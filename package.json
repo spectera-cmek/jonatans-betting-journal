@@ -19,6 +19,14 @@
   "engines": {
     "node": ">=18.18"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spectera-cmek/jonatans-betting-journal.git"
+  },
+  "homepage": "https://github.com/spectera-cmek/jonatans-betting-journal#readme",
+  "bugs": {
+    "url": "https://github.com/spectera-cmek/jonatans-betting-journal/issues"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
