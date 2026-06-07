@@ -1,0 +1,214 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { Topbar } from "@/components/Shell";
+import { Card, Kpi } from "@/components/ui";
+import { LineChart, PLBars, Donut, Ring } from "@/components/charts";
+import { ResultBadge } from "@/components/ResultBadge";
+import { AddBetModal } from "@/components/AddBetModal";
+import { SyncButton } from "@/components/SyncButton";
+import { useTheme } from "@/components/ThemeProvider";
+import { useMetrics } from "@/lib/useData";
+import { api } from "@/lib/fetcher";
+import { krFmt, krShort, uFmt, pctFmt, sportTag, dateShort } from "@/lib/format";
+import type { BetDTO } from "@/lib/types";
+import type { StreakInfo } from "@/lib/insights";
+import { I, IC } from "@/components/icons";
+import { useEffect } from "react";
+
+export default function OverviewPage() {
+  const { cc, glow } = useTheme();
+  const { data, settings, loading, reload } = useMetrics();
+  const [adding, setAdding] = useState(false);
+  const [recent, setRecent] = useState<BetDTO[]>([]);
+
+  useEffect(() => {
+    api.get<BetDTO[]>("/api/bets").then((b) => setRecent(b.slice(0, 7)));
+  }, [data]);
+
+  const m = data?.metrics;
+  const unit = data?.settings.unitValue ?? 100;
+  const currency = data?.settings.currency ?? "kr";
+  const startBank = data?.settings.startingBankrollUnits ?? 100;
+  const hasKey = settings?.hasOddsApiKey ?? false;
+
+  const curve = (data?.bankroll ?? []).map((p) => p.bankrollUnits * unit);
+  const bankrollUnits = data?.bankroll.length ? data.bankroll[data.bankroll.length - 1].bankrollUnits : startBank;
+  const bankrollKr = bankrollUnits * unit;
+  const startKr = startBank * unit;
+  const bankrollPct = startBank > 0 ? ((bankrollUnits - startBank) / startBank) * 100 : 0;
+
+  const profitKr = (m?.profitUnits ?? 0) * unit;
+
+  // sport distribution with pct
+  const sports = (data?.bySport ?? []).map((s) => ({ ...s }));
+  const totalSportBets = sports.reduce((a, s) => a + s.bets, 0) || 1;
+  const sportsWithPct = sports.map((s) => ({ ...s, pct: Math.round((s.bets / totalSportBets) * 100) }));
+
+  const months = (data?.monthly ?? []).map((mo) => ({ m: monthLabel(mo.month), units: mo.profitUnits }));
+  // First year present in the data -> "sedan 2023" copy in the header.
+  const allMonths = data?.byMonth ?? [];
+  const rangeLabel = allMonths.length ? allMonths[0].month.slice(0, 4) : "";
+  const ins = data?.insights;
+
+  return (
+    <div>
+      {glow && <div className="ap-glow" />}
+      <Topbar
+        title="Jonatans Betting Journal"
+        sub={
+          loading ? (
+            "Laddar…"
+          ) : (
+            <>Du är {profitKr >= 0 ? "upp" : "ner"} <span className={profitKr >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{krFmt(Math.abs(profitKr))}</span> {rangeLabel ? `sedan ${rangeLabel}` : "totalt"}</>
+          )
+        }
+        actions={
+          <>
+            {hasKey && <SyncButton onDone={reload} />}
+            <button className="ap-btn" onClick={() => setAdding(true)}>
+              <I p={IC.plus} size={15} /> <span className="ap-hide-sm">Logga bet</span>
+            </button>
+          </>
+        }
+      />
+
+      {/* KPI row */}
+      <div className="ap-kpi-row">
+        <Kpi label="Total P/L" value={krFmt(profitKr, true)} valueClass={profitKr >= 0 ? "pos" : "neg"} spark={curve.slice(-16)} />
+        <Kpi label="ROI" value={pctFmt(m?.roiPct ?? null, true)} valueClass={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
+        <Kpi label="+Units" value={uFmt(m?.profitUnits ?? null, true)} valueClass={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
+        <Kpi label="Win rate" value={pctFmt(m?.winRatePct ?? null)} />
+      </div>
+
+      {/* Bankroll + sport donut */}
+      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px", marginBottom: 12 }}>
+        <Card style={{ background: `linear-gradient(180deg, ${cc.fill}, transparent 55%), var(--card)` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <span className="ap-label">Bankrulle</span>
+              <div className="ap-num" style={{ fontSize: 33, fontWeight: 600, marginTop: 8 }}>{krFmt(bankrollKr)}</div>
+              <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>
+                Start {krFmt(startKr)} · <span className={bankrollPct >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{bankrollPct >= 0 ? "▲" : "▼"} {pctFmt(bankrollPct, true)}</span>
+              </div>
+            </div>
+            <span className="ap-leg ap-hide-sm" style={{ color: "var(--dim)", fontSize: 11.5 }}>
+              <span className="ap-dot" style={{ background: cc.acc, borderRadius: "50%" }} /> Saldo
+            </span>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <LineChart data={curve} w={640} h={184} stroke={cc.acc} fill={cc.fill} grid={cc.grid} strokeW={2.2} />
+          </div>
+        </Card>
+
+        <Card>
+          <span className="ap-label">Fördelning per sport</span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 14 }}>
+            <Donut data={sportsWithPct} size={132} thickness={20} colors={cc.palette} track={cc.grid} centerLabel={pctFmt(m?.roiPct ?? null, true)} centerSub="ROI" centerColor={cc.txt} centerSubColor={cc.dim} />
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 9 }}>
+              {sportsWithPct.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data än</span>}
+              {sportsWithPct.map((s, i) => (
+                <div key={s.key} className="ap-leg">
+                  <span className="ap-dot" style={{ background: cc.palette[i % cc.palette.length] }} />
+                  <span style={{ flex: 1, color: "var(--dim)" }}>{s.key}</span>
+                  <span style={{ color: "var(--dim2)" }}>{s.pct}%</span>
+                  <span className="ap-num" style={{ width: 54, textAlign: "right", fontWeight: 600 }}>
+                    <em className={s.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(s.profitUnits * unit, true)}</em>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Monthly bars + win ring + books */}
+      <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 200px 310px", marginBottom: 12 }}>
+        <Card>
+          <span className="ap-label">P/L per månad (units)</span>
+          <div style={{ marginTop: 14 }}>
+            <PLBars data={months} w={400} h={150} pos={cc.pos} neg={cc.red} labelColor={cc.dim} track={cc.line} />
+          </div>
+        </Card>
+        <Card style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Ring pct={m?.winRatePct ?? 0} size={134} thickness={11} color={cc.acc} track={cc.line} textColor={cc.txt} sub="WIN RATE" subColor={cc.dim} />
+        </Card>
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span className="ap-label">Form &amp; rekord</span>
+            <Link href="/insights" className="ap-link">Mer →</Link>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>
+            <FormRow label="Nuvarande svit" value={streakText(ins?.streaks)} tone={streakTone(ins?.streaks)} />
+            <FormRow label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin} i rad` : "—"} tone="pos" />
+            <FormRow label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss} i rad` : "—"} tone="neg" />
+            <FormRow label="Bästa dag" value={ins?.best ? `${krShort(ins.best.profitUnits * unit, true)} · ${dateShort(ins.best.date)}` : "—"} tone="pos" />
+            <FormRow label="Sämsta dag" value={ins?.worst ? `${krShort(ins.worst.profitUnits * unit, true)} · ${dateShort(ins.worst.date)}` : "—"} tone="neg" />
+            <FormRow label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U · ${krFmt(ins.avgStakeUnits * unit)}` : "—"} />
+          </div>
+        </Card>
+      </div>
+
+      {/* Recent bets */}
+      <Card style={{ padding: 0 }}>
+        <div className="ap-card-head">
+          <span className="ap-card-title">Senaste bets</span>
+          <Link href="/bets" className="ap-link">Visa alla →</Link>
+        </div>
+        <div className="ap-table">
+          <div className="ap-thead" style={{ gridTemplateColumns: "66px 50px 1.7fr 1.2fr 100px 58px 76px 84px" }}>
+            <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
+          </div>
+          {recent.map((b) => (
+            <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: "66px 50px 1.7fr 1.2fr 100px 58px 76px 84px" }}>
+              <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
+              <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
+              <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
+              <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
+              <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
+              <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
+              <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
+              <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
+            </div>
+          ))}
+          {recent.length === 0 && (
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets än — logga din första bet.</div>
+          )}
+        </div>
+      </Card>
+
+      <AddBetModal open={adding} onClose={() => setAdding(false)} onSaved={reload} hasOddsApiKey={hasKey} />
+    </div>
+  );
+}
+
+function monthLabel(ym: string): string {
+  // ym = "2026-05" -> "Maj"
+  const months = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
+  const mi = parseInt(ym.slice(5, 7), 10) - 1;
+  return months[mi] ?? ym;
+}
+
+// One label/value line in the "Form & rekord" card.
+function FormRow({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
+  return (
+    <div className="ap-leg">
+      <span style={{ flex: 1, color: "var(--dim)" }}>{label}</span>
+      <span className="ap-num" style={{ fontWeight: 600 }}>
+        <em className={tone ?? ""} style={{ fontStyle: "normal" }}>{value}</em>
+      </span>
+    </div>
+  );
+}
+
+function streakText(s?: StreakInfo): string {
+  if (!s || s.currentType === "none" || s.current === 0) return "—";
+  const noun = s.currentType === "win" ? (s.current === 1 ? "vinst" : "vinster") : (s.current === 1 ? "förlust" : "förluster");
+  return `${s.current} ${noun} i rad`;
+}
+
+function streakTone(s?: StreakInfo): "pos" | "neg" | undefined {
+  if (!s || s.currentType === "none") return undefined;
+  return s.currentType === "win" ? "pos" : "neg";
+}

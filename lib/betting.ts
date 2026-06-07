@@ -1,0 +1,315 @@
+// Core settlement & portfolio math. Everything is in UNITS; convert to currency
+// at display time via Setting.unitValue. Keep this module pure & dependency-free
+// so it is trivially unit-testable.
+
+export type Outcome =
+  | "pending"
+  | "win"
+  | "loss"
+  | "push"
+  | "half_win"
+  | "half_loss"
+  | "void";
+
+export const OUTCOME_LABELS: Record<Outcome, string> = {
+  pending: "Pending",
+  win: "Win",
+  loss: "Loss",
+  push: "Push",
+  half_win: "Half win",
+  half_loss: "Half loss",
+  void: "Void",
+};
+
+/**
+ * Profit in units for a settled bet.
+ *  win       -> stake * (odds - 1)
+ *  loss      -> -stake
+ *  push/void -> 0 (stake returned)
+ *  half_win  -> half the stake wins, the other half is returned
+ *  half_loss -> half the stake is lost, the other half is returned
+ *  pending   -> 0 (excluded from settled stats elsewhere)
+ *
+ * NOTE: profit is stake * (odds - 1), NOT stake * odds (that is the return).
+ */
+export function profitUnits(
+  outcome: Outcome,
+  odds: number,
+  stakeUnits: number
+): number {
+  switch (outcome) {
+    case "win":
+      return stakeUnits * (odds - 1);
+    case "loss":
+      return -stakeUnits;
+    case "push":
+    case "void":
+      return 0;
+    case "half_win":
+      return (stakeUnits * (odds - 1)) / 2;
+    case "half_loss":
+      return -stakeUnits / 2;
+    case "pending":
+    default:
+      return 0;
+  }
+}
+
+export function isSettled(outcome: Outcome): boolean {
+  return outcome !== "pending";
+}
+
+/** Outcomes that count toward the win-rate denominator (exclude push/void). */
+export function countsForWinRate(outcome: Outcome): boolean {
+  return (
+    outcome === "win" ||
+    outcome === "loss" ||
+    outcome === "half_win" ||
+    outcome === "half_loss"
+  );
+}
+
+export function isWinLike(outcome: Outcome): boolean {
+  return outcome === "win" || outcome === "half_win";
+}
+
+export interface BetLike {
+  odds: number;
+  stakeUnits: number;
+  outcome: Outcome;
+  closingOdds?: number | null;
+  eventAt?: Date | string | null;
+  placedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  // Authoritative settled profit (e.g. real payout from an imported statement).
+  // When present, it overrides the odds-based formula in aggregates.
+  profitUnits?: number | null;
+}
+
+/**
+ * Settled profit for a bet: prefer a stored, authoritative profitUnits (imported
+ * real payouts, after tax/cashout), falling back to the odds-based formula.
+ */
+export function settledProfit(b: BetLike): number {
+  if (typeof b.profitUnits === "number" && Number.isFinite(b.profitUnits))
+    return b.profitUnits;
+  return profitUnits(b.outcome, b.odds, b.stakeUnits);
+}
+
+export interface Metrics {
+  totalBets: number;
+  settledBets: number;
+  pendingBets: number;
+  wins: number;
+  losses: number;
+  pushVoid: number;
+  stakedUnits: number; // total staked across settled bets
+  profitUnits: number; // net profit across settled bets
+  roiPct: number | null; // profit / staked * 100
+  winRatePct: number | null; // wins / (wins+losses-ish) * 100
+  avgOdds: number | null; // mean odds across settled bets
+  clvPct: number | null; // mean CLV across bets that have closingOdds
+  clvBeatCount: number; // bets where we beat the closing line
+  clvSampleSize: number; // bets with a closingOdds value
+}
+
+/** Single-bet CLV as a percentage: (odds / closingOdds - 1) * 100. */
+export function clvPct(odds: number, closingOdds: number): number {
+  return (odds / closingOdds - 1) * 100;
+}
+
+/** Aggregate portfolio metrics over a set of bets. Pending excluded from settled stats. */
+export function computeMetrics(bets: BetLike[]): Metrics {
+  let settledBets = 0;
+  let pendingBets = 0;
+  let wins = 0;
+  let losses = 0;
+  let pushVoid = 0;
+  let stakedUnits = 0;
+  let profit = 0;
+  let oddsSum = 0;
+  let oddsCount = 0;
+  let clvSum = 0;
+  let clvSample = 0;
+  let clvBeat = 0;
+
+  for (const b of bets) {
+    const outcome = b.outcome;
+
+    // CLV is independent of settlement: count any bet that has a closing line.
+    if (b.closingOdds && b.closingOdds > 1) {
+      const c = clvPct(b.odds, b.closingOdds);
+      clvSum += c;
+      clvSample += 1;
+      if (c > 0) clvBeat += 1;
+    }
+
+    if (!isSettled(outcome)) {
+      pendingBets += 1;
+      continue;
+    }
+
+    settledBets += 1;
+    stakedUnits += b.stakeUnits;
+    profit += settledProfit(b);
+    oddsSum += b.odds;
+    oddsCount += 1;
+
+    if (isWinLike(outcome)) wins += 1;
+    else if (outcome === "loss" || outcome === "half_loss") losses += 1;
+    else pushVoid += 1; // push or void
+  }
+
+  const winRateDenom = wins + losses;
+
+  return {
+    totalBets: bets.length,
+    settledBets,
+    pendingBets,
+    wins,
+    losses,
+    pushVoid,
+    stakedUnits,
+    profitUnits: profit,
+    roiPct: stakedUnits > 0 ? (profit / stakedUnits) * 100 : null,
+    winRatePct: winRateDenom > 0 ? (wins / winRateDenom) * 100 : null,
+    avgOdds: oddsCount > 0 ? oddsSum / oddsCount : null,
+    clvPct: clvSample > 0 ? clvSum / clvSample : null,
+    clvBeatCount: clvBeat,
+    clvSampleSize: clvSample,
+  };
+}
+
+function toTime(d?: Date | string | null): number {
+  if (!d) return 0;
+  const t = new Date(d).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+export interface BankrollPoint {
+  date: string; // ISO date of the settling event
+  bankrollUnits: number;
+  profitUnits: number; // cumulative profit
+  label: string; // short event label
+}
+
+/**
+ * Running bankroll over time, ordered by event date (falls back to placedAt/createdAt).
+ * Only settled bets move the bankroll. Starts at startingBankrollUnits.
+ */
+export function bankrollSeries(
+  bets: BetLike[],
+  startingBankrollUnits: number
+): BankrollPoint[] {
+  const settled = bets
+    .filter((b) => isSettled(b.outcome))
+    .map((b) => ({
+      ...b,
+      t: toTime(b.eventAt) || toTime(b.placedAt) || toTime(b.createdAt),
+    }))
+    .sort((a, b) => a.t - b.t);
+
+  let running = startingBankrollUnits;
+  let cumProfit = 0;
+  const points: BankrollPoint[] = [];
+
+  // Seed point so the chart starts at the baseline.
+  points.push({
+    date: settled.length ? new Date(settled[0].t).toISOString() : new Date().toISOString(),
+    bankrollUnits: startingBankrollUnits,
+    profitUnits: 0,
+    label: "Start",
+  });
+
+  for (const b of settled) {
+    const p = settledProfit(b);
+    running += p;
+    cumProfit += p;
+    points.push({
+      date: new Date(b.t || Date.now()).toISOString(),
+      bankrollUnits: round2(running),
+      profitUnits: round2(cumProfit),
+      label: "",
+    });
+  }
+
+  return points;
+}
+
+export interface Breakdown {
+  key: string;
+  bets: number;
+  settled: number;
+  stakedUnits: number;
+  profitUnits: number;
+  roiPct: number | null;
+  avgOdds: number | null;
+  winRatePct: number | null;
+}
+
+/** Group bets by an arbitrary key (sport, league, market, bookmaker...) with per-group metrics. */
+export function breakdownBy(
+  bets: BetLike[],
+  keyFn: (b: BetLike) => string | null | undefined,
+  fallback = "Unknown"
+): Breakdown[] {
+  const map = new Map<string, BetLike[]>();
+  for (const b of bets) {
+    const k = (keyFn(b) || fallback).toString();
+    const arr = map.get(k);
+    if (arr) arr.push(b);
+    else map.set(k, [b]);
+  }
+
+  const out: Breakdown[] = [];
+  for (const [key, group] of map) {
+    const m = computeMetrics(group);
+    out.push({
+      key,
+      bets: group.length,
+      settled: m.settledBets,
+      stakedUnits: m.stakedUnits,
+      profitUnits: m.profitUnits,
+      roiPct: m.roiPct,
+      avgOdds: m.avgOdds,
+      winRatePct: m.winRatePct,
+    });
+  }
+  // Sort by profit descending so the best performers float to the top.
+  out.sort((a, b) => b.profitUnits - a.profitUnits);
+  return out;
+}
+
+/**
+ * Top N settled bets by total profit. dir="win" returns the biggest winners
+ * (profit > 0, descending); dir="loss" returns the biggest losers (profit < 0,
+ * ascending, i.e. most negative first). Generic so callers keep their own display
+ * fields on each entry. Pending/push/void are excluded (profit 0 never qualifies).
+ */
+export function topBetsByProfit<T extends BetLike>(
+  bets: T[],
+  dir: "win" | "loss",
+  n = 5
+): T[] {
+  return bets
+    .filter((b) => isSettled(b.outcome))
+    .map((b) => ({ b, p: settledProfit(b) }))
+    .filter((x) => (dir === "win" ? x.p > 0 : x.p < 0))
+    .sort((a, b) => (dir === "win" ? b.p - a.p : a.p - b.p))
+    .slice(0, n)
+    .map((x) => x.b);
+}
+
+/** Single-bet ROI as a percentage: profit / stake * 100 (null if stake <= 0). */
+export function singleRoiPct(b: BetLike): number | null {
+  return b.stakeUnits > 0 ? (settledProfit(b) / b.stakeUnits) * 100 : null;
+}
+
+/** Combined decimal odds for an accumulator: product of leg odds. */
+export function accaOdds(legOdds: number[]): number {
+  return legOdds.reduce((acc, o) => acc * o, 1);
+}
+
+export function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}

@@ -1,0 +1,58 @@
+// Betting Tracker — Prisma schema (SQLite)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Bet {
+  id            String    @id @default(cuid())
+  placedAt      DateTime  @default(now())
+  eventAt       DateTime?
+  sportKey      String? // The Odds API key, e.g. "soccer_epl"
+  sport         String? // display name
+  league        String?
+  event         String // "Team A vs Team B"
+  homeTeam      String?
+  awayTeam      String?
+  market        String    @default("h2h") // h2h | totals | spreads | other
+  selection     String // label, e.g. "Team A", "Over 2.5"
+  selectionSide String? // home | away | draw | over | under (structured -> grading)
+  line          Float? // for totals/spreads
+  betType       String    @default("single") // single | accumulator
+  odds          Float // decimal odds you took
+  closingOdds   Float? // for CLV
+  stakeUnits    Float // e.g. 1.0, 2.5
+  outcome       String    @default("pending") // pending|win|loss|push|half_win|half_loss|void
+  profitUnits   Float? // computed at settlement
+  externalRef   String? // The Odds API event id (for auto-grading)
+  importRef     String? // Bet365 betslip reference — stable key for incremental re-import
+  legs          String? // JSON-encoded accumulator legs
+  bookmaker     String?
+  tipster       String?
+  notes         String?
+  gradedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([outcome])
+  @@index([eventAt])
+  @@index([importRef])
+}
+
+model Setting {
+  id                    Int    @id @default(1)
+  unitValue             Float  @default(100) // currency per unit
+  currency              String @default("kr")
+  startingBankrollUnits Float  @default(100)
+}
+
+model SyncLog {
+  id      String   @id @default(cuid())
+  ranAt   DateTime @default(now())
+  kind    String // grade | closing
+  summary String
+}

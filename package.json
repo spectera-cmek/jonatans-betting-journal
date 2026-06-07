@@ -1,0 +1,61 @@
+{
+  "name": "betting-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first sports betting journal — log bets in units, track ROI and bankroll over time, and auto-settle from a bet365 statement or The Odds API. Next.js + Prisma/SQLite.",
+  "license": "MIT",
+  "author": "Jonatan",
+  "keywords": [
+    "betting",
+    "betting-tracker",
+    "sports-betting",
+    "bankroll",
+    "roi",
+    "nextjs",
+    "prisma",
+    "sqlite",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "sync": "tsx scripts/sync.ts",
+    "import:bet365": "tsx scripts/importBet365.ts",
+    "import:unibet": "tsx scripts/importUnibet.ts",
+    "recategorize": "tsx scripts/recategorize.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0",
+    "dotenv": "^16.4.5",
+    "next": "14.2.18",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "2.13.3"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.6",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "autoprefixer": "10.4.20",
+    "pdfjs-dist": "^4.0.379",
+    "postcss": "8.4.49",
+    "prisma": "5.22.0",
+    "tailwindcss": "3.4.15",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "vitest": "2.1.5"
+  }
+}
