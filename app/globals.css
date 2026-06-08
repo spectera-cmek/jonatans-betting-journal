@@ -823,10 +823,12 @@ select.ap-input {
     z-index: 900;
     background: var(--side);
     border-top: 1px solid var(--line);
-    padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
-    justify-content: space-around;
+    padding: 8px 2px calc(8px + env(safe-area-inset-bottom));
+    justify-content: space-between;
   }
   .ap-mobnav a {
+    flex: 1 1 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -837,8 +839,16 @@ select.ap-input {
     font-size: 10px;
     font-weight: 600;
     cursor: pointer;
-    padding: 4px 10px;
+    padding: 4px 2px;
     text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .ap-mobnav a > span,
+  .ap-mobnav a {
+    text-align: center;
   }
   .ap-mobnav a.is-active {
     color: var(--acc);
@@ -951,4 +961,120 @@ select.ap-input {
   .ap-modal-body {
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }
+}
+
+/* The decorative background glow is absolutely positioned and can extend past the
+   right edge on a narrow screen, creating phantom horizontal scroll. It's purely
+   cosmetic — drop it on mobile. */
+@media (max-width: 920px) {
+  .ap-glow {
+    display: none;
+  }
+  /* Grid items default to min-width:auto, so a card refuses to shrink below its
+     content and overflows the page on a phone. Let them shrink to their track. */
+  .ap-grid > *,
+  .ap-two > *,
+  .ap-three > *,
+  .ap-kpi-row > * {
+    min-width: 0;
+  }
+}
+
+/* Grid-tables on the other pages (dashboard, analytics, calendar) have fixed-px
+   columns that are wider than a phone. Let each table scroll horizontally inside its
+   own card instead of pushing the whole page wide. */
+@media (max-width: 700px) {
+  .ap-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ap-table .ap-thead,
+  .ap-table .ap-trow {
+    width: max-content;
+    min-width: 100%;
+  }
+}
+
+/* ---------- bet list: cards on phones, table on larger screens ---------- */
+.ap-betcards {
+  display: none;
+}
+@media (max-width: 700px) {
+  .ap-table-wrap {
+    display: none;
+  }
+  .ap-betcards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+.ap-betcard {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 13px 14px;
+}
+.ap-betcard-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ap-betcard-date {
+  font-size: 12px;
+  color: var(--dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ap-betcard-event {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.ap-betcard-sel {
+  font-size: 12.5px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+.ap-betcard-stats {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line2);
+}
+.ap-betcard-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ap-betcard-stats > div > span {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim2);
+  font-weight: 600;
+}
+.ap-betcard-stats > div > b {
+  font-size: 14px;
+  font-weight: 600;
+}
+.ap-betcard-act {
+  margin-left: auto;
+  flex-direction: row !important;
+  gap: 5px !important;
+  align-items: center;
+}
+.ap-betcard-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--dim2);
+  font-size: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
 }

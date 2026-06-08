@@ -156,28 +156,71 @@ export default function BetsPage() {
         </div>
       </div>
 
-      {/* table */}
-      <Card style={{ padding: 0 }}>
-        <div className="ap-table">
-          <div className="ap-thead" style={{ gridTemplateColumns: GRID }}>
-            <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">P/L</span><span className="ap-r">Resultat</span><span className="ap-c">·</span>
+      {/* table (desktop / tablet) */}
+      <div className="ap-table-wrap">
+        <Card style={{ padding: 0 }}>
+          <div className="ap-table">
+            <div className="ap-thead" style={{ gridTemplateColumns: GRID }}>
+              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">P/L</span><span className="ap-r">Resultat</span><span className="ap-c">·</span>
+            </div>
+            {loading && <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>}
+            {!loading && filtered.length === 0 && (
+              <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets matchar filtren.</div>
+            )}
+            {filtered.map((b) => (
+              <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: GRID }}>
+                <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
+                <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
+                <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
+                <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
+                <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
+                <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
+                <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
+                <span className={"ap-r ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>{b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}</span>
+                <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
+                <span className="ap-c" style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                  {b.outcome === "pending" && (
+                    <>
+                      <button className="ap-iconbtn w" title="Vunnen" onClick={() => settle(b.id, "win")}>W</button>
+                      <button className="ap-iconbtn l" title="Förlorad" onClick={() => settle(b.id, "loss")}>L</button>
+                    </>
+                  )}
+                  <button className="ap-iconbtn x" title="Ta bort" onClick={() => del(b)}>✕</button>
+                </span>
+              </div>
+            ))}
           </div>
-          {loading && <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>}
-          {!loading && filtered.length === 0 && (
-            <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets matchar filtren.</div>
-          )}
-          {filtered.map((b) => (
-            <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: GRID }}>
-              <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
-              <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
-              <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
-              <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
-              <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
-              <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
-              <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
-              <span className={"ap-r ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>{b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}</span>
-              <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
-              <span className="ap-c" style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+        </Card>
+      </div>
+
+      {/* cards (mobile) */}
+      <div className="ap-betcards">
+        {loading && <div className="ap-betcard-empty">Laddar…</div>}
+        {!loading && filtered.length === 0 && <div className="ap-betcard-empty">Inga bets matchar filtren.</div>}
+        {!loading && filtered.map((b) => (
+          <div key={b.id} className="ap-betcard">
+            <div className="ap-betcard-top">
+              <span className="ap-betcard-date">
+                {dateShort(b.eventAt ?? b.placedAt)} <span className="ap-tag">{sportTag(b.sport)}</span>
+              </span>
+              <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
+            </div>
+            <div className="ap-betcard-event">
+              {b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}
+            </div>
+            <div className="ap-betcard-sel">
+              {b.selection || "—"}{b.bookmaker ? ` · ${b.bookmaker}` : ""}
+            </div>
+            <div className="ap-betcard-stats">
+              <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
+              <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
+              <div>
+                <span>P/L</span>
+                <b className={"ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>
+                  {b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}
+                </b>
+              </div>
+              <div className="ap-betcard-act">
                 {b.outcome === "pending" && (
                   <>
                     <button className="ap-iconbtn w" title="Vunnen" onClick={() => settle(b.id, "win")}>W</button>
@@ -185,11 +228,11 @@ export default function BetsPage() {
                   </>
                 )}
                 <button className="ap-iconbtn x" title="Ta bort" onClick={() => del(b)}>✕</button>
-              </span>
+              </div>
             </div>
-          ))}
-        </div>
-      </Card>
+          </div>
+        ))}
+      </div>
 
       <AddBetModal open={adding} onClose={() => setAdding(false)} onSaved={reload} hasOddsApiKey={hasKey} />
     </div>

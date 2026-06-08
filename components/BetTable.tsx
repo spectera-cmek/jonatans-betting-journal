@@ -78,8 +78,7 @@ export function BetTable({
         <span className="tnum text-xs text-text-lo">{filtered.length} bets</span>
       </div>
 
-      {/* Desktop / tablet: full table (horizontal scroll if needed) */}
-      <div className="hidden overflow-x-auto rounded-xl border border-line bg-hero lg:block">
+      <div className="overflow-x-auto rounded-xl border border-line bg-hero">
         <table className="w-full min-w-[1100px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line bg-hero text-[10px] font-semibold uppercase tracking-[0.12em] text-pos/55">
@@ -113,115 +112,6 @@ export function BetTable({
           </tbody>
         </table>
       </div>
-
-      {/* Mobile: one card per bet, tap-friendly actions always visible */}
-      <div className="flex flex-col gap-2.5 lg:hidden">
-        {filtered.map((b) => (
-          <BetCard key={b.id} bet={b} onChanged={onChanged} />
-        ))}
-        {filtered.length === 0 && (
-          <div className="rounded-xl border border-line bg-hero px-4 py-12 text-center text-sm text-text-lo">
-            Inga bets matchar filtret.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BetCard({ bet, onChanged }: { bet: BetDTO; onChanged: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const pill = STATUS_PILL[bet.outcome] ?? STATUS_PILL.pending;
-
-  const del = async () => {
-    if (!confirm(`Ta bort betet "${bet.event}"?`)) return;
-    await api.del(`/api/bets/${bet.id}`);
-    onChanged();
-  };
-
-  const changeOutcome = async (outcome: string) => {
-    await api.post(`/api/bets/${bet.id}/settle`, { outcome });
-    setEditing(false);
-    onChanged();
-  };
-
-  return (
-    <div className="rounded-xl border border-line bg-hero p-3.5 text-text-hi">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="tnum text-xs text-text-mid">{fmtDate(bet.eventAt ?? bet.placedAt)}</span>
-        {editing ? (
-          <select
-            autoFocus
-            defaultValue={bet.outcome}
-            onChange={(e) => changeOutcome(e.target.value)}
-            onBlur={() => setEditing(false)}
-            className="rounded-md border border-line bg-card px-2 py-1 text-xs text-text-hi"
-          >
-            {OUTCOMES.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <button
-            onClick={() => setEditing(true)}
-            className={`inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${pill.ring} ${pill.text}`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
-            {pill.label}
-          </button>
-        )}
-      </div>
-
-      <div className="font-medium leading-tight">{bet.event}</div>
-      {bet.league && <div className="text-[11px] text-text-lo">{bet.league}</div>}
-
-      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        <span className="font-semibold">{bet.selection || "—"}</span>
-        <span className="rounded bg-band px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-text-mid">
-          {marketLabel(bet.market)}
-        </span>
-        {bet.sport && (
-          <span className="rounded bg-band px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-text-mid ring-1 ring-line">
-            {bet.sport}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-2.5 grid grid-cols-4 gap-2 border-t border-line-subtle/60 pt-2.5 text-center">
-        <CardStat label="Odds" value={fmtOdds(bet.odds)} />
-        <CardStat label="Insats" value={fmtStake(bet.stakeUnits)} />
-        <CardStat
-          label="P/L"
-          value={bet.outcome === "pending" ? "—" : fmtUnits(bet.profitUnits, false)}
-          cls={bet.outcome === "pending" ? "text-text-lo" : signClass(bet.profitUnits)}
-        />
-        <CardStat
-          label="CLV"
-          value={bet.clvPct == null ? "—" : fmtPct(bet.clvPct, false)}
-          cls={bet.clvPct == null ? "text-text-lo" : signClass(bet.clvPct)}
-        />
-      </div>
-
-      <div className="mt-3 flex items-center justify-end gap-1.5">
-        {bet.outcome === "pending" && <SettleButtons betId={bet.id} onDone={onChanged} />}
-        <button
-          onClick={del}
-          className="rounded-md px-2.5 py-1 text-xs text-text-lo ring-1 ring-line hover:bg-neg/20 hover:text-neg"
-        >
-          Ta bort
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function CardStat({ label, value, cls }: { label: string; value: React.ReactNode; cls?: string }) {
-  return (
-    <div>
-      <div className="text-[9px] uppercase tracking-wider text-text-lo">{label}</div>
-      <div className={`tnum text-sm font-semibold ${cls ?? "text-text-hi"}`}>{value}</div>
     </div>
   );
 }

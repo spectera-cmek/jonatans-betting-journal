@@ -103,7 +103,7 @@ export default function CalendarPage() {
           <button className="ap-iconbtn" onClick={() => shift(1)} aria-label="Nästa månad">›</button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 6 }}>
           {WEEKDAYS.map((w) => (
             <div key={w} style={{ textAlign: "center", fontSize: 11, color: "var(--dim2)", fontWeight: 600, paddingBottom: 4 }}>{w}</div>
           ))}
@@ -116,6 +116,7 @@ export default function CalendarPage() {
                 key={c.iso}
                 onClick={() => setSelected(isSel ? "" : c.iso)}
                 style={{
+                  minWidth: 0, overflow: "hidden",
                   minHeight: 64, borderRadius: 10, padding: "6px 8px", textAlign: "left", cursor: "pointer",
                   background: tint(a?.profit ?? 0, a?.settled ?? 0),
                   border: `1px solid ${isSel ? cc.acc : "var(--grid, rgba(255,255,255,.06))"}`,
