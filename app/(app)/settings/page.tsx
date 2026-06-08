@@ -133,6 +133,23 @@ export default function SettingsPage() {
             <a className="ap-btn ghost" href="/api/bets/export"><I p={IC.download} size={15} /> Exportera alla bets (CSV)</a>
           </div>
         </Card>
+
+        <div style={{ height: 12 }} />
+
+        <Card>
+          <span className="ap-label">Konto</span>
+          <div style={{ marginTop: 14 }}>
+            <button
+              className="ap-btn ghost"
+              onClick={async () => {
+                await fetch("/api/login", { method: "DELETE" });
+                window.location.href = "/login";
+              }}
+            >
+              Logga ut
+            </button>
+          </div>
+        </Card>
       </div>
     </div>
   );

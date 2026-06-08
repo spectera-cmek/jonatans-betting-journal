@@ -1,11 +1,14 @@
-// Betting Tracker — Prisma schema (SQLite)
+// Betting Tracker — Prisma schema (Postgres / Neon)
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection (PgBouncer) — used by the app at runtime on serverless.
+  url       = env("DATABASE_URL")
+  // Direct connection — used by `prisma db push` / migrations.
+  directUrl = env("DIRECT_URL")
 }
 
 model Bet {

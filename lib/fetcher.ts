@@ -5,6 +5,10 @@ export async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> 
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
   });
+  // Session expired / not signed in → bounce to the login page.
+  if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data as { error?: string }).error || `Request failed: ${res.status}`);

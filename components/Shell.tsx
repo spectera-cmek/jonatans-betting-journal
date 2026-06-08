@@ -38,7 +38,7 @@ export function Sidebar() {
           <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             Jonatan
           </div>
-          <div style={{ fontSize: 11, color: "var(--dim2)" }}>Lokal journal · SQLite</div>
+          <div style={{ fontSize: 11, color: "var(--dim2)" }}>Personlig journal</div>
         </div>
       </div>
     </aside>

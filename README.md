@@ -65,6 +65,10 @@ Open **http://localhost:3000**.
 `db:seed` inserts a handful of **fictional demo bets** so you can explore the app
 immediately — replace them with your own from the **Logga bet** button.
 
+> 📱 **Want it on your phone?** The app can also be deployed to the cloud (Vercel +
+> Postgres) with password login, so you can open it anywhere and add it to your home
+> screen. See **[DEPLOY.md](DEPLOY.md)**.
+
 ## 📜 Scripts
 
 | Command | What it does |

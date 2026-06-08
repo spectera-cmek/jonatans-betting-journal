@@ -16,6 +16,8 @@ next-env.d.ts
 *.db-journal
 /prisma/dev.db
 /prisma/dev.db-journal
+# exported real history (SQLite -> Postgres migration) — personal data, keep local
+/prisma/data-export.json
 
 # env
 .env

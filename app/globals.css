@@ -869,3 +869,86 @@ select.ap-input {
     display: none;
   }
 }
+
+/* ---------- login ---------- */
+.ap-login {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(900px 500px at 50% -10%, var(--acc-soft), transparent 60%), var(--bg);
+}
+.ap-login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 30px 26px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.ap-login-logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.ap-login-logo .mark {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--acc), #ffffff55);
+  display: grid;
+  place-items: center;
+  font-family: var(--disp);
+  font-weight: 700;
+  color: var(--acc-text);
+  font-size: 22px;
+}
+.ap-login-title {
+  font-family: var(--disp);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+.ap-login-sub {
+  font-size: 13px;
+  color: var(--dim);
+  margin: 6px 0 0;
+}
+.ap-login-err {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--red);
+  background: var(--red-soft);
+  border-radius: 9px;
+  padding: 8px 10px;
+}
+
+/* ---------- mobile forms & modal ---------- */
+@media (max-width: 560px) {
+  /* iOS zooms in on focus for inputs < 16px — bump every form control. */
+  .ap-input,
+  .ap-seg2 button,
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  /* Full-screen sheet for the bet modal on phones. */
+  .ap-overlay {
+    padding: 0;
+    place-items: stretch;
+  }
+  .ap-modal {
+    max-width: 100%;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .ap-modal-body {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+}
