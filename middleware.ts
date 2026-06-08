@@ -1,49 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-// NOTE: the session-cookie verification is inlined here instead of imported from
-// @/lib/auth. Middleware runs in the Edge runtime, and Vercel's Edge bundler can fail
-// to bundle middleware's module imports ("referencing unsupported modules: @/lib/auth").
-// Keeping this self-contained avoids that. lib/auth.ts holds the matching *sign* side
-// used by the Node-runtime /api/login route — keep the cookie name + HMAC in sync.
+// Edge-runtime middleware: keep it dead simple (sync, no crypto, no top-level globals)
+// so it can't fail to initialise/invoke on Vercel's Edge runtime. Auth model: the session
+// cookie's value IS the AUTH_SECRET (a long random string) — holding it == being signed in.
+// The Node-runtime /api/login route sets it after checking APP_PASSWORD.
 
 const SESSION_COOKIE = "bj_session";
-const encoder = new TextEncoder();
 
-function base64url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function hmac(secret: string, data: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
-  return base64url(new Uint8Array(sig));
-}
-
+// Constant-time-ish compare (avoid leaking via early mismatch).
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
-}
-
-async function verifySessionToken(token: string | undefined, secret: string): Promise<boolean> {
-  if (!token) return false;
-  const dot = token.indexOf(".");
-  if (dot <= 0) return false;
-  const exp = token.slice(0, dot);
-  const sig = token.slice(dot + 1);
-  const expNum = Number(exp);
-  if (!Number.isFinite(expNum) || expNum * 1000 < Date.now()) return false;
-  const expected = await hmac(secret, exp);
-  return safeEqual(sig, expected);
 }
 
 // Protect everything except: the login page/route, Next internals, and public
@@ -54,7 +23,7 @@ export const config = {
   ],
 };
 
-export async function middleware(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (pathname === "/login" || pathname === "/api/login") {
@@ -65,11 +34,10 @@ export async function middleware(req: NextRequest) {
   const password = process.env.APP_PASSWORD;
 
   // Auth not configured (e.g. local dev without secrets) → don't lock anyone out.
-  // In production on Vercel, set AUTH_SECRET + APP_PASSWORD so this gate is active.
   if (!secret || !password) return NextResponse.next();
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (await verifySessionToken(token, secret)) {
+  if (token && safeEqual(token, secret)) {
     return NextResponse.next();
   }
 
