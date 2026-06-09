@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/db";
+import { isAuthed, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/bets/export — download the full bet log as CSV.
 export async function GET() {
+  if (!isAuthed()) return apiUnauthorized();
   const bets = await prisma.bet.findMany({
     orderBy: [{ eventAt: "desc" }, { createdAt: "desc" }],
   });

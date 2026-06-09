@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma, getSettings } from "@/lib/db";
 import { hasOddsApiKey } from "@/lib/oddsApi";
+import { isAuthed, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (!isAuthed()) return apiUnauthorized();
   const s = await getSettings();
   return NextResponse.json({
     unitValue: s.unitValue,
@@ -15,6 +17,7 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
+  if (!isAuthed()) return apiUnauthorized();
   try {
     const body = await req.json();
     const data: Record<string, unknown> = {};

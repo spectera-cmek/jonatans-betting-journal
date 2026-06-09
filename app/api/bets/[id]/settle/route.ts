@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { serializeBet } from "@/lib/types";
 import { profitUnits, type Outcome } from "@/lib/betting";
+import { isAuthed, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export async function POST(
   req: Request,
   { params }: { params: { id: string } }
 ) {
+  if (!isAuthed()) return apiUnauthorized();
   try {
     const { outcome } = (await req.json()) as { outcome?: string };
     const o = (outcome || "").toLowerCase() as Outcome;

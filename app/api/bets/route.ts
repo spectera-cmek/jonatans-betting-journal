@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { serializeBet } from "@/lib/types";
 import { buildBetData, ValidationError } from "@/lib/betInput";
+import { isAuthed, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/bets — list bets, newest event first.
 export async function GET() {
+  if (!isAuthed()) return apiUnauthorized();
   const bets = await prisma.bet.findMany({
     orderBy: [{ eventAt: "desc" }, { createdAt: "desc" }],
   });
@@ -15,6 +17,7 @@ export async function GET() {
 
 // POST /api/bets — create a bet.
 export async function POST(req: Request) {
+  if (!isAuthed()) return apiUnauthorized();
   try {
     const body = await req.json();
     const data = buildBetData(body, { partial: false });

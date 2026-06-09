@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { runGrade, runClosing, runFullSync, runGradeByScores } from "@/lib/sync";
+import { isAuthed, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // POST /api/sync?kind=grade|closing|all|scores
 // "scores" uses the free, keyless ESPN scoreboard lookup (no Odds API needed).
 export async function POST(req: Request) {
+  if (!isAuthed()) return apiUnauthorized();
   const { searchParams } = new URL(req.url);
   const kind = searchParams.get("kind") || "all";
   try {

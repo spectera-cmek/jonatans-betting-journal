@@ -11,11 +11,13 @@ import {
 } from "@/lib/betting";
 import type { Outcome } from "@/lib/betting";
 import { computeInsights } from "@/lib/insights";
+import { isAuthed, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/metrics — everything the dashboard & analytics need.
 export async function GET() {
+  if (!isAuthed()) return apiUnauthorized();
   const [bets, settings] = await Promise.all([
     prisma.bet.findMany(),
     getSettings(),

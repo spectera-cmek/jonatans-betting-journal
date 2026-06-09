@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { serializeBet } from "@/lib/types";
 import { buildBetData, ValidationError } from "@/lib/betInput";
+import { isAuthed, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
 ) {
+  if (!isAuthed()) return apiUnauthorized();
   try {
     const existing = await prisma.bet.findUnique({ where: { id: params.id } });
     if (!existing) {
@@ -43,6 +45,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
+  if (!isAuthed()) return apiUnauthorized();
   try {
     await prisma.bet.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });

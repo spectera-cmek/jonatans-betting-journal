@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getOdds, hasOddsApiKey, bestPriceFor } from "@/lib/oddsApi";
+import { isAuthed, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/odds/search?sport=soccer_epl&q=arsenal
 // Returns upcoming events for a sport, filtered by query, with H2H prices to autofill.
 export async function GET(req: Request) {
+  if (!isAuthed()) return apiUnauthorized();
   if (!hasOddsApiKey()) {
     return NextResponse.json({ error: "No ODDS_API_KEY set", events: [] }, { status: 200 });
   }
