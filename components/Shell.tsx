@@ -17,8 +17,9 @@ function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
-export function Sidebar() {
+export function Sidebar({ username }: { username?: string }) {
   const pathname = usePathname();
+  const displayName = username ? username[0].toUpperCase() + username.slice(1) : "—";
   return (
     <aside className="ap-side">
       <div className="ap-logo">
@@ -33,10 +34,10 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="ap-side-foot">
-        <div className="ap-avatar">J</div>
+        <div className="ap-avatar">{username ? username[0].toUpperCase() : "?"}</div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            Jonatan
+            {displayName}
           </div>
           <div style={{ fontSize: 11, color: "var(--dim2)" }}>Personlig journal</div>
         </div>

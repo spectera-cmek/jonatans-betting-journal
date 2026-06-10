@@ -2,8 +2,11 @@
 //
 // Usage:
 //   npm run import:unibet -- <file.csv>                # dry-run: parse + print stats
-//   npm run import:unibet -- <file.csv> --confirm      # incremental import into the DB
+//   npm run import:unibet -- <file.csv> --confirm --user <username>
+//                                                      # incremental import into that account
 //   npm run import:unibet -- <file.csv> --sample 10    # also print first N coupons
+//
+// --user is required with --confirm: coupons are imported into that account's log.
 //
 // The CSV is a transaction ledger (no team names / odds / markets). Parsing + DB logic
 // live in lib/unibet.ts. Profit is taken from the actual cash movements (after tax),
@@ -47,10 +50,19 @@ async function main() {
   const args = process.argv.slice(2);
   const confirm = args.includes("--confirm");
   const sampleN = args.includes("--sample") ? Number(args[args.indexOf("--sample") + 1]) || 8 : 0;
-  const path = args.find((a) => !a.startsWith("--") && a !== String(sampleN));
+  const username = args.includes("--user")
+    ? (args[args.indexOf("--user") + 1] || "").trim().toLowerCase()
+    : "";
+  // The file path is the first arg that isn't a flag or a flag's value.
+  const flagValues = new Set([String(sampleN), username && args[args.indexOf("--user") + 1]]);
+  const path = args.find((a) => !a.startsWith("--") && !flagValues.has(a));
 
   if (!path) {
-    console.error("Usage: npm run import:unibet -- <file.csv> [--confirm] [--sample N]");
+    console.error("Usage: npm run import:unibet -- <file.csv> [--confirm --user <username>] [--sample N]");
+    process.exit(1);
+  }
+  if (confirm && !username) {
+    console.error("--confirm requires --user <username> (the account to import into).");
     process.exit(1);
   }
 
@@ -77,8 +89,13 @@ async function main() {
 
   const prisma = new PrismaClient();
   try {
-    console.log(`\n--confirm: incremental import (matching on coupon id) ...`);
-    const s = await importCoupons(prisma, coupons);
+    const user = await prisma.user.findUnique({ where: { username } });
+    if (!user) {
+      console.error(`No user "${username}" found — register the account in the app first.`);
+      process.exit(1);
+    }
+    console.log(`\n--confirm: incremental import for ${username} (matching on coupon id) ...`);
+    const s = await importCoupons(prisma, coupons, user.id);
     console.log("\nDone.");
     console.log(`  Added new:        ${s.added}`);
     console.log(`  Updated:          ${s.updated}`);

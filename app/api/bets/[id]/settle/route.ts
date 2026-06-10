@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { serializeBet } from "@/lib/types";
 import { profitUnits, type Outcome } from "@/lib/betting";
-import { isAuthed, apiUnauthorized } from "@/lib/auth";
+import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,8 @@ export async function POST(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  if (!isAuthed()) return apiUnauthorized();
+  const userId = getSessionUserId();
+  if (!userId) return apiUnauthorized();
   try {
     const { outcome } = (await req.json()) as { outcome?: string };
     const o = (outcome || "").toLowerCase() as Outcome;
@@ -30,7 +31,8 @@ export async function POST(
       return NextResponse.json({ error: "invalid outcome" }, { status: 400 });
     }
 
-    const existing = await prisma.bet.findUnique({ where: { id: params.id } });
+    // Scoped lookup: another user's bet id looks like a 404, not a 403.
+    const existing = await prisma.bet.findFirst({ where: { id: params.id, userId } });
     if (!existing) {
       return NextResponse.json({ error: "Bet not found" }, { status: 404 });
     }

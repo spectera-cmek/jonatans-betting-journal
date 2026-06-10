@@ -2,11 +2,14 @@
 //
 // Usage:
 //   npm run import:bet365                 # dry-run: parse + print stats, DB untouched
-//   npm run import:bet365 -- --confirm    # INCREMENTAL: settle pending + add new slips
+//   npm run import:bet365 -- --confirm --user <username>
+//                                         # INCREMENTAL: settle pending + add new slips
 //                                         #   (matches on slip ref, never wipes, keeps
 //                                         #    manually-added bets & enrichment)
-//   npm run import:bet365 -- --confirm --wipe   # full reset: delete all, re-import
+//   npm run import:bet365 -- --confirm --user <username> --wipe   # full reset for that user
 //   npm run import:bet365 -- --sample 8   # also print first N parsed slips
+//
+// --user is required with --confirm: bets are imported into that account's log.
 //
 // Parsing + DB logic live in lib/bet365.mts (shared with the in-app import button).
 // Profit is taken from the ACTUAL payout column (after tax), not recomputed.
@@ -67,6 +70,14 @@ async function main() {
   const confirm = args.includes("--confirm");
   const wipe = args.includes("--wipe");
   const sampleN = args.includes("--sample") ? Number(args[args.indexOf("--sample") + 1]) || 8 : 0;
+  const username = args.includes("--user")
+    ? (args[args.indexOf("--user") + 1] || "").trim().toLowerCase()
+    : "";
+
+  if (confirm && !username) {
+    console.error("--confirm requires --user <username> (the account to import into).");
+    process.exit(1);
+  }
 
   console.log(`Reading ${PDF_PATH} ...`);
   const data = new Uint8Array(fs.readFileSync(PDF_PATH));
@@ -91,13 +102,19 @@ async function main() {
 
   const prisma = new PrismaClient();
   try {
+    const user = await prisma.user.findUnique({ where: { username } });
+    if (!user) {
+      console.error(`No user "${username}" found — register the account in the app first.`);
+      process.exit(1);
+    }
     if (wipe) {
-      const existing = await prisma.bet.count();
-      console.log(`\n--wipe: deleting ${existing} existing bets, then re-importing ...`);
+      const existing = await prisma.bet.count({ where: { userId: user.id } });
+      console.log(`\n--wipe: deleting ${existing} existing bets for ${username}, then re-importing ...`);
     } else {
-      console.log(`\n--confirm: incremental import (matching on slip ref) ...`);
+      console.log(`\n--confirm: incremental import for ${username} (matching on slip ref) ...`);
     }
     const summary = await importSlips(prisma, slips, {
+      userId: user.id,
       wipe,
       onProgress: (done, total) => {
         if (done % 500 === 0 || done === total) process.stdout.write(`\r  ${done}/${total}`);

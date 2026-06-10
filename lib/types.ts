@@ -96,6 +96,7 @@ export function serializeBet(b: BetRow): BetDTO {
 }
 
 export interface SettingsDTO {
+  username?: string; // present on GET (who's logged in), not echoed by PUT
   unitValue: number;
   currency: string;
   startingBankrollUnits: number;

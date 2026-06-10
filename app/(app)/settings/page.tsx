@@ -35,7 +35,8 @@ export default function SettingsPage() {
         currency,
         startingBankrollUnits: Number(startBankroll),
       });
-      setSettings(s);
+      // PUT doesn't echo username — keep the one from the initial GET.
+      setSettings((prev) => ({ ...s, username: prev?.username }));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -138,6 +139,11 @@ export default function SettingsPage() {
 
         <Card>
           <span className="ap-label">Konto</span>
+          {settings?.username && (
+            <p style={{ fontSize: 13, color: "var(--dim)", marginTop: 14, marginBottom: 0 }}>
+              Inloggad som <strong style={{ color: "var(--txt)" }}>{settings.username}</strong>
+            </p>
+          )}
           <div style={{ marginTop: 14 }}>
             <button
               className="ap-btn ghost"

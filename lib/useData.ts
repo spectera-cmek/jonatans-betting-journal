@@ -30,6 +30,7 @@ export interface LeaderboardEntry {
 }
 
 export interface MetricsResponse {
+  username: string;
   metrics: Metrics;
   insights: Insights;
   bankroll: BankrollPoint[];

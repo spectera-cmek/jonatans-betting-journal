@@ -36,6 +36,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:push": "prisma db push",
+    "db:migrate-users": "tsx scripts/migrateToMultiUser.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:export": "tsx scripts/exportData.ts",
@@ -51,6 +52,7 @@
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
+    "bcryptjs": "^3.0.2",
     "dotenv": "^16.4.5",
     "next": "14.2.18",
     "react": "18.3.1",

@@ -66,8 +66,8 @@ Open **http://localhost:3000**.
 immediately — replace them with your own from the **Logga bet** button.
 
 > 📱 **Want it on your phone?** The app can also be deployed to the cloud (Vercel +
-> Postgres) with password login, so you can open it anywhere and add it to your home
-> screen. See **[DEPLOY.md](DEPLOY.md)**.
+> Postgres) with per-account login (username + password, invite-code registration),
+> so several people can track their own bets. See **[DEPLOY.md](DEPLOY.md)**.
 
 ## 📜 Scripts
 
@@ -105,8 +105,8 @@ Export your **account statement** as PDF, drop it in the project root as `statem
 (or point `BET365_PDF` at it), then:
 
 ```bash
-npm run import:bet365              # dry-run: parse + print stats, DB untouched
-npm run import:bet365 -- --confirm # incremental: settle pending + add new slips
+npm run import:bet365                                  # dry-run: parse + print stats, DB untouched
+npm run import:bet365 -- --confirm --user <username>   # incremental import into that account
 ```
 
 It matches on each slip's reference, so it never wipes manually-added bets and is safe
@@ -206,8 +206,8 @@ Exportera ditt **kontoutdrag** som PDF, lägg det i projektroten som `statement.
 (eller peka `BET365_PDF` på det):
 
 ```bash
-npm run import:bet365              # dry-run: parsar + skriver statistik
-npm run import:bet365 -- --confirm # inkrementellt: rättar pending + lägger till nya
+npm run import:bet365                                       # dry-run: parsar + skriver statistik
+npm run import:bet365 -- --confirm --user <användarnamn>    # inkrementellt in på det kontot
 ```
 
 Matchar på varje slips referens — rör aldrig manuellt tillagda bets och är säker att

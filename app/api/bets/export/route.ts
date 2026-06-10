@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/db";
-import { isAuthed, apiUnauthorized } from "@/lib/auth";
+import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/bets/export — download the full bet log as CSV.
+// GET /api/bets/export — download the current user's bet log as CSV.
 export async function GET() {
-  if (!isAuthed()) return apiUnauthorized();
+  const userId = getSessionUserId();
+  if (!userId) return apiUnauthorized();
   const bets = await prisma.bet.findMany({
+    where: { userId },
     orderBy: [{ eventAt: "desc" }, { createdAt: "desc" }],
   });
 

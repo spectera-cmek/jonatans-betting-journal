@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function LoginPage() {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -15,7 +17,7 @@ export default function LoginPage() {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -38,19 +40,30 @@ export default function LoginPage() {
         <div className="ap-login-logo">
           <div className="mark">J</div>
         </div>
-        <h1 className="ap-login-title">Jonatans Betting Journal</h1>
-        <p className="ap-login-sub">Ange lösenord för att fortsätta</p>
+        <h1 className="ap-login-title">Betting Journal</h1>
+        <p className="ap-login-sub">Logga in för att fortsätta</p>
+
+        <input
+          className="ap-input"
+          type="text"
+          inputMode="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          placeholder="Användarnamn"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoFocus
+          style={{ marginTop: 18, width: "100%" }}
+        />
 
         <input
           className="ap-input"
           type="password"
-          inputMode="text"
           autoComplete="current-password"
           placeholder="Lösenord"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          autoFocus
-          style={{ marginTop: 18, width: "100%" }}
+          style={{ marginTop: 10, width: "100%" }}
         />
 
         {error && <div className="ap-login-err">{error}</div>}
@@ -58,6 +71,10 @@ export default function LoginPage() {
         <button className="ap-btn" type="submit" disabled={busy} style={{ marginTop: 14, width: "100%", justifyContent: "center" }}>
           {busy ? "Loggar in…" : "Logga in"}
         </button>
+
+        <p className="ap-login-sub" style={{ marginTop: 14 }}>
+          Inget konto? <Link href="/register" style={{ color: "var(--accent, #7aa2ff)" }}>Skapa konto</Link>
+        </p>
       </form>
     </div>
   );

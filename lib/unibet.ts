@@ -197,12 +197,14 @@ function approxEq(a: number | null | undefined, b: number | null | undefined): b
 }
 
 /**
- * Incremental import: match existing rows on importRef (coupon id). Adds new coupons,
- * updates outcome/profit on changed ones, never wipes or touches non-Unibet bets.
+ * Incremental import into the given user's bet log: match existing rows on importRef
+ * (coupon id). Adds new coupons, updates outcome/profit on changed ones, never wipes
+ * or touches non-Unibet bets.
  */
 export async function importCoupons(
   prisma: PrismaClient,
-  coupons: Coupon[]
+  coupons: Coupon[],
+  userId: string
 ): Promise<ImportSummary> {
   const usable = coupons.filter((c) => c.hasStake && c.stakeKr > 0);
   const skippedNoStake = coupons.length - usable.length;
@@ -210,7 +212,7 @@ export async function importCoupons(
   const netUnits = records.reduce((a, r) => a + r.profitUnits, 0);
 
   const existing = await prisma.bet.findMany({
-    where: { importRef: { in: records.map((r) => r.ref) } },
+    where: { userId, importRef: { in: records.map((r) => r.ref) } },
     select: { id: true, importRef: true, outcome: true, profitUnits: true },
   });
   const byRef = new Map(existing.map((e) => [e.importRef as string, e]));
@@ -222,7 +224,7 @@ export async function importCoupons(
   for (const r of records) {
     const ex = byRef.get(r.ref);
     if (!ex) {
-      await prisma.bet.create({ data: r.data as never });
+      await prisma.bet.create({ data: { ...r.data, userId } as never });
       added += 1;
     } else if (ex.outcome !== r.outcome || !approxEq(ex.profitUnits, r.profitUnits)) {
       await prisma.bet.update({

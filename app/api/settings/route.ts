@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma, getSettings } from "@/lib/db";
 import { hasOddsApiKey } from "@/lib/oddsApi";
-import { isAuthed, apiUnauthorized } from "@/lib/auth";
+import { getSessionUser, getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!isAuthed()) return apiUnauthorized();
-  const s = await getSettings();
+  const user = await getSessionUser();
+  if (!user) return apiUnauthorized();
+  const s = await getSettings(user.id);
   return NextResponse.json({
+    username: user.username,
     unitValue: s.unitValue,
     currency: s.currency,
     startingBankrollUnits: s.startingBankrollUnits,
@@ -17,7 +19,8 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-  if (!isAuthed()) return apiUnauthorized();
+  const userId = getSessionUserId();
+  if (!userId) return apiUnauthorized();
   try {
     const body = await req.json();
     const data: Record<string, unknown> = {};
@@ -41,9 +44,9 @@ export async function PUT(req: Request) {
     }
 
     const s = await prisma.setting.upsert({
-      where: { id: 1 },
+      where: { userId },
       update: data,
-      create: { id: 1, ...data },
+      create: { userId, ...data },
     });
 
     return NextResponse.json({

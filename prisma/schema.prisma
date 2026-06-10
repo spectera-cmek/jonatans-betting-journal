@@ -11,8 +11,21 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique // stored lowercase; capitalized only for display
+  passwordHash String // bcrypt
+  createdAt    DateTime @default(now())
+  bets         Bet[]
+  setting      Setting?
+}
+
 model Bet {
   id            String    @id @default(cuid())
+  // Optional during the multi-user migration (phase A); becomes required once all
+  // rows are backfilled and the NOT NULL push (phase D) has run.
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   placedAt      DateTime  @default(now())
   eventAt       DateTime?
   sportKey      String? // The Odds API key, e.g. "soccer_epl"
@@ -41,16 +54,20 @@ model Bet {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  @@index([outcome])
-  @@index([eventAt])
-  @@index([importRef])
+  @@index([userId, outcome])
+  @@index([userId, eventAt])
+  // Index (not unique): historical imports may hold duplicate refs per user.
+  @@index([userId, importRef])
 }
 
 model Setting {
-  id                    Int    @id @default(1)
-  unitValue             Float  @default(100) // currency per unit
-  currency              String @default("kr")
-  startingBankrollUnits Float  @default(100)
+  id                    Int     @id @default(autoincrement())
+  // One settings row per user. Optional during phase A (see Bet.userId).
+  userId                String? @unique
+  user                  User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitValue             Float   @default(100) // currency per unit
+  currency              String  @default("kr")
+  startingBankrollUnits Float   @default(100)
 }
 
 model SyncLog {

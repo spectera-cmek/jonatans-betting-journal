@@ -1,4 +1,7 @@
 /**
+ * DEPRECATED — legacy tool from the one-time SQLite → Neon migration (June 2026).
+ * Predates multi-user accounts: the export has no User table or userId column.
+ *
  * One-time data export — run this while the Prisma provider is still `sqlite`.
  *
  * Dumps every Bet / Setting / SyncLog row from the local SQLite database to

@@ -2,18 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { serializeBet } from "@/lib/types";
 import { buildBetData, ValidationError } from "@/lib/betInput";
-import { isAuthed, apiUnauthorized } from "@/lib/auth";
+import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// PATCH /api/bets/:id — update fields on a bet.
+// PATCH /api/bets/:id — update fields on a bet (must belong to the current user).
 export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  if (!isAuthed()) return apiUnauthorized();
+  const userId = getSessionUserId();
+  if (!userId) return apiUnauthorized();
   try {
-    const existing = await prisma.bet.findUnique({ where: { id: params.id } });
+    // Scoped lookup: another user's bet id looks like a 404, not a 403.
+    const existing = await prisma.bet.findFirst({ where: { id: params.id, userId } });
     if (!existing) {
       return NextResponse.json({ error: "Bet not found" }, { status: 404 });
     }
@@ -45,9 +47,13 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  if (!isAuthed()) return apiUnauthorized();
+  const userId = getSessionUserId();
+  if (!userId) return apiUnauthorized();
   try {
-    await prisma.bet.delete({ where: { id: params.id } });
+    const { count } = await prisma.bet.deleteMany({ where: { id: params.id, userId } });
+    if (count === 0) {
+      return NextResponse.json({ error: "Bet not found" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error(e);

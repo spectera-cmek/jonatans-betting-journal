@@ -296,32 +296,33 @@ function approxEq(a: number | null | undefined, b: number | null | undefined): b
 }
 
 /**
- * Import slips into the DB.
- *  - default (incremental): match existing bets on the Bet365 slip ref (importRef,
- *    falling back to the legacy `notes` ref). Updates settlement on previously-pending
- *    slips, adds new slips, and never touches manually-added bets or enrichment
- *    (sport/league/market) on existing rows.
- *  - wipe: delete everything and re-create from scratch (the old behaviour).
+ * Import slips into the given user's bet log.
+ *  - default (incremental): match the user's existing bets on the Bet365 slip ref
+ *    (importRef, falling back to the legacy `notes` ref). Updates settlement on
+ *    previously-pending slips, adds new slips, and never touches manually-added
+ *    bets or enrichment (sport/league/market) on existing rows.
+ *  - wipe: delete the user's bets and re-create from scratch (the old behaviour).
  */
 export async function importSlips(
   prisma: PrismaClient,
   slips: Slip[],
-  opts: { wipe?: boolean; onProgress?: (done: number, total: number) => void } = {}
+  opts: { userId: string; wipe?: boolean; onProgress?: (done: number, total: number) => void }
 ): Promise<ImportSummary> {
+  const { userId } = opts;
   const records = slips.map(slipToRecord);
   const netUnits = records.reduce((a, r) => a + (r.profitUnits ?? 0), 0);
 
   if (opts.wipe) {
-    await prisma.bet.deleteMany({});
+    await prisma.bet.deleteMany({ where: { userId } });
     await prisma.setting.upsert({
-      where: { id: 1 },
+      where: { userId },
       update: {},
-      create: { id: 1, unitValue: UNIT_KR, currency: "kr", startingBankrollUnits: 100 },
+      create: { userId, unitValue: UNIT_KR, currency: "kr", startingBankrollUnits: 100 },
     });
     const CHUNK = 500;
     let inserted = 0;
     for (let i = 0; i < records.length; i += CHUNK) {
-      const batch = records.slice(i, i + CHUNK).map((r) => r.data);
+      const batch = records.slice(i, i + CHUNK).map((r) => ({ ...r.data, userId }));
       const res = await prisma.bet.createMany({ data: batch as never });
       inserted += res.count;
       opts.onProgress?.(inserted, records.length);
@@ -338,8 +339,9 @@ export async function importSlips(
     };
   }
 
-  // Incremental: index existing bets by their slip ref.
+  // Incremental: index the user's existing bets by their slip ref.
   const existing = await prisma.bet.findMany({
+    where: { userId },
     select: { id: true, importRef: true, notes: true, outcome: true, profitUnits: true },
   });
   const byRef = new Map<string, (typeof existing)[number]>();
@@ -358,7 +360,7 @@ export async function importSlips(
   for (const r of records) {
     const ex = r.ref ? byRef.get(r.ref) : undefined;
     if (!ex) {
-      await prisma.bet.create({ data: r.data as never });
+      await prisma.bet.create({ data: { ...r.data, userId } as never });
       added += 1;
     } else {
       const outcomeChanged = ex.outcome !== r.outcome;

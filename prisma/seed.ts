@@ -1,9 +1,13 @@
-// Seeds the settings row and a handful of demo bets so the dashboard isn't empty
-// on first run. Safe to re-run: it upserts settings and only adds demo bets if
-// the table is empty.
+// Seeds a "demo" account (password: SEED_PASSWORD env, default "demo1234"),
+// its settings row and a handful of demo bets so the dashboard isn't empty on
+// first run. Safe to re-run: it upserts the user + settings and only adds demo
+// bets if the account has none.
 
 import { PrismaClient } from "@prisma/client";
 import { profitUnits, type Outcome } from "../lib/betting";
+import { hashPassword } from "../lib/password";
+
+const DEMO_USERNAME = "demo";
 
 const prisma = new PrismaClient();
 
@@ -48,13 +52,20 @@ const demo: DemoBet[] = [
 ];
 
 async function main() {
-  await prisma.setting.upsert({
-    where: { id: 1 },
+  const passwordHash = await hashPassword(process.env.SEED_PASSWORD || "demo1234");
+  const user = await prisma.user.upsert({
+    where: { username: DEMO_USERNAME },
     update: {},
-    create: { id: 1, unitValue: 100, currency: "kr", startingBankrollUnits: 100 },
+    create: { username: DEMO_USERNAME, passwordHash },
   });
 
-  const count = await prisma.bet.count();
+  await prisma.setting.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: { userId: user.id, unitValue: 100, currency: "kr", startingBankrollUnits: 100 },
+  });
+
+  const count = await prisma.bet.count({ where: { userId: user.id } });
   if (count === 0) {
     for (const b of demo) {
       const p =
@@ -63,6 +74,7 @@ async function main() {
           : profitUnits(b.outcome, b.odds, b.stakeUnits);
       await prisma.bet.create({
         data: {
+          userId: user.id,
           eventAt: b.eventAt,
           placedAt: b.eventAt,
           sport: b.sport,
@@ -85,9 +97,9 @@ async function main() {
         },
       });
     }
-    console.log(`Seeded ${demo.length} demo bets.`);
+    console.log(`Seeded ${demo.length} demo bets for "${DEMO_USERNAME}".`);
   } else {
-    console.log(`Bets table already has ${count} rows — skipping demo seed.`);
+    console.log(`"${DEMO_USERNAME}" already has ${count} bets — skipping demo seed.`);
   }
 
   console.log("Seed complete.");

@@ -3,8 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Jonatans Betting Journal",
-  description: "Jonatans personliga betting-journal — bets, ROI och form, med auto-rättning från kontoutdrag.",
+  title: "Betting Journal",
+  description: "Personlig betting-journal — bets, ROI och form, med auto-rättning från kontoutdrag.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

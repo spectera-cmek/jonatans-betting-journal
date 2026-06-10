@@ -2,14 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { serializeBet } from "@/lib/types";
 import { buildBetData, ValidationError } from "@/lib/betInput";
-import { isAuthed, apiUnauthorized } from "@/lib/auth";
+import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/bets — list bets, newest event first.
+// GET /api/bets — list the current user's bets, newest event first.
 export async function GET() {
-  if (!isAuthed()) return apiUnauthorized();
+  const userId = getSessionUserId();
+  if (!userId) return apiUnauthorized();
   const bets = await prisma.bet.findMany({
+    where: { userId },
     orderBy: [{ eventAt: "desc" }, { createdAt: "desc" }],
   });
   return NextResponse.json(bets.map(serializeBet));
@@ -17,11 +19,12 @@ export async function GET() {
 
 // POST /api/bets — create a bet.
 export async function POST(req: Request) {
-  if (!isAuthed()) return apiUnauthorized();
+  const userId = getSessionUserId();
+  if (!userId) return apiUnauthorized();
   try {
     const body = await req.json();
     const data = buildBetData(body, { partial: false });
-    const bet = await prisma.bet.create({ data: data as never });
+    const bet = await prisma.bet.create({ data: { ...(data as object), userId } as never });
     return NextResponse.json(serializeBet(bet), { status: 201 });
   } catch (e) {
     if (e instanceof ValidationError) {

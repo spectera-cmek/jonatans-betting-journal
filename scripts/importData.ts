@@ -1,4 +1,8 @@
 /**
+ * DEPRECATED — legacy tool from the one-time SQLite → Neon migration (June 2026).
+ * Predates multi-user accounts: imported rows get no userId; run
+ * `npm run db:migrate-users -- --user <username>` afterwards to claim them.
+ *
  * One-time data import — run this AFTER the Postgres (Neon) database exists and
  * `npm run db:push` has created the tables. Reads prisma/data-export.json (produced
  * by scripts/exportData.ts) and inserts every row into the cloud database.

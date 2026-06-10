@@ -11,11 +11,7 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-/** Fetch the singleton settings row, creating defaults if missing. */
-export async function getSettings() {
-  let s = await prisma.setting.findUnique({ where: { id: 1 } });
-  if (!s) {
-    s = await prisma.setting.create({ data: { id: 1 } });
-  }
-  return s;
+/** Fetch a user's settings row, creating defaults if missing. */
+export async function getSettings(userId: string) {
+  return prisma.setting.upsert({ where: { userId }, update: {}, create: { userId } });
 }

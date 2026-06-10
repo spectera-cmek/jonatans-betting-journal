@@ -52,11 +52,17 @@ export default function OverviewPage() {
   const rangeLabel = allMonths.length ? allMonths[0].month.slice(0, 4) : "";
   const ins = data?.insights;
 
+  // Per-user header: "Jonatans Betting Journal" for jonatan, etc.
+  const username = data?.username;
+  const title = username
+    ? `${username[0].toUpperCase() + username.slice(1)}s Betting Journal`
+    : "Betting Journal";
+
   return (
     <div>
       {glow && <div className="ap-glow" />}
       <Topbar
-        title="Jonatans Betting Journal"
+        title={title}
         sub={
           loading ? (
             "Laddar…"

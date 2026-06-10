@@ -4,7 +4,7 @@ import type { MetadataRoute } from "next";
 // home screen ("Lägg till på hemskärmen") so it launches like a native app.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Jonatans Betting Journal",
+    name: "Betting Journal",
     short_name: "Journal",
     description: "Personlig betting-journal — bets, ROI och form.",
     lang: "sv",

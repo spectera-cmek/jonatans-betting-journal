@@ -26,8 +26,8 @@ I Vercel: **Settings → Environment Variables**. Lägg till (Environment: *Prod
 
 | Namn | Värde |
 |------|-------|
-| `APP_PASSWORD` | Lösenordet du vill logga in med på telefonen |
-| `AUTH_SECRET` | En lång slumpsträng (se kommando nedan) |
+| `AUTH_SECRET` | En lång slumpsträng (se kommando nedan) — signerar sessionscookies |
+| `INVITE_CODE` | Koden som krävs för att skapa konto — dela bara med folk du vill ha in |
 | `DIRECT_URL` | Samma som `DATABASE_URL` men **utan** `-pooler` i hostnamnet *(se nedan)* |
 | `ODDS_API_KEY` | (valfritt) din The Odds API-nyckel |
 
@@ -70,7 +70,7 @@ Tryck **Deploy** (eller **Redeploy**) i Vercel. När det är klart får du en UR
 ## 5. På telefonen
 
 1. Öppna URL:en i webbläsaren.
-2. Logga in med `APP_PASSWORD`.
+2. Logga in med ditt användarnamn + lösenord (eller skapa konto med inbjudningskoden).
 3. **Lägg till på hemskärmen:**
    - iPhone (Safari): Dela-knappen → *Lägg till på hemskärmen*.
    - Android (Chrome): meny (⋮) → *Lägg till på startskärmen / Installera appen*.
@@ -86,7 +86,7 @@ molndatabasen (eftersom `.env` pekar dit):
 
 ```bash
 # lägg kontoutdraget som statement.pdf i projektmappen, sedan:
-npm run import:bet365 -- --confirm
+npm run import:bet365 -- --confirm --user <ditt-användarnamn>
 ```
 
 Ändringarna syns direkt på telefonen efter en omladdning.
@@ -97,6 +97,9 @@ npm run import:bet365 -- --confirm
 
 - **Första bygget failar med databas-/Prisma-fel:** env-variablerna saknades vid bygget.
   Lägg in dem (steg 1–2) och tryck **Redeploy**.
-- **"Inloggning är inte konfigurerad":** `APP_PASSWORD` eller `AUTH_SECRET` saknas i Vercel.
+- **"Inloggning är inte konfigurerad":** `AUTH_SECRET` saknas i Vercel.
+- **"Registrering är inte konfigurerad":** `INVITE_CODE` saknas i Vercel.
 - **Utloggad hela tiden:** `AUTH_SECRET` skiljer sig mellan Production och Preview — sätt
   samma värde i alla miljöer.
+- **Glömt lösenord:** det finns ingen självbetjäning — ägaren får sätta ett nytt hash direkt
+  i databasen (eller skapa ett nytt konto och importera om).
