@@ -22,22 +22,51 @@ const RES_CHIPS: [string, string][] = [
 ];
 const MONTHS_SV = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
 
+type SortKey = "date" | "odds" | "stake" | "profit";
+const SORT_OPTS: [string, string][] = [
+  ["date_desc", "Senaste först"],
+  ["date_asc", "Äldsta först"],
+  ["odds_desc", "Högsta odds"],
+  ["odds_asc", "Lägsta odds"],
+  ["stake_desc", "Största insats"],
+  ["stake_asc", "Minsta insats"],
+  ["profit_desc", "Största vinst"],
+  ["profit_asc", "Största förlust"],
+];
+
+// "1,5" and "1.5" both parse; empty/garbage → null (filter inactive).
+const num = (s: string) => {
+  const v = parseFloat(s.replace(",", "."));
+  return Number.isFinite(v) ? v : null;
+};
+
 export default function BetsPage() {
   const { bets, settings, loading, reload } = useBets();
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("Alla sporter");
   const [book, setBook] = useState("Alla bookmakers");
+  const [market, setMarket] = useState("Alla marknader");
+  const [btype, setBtype] = useState("alla");
   const [res, setRes] = useState("alla");
   const [day, setDay] = useState(""); // YYYY-MM-DD, specific day
   const [year, setYear] = useState("Alla år");
   const [month, setMonth] = useState("Alla månader");
+  const [oddsMin, setOddsMin] = useState("");
+  const [oddsMax, setOddsMax] = useState("");
+  const [stakeMin, setStakeMin] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
 
   const sports = useMemo(() => Array.from(new Set(bets.map((b) => b.sport).filter(Boolean))) as string[], [bets]);
   const books = useMemo(() => Array.from(new Set(bets.map((b) => b.bookmaker).filter(Boolean))) as string[], [bets]);
+  const markets = useMemo(
+    () => (Array.from(new Set(bets.map((b) => b.market).filter(Boolean))) as string[]).sort((a, b) => a.localeCompare(b, "sv")),
+    [bets]
+  );
   const years = useMemo(
     () => Array.from(new Set(bets.map((b) => new Date(b.eventAt ?? b.placedAt).getFullYear()))).sort((a, b) => b - a).map(String),
     [bets]
@@ -45,13 +74,19 @@ export default function BetsPage() {
   const rangeLabel = years.length ? (years[0] === years[years.length - 1] ? years[0] : `${years[years.length - 1]}–${years[0]}`) : "";
 
   const filtered = useMemo(() => {
+    const oMin = num(oddsMin), oMax = num(oddsMax), sMin = num(stakeMin);
     return bets.filter((b) => {
       if (sport !== "Alla sporter" && b.sport !== sport) return false;
       if (book !== "Alla bookmakers" && b.bookmaker !== book) return false;
+      if (market !== "Alla marknader" && b.market !== market) return false;
+      if (btype !== "alla" && b.betType !== btype) return false;
       if (res === "win" && !(b.outcome === "win" || b.outcome === "half_win")) return false;
       if (res === "loss" && !(b.outcome === "loss" || b.outcome === "half_loss")) return false;
       if (res === "pending" && b.outcome !== "pending") return false;
       if (res === "push" && !(b.outcome === "push" || b.outcome === "void")) return false;
+      if (oMin !== null && b.odds < oMin) return false;
+      if (oMax !== null && b.odds > oMax) return false;
+      if (sMin !== null && b.stakeUnits < sMin) return false;
       const d = new Date(b.eventAt ?? b.placedAt);
       if (day) {
         const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -66,7 +101,47 @@ export default function BetsPage() {
       }
       return true;
     });
-  }, [bets, sport, book, res, q, day, year, month]);
+  }, [bets, sport, book, market, btype, res, q, day, year, month, oddsMin, oddsMax, stakeMin]);
+
+  const sorted = useMemo(() => {
+    const t = (b: BetDTO) => new Date(b.eventAt ?? b.placedAt).getTime();
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (sortKey === "profit") {
+        // open bets have no P/L — keep them at the bottom either way
+        const ap = a.outcome === "pending", bp = b.outcome === "pending";
+        if (ap !== bp) return ap ? 1 : -1;
+      }
+      let cmp = 0;
+      if (sortKey === "date") cmp = t(a) - t(b);
+      else if (sortKey === "odds") cmp = a.odds - b.odds;
+      else if (sortKey === "stake") cmp = a.stakeUnits - b.stakeUnits;
+      else cmp = (a.profitUnits ?? 0) - (b.profitUnits ?? 0);
+      return cmp !== 0 ? cmp * dir : t(b) - t(a);
+    });
+  }, [filtered, sortKey, sortDir]);
+
+  const hasFilter =
+    q !== "" || sport !== "Alla sporter" || book !== "Alla bookmakers" || market !== "Alla marknader" ||
+    btype !== "alla" || res !== "alla" || day !== "" || year !== "Alla år" || month !== "Alla månader" ||
+    oddsMin !== "" || oddsMax !== "" || stakeMin !== "";
+
+  const clearFilters = () => {
+    setQ(""); setSport("Alla sporter"); setBook("Alla bookmakers"); setMarket("Alla marknader");
+    setBtype("alla"); setRes("alla"); setDay(""); setYear("Alla år"); setMonth("Alla månader");
+    setOddsMin(""); setOddsMax(""); setStakeMin("");
+  };
+
+  const clickSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else { setSortKey(k); setSortDir("desc"); }
+  };
+
+  const th = (k: SortKey, label: string, cls = "") => (
+    <span className={(cls ? cls + " " : "") + "ap-sort-h" + (sortKey === k ? " is-active" : "")} onClick={() => clickSort(k)} title="Sortera">
+      {label}{sortKey === k ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
+    </span>
+  );
 
   const metrics = useMemo(() => {
     const likes: BetLike[] = filtered.map((b) => ({
@@ -126,6 +201,14 @@ export default function BetsPage() {
         </div>
         {sel(sport, setSport, ["Alla sporter", ...sports])}
         {sel(book, setBook, ["Alla bookmakers", ...books])}
+        {sel(market, setMarket, ["Alla marknader", ...markets])}
+        <div className="ap-select">
+          <select value={btype} onChange={(e) => setBtype(e.target.value)}>
+            <option value="alla">Alla typer</option>
+            <option value="single">Singlar</option>
+            <option value="accumulator">Multiplar</option>
+          </select>
+        </div>
       </div>
       <div className="ap-filters">
         <div className="ap-select">
@@ -143,15 +226,21 @@ export default function BetsPage() {
             {MONTHS_SV.map((label, i) => <option key={label} value={String(i + 1)}>{label}</option>)}
           </select>
         </div>
-        {(day || year !== "Alla år" || month !== "Alla månader") && (
-          <button className="ap-chip" onClick={() => { setDay(""); setYear("Alla år"); setMonth("Alla månader"); }}>Rensa datum</button>
-        )}
+        <input className="ap-numin" inputMode="decimal" placeholder="Odds från" value={oddsMin} onChange={(e) => setOddsMin(e.target.value)} />
+        <input className="ap-numin" inputMode="decimal" placeholder="Odds till" value={oddsMax} onChange={(e) => setOddsMax(e.target.value)} />
+        <input className="ap-numin" inputMode="decimal" placeholder="Min insats (U)" value={stakeMin} onChange={(e) => setStakeMin(e.target.value)} style={{ width: 108 }} />
+        {hasFilter && <button className="ap-chip" onClick={clearFilters}>Rensa filter</button>}
       </div>
       <div className="ap-filters">
         {RES_CHIPS.map(([v, l]) => (
           <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} onClick={() => setRes(v)}>{l}</button>
         ))}
-        <div style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--dim)", alignSelf: "center" }}>
+        <div className="ap-select" style={{ marginLeft: "auto" }}>
+          <select value={`${sortKey}_${sortDir}`} onChange={(e) => { const [k, d] = e.target.value.split("_"); setSortKey(k as SortKey); setSortDir(d as "asc" | "desc"); }}>
+            {SORT_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--dim)", alignSelf: "center" }}>
           Visar <strong style={{ color: "var(--txt)" }}>{filtered.length}</strong> av {bets.length} bets
         </div>
       </div>
@@ -161,13 +250,13 @@ export default function BetsPage() {
         <Card style={{ padding: 0 }}>
           <div className="ap-table">
             <div className="ap-thead" style={{ gridTemplateColumns: GRID }}>
-              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">P/L</span><span className="ap-r">Resultat</span><span className="ap-c">·</span>
+              {th("date", "Datum")}<span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span>{th("odds", "Odds", "ap-r")}{th("stake", "Insats", "ap-r")}{th("profit", "P/L", "ap-r")}<span className="ap-r">Resultat</span><span className="ap-c">·</span>
             </div>
             {loading && <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>}
             {!loading && filtered.length === 0 && (
               <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets matchar filtren.</div>
             )}
-            {filtered.map((b) => (
+            {sorted.map((b) => (
               <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: GRID }}>
                 <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
@@ -197,7 +286,7 @@ export default function BetsPage() {
       <div className="ap-betcards">
         {loading && <div className="ap-betcard-empty">Laddar…</div>}
         {!loading && filtered.length === 0 && <div className="ap-betcard-empty">Inga bets matchar filtren.</div>}
-        {!loading && filtered.map((b) => (
+        {!loading && sorted.map((b) => (
           <div key={b.id} className="ap-betcard">
             <div className="ap-betcard-top">
               <span className="ap-betcard-date">
