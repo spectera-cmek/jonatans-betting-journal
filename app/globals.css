@@ -529,6 +529,32 @@ body {
   color: var(--txt);
   font-weight: 600;
 }
+.ap-numin {
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--txt);
+  border-radius: 10px;
+  padding: 9px 11px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  width: 88px;
+  outline: none;
+}
+.ap-numin::placeholder {
+  color: var(--dim2);
+}
+.ap-sort-h {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.ap-sort-h:hover {
+  color: var(--txt);
+}
+.ap-sort-h.is-active {
+  color: var(--txt);
+}
 
 /* result badge */
 .ap-res {

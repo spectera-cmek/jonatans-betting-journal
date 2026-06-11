@@ -31,6 +31,9 @@ next-env.d.ts
 /statement.pdf
 *.statement.pdf
 
+# local DB backups taken before dedupe runs (personal data — keep local)
+/backups/
+
 # misc
 .DS_Store
 *.pem
