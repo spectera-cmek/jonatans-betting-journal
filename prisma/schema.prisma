@@ -22,10 +22,8 @@ model User {
 
 model Bet {
   id            String    @id @default(cuid())
-  // Optional during the multi-user migration (phase A); becomes required once all
-  // rows are backfilled and the NOT NULL push (phase D) has run.
-  userId        String?
-  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   placedAt      DateTime  @default(now())
   eventAt       DateTime?
   sportKey      String? // The Odds API key, e.g. "soccer_epl"
@@ -62,9 +60,9 @@ model Bet {
 
 model Setting {
   id                    Int     @id @default(autoincrement())
-  // One settings row per user. Optional during phase A (see Bet.userId).
-  userId                String? @unique
-  user                  User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // One settings row per user.
+  userId                String  @unique
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   unitValue             Float   @default(100) // currency per unit
   currency              String  @default("kr")
   startingBankrollUnits Float   @default(100)

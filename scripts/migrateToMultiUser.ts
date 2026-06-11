@@ -56,20 +56,29 @@ async function main() {
   }
 
   // Claim all ownerless bets (pre-multi-user rows + anything the old deployment
-  // wrote in the window before the new code went live).
-  const bets = await prisma.bet.updateMany({
-    where: { userId: null },
-    data: { userId: user.id },
-  });
-  console.log(`Claimed ${bets.count} ownerless bets.`);
+  // wrote in the window before the new code went live). Raw SQL: once the schema
+  // is tightened to a required userId, `where: { userId: null }` no longer
+  // type-checks, but historical NULLs must still be claimable.
+  const claimed = await prisma.$executeRawUnsafe(
+    `UPDATE "Bet" SET "userId" = $1 WHERE "userId" IS NULL`,
+    user.id
+  );
+  console.log(`Claimed ${claimed} ownerless bets.`);
 
   // Attach the legacy singleton Setting row (preserves unitValue/currency/bankroll).
-  const settings = await prisma.setting.updateMany({
-    where: { userId: null },
-    data: { userId: user.id },
-  });
-  if (settings.count > 0) {
-    console.log(`Attached ${settings.count} legacy settings row(s).`);
+  // If the account already has a Setting row (created on registration with pure
+  // defaults), drop that one first — the legacy row's values win.
+  const legacy = await prisma.$queryRawUnsafe<{ id: number }[]>(
+    `SELECT id FROM "Setting" WHERE "userId" IS NULL LIMIT 1`
+  );
+  if (legacy.length > 0) {
+    const own = await prisma.setting.findUnique({ where: { userId: user.id } });
+    if (own) {
+      await prisma.setting.delete({ where: { id: own.id } });
+      console.log("Dropped the registration-created default settings row.");
+    }
+    await prisma.setting.update({ where: { id: legacy[0].id }, data: { userId: user.id } });
+    console.log("Attached the legacy settings row (values preserved).");
   } else {
     await prisma.setting.upsert({ where: { userId: user.id }, update: {}, create: { userId: user.id } });
     console.log("No legacy settings row — ensured defaults exist.");
@@ -82,8 +91,12 @@ async function main() {
   );
 
   // Verify: phase D (NOT NULL push) is only safe when both counts are 0.
-  const orphanBets = await prisma.bet.count({ where: { userId: null } });
-  const orphanSettings = await prisma.setting.count({ where: { userId: null } });
+  const [{ n: orphanBets }] = await prisma.$queryRawUnsafe<{ n: bigint }[]>(
+    `SELECT count(*) AS n FROM "Bet" WHERE "userId" IS NULL`
+  );
+  const [{ n: orphanSettings }] = await prisma.$queryRawUnsafe<{ n: bigint }[]>(
+    `SELECT count(*) AS n FROM "Setting" WHERE "userId" IS NULL`
+  );
   const totalBets = await prisma.bet.count({ where: { userId: user.id } });
   console.log(`\nVerification: ${totalBets} bets on "${username}"; unclaimed: ${orphanBets} bets, ${orphanSettings} settings.`);
   if (orphanBets > 0 || orphanSettings > 0) {
