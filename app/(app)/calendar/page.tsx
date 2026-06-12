@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card, Skeleton } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
@@ -127,7 +127,7 @@ export default function CalendarPage() {
           <button className="ap-iconbtn" onClick={() => shift(1)} aria-label="Nästa månad">›</button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 6 }}>
+        <div className="ap-cal-grid">
           {WEEKDAYS.map((w) => (
             <div key={w} style={{ textAlign: "center", fontSize: 11, color: "var(--dim2)", fontWeight: 600, paddingBottom: 4 }}>{w}</div>
           ))}
@@ -139,25 +139,25 @@ export default function CalendarPage() {
               <button
                 key={c.iso}
                 onClick={() => setSelected(isSel ? "" : c.iso)}
+                className="ap-cal-day"
                 style={{
-                  minWidth: 0, overflow: "hidden",
-                  minHeight: 64, borderRadius: 10, padding: "6px 8px", textAlign: "left", cursor: "pointer",
                   background: tint(a?.profit ?? 0, a?.settled ?? 0),
                   border: `1px solid ${isSel ? cc.acc : "var(--grid, rgba(255,255,255,.06))"}`,
-                  display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 2,
                 }}
               >
-                <span style={{ fontSize: 12, color: "var(--dim)", fontWeight: 600 }}>{c.day}</span>
+                <span className="ap-cal-num">{c.day}</span>
                 {a ? (
-                  <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
-                    <em className={a.settled === 0 ? "" : a.profit >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal", fontWeight: 700, fontSize: 12.5 }}>
-                      {a.settled === 0 ? "—" : uFmt(a.profit, true)}
+                  <span className="ap-cal-body">
+                    <em className={a.settled === 0 ? "" : a.profit >= 0 ? "pos" : "neg"}>
+                      <span className="ap-cal-val-u">{a.settled === 0 ? "—" : uFmt(a.profit, true)}</span>
+                      <span className="ap-cal-val-kr">{a.settled === 0 ? "—" : krShort(Math.round(a.profit * unit), true)}</span>
                     </em>
-                    <span style={{ fontSize: 10.5, color: "var(--dim2)" }}>{a.count} {a.count === 1 ? "bet" : "bets"}{a.pending ? ` · ${a.pending} öppna` : ""}</span>
+                    <span className="ap-cal-sub">{a.count} {a.count === 1 ? "bet" : "bets"}{a.pending ? ` · ${a.pending} öppna` : ""}</span>
                   </span>
                 ) : (
                   <span />
                 )}
+                {a?.pending ? <span className="ap-cal-dot" /> : null}
               </button>
             );
           })}
@@ -171,19 +171,46 @@ export default function CalendarPage() {
             <span className="ap-card-title">Spel {selected}</span>
             <span style={{ color: "var(--dim2)", fontSize: 12 }}>{dayBets.length} bets</span>
           </div>
-          <div className="ap-table">
-            <div className="ap-thead" style={{ gridTemplateColumns: "46px 1.4fr 1.1fr 70px 64px 96px" }}>
-              <span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
+          <div className="ap-table-wrap">
+            <div className="ap-table">
+              <div className="ap-thead" style={{ gridTemplateColumns: "46px 1.4fr 1.1fr 70px 64px 96px" }}>
+                <span>Sport</span><span>Match</span><span>Spel</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
+              </div>
+              {dayBets.length === 0 && <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--dim2)" }}>Inga spel den här dagen.</div>}
+              {dayBets.map((b) => (
+                <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: "46px 1.4fr 1.1fr 70px 64px 96px" }}>
+                  <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
+                  <span className="ap-ell">{b.event}{b.market ? <span style={{ color: "var(--dim2)" }}> · {b.market}</span> : null}</span>
+                  <span className="ap-ell" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
+                  <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
+                  <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
+                  <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
+                </div>
+              ))}
             </div>
-            {dayBets.length === 0 && <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--dim2)" }}>Inga spel den här dagen.</div>}
+          </div>
+          <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
+            {dayBets.length === 0 && <div className="ap-betcard-empty">Inga spel den här dagen.</div>}
             {dayBets.map((b) => (
-              <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: "46px 1.4fr 1.1fr 70px 64px 96px" }}>
-                <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
-                <span className="ap-ell">{b.event}{b.market ? <span style={{ color: "var(--dim2)" }}> · {b.market}</span> : null}</span>
-                <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
-                <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
-                <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
-                <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
+              <div key={b.id} className="ap-betcard">
+                <div className="ap-betcard-top">
+                  <span className="ap-betcard-date"><span className="ap-tag">{sportTag(b.sport)}</span></span>
+                  <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
+                </div>
+                <div className="ap-betcard-event">
+                  {b.event}{b.market ? <span style={{ color: "var(--dim2)" }}> · {b.market}</span> : null}
+                </div>
+                <div className="ap-betcard-sel">{b.selection || "—"}</div>
+                <div className="ap-betcard-stats">
+                  <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
+                  <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
+                  <div>
+                    <span>P/L</span>
+                    <b className={"ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>
+                      {b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}
+                    </b>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -258,6 +285,17 @@ function YearHeatmap({
     return hexA(agg.profit >= 0 ? cc.pos : cc.red, alpha);
   };
 
+  // On a phone the year is wider than the screen and the container opens scrolled
+  // to January — scroll so the latest week with bets is in view instead.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let lastCol = 0;
+    for (const c of cells) if (c.agg?.count) lastCol = Math.max(lastCol, c.col);
+    el.scrollLeft = Math.max(0, 26 + (lastCol + 1) * (CELL + GAP) + 12 - el.clientWidth);
+  }, [cells]);
+
   return (
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -271,7 +309,7 @@ function YearHeatmap({
         <button className="ap-iconbtn" onClick={() => onShiftYear(1)} aria-label="Nästa år">›</button>
       </div>
 
-      <div style={{ overflowX: "auto", paddingBottom: 4 }}>
+      <div ref={scrollRef} style={{ overflowX: "auto", paddingBottom: 4 }}>
         <div style={{ width: nCols * (CELL + GAP) + 26 }}>
           <div style={{ display: "flex", gap: GAP, marginLeft: 26, marginBottom: 4 }}>
             {Array.from({ length: nCols }, (_, c) => (
@@ -316,12 +354,12 @@ function YearHeatmap({
               ))}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, marginLeft: 26, fontSize: 11, color: "var(--dim2)" }}>
-            <span style={{ width: 9, height: 9, borderRadius: 2, background: hexA(cc.red, 0.65), display: "inline-block" }} /> förlust
-            <span style={{ width: 9, height: 9, borderRadius: 2, background: "var(--hover)", display: "inline-block", marginLeft: 6 }} /> inga bets
-            <span style={{ width: 9, height: 9, borderRadius: 2, background: hexA(cc.pos, 0.65), display: "inline-block", marginLeft: 6 }} /> vinst
-          </div>
         </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, fontSize: 11, color: "var(--dim2)" }}>
+        <span style={{ width: 9, height: 9, borderRadius: 2, background: hexA(cc.red, 0.65), display: "inline-block" }} /> förlust
+        <span style={{ width: 9, height: 9, borderRadius: 2, background: "var(--hover)", display: "inline-block", marginLeft: 6 }} /> inga bets
+        <span style={{ width: 9, height: 9, borderRadius: 2, background: hexA(cc.pos, 0.65), display: "inline-block", marginLeft: 6 }} /> vinst
       </div>
     </Card>
   );

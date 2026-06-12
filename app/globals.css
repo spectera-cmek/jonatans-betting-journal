@@ -1070,6 +1070,89 @@ select.ap-input {
   }
 }
 
+/* ---------- calendar month grid ---------- */
+.ap-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.ap-cal-day {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  min-height: 64px;
+  border-radius: 10px;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2px;
+}
+.ap-cal-num {
+  font-size: 12px;
+  color: var(--dim);
+  font-weight: 600;
+}
+.ap-cal-body {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+.ap-cal-body em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.ap-cal-sub {
+  font-size: 10.5px;
+  color: var(--dim2);
+}
+/* kr value + pending dot are the phone representation — hidden on desktop */
+.ap-cal-val-kr,
+.ap-cal-dot {
+  display: none;
+}
+@media (max-width: 700px) {
+  .ap-cal-grid {
+    gap: 4px;
+  }
+  /* ~40px per cell on a phone: drop the "N bets · M öppna" line (the tap-for-
+     details panel has it), show compact kr instead of units, dot = open bets. */
+  .ap-cal-day {
+    min-height: 48px;
+    padding: 4px 5px;
+    border-radius: 8px;
+  }
+  .ap-cal-num {
+    font-size: 10.5px;
+  }
+  .ap-cal-body em {
+    font-size: 11px;
+    letter-spacing: -0.02em;
+  }
+  .ap-cal-sub,
+  .ap-cal-val-u {
+    display: none;
+  }
+  .ap-cal-val-kr {
+    display: inline;
+  }
+  .ap-cal-dot {
+    display: block;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--dim2);
+  }
+}
+
 /* ---------- bet list: cards on phones, table on larger screens ---------- */
 .ap-betcards {
   display: none;
