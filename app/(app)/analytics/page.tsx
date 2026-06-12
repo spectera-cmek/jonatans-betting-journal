@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card } from "@/components/ui";
+import { Card, SkeletonCard } from "@/components/ui";
 import { LineChart, Donut, HBar } from "@/components/charts";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics, type LeaderboardEntry } from "@/lib/useData";
@@ -11,7 +11,7 @@ import type { Breakdown } from "@/lib/betting";
 
 function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
   return (
-    <div className="ap-card">
+    <div className="ap-card ap-lift">
       <span className="ap-label">{label}</span>
       <div className="ap-num ap-kpi-val"><span className={tone || ""}>{value}</span></div>
       {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 6 }}>{sub}</div>}
@@ -90,7 +90,7 @@ function monthLabel(ym: string): string {
 
 export default function AnalyticsPage() {
   const { cc } = useTheme();
-  const { data } = useMetrics();
+  const { data, loading } = useMetrics();
   const m = data?.metrics;
   const ins = data?.insights;
   const dd = data?.drawdown;
@@ -135,6 +135,24 @@ export default function AnalyticsPage() {
     avgOdds: null,
     winRatePct: o.winRatePct,
   }));
+
+  if (loading && !data) {
+    return (
+      <div>
+        <Topbar title="Analys" sub="Laddar…" />
+        <div className="ap-kpi-row">
+          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+        </div>
+        <div className="ap-kpi-row">
+          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+        </div>
+        <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <SkeletonCard chartH={150} />
+          <SkeletonCard chartH={150} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

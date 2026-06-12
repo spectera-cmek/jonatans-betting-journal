@@ -14,6 +14,8 @@ export default function SettingsPage() {
   const [unitValue, setUnitValue] = useState("100");
   const [currency, setCurrency] = useState("kr");
   const [startBankroll, setStartBankroll] = useState("100");
+  const [dailyBudget, setDailyBudget] = useState("");
+  const [weeklyBudget, setWeeklyBudget] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -23,6 +25,8 @@ export default function SettingsPage() {
       setUnitValue(String(s.unitValue));
       setCurrency(s.currency);
       setStartBankroll(String(s.startingBankrollUnits));
+      setDailyBudget(s.dailyStakeBudgetUnits != null ? String(s.dailyStakeBudgetUnits) : "");
+      setWeeklyBudget(s.weeklyStakeBudgetUnits != null ? String(s.weeklyStakeBudgetUnits) : "");
     });
   }, []);
 
@@ -34,6 +38,8 @@ export default function SettingsPage() {
         unitValue: Number(unitValue),
         currency,
         startingBankrollUnits: Number(startBankroll),
+        dailyStakeBudgetUnits: dailyBudget.trim() === "" ? null : Number(dailyBudget),
+        weeklyStakeBudgetUnits: weeklyBudget.trim() === "" ? null : Number(weeklyBudget),
       });
       // PUT doesn't echo username — keep the one from the initial GET.
       setSettings((prev) => ({ ...s, username: prev?.username }));
@@ -63,6 +69,32 @@ export default function SettingsPage() {
             <div className="ap-field">
               <label>Start-bankrulle (U)</label>
               <input className="ap-input ap-num" type="number" value={startBankroll} onChange={(e) => setStartBankroll(e.target.value)} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button className="ap-btn" onClick={save} disabled={saving}>{saving ? "Sparar…" : "Spara"}</button>
+              {saved && <span className="pos" style={{ fontSize: 13 }}>✓ Sparat</span>}
+            </div>
+          </div>
+        </Card>
+
+        <div style={{ height: 12 }} />
+
+        <Card>
+          <span className="ap-label">Tilt-vakt</span>
+          <p style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 14, marginBottom: 14, lineHeight: 1.55 }}>
+            Sätt ett tak för hur många units du satsar per dag och vecka. När du närmar dig taket — eller när
+            insatserna ökar under en förlustsvit — visas en varning på översikten. Lämna tomt för att stänga av.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="ap-x2">
+              <div className="ap-field">
+                <label>Dagsbudget (U)</label>
+                <input className="ap-input ap-num" type="number" min="0" placeholder="av" value={dailyBudget} onChange={(e) => setDailyBudget(e.target.value)} />
+              </div>
+              <div className="ap-field">
+                <label>Veckobudget (U)</label>
+                <input className="ap-input ap-num" type="number" min="0" placeholder="av" value={weeklyBudget} onChange={(e) => setWeeklyBudget(e.target.value)} />
+              </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <button className="ap-btn" onClick={save} disabled={saving}>{saving ? "Sparar…" : "Spara"}</button>

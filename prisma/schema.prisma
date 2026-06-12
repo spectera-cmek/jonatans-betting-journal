@@ -66,6 +66,9 @@ model Setting {
   unitValue             Float   @default(100) // currency per unit
   currency              String  @default("kr")
   startingBankrollUnits Float   @default(100)
+  // Tilt-guard stake budgets in units. Null/0 = budget off.
+  dailyStakeBudgetUnits  Float?
+  weeklyStakeBudgetUnits Float?
 }
 
 model SyncLog {

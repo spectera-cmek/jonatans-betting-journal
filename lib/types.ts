@@ -107,6 +107,7 @@ export interface BetListDTO {
   event: string;
   market: string;
   selection: string;
+  betType: string;
   odds: number;
   stakeUnits: number;
   outcome: Outcome;
@@ -117,7 +118,7 @@ export interface BetListDTO {
 export type BetListRow = Pick<
   BetRow,
   | "id" | "placedAt" | "eventAt" | "sport" | "league" | "event" | "market"
-  | "selection" | "odds" | "stakeUnits" | "outcome" | "profitUnits" | "bookmaker"
+  | "selection" | "betType" | "odds" | "stakeUnits" | "outcome" | "profitUnits" | "bookmaker"
 >;
 
 export function serializeBetList(b: BetListRow): BetListDTO {
@@ -130,6 +131,7 @@ export function serializeBetList(b: BetListRow): BetListDTO {
     event: b.event,
     market: b.market,
     selection: b.selection,
+    betType: b.betType,
     odds: b.odds,
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
@@ -143,5 +145,7 @@ export interface SettingsDTO {
   unitValue: number;
   currency: string;
   startingBankrollUnits: number;
+  dailyStakeBudgetUnits: number | null;
+  weeklyStakeBudgetUnits: number | null;
   hasOddsApiKey: boolean;
 }

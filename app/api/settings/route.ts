@@ -14,6 +14,8 @@ export async function GET() {
     unitValue: s.unitValue,
     currency: s.currency,
     startingBankrollUnits: s.startingBankrollUnits,
+    dailyStakeBudgetUnits: s.dailyStakeBudgetUnits,
+    weeklyStakeBudgetUnits: s.weeklyStakeBudgetUnits,
     hasOddsApiKey: hasOddsApiKey(),
   });
 }
@@ -42,6 +44,18 @@ export async function PUT(req: Request) {
         return NextResponse.json({ error: "invalid bankroll" }, { status: 400 });
       data.startingBankrollUnits = v;
     }
+    // Tilt budgets: null/0/"" clears, otherwise a positive number of units.
+    for (const key of ["dailyStakeBudgetUnits", "weeklyStakeBudgetUnits"] as const) {
+      if (body[key] === undefined) continue;
+      if (body[key] === null || body[key] === "" || Number(body[key]) === 0) {
+        data[key] = null;
+        continue;
+      }
+      const v = Number(body[key]);
+      if (Number.isNaN(v) || v < 0)
+        return NextResponse.json({ error: `${key} must be >= 0` }, { status: 400 });
+      data[key] = v;
+    }
 
     const s = await prisma.setting.upsert({
       where: { userId },
@@ -53,6 +67,8 @@ export async function PUT(req: Request) {
       unitValue: s.unitValue,
       currency: s.currency,
       startingBankrollUnits: s.startingBankrollUnits,
+      dailyStakeBudgetUnits: s.dailyStakeBudgetUnits,
+      weeklyStakeBudgetUnits: s.weeklyStakeBudgetUnits,
       hasOddsApiKey: hasOddsApiKey(),
     });
   } catch (e) {

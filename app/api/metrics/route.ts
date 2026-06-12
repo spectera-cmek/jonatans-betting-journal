@@ -13,6 +13,8 @@ import {
 } from "@/lib/betting";
 import type { Outcome } from "@/lib/betting";
 import { computeInsights } from "@/lib/insights";
+import { tiltStatus } from "@/lib/tilt";
+import { weeklyReport, type WeeklyBetInput } from "@/lib/weekly";
 import { getSessionUser, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -99,12 +101,39 @@ export async function GET() {
   const risk = openRisk(betLikes);
   const drawdown = maxDrawdown(bankroll);
 
+  // Tilt guard (stake budgets + chasing) and the weekly report.
+  const tilt = tiltStatus(
+    betLikes,
+    {
+      dailyBudgetUnits: settings.dailyStakeBudgetUnits,
+      weeklyBudgetUnits: settings.weeklyStakeBudgetUnits,
+    },
+    new Date()
+  );
+  const weeklyInput: WeeklyBetInput[] = bets.map((b) => ({
+    odds: b.odds,
+    stakeUnits: b.stakeUnits,
+    outcome: b.outcome as Outcome,
+    eventAt: b.eventAt,
+    placedAt: b.placedAt,
+    createdAt: b.createdAt,
+    profitUnits: b.profitUnits,
+    event: b.event,
+    selection: b.selection,
+    sport: b.sport,
+    market: b.market,
+    betType: b.betType,
+  }));
+  const weekly = weeklyReport(weeklyInput, new Date());
+
   return NextResponse.json({
     username: user.username,
     metrics,
     insights,
     openRisk: risk,
     drawdown,
+    tilt,
+    weekly,
     bankroll,
     bySport,
     byLeague,

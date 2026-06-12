@@ -16,6 +16,7 @@ const LIST_SELECT = {
   event: true,
   market: true,
   selection: true,
+  betType: true,
   odds: true,
   stakeUnits: true,
   outcome: true,

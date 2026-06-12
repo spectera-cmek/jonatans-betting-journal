@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Spark } from "./charts";
 import { useTheme } from "./ThemeProvider";
 
@@ -28,7 +29,7 @@ export function Kpi({
   valueClass,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   delta?: string;
   deltaPos?: boolean;
   spark?: number[];
@@ -36,7 +37,7 @@ export function Kpi({
 }) {
   const { cc } = useTheme();
   return (
-    <div className="ap-card">
+    <div className="ap-card ap-lift">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <span className="ap-label">{label}</span>
         {delta && <span className={"ap-pill " + (deltaPos ? "pos" : "neg")}>{delta}</span>}
@@ -49,4 +50,67 @@ export function Kpi({
       )}
     </div>
   );
+}
+
+/** Shimmering placeholder block while data loads. */
+export function Skeleton({
+  w,
+  h = 14,
+  style,
+}: {
+  w?: number | string;
+  h?: number | string;
+  style?: React.CSSProperties;
+}) {
+  return <div className="ap-skel" style={{ width: w ?? "100%", height: h, ...style }} aria-hidden="true" />;
+}
+
+/** A card-shaped skeleton: label line + value line (+ optional chart block). */
+export function SkeletonCard({ chartH }: { chartH?: number }) {
+  return (
+    <div className="ap-card">
+      <Skeleton w={90} h={10} />
+      <Skeleton w={130} h={24} style={{ marginTop: 14 }} />
+      {chartH != null && <Skeleton h={chartH} style={{ marginTop: 14 }} />}
+    </div>
+  );
+}
+
+/**
+ * Animates a number change with an ease-out count-up (~0.65 s). The formatter
+ * runs on every frame, so pass one that rounds (krFmt/uFmt/pctFmt all do).
+ */
+export function CountUp({
+  value,
+  format,
+  duration = 650,
+}: {
+  value: number;
+  format: (n: number) => string;
+  duration?: number;
+}) {
+  // Starts at 0 so the very first data render gets the count-up too.
+  const [shown, setShown] = useState(0);
+  const fromRef = useRef(0);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    fromRef.current = value;
+    if (from === value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(value);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / duration);
+      const eased = 1 - Math.pow(1 - k, 3);
+      setShown(from + (value - from) * eased);
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+
+  return <>{format(shown)}</>;
 }

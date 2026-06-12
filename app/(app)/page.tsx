@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Topbar } from "@/components/Shell";
-import { Card, Kpi } from "@/components/ui";
-import { LineChart, PLBars, Donut } from "@/components/charts";
+import { Card, Kpi, Skeleton, SkeletonCard, CountUp } from "@/components/ui";
+import { InteractiveLineChart, PLBars, Donut, type TimePoint } from "@/components/charts";
 import { ResultBadge } from "@/components/ResultBadge";
 import { AddBetModal } from "@/components/AddBetModal";
 import { SyncButton } from "@/components/SyncButton";
+import { TiltBanner } from "@/components/TiltBanner";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
@@ -17,11 +18,20 @@ import type { StreakInfo } from "@/lib/insights";
 import { I, IC } from "@/components/icons";
 import { useEffect } from "react";
 
+const PERIODS = [
+  { key: "all", label: "Allt", days: null },
+  { key: "1y", label: "1 år", days: 365 },
+  { key: "90d", label: "90 d", days: 90 },
+  { key: "30d", label: "30 d", days: 30 },
+] as const;
+type PeriodKey = (typeof PERIODS)[number]["key"];
+
 export default function OverviewPage() {
   const { cc, glow } = useTheme();
   const { data, settings, loading, reload } = useMetrics();
   const [adding, setAdding] = useState(false);
   const [recent, setRecent] = useState<BetListDTO[]>([]);
+  const [period, setPeriod] = useState<PeriodKey>("all");
 
   // Re-fetch the short list whenever the metrics refresh (a save/settle
   // triggers reload → new data → fresh recent rows).
@@ -40,6 +50,40 @@ export default function OverviewPage() {
   const bankrollKr = bankrollUnits * unit;
   const startKr = startBank * unit;
   const bankrollPct = startBank > 0 ? ((bankrollUnits - startBank) / startBank) * 100 : 0;
+
+  // Bankroll points (kr) for the interactive chart, cut to the chosen period.
+  // The point just before the cutoff is kept so the curve enters at its real level.
+  const allPts = useMemo<TimePoint[]>(
+    () => (data?.bankroll ?? []).map((p) => ({ t: Date.parse(p.date), v: p.bankrollUnits * unit })),
+    [data, unit]
+  );
+  const pts = useMemo(() => {
+    const days = PERIODS.find((p) => p.key === period)?.days;
+    if (!days) return allPts;
+    const cutoff = Date.now() - days * 864e5;
+    const idx = allPts.findIndex((p) => p.t >= cutoff);
+    if (idx === -1) return [];
+    return allPts.slice(Math.max(0, idx - 1));
+  }, [allPts, period]);
+
+  // Max drawdown over the visible period (kr + % of the peak it fell from).
+  const visDd = useMemo(() => {
+    let peak = -Infinity;
+    let maxDd = 0;
+    let pct: number | null = null;
+    for (const p of pts) {
+      if (p.v > peak) peak = p.v;
+      const dd = peak - p.v;
+      if (dd > maxDd) {
+        maxDd = dd;
+        pct = peak > 0 ? (dd / peak) * 100 : null;
+      }
+    }
+    return { kr: maxDd, pct };
+  }, [pts]);
+
+  // Period P/L: last point vs the period's entry level.
+  const periodDiff = pts.length >= 2 ? pts[pts.length - 1].v - pts[0].v : null;
 
   const profitKr = (m?.profitUnits ?? 0) * unit;
 
@@ -83,32 +127,79 @@ export default function OverviewPage() {
         }
       />
 
+      {/* Tilt guard — only visible when budgets/chasing trip */}
+      {data?.tilt && <TiltBanner tilt={data.tilt} unit={unit} />}
+
       {/* KPI row */}
-      <div className="ap-kpi-row">
-        <Kpi label="Total P/L" value={krFmt(profitKr, true)} valueClass={profitKr >= 0 ? "pos" : "neg"} spark={curve.slice(-16)} />
-        <Kpi label="ROI" value={pctFmt(m?.roiPct ?? null, true)} valueClass={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
-        <Kpi label="+Units" value={uFmt(m?.profitUnits ?? null, true)} valueClass={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
-        <Kpi label="Win rate" value={pctFmt(m?.winRatePct ?? null)} />
-      </div>
+      {loading && !data ? (
+        <div className="ap-kpi-row">
+          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+        </div>
+      ) : (
+        <div className="ap-kpi-row">
+          <Kpi label="Total P/L" value={<CountUp value={profitKr} format={(n) => krFmt(n, true)} />} valueClass={profitKr >= 0 ? "pos" : "neg"} spark={curve.slice(-16)} />
+          <Kpi label="ROI" value={m?.roiPct != null ? <CountUp value={m.roiPct} format={(n) => pctFmt(n, true)} /> : "—"} valueClass={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
+          <Kpi label="+Units" value={<CountUp value={m?.profitUnits ?? 0} format={(n) => uFmt(n, true)} />} valueClass={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
+          <Kpi label="Win rate" value={m?.winRatePct != null ? <CountUp value={m.winRatePct} format={(n) => pctFmt(n)} /> : "—"} />
+        </div>
+      )}
 
       {/* Bankroll + sport donut */}
       <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px", marginBottom: 12 }}>
         <Card style={{ background: `linear-gradient(180deg, ${cc.fill}, transparent 55%), var(--card)` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <span className="ap-label">Bankrulle</span>
-              <div className="ap-num" style={{ fontSize: 33, fontWeight: 600, marginTop: 8 }}>{krFmt(bankrollKr)}</div>
-              <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>
-                Start {krFmt(startKr)} · <span className={bankrollPct >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{bankrollPct >= 0 ? "▲" : "▼"} {pctFmt(bankrollPct, true)}</span>
+          {loading && !data ? (
+            <>
+              <Skeleton w={90} h={10} />
+              <Skeleton w={170} h={30} style={{ marginTop: 12 }} />
+              <Skeleton h={184} style={{ marginTop: 16 }} />
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+                <div>
+                  <span className="ap-label">Bankrulle</span>
+                  <div className="ap-num" style={{ fontSize: 33, fontWeight: 600, marginTop: 8 }}>
+                    <CountUp value={bankrollKr} format={(n) => krFmt(n)} />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>
+                    Start {krFmt(startKr)} · <span className={bankrollPct >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{bankrollPct >= 0 ? "▲" : "▼"} {pctFmt(bankrollPct, true)}</span>
+                    {periodDiff != null && period !== "all" && (
+                      <> · perioden <span className={periodDiff >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{krFmt(periodDiff, true)}</span></>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {PERIODS.map((p) => (
+                      <button
+                        key={p.key}
+                        className={"ap-chip" + (period === p.key ? " is-active" : "")}
+                        onClick={() => setPeriod(p.key)}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  {visDd.kr > 0 && (
+                    <span className="ap-pill neg">
+                      max drawdown {krShort(-visDd.kr, false)}{visDd.pct != null ? ` · −${visDd.pct.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} %` : ""}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-            <span className="ap-leg ap-hide-sm" style={{ color: "var(--dim)", fontSize: 11.5 }}>
-              <span className="ap-dot" style={{ background: cc.acc, borderRadius: "50%" }} /> Saldo
-            </span>
-          </div>
-          <div style={{ marginTop: 14 }}>
-            <LineChart data={curve} w={640} h={184} stroke={cc.acc} fill={cc.fill} grid={cc.grid} strokeW={2.2} />
-          </div>
+              <div style={{ marginTop: 14 }}>
+                <InteractiveLineChart
+                  points={pts}
+                  w={640}
+                  h={184}
+                  stroke={cc.acc}
+                  fill={cc.fill}
+                  grid={cc.grid}
+                  formatValue={(v) => krFmt(v)}
+                />
+              </div>
+            </>
+          )}
         </Card>
 
         <Card>

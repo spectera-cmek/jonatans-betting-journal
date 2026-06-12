@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card } from "@/components/ui";
+import { Card, Skeleton } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
 import { useTheme } from "@/components/ThemeProvider";
 import { useBets } from "@/lib/useData";
-import { krShort, uFmt, sportTag } from "@/lib/format";
+import { hexA, type ChartColors } from "@/lib/theme";
+import { krShort, krFmt, uFmt, sportTag, dateShort } from "@/lib/format";
 import { I, IC } from "@/components/icons";
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
@@ -91,6 +92,29 @@ export default function CalendarPage() {
     <div>
       <Topbar title="Kalender" sub={`${bets.length} bets · klicka på en dag för att se spelen`} />
 
+      {loading && bets.length === 0 ? (
+        <Card style={{ marginBottom: 12 }}>
+          <Skeleton w={140} h={12} />
+          <Skeleton h={110} style={{ marginTop: 14 }} />
+        </Card>
+      ) : (
+        <YearHeatmap
+          year={cur.y}
+          byDay={byDay}
+          unit={unit}
+          cc={cc}
+          selected={selected}
+          onShiftYear={(dy) => {
+            setView({ y: cur.y + dy, m: cur.m });
+            setSelected("");
+          }}
+          onPick={(iso) => {
+            setView({ y: Number(iso.slice(0, 4)), m: Number(iso.slice(5, 7)) - 1 });
+            setSelected(iso);
+          }}
+        />
+      )}
+
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <button className="ap-iconbtn" onClick={() => shift(-1)} aria-label="Föregående månad">‹</button>
@@ -173,5 +197,132 @@ export default function CalendarPage() {
         </div>
       )}
     </div>
+  );
+}
+
+const MONTHS_SHORT = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
+// GitHub-style year overview: one column per week, one cell per day, tinted by
+// the day's settled P/L. Intensity is scaled against the year's 90th-percentile
+// day so a single outlier doesn't wash everything else out.
+function YearHeatmap({
+  year,
+  byDay,
+  unit,
+  cc,
+  selected,
+  onShiftYear,
+  onPick,
+}: {
+  year: number;
+  byDay: Map<string, DayAgg>;
+  unit: number;
+  cc: ChartColors;
+  selected: string;
+  onShiftYear: (dy: number) => void;
+  onPick: (iso: string) => void;
+}) {
+  const CELL = 12;
+  const GAP = 2;
+
+  const { cells, monthCols, nCols, totals, scale } = useMemo(() => {
+    const start = new Date(year, 0, 1);
+    const lead = (start.getDay() + 6) % 7; // Mon=0
+    const days = (new Date(year + 1, 0, 1).getTime() - start.getTime()) / 864e5;
+    const cells: { iso: string; col: number; row: number; agg?: DayAgg }[] = [];
+    const monthCols = new Map<number, string>();
+    const absDays: number[] = [];
+    const totals = { profit: 0, count: 0 };
+    for (let d = 0; d < days; d++) {
+      const date = new Date(year, 0, 1 + d);
+      const iso = isoOf(date);
+      const idx = lead + d;
+      const agg = byDay.get(iso);
+      if (date.getDate() === 1) monthCols.set(Math.floor(idx / 7), MONTHS_SHORT[date.getMonth()]);
+      if (agg) {
+        totals.profit += agg.profit;
+        totals.count += agg.count;
+        if (agg.settled > 0) absDays.push(Math.abs(agg.profit));
+      }
+      cells.push({ iso, col: Math.floor(idx / 7), row: idx % 7, agg });
+    }
+    absDays.sort((a, b) => a - b);
+    const p90 = absDays.length ? absDays[Math.floor(0.9 * (absDays.length - 1))] : 0;
+    return { cells, monthCols, nCols: Math.ceil((lead + days) / 7), totals, scale: p90 || 1 };
+  }, [year, byDay]);
+
+  const fill = (agg?: DayAgg): string => {
+    if (!agg || agg.count === 0) return "var(--hover)";
+    if (agg.settled === 0) return "var(--line)"; // only open bets
+    const alpha = 0.16 + 0.74 * Math.min(1, Math.abs(agg.profit) / scale);
+    return hexA(agg.profit >= 0 ? cc.pos : cc.red, alpha);
+  };
+
+  return (
+    <Card style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <button className="ap-iconbtn" onClick={() => onShiftYear(-1)} aria-label="Föregående år">‹</button>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{year}</div>
+          <div style={{ fontSize: 12, color: "var(--dim2)" }}>
+            {totals.count} bets · <em className={totals.profit >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal", fontWeight: 600 }}>{krShort(totals.profit * unit, true)}</em>
+          </div>
+        </div>
+        <button className="ap-iconbtn" onClick={() => onShiftYear(1)} aria-label="Nästa år">›</button>
+      </div>
+
+      <div style={{ overflowX: "auto", paddingBottom: 4 }}>
+        <div style={{ width: nCols * (CELL + GAP) + 26 }}>
+          <div style={{ display: "flex", gap: GAP, marginLeft: 26, marginBottom: 4 }}>
+            {Array.from({ length: nCols }, (_, c) => (
+              <span key={c} style={{ width: CELL, fontSize: 9.5, color: "var(--dim2)", overflow: "visible", whiteSpace: "nowrap" }}>
+                {monthCols.get(c) ?? ""}
+              </span>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            <div style={{ display: "grid", gridTemplateRows: `repeat(7, ${CELL}px)`, rowGap: GAP, width: 22, flexShrink: 0 }}>
+              {["M", "", "O", "", "F", "", "S"].map((d, i) => (
+                <span key={i} style={{ fontSize: 9.5, color: "var(--dim2)", lineHeight: `${CELL}px` }}>{d}</span>
+              ))}
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateRows: `repeat(7, ${CELL}px)`,
+                gridAutoFlow: "column",
+                gridAutoColumns: `${CELL}px`,
+                gap: GAP,
+              }}
+            >
+              {cells.map((c) => (
+                <button
+                  key={c.iso}
+                  onClick={() => onPick(c.iso)}
+                  title={`${dateShort(c.iso)} · ${c.agg && c.agg.settled > 0 ? krFmt(c.agg.profit * unit, true) : "—"} · ${c.agg?.count ?? 0} bets`}
+                  aria-label={c.iso}
+                  style={{
+                    gridRow: c.row + 1,
+                    gridColumn: c.col + 1,
+                    width: CELL,
+                    height: CELL,
+                    borderRadius: 3,
+                    border: selected === c.iso ? `1.5px solid ${cc.acc}` : "1px solid transparent",
+                    background: fill(c.agg),
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, marginLeft: 26, fontSize: 11, color: "var(--dim2)" }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: hexA(cc.red, 0.65), display: "inline-block" }} /> förlust
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: "var(--hover)", display: "inline-block", marginLeft: 6 }} /> inga bets
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: hexA(cc.pos, 0.65), display: "inline-block", marginLeft: 6 }} /> vinst
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }

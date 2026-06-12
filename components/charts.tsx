@@ -1,8 +1,241 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 // Reusable themeable SVG charts (no chart library). Ported from the Aurora kit.
+
+export interface TimePoint {
+  t: number; // epoch ms
+  v: number; // value (already in display currency)
+}
+
+// Cap the rendered point count — the full history is 8k+ points and the path
+// string alone would be ~100 kB. Hover still resolves to a real point.
+function downsample(points: TimePoint[], max = 600): TimePoint[] {
+  if (points.length <= max) return points;
+  const stride = Math.ceil(points.length / max);
+  const out: TimePoint[] = [];
+  for (let i = 0; i < points.length; i += stride) out.push(points[i]);
+  if (out[out.length - 1] !== points[points.length - 1]) out.push(points[points.length - 1]);
+  return out;
+}
+
+/**
+ * Line chart with hover crosshair + tooltip and max-drawdown shading.
+ * X is index-spaced (one step per settled bet) like the static LineChart,
+ * so idle weeks don't flatten the curve; the tooltip carries the date.
+ */
+export function InteractiveLineChart({
+  points,
+  w = 640,
+  h = 200,
+  stroke = "#22c55e",
+  fill = "rgba(34,197,94,0.14)",
+  grid = "rgba(255,255,255,0.06)",
+  redSoft = "rgba(255,96,121,0.07)",
+  pad = 6,
+  strokeW = 2.2,
+  formatValue = (v: number) => String(Math.round(v)),
+  formatDate = (t: number) =>
+    new Date(t).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" }),
+}: {
+  points: TimePoint[];
+  w?: number;
+  h?: number;
+  stroke?: string;
+  fill?: string;
+  grid?: string;
+  redSoft?: string;
+  pad?: number;
+  strokeW?: number;
+  formatValue?: (v: number) => string;
+  formatDate?: (t: number) => string;
+}) {
+  const gid = useId().replace(/:/g, "");
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
+
+  const pts = useMemo(() => downsample(points), [points]);
+
+  // Max-drawdown segment (peak index -> trough index) over the visible range.
+  const dd = useMemo(() => {
+    let peak = -Infinity;
+    let peakI = 0;
+    let maxDd = 0;
+    let from = 0;
+    let to = 0;
+    pts.forEach((p, i) => {
+      if (p.v > peak) {
+        peak = p.v;
+        peakI = i;
+      }
+      const drop = peak - p.v;
+      if (drop > maxDd) {
+        maxDd = drop;
+        from = peakI;
+        to = i;
+      }
+    });
+    return maxDd > 0 ? { from, to } : null;
+  }, [pts]);
+
+  if (pts.length < 2) {
+    return (
+      <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>
+        Inte tillräckligt med data i perioden
+      </div>
+    );
+  }
+
+  const n = pts.length;
+  const min = Math.min(...pts.map((p) => p.v));
+  const max = Math.max(...pts.map((p) => p.v));
+  const range = max - min || 1;
+  const x = (i: number) => pad + (i / (n - 1)) * (w - pad * 2);
+  const y = (v: number) => pad + (1 - (v - min) / range) * (h - pad * 2);
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+  const area = `${line} L${x(n - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
+  const gridLines = [0.25, 0.5, 0.75].map((g) => pad + g * (h - pad * 2));
+
+  const onMove = (e: React.PointerEvent) => {
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return;
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    setHover(Math.round(frac * (n - 1)));
+  };
+
+  const hv = hover != null ? pts[hover] : null;
+  const frac = hover != null ? hover / (n - 1) : 0;
+  const start = pts[0].v;
+  const diffPct = hv && start !== 0 ? ((hv.v - start) / Math.abs(start)) * 100 : null;
+
+  return (
+    <div
+      ref={boxRef}
+      style={{ position: "relative", touchAction: "pan-y" }}
+      onPointerMove={onMove}
+      onPointerDown={onMove}
+      onPointerLeave={() => setHover(null)}
+    >
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+        <defs>
+          <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={fill} />
+            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+          </linearGradient>
+        </defs>
+        {gridLines.map((gy, i) => (
+          <line key={i} x1={pad} y1={gy} x2={w - pad} y2={gy} stroke={grid} strokeWidth="1" />
+        ))}
+        {dd && dd.to > dd.from && (
+          <rect
+            x={x(dd.from)}
+            y={pad}
+            width={x(dd.to) - x(dd.from)}
+            height={h - pad * 2}
+            fill={redSoft}
+          />
+        )}
+        <path d={area} fill={`url(#g${gid})`} />
+        <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round" strokeLinecap="round" />
+        {hover != null && (
+          <line x1={x(hover)} y1={pad} x2={x(hover)} y2={h - pad} stroke={stroke} strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
+        )}
+        <circle
+          cx={x(hover ?? n - 1)}
+          cy={y(pts[hover ?? n - 1].v)}
+          r="3.5"
+          fill={stroke}
+        />
+      </svg>
+      {hv && (
+        <div
+          style={{
+            position: "absolute",
+            top: 6,
+            left: `${frac * 100}%`,
+            transform: `translateX(${frac > 0.72 ? "-100%" : frac < 0.28 ? "0%" : "-50%"})`,
+            background: "var(--card2)",
+            border: "1px solid var(--line)",
+            borderRadius: 10,
+            padding: "8px 11px",
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+            boxShadow: "var(--shadow)",
+            zIndex: 5,
+          }}
+        >
+          <div style={{ fontSize: 11, color: "var(--dim)" }}>{formatDate(hv.t)}</div>
+          <div className="ap-num" style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>
+            {formatValue(hv.v)}
+            {diffPct != null && (
+              <span className={diffPct >= 0 ? "pos" : "neg"} style={{ fontSize: 11.5, marginLeft: 7, fontWeight: 600 }}>
+                {diffPct >= 0 ? "+" : "−"}{Math.abs(diffPct).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} %
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Two cumulative series on a shared time axis — the what-if simulator's
+ * "actual vs filtered" comparison. Series are downsampled independently.
+ */
+export function CompareChart({
+  a,
+  b,
+  w = 640,
+  h = 210,
+  colorA = "#646b81",
+  colorB = "#22c55e",
+  grid = "rgba(255,255,255,0.06)",
+  pad = 6,
+}: {
+  a: TimePoint[]; // baseline (actual)
+  b: TimePoint[]; // scenario (filtered)
+  w?: number;
+  h?: number;
+  colorA?: string;
+  colorB?: string;
+  grid?: string;
+  pad?: number;
+}) {
+  const sa = useMemo(() => downsample(a), [a]);
+  const sb = useMemo(() => downsample(b), [b]);
+  if (sa.length < 2) {
+    return (
+      <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>
+        Inte tillräckligt med data
+      </div>
+    );
+  }
+  const all = [...sa, ...sb];
+  const tMin = Math.min(...all.map((p) => p.t));
+  const tMax = Math.max(...all.map((p) => p.t));
+  const vMin = Math.min(0, ...all.map((p) => p.v));
+  const vMax = Math.max(0, ...all.map((p) => p.v));
+  const tR = tMax - tMin || 1;
+  const vR = vMax - vMin || 1;
+  const x = (t: number) => pad + ((t - tMin) / tR) * (w - pad * 2);
+  const y = (v: number) => pad + (1 - (v - vMin) / vR) * (h - pad * 2);
+  const path = (pts: TimePoint[]) =>
+    pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+  const zero = y(0);
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+      <line x1={pad} y1={zero} x2={w - pad} y2={zero} stroke={grid} strokeWidth="1.4" />
+      <path d={path(sa)} fill="none" stroke={colorA} strokeWidth="1.8" strokeLinejoin="round" opacity="0.85" />
+      {sb.length >= 2 && (
+        <path d={path(sb)} fill="none" stroke={colorB} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
+      )}
+      {sb.length >= 2 && <circle cx={x(sb[sb.length - 1].t)} cy={y(sb[sb.length - 1].v)} r="3.5" fill={colorB} />}
+      <circle cx={x(sa[sa.length - 1].t)} cy={y(sa[sa.length - 1].v)} r="3" fill={colorA} />
+    </svg>
+  );
+}
 
 export function LineChart({
   data,
