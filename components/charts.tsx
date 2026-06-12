@@ -106,8 +106,9 @@ export function InteractiveLineChart({
 
   const hv = hover != null ? pts[hover] : null;
   const frac = hover != null ? hover / (n - 1) : 0;
-  const start = pts[0].v;
-  const diffPct = hv && start !== 0 ? ((hv.v - start) / Math.abs(start)) * 100 : null;
+  // Change vs the start of the visible range. Skipped when the range starts
+  // at 0 (full cumulative series) — the diff would just repeat the value.
+  const diff = hv && pts[0].v !== 0 ? hv.v - pts[0].v : null;
 
   return (
     <div
@@ -168,9 +169,9 @@ export function InteractiveLineChart({
           <div style={{ fontSize: 11, color: "var(--dim)" }}>{formatDate(hv.t)}</div>
           <div className="ap-num" style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>
             {formatValue(hv.v)}
-            {diffPct != null && (
-              <span className={diffPct >= 0 ? "pos" : "neg"} style={{ fontSize: 11.5, marginLeft: 7, fontWeight: 600 }}>
-                {diffPct >= 0 ? "+" : "−"}{Math.abs(diffPct).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} %
+            {diff != null && diff !== 0 && (
+              <span className={diff >= 0 ? "pos" : "neg"} style={{ fontSize: 11.5, marginLeft: 7, fontWeight: 600 }}>
+                {diff >= 0 ? "+" : "−"}{formatValue(Math.abs(diff))}
               </span>
             )}
           </div>

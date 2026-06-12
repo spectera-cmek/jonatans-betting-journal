@@ -13,7 +13,6 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsDTO | null>(null);
   const [unitValue, setUnitValue] = useState("100");
   const [currency, setCurrency] = useState("kr");
-  const [startBankroll, setStartBankroll] = useState("100");
   const [dailyBudget, setDailyBudget] = useState("");
   const [weeklyBudget, setWeeklyBudget] = useState("");
   const [saved, setSaved] = useState(false);
@@ -24,7 +23,6 @@ export default function SettingsPage() {
       setSettings(s);
       setUnitValue(String(s.unitValue));
       setCurrency(s.currency);
-      setStartBankroll(String(s.startingBankrollUnits));
       setDailyBudget(s.dailyStakeBudgetUnits != null ? String(s.dailyStakeBudgetUnits) : "");
       setWeeklyBudget(s.weeklyStakeBudgetUnits != null ? String(s.weeklyStakeBudgetUnits) : "");
     });
@@ -37,7 +35,6 @@ export default function SettingsPage() {
       const s = await api.put<SettingsDTO>("/api/settings", {
         unitValue: Number(unitValue),
         currency,
-        startingBankrollUnits: Number(startBankroll),
         dailyStakeBudgetUnits: dailyBudget.trim() === "" ? null : Number(dailyBudget),
         weeklyStakeBudgetUnits: weeklyBudget.trim() === "" ? null : Number(weeklyBudget),
       });
@@ -65,10 +62,6 @@ export default function SettingsPage() {
             <div className="ap-field">
               <label>Valuta</label>
               <input className="ap-input" value={currency} onChange={(e) => setCurrency(e.target.value)} />
-            </div>
-            <div className="ap-field">
-              <label>Start-bankrulle (U)</label>
-              <input className="ap-input ap-num" type="number" value={startBankroll} onChange={(e) => setStartBankroll(e.target.value)} />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <button className="ap-btn" onClick={save} disabled={saving}>{saving ? "Sparar…" : "Spara"}</button>

@@ -42,19 +42,16 @@ export default function OverviewPage() {
   const m = data?.metrics;
   const unit = data?.settings.unitValue ?? 100;
   const currency = data?.settings.currency ?? "kr";
-  const startBank = data?.settings.startingBankrollUnits ?? 100;
   const hasKey = settings?.hasOddsApiKey ?? false;
 
-  const curve = (data?.bankroll ?? []).map((p) => p.bankrollUnits * unit);
-  const bankrollUnits = data?.bankroll.length ? data.bankroll[data.bankroll.length - 1].bankrollUnits : startBank;
-  const bankrollKr = bankrollUnits * unit;
-  const startKr = startBank * unit;
-  const bankrollPct = startBank > 0 ? ((bankrollUnits - startBank) / startBank) * 100 : 0;
+  // Cumulative P/L in kr (no bankroll framing — the starting-bankroll number
+  // was arbitrary, so the chart shows pure result over time instead).
+  const curve = (data?.bankroll ?? []).map((p) => p.profitUnits * unit);
 
-  // Bankroll points (kr) for the interactive chart, cut to the chosen period.
-  // The point just before the cutoff is kept so the curve enters at its real level.
+  // Chart points cut to the chosen period. The point just before the cutoff
+  // is kept so the curve enters at its real level.
   const allPts = useMemo<TimePoint[]>(
-    () => (data?.bankroll ?? []).map((p) => ({ t: Date.parse(p.date), v: p.bankrollUnits * unit })),
+    () => (data?.bankroll ?? []).map((p) => ({ t: Date.parse(p.date), v: p.profitUnits * unit })),
     [data, unit]
   );
   const pts = useMemo(() => {
@@ -66,20 +63,16 @@ export default function OverviewPage() {
     return allPts.slice(Math.max(0, idx - 1));
   }, [allPts, period]);
 
-  // Max drawdown over the visible period (kr + % of the peak it fell from).
-  const visDd = useMemo(() => {
+  // Max drawdown over the visible period, in kr. (No %-of-peak — that only
+  // made sense against the old arbitrary starting bankroll.)
+  const visDdKr = useMemo(() => {
     let peak = -Infinity;
     let maxDd = 0;
-    let pct: number | null = null;
     for (const p of pts) {
       if (p.v > peak) peak = p.v;
-      const dd = peak - p.v;
-      if (dd > maxDd) {
-        maxDd = dd;
-        pct = peak > 0 ? (dd / peak) * 100 : null;
-      }
+      if (peak - p.v > maxDd) maxDd = peak - p.v;
     }
-    return { kr: maxDd, pct };
+    return maxDd;
   }, [pts]);
 
   // Period P/L: last point vs the period's entry level.
@@ -144,7 +137,7 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {/* Bankroll + sport donut */}
+      {/* Cumulative P/L + sport donut */}
       <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px", marginBottom: 12 }}>
         <Card style={{ background: `linear-gradient(180deg, ${cc.fill}, transparent 55%), var(--card)` }}>
           {loading && !data ? (
@@ -157,12 +150,14 @@ export default function OverviewPage() {
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
                 <div>
-                  <span className="ap-label">Bankrulle</span>
+                  <span className="ap-label">P/L över tid</span>
                   <div className="ap-num" style={{ fontSize: 33, fontWeight: 600, marginTop: 8 }}>
-                    <CountUp value={bankrollKr} format={(n) => krFmt(n)} />
+                    <span className={profitKr >= 0 ? "pos" : "neg"}>
+                      <CountUp value={profitKr} format={(n) => krFmt(n, true)} />
+                    </span>
                   </div>
                   <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>
-                    Start {krFmt(startKr)} · <span className={bankrollPct >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{bankrollPct >= 0 ? "▲" : "▼"} {pctFmt(bankrollPct, true)}</span>
+                    {(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda bets
                     {periodDiff != null && period !== "all" && (
                       <> · perioden <span className={periodDiff >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{krFmt(periodDiff, true)}</span></>
                     )}
@@ -180,10 +175,8 @@ export default function OverviewPage() {
                       </button>
                     ))}
                   </div>
-                  {visDd.kr > 0 && (
-                    <span className="ap-pill neg">
-                      max drawdown {krShort(-visDd.kr, false)}{visDd.pct != null ? ` · −${visDd.pct.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} %` : ""}
-                    </span>
+                  {visDdKr > 0 && (
+                    <span className="ap-pill neg">max drawdown {krShort(-visDdKr, false)}</span>
                   )}
                 </div>
               </div>

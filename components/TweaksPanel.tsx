@@ -37,7 +37,7 @@ export function TweaksPanel() {
             />
           </div>
           <div className="ap-toggle">
-            <span>Glöd bakom bankrulle</span>
+            <span>Bakgrundsglöd</span>
             <button
               className={"ap-switch" + (glow ? " on" : "")}
               onClick={() => setGlow(!glow)}

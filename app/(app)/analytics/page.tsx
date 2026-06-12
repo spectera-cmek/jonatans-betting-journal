@@ -169,7 +169,7 @@ export default function AnalyticsPage() {
         <StatTile
           label="Max drawdown"
           value={dd ? `−${krShort(dd.maxUnits * unit)}` : "—"}
-          sub={dd?.pctOfPeak != null ? `−${dd.pctOfPeak.toFixed(1).replace(".", ",")} % från toppen · ${uFmt(-dd.maxUnits, true)}` : "största tapp från toppen"}
+          sub={dd ? `största tapp från toppen · ${uFmt(-dd.maxUnits, true)}` : "största tapp från toppen"}
           tone="neg"
         />
         <StatTile
