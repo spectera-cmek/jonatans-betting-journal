@@ -23,6 +23,7 @@ const PERIODS = [
   { key: "1y", label: "1 år", days: 365 },
   { key: "90d", label: "90 d", days: 90 },
   { key: "30d", label: "30 d", days: 30 },
+  { key: "7d", label: "7 d", days: 7 },
 ] as const;
 type PeriodKey = (typeof PERIODS)[number]["key"];
 
@@ -43,6 +44,7 @@ export default function OverviewPage() {
   const unit = data?.settings.unitValue ?? 100;
   const currency = data?.settings.currency ?? "kr";
   const hasKey = settings?.hasOddsApiKey ?? false;
+  const profitKr = (m?.profitUnits ?? 0) * unit;
 
   // Cumulative P/L in kr (no bankroll framing — the starting-bankroll number
   // was arbitrary, so the chart shows pure result over time instead).
@@ -75,10 +77,12 @@ export default function OverviewPage() {
     return maxDd;
   }, [pts]);
 
-  // Period P/L: last point vs the period's entry level.
+  // Period P/L: last point vs the period's entry level. The headline follows
+  // the selected period; "Allt" shows the all-time total.
   const periodDiff = pts.length >= 2 ? pts[pts.length - 1].v - pts[0].v : null;
-
-  const profitKr = (m?.profitUnits ?? 0) * unit;
+  const periodBets = Math.max(0, pts.length - 1); // every point after the entry = one settled bet
+  const showPeriod = period !== "all" && periodDiff != null;
+  const headlineKr = showPeriod ? (periodDiff as number) : profitKr;
 
   // sport distribution with pct
   const sports = (data?.bySport ?? []).map((s) => ({ ...s }));
@@ -150,21 +154,27 @@ export default function OverviewPage() {
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
                 <div>
-                  <span className="ap-label">P/L över tid</span>
+                  <span className="ap-label">
+                    P/L {showPeriod ? `senaste ${PERIODS.find((p) => p.key === period)?.label}` : "över tid"}
+                  </span>
                   <div className="ap-num" style={{ fontSize: 33, fontWeight: 600, marginTop: 8 }}>
-                    <span className={profitKr >= 0 ? "pos" : "neg"}>
-                      <CountUp value={profitKr} format={(n) => krFmt(n, true)} />
+                    <span className={headlineKr >= 0 ? "pos" : "neg"}>
+                      <CountUp value={headlineKr} format={(n) => krFmt(n, true)} />
                     </span>
                   </div>
                   <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>
-                    {(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda bets
-                    {periodDiff != null && period !== "all" && (
-                      <> · perioden <span className={periodDiff >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{krFmt(periodDiff, true)}</span></>
+                    {showPeriod ? (
+                      <>
+                        {periodBets.toLocaleString("sv-SE")} avgjorda bets i perioden · totalt{" "}
+                        <span className={profitKr >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{krFmt(profitKr, true)}</span>
+                      </>
+                    ) : (
+                      <>{(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda bets</>
                     )}
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                     {PERIODS.map((p) => (
                       <button
                         key={p.key}
