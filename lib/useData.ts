@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./fetcher";
-import type { Metrics, BankrollPoint, Breakdown } from "./betting";
+import type { Metrics, BankrollPoint, Breakdown, OpenRisk, DrawdownInfo } from "./betting";
 import type { Insights } from "./insights";
-import type { BetDTO, SettingsDTO } from "./types";
+import type { BetListDTO, SettingsDTO } from "./types";
 
 export interface MonthRow {
   month: string;
@@ -33,6 +33,8 @@ export interface MetricsResponse {
   username: string;
   metrics: Metrics;
   insights: Insights;
+  openRisk: OpenRisk;
+  drawdown: DrawdownInfo;
   bankroll: BankrollPoint[];
   bySport: Breakdown[];
   byLeague: Breakdown[];
@@ -48,54 +50,49 @@ export interface MetricsResponse {
   settings: { unitValue: number; currency: string; startingBankrollUnits: number };
 }
 
-export function useMetrics() {
-  const [data, setData] = useState<MetricsResponse | null>(null);
-  const [settings, setSettings] = useState<SettingsDTO | null>(null);
-  const [loading, setLoading] = useState(true);
+// Stale-while-revalidate: last good response per URL, shared across pages for
+// the lifetime of the tab. A page mount renders the cached data instantly and
+// refreshes it in the background, so navigation never shows a spinner twice.
+const cache = new Map<string, unknown>();
+
+function useCachedGet<T>(url: string) {
+  const [data, setData] = useState<T | null>(() => (cache.get(url) as T) ?? null);
+  const [loading, setLoading] = useState(!cache.has(url));
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!cache.has(url)) setLoading(true);
     try {
-      const [m, s] = await Promise.all([
-        api.get<MetricsResponse>("/api/metrics"),
-        api.get<SettingsDTO>("/api/settings"),
-      ]);
-      setData(m);
-      setSettings(s);
+      const d = await api.get<T>(url);
+      cache.set(url, d);
+      setData(d);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [url]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  return { data, settings, loading, reload: load };
+  return { data, loading, reload: load };
+}
+
+export function useMetrics() {
+  const m = useCachedGet<MetricsResponse>("/api/metrics");
+  const s = useCachedGet<SettingsDTO>("/api/settings");
+  const reload = useCallback(() => {
+    m.reload();
+    s.reload();
+  }, [m.reload, s.reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { data: m.data, settings: s.data, loading: m.loading || s.loading, reload };
 }
 
 export function useBets() {
-  const [bets, setBets] = useState<BetDTO[]>([]);
-  const [settings, setSettings] = useState<SettingsDTO | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [b, s] = await Promise.all([
-        api.get<BetDTO[]>("/api/bets"),
-        api.get<SettingsDTO>("/api/settings"),
-      ]);
-      setBets(b);
-      setSettings(s);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return { bets, settings, loading, reload: load };
+  const b = useCachedGet<BetListDTO[]>("/api/bets?fields=list");
+  const s = useCachedGet<SettingsDTO>("/api/settings");
+  const reload = useCallback(() => {
+    b.reload();
+    s.reload();
+  }, [b.reload, s.reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { bets: b.data ?? [], settings: s.data, loading: b.loading || s.loading, reload };
 }

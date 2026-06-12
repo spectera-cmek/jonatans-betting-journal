@@ -7,6 +7,8 @@ import {
   topBetsByProfit,
   singleRoiPct,
   settledProfit,
+  openRisk,
+  maxDrawdown,
   type BetLike,
 } from "@/lib/betting";
 import type { Outcome } from "@/lib/betting";
@@ -15,12 +17,33 @@ import { getSessionUser, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+// Only the columns the aggregations actually read — keeps the Neon transfer
+// small (notes/legs/teams are the bulk of a full row and are never used here).
+const METRICS_SELECT = {
+  id: true,
+  event: true,
+  selection: true,
+  sport: true,
+  league: true,
+  market: true,
+  bookmaker: true,
+  betType: true,
+  odds: true,
+  closingOdds: true,
+  stakeUnits: true,
+  outcome: true,
+  profitUnits: true,
+  eventAt: true,
+  placedAt: true,
+  createdAt: true,
+} as const;
+
 // GET /api/metrics — everything the dashboard & analytics need.
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return apiUnauthorized();
   const [bets, settings] = await Promise.all([
-    prisma.bet.findMany({ where: { userId: user.id } }),
+    prisma.bet.findMany({ where: { userId: user.id }, select: METRICS_SELECT }),
     getSettings(user.id),
   ]);
 
@@ -72,10 +95,16 @@ export async function GET() {
   // Personal "form" insights (streaks, best/worst day, month-over-month…).
   const insights = computeInsights(betLikes);
 
+  // Exposure on pending bets + worst historical peak-to-trough drop.
+  const risk = openRisk(betLikes);
+  const drawdown = maxDrawdown(bankroll);
+
   return NextResponse.json({
     username: user.username,
     metrics,
     insights,
+    openRisk: risk,
+    drawdown,
     bankroll,
     bySport,
     byLeague,

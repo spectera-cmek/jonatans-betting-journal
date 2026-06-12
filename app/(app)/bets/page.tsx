@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
@@ -10,9 +10,10 @@ import { api } from "@/lib/fetcher";
 import { uFmt, pctFmt, krShort, sportTag, dateShort } from "@/lib/format";
 import { computeMetrics, type BetLike, type Outcome } from "@/lib/betting";
 import { I, IC } from "@/components/icons";
-import type { BetDTO } from "@/lib/types";
+import type { BetDTO, BetListDTO } from "@/lib/types";
 
-const GRID = "62px 46px 1.5fr 1.1fr 92px 64px 52px 70px 80px 96px";
+const GRID = "62px 46px 1.5fr 1.1fr 92px 64px 52px 70px 80px 116px";
+const PAGE = 100;
 const RES_CHIPS: [string, string][] = [
   ["alla", "Alla"],
   ["pending", "Öppna"],
@@ -21,23 +22,40 @@ const RES_CHIPS: [string, string][] = [
   ["push", "Push"],
 ];
 const MONTHS_SV = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
+// Labels for the four raw market codes; imported bets carry Swedish categories already.
+const MARKET_LABELS: Record<string, string> = {
+  h2h: "H2H / 1X2",
+  totals: "Över/Under",
+  spreads: "Spread/Handikapp",
+  other: "Övrigt (manuellt)",
+};
 
 export default function BetsPage() {
   const { bets, settings, loading, reload } = useBets();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<BetDTO | null>(null);
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("Alla sporter");
   const [book, setBook] = useState("Alla bookmakers");
+  const [market, setMarket] = useState("");
   const [res, setRes] = useState("alla");
   const [day, setDay] = useState(""); // YYYY-MM-DD, specific day
   const [year, setYear] = useState("Alla år");
   const [month, setMonth] = useState("Alla månader");
+  const [shown, setShown] = useState(PAGE);
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
 
   const sports = useMemo(() => Array.from(new Set(bets.map((b) => b.sport).filter(Boolean))) as string[], [bets]);
   const books = useMemo(() => Array.from(new Set(bets.map((b) => b.bookmaker).filter(Boolean))) as string[], [bets]);
+  const markets = useMemo(
+    () =>
+      Array.from(new Set(bets.map((b) => b.market).filter(Boolean)))
+        .map((m) => ({ value: m, label: MARKET_LABELS[m] ?? m }))
+        .sort((a, b) => a.label.localeCompare(b.label, "sv")),
+    [bets]
+  );
   const years = useMemo(
     () => Array.from(new Set(bets.map((b) => new Date(b.eventAt ?? b.placedAt).getFullYear()))).sort((a, b) => b - a).map(String),
     [bets]
@@ -48,6 +66,7 @@ export default function BetsPage() {
     return bets.filter((b) => {
       if (sport !== "Alla sporter" && b.sport !== sport) return false;
       if (book !== "Alla bookmakers" && b.bookmaker !== book) return false;
+      if (market && b.market !== market) return false;
       if (res === "win" && !(b.outcome === "win" || b.outcome === "half_win")) return false;
       if (res === "loss" && !(b.outcome === "loss" || b.outcome === "half_loss")) return false;
       if (res === "pending" && b.outcome !== "pending") return false;
@@ -66,14 +85,21 @@ export default function BetsPage() {
       }
       return true;
     });
-  }, [bets, sport, book, res, q, day, year, month]);
+  }, [bets, sport, book, market, res, q, day, year, month]);
+
+  // Render at most `shown` rows; reset when any filter changes.
+  useEffect(() => {
+    setShown(PAGE);
+  }, [sport, book, market, res, q, day, year, month]);
+  const visible = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
+  const remaining = filtered.length - visible.length;
 
   const metrics = useMemo(() => {
     const likes: BetLike[] = filtered.map((b) => ({
       odds: b.odds,
       stakeUnits: b.stakeUnits,
       outcome: b.outcome as Outcome,
-      closingOdds: b.closingOdds,
+      closingOdds: null,
       profitUnits: b.profitUnits,
     }));
     return computeMetrics(likes);
@@ -91,11 +117,33 @@ export default function BetsPage() {
     await api.post(`/api/bets/${id}/settle`, { outcome });
     reload();
   };
-  const del = async (b: BetDTO) => {
+  const del = async (b: BetListDTO) => {
     if (!confirm(`Ta bort betet "${b.event}"?`)) return;
     await api.del(`/api/bets/${b.id}`);
     reload();
   };
+  const openEdit = async (b: BetListDTO) => {
+    try {
+      const full = await api.get<BetDTO>(`/api/bets/${b.id}`);
+      setEditing(full);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const rowActions = (b: BetListDTO) => (
+    <>
+      {b.outcome === "pending" && (
+        <>
+          <button className="ap-iconbtn w" title="Vunnen" onClick={() => settle(b.id, "win")}>W</button>
+          <button className="ap-iconbtn l" title="Förlorad" onClick={() => settle(b.id, "loss")}>L</button>
+          <button className="ap-iconbtn" title="Push (insats tillbaka)" onClick={() => settle(b.id, "push")}>P</button>
+        </>
+      )}
+      <button className="ap-iconbtn" title="Redigera" onClick={() => openEdit(b)}>✎</button>
+      <button className="ap-iconbtn x" title="Ta bort" onClick={() => del(b)}>✕</button>
+    </>
+  );
 
   return (
     <div>
@@ -126,6 +174,12 @@ export default function BetsPage() {
         </div>
         {sel(sport, setSport, ["Alla sporter", ...sports])}
         {sel(book, setBook, ["Alla bookmakers", ...books])}
+        <div className="ap-select">
+          <select value={market} onChange={(e) => setMarket(e.target.value)}>
+            <option value="">Alla marknader</option>
+            {markets.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </div>
       </div>
       <div className="ap-filters">
         <div className="ap-select">
@@ -152,7 +206,7 @@ export default function BetsPage() {
           <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} onClick={() => setRes(v)}>{l}</button>
         ))}
         <div style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--dim)", alignSelf: "center" }}>
-          Visar <strong style={{ color: "var(--txt)" }}>{filtered.length}</strong> av {bets.length} bets
+          Visar <strong style={{ color: "var(--txt)" }}>{Math.min(visible.length, filtered.length)}</strong> av {filtered.length} träffar
         </div>
       </div>
 
@@ -167,7 +221,7 @@ export default function BetsPage() {
             {!loading && filtered.length === 0 && (
               <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets matchar filtren.</div>
             )}
-            {filtered.map((b) => (
+            {visible.map((b) => (
               <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: GRID }}>
                 <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
@@ -179,13 +233,7 @@ export default function BetsPage() {
                 <span className={"ap-r ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>{b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}</span>
                 <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
                 <span className="ap-c" style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                  {b.outcome === "pending" && (
-                    <>
-                      <button className="ap-iconbtn w" title="Vunnen" onClick={() => settle(b.id, "win")}>W</button>
-                      <button className="ap-iconbtn l" title="Förlorad" onClick={() => settle(b.id, "loss")}>L</button>
-                    </>
-                  )}
-                  <button className="ap-iconbtn x" title="Ta bort" onClick={() => del(b)}>✕</button>
+                  {rowActions(b)}
                 </span>
               </div>
             ))}
@@ -197,7 +245,7 @@ export default function BetsPage() {
       <div className="ap-betcards">
         {loading && <div className="ap-betcard-empty">Laddar…</div>}
         {!loading && filtered.length === 0 && <div className="ap-betcard-empty">Inga bets matchar filtren.</div>}
-        {!loading && filtered.map((b) => (
+        {!loading && visible.map((b) => (
           <div key={b.id} className="ap-betcard">
             <div className="ap-betcard-top">
               <span className="ap-betcard-date">
@@ -221,20 +269,29 @@ export default function BetsPage() {
                 </b>
               </div>
               <div className="ap-betcard-act">
-                {b.outcome === "pending" && (
-                  <>
-                    <button className="ap-iconbtn w" title="Vunnen" onClick={() => settle(b.id, "win")}>W</button>
-                    <button className="ap-iconbtn l" title="Förlorad" onClick={() => settle(b.id, "loss")}>L</button>
-                  </>
-                )}
-                <button className="ap-iconbtn x" title="Ta bort" onClick={() => del(b)}>✕</button>
+                {rowActions(b)}
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <AddBetModal open={adding} onClose={() => setAdding(false)} onSaved={reload} hasOddsApiKey={hasKey} />
+      {/* pagination */}
+      {!loading && remaining > 0 && (
+        <div style={{ display: "flex", justifyContent: "center", padding: "14px 0 4px" }}>
+          <button className="ap-btn ghost" onClick={() => setShown((n) => n + PAGE * 2)}>
+            Visa fler ({remaining} kvar)
+          </button>
+        </div>
+      )}
+
+      <AddBetModal
+        open={adding || !!editing}
+        bet={editing}
+        onClose={() => { setAdding(false); setEditing(null); }}
+        onSaved={reload}
+        hasOddsApiKey={hasKey}
+      />
     </div>
   );
 }

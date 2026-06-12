@@ -8,6 +8,9 @@ import {
   accaOdds,
   topBetsByProfit,
   singleRoiPct,
+  openRisk,
+  maxDrawdown,
+  type BankrollPoint,
   type BetLike,
 } from "../lib/betting";
 
@@ -177,5 +180,53 @@ describe("singleRoiPct", () => {
 
   it("returns null when stake is zero", () => {
     expect(singleRoiPct({ odds: 2.0, stakeUnits: 0, outcome: "win" })).toBeNull();
+  });
+});
+
+describe("openRisk", () => {
+  it("sums stake and best-case return across pending bets only", () => {
+    const bets: BetLike[] = [
+      { odds: 2.0, stakeUnits: 1, outcome: "pending" },
+      { odds: 1.5, stakeUnits: 2, outcome: "pending" },
+      { odds: 3.0, stakeUnits: 5, outcome: "win" }, // settled — ignored
+    ];
+    const r = openRisk(bets);
+    expect(r.bets).toBe(2);
+    expect(r.stakeUnits).toBeCloseTo(3);
+    expect(r.potentialReturnUnits).toBeCloseTo(2 * 1 + 1.5 * 2); // 5
+  });
+
+  it("is all zeroes with no pending bets", () => {
+    expect(openRisk([{ odds: 2, stakeUnits: 1, outcome: "loss" }])).toEqual({
+      bets: 0,
+      stakeUnits: 0,
+      potentialReturnUnits: 0,
+    });
+  });
+});
+
+describe("maxDrawdown", () => {
+  const pt = (bankrollUnits: number): BankrollPoint => ({
+    date: "2026-01-01",
+    bankrollUnits,
+    profitUnits: 0,
+    label: "",
+  });
+
+  it("finds the largest peak-to-trough drop", () => {
+    // 100 -> 120 -> 90 (dd 30) -> 110 -> 60 (dd 60 from 120)
+    const dd = maxDrawdown([pt(100), pt(120), pt(90), pt(110), pt(60)]);
+    expect(dd.maxUnits).toBeCloseTo(60);
+    expect(dd.pctOfPeak!).toBeCloseTo(50);
+  });
+
+  it("is zero for a monotonically rising bankroll", () => {
+    const dd = maxDrawdown([pt(100), pt(110), pt(150)]);
+    expect(dd.maxUnits).toBe(0);
+    expect(dd.pctOfPeak).toBeNull();
+  });
+
+  it("handles an empty series", () => {
+    expect(maxDrawdown([]).maxUnits).toBe(0);
   });
 });

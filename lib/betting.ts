@@ -305,6 +305,47 @@ export function singleRoiPct(b: BetLike): number | null {
   return b.stakeUnits > 0 ? (settledProfit(b) / b.stakeUnits) * 100 : null;
 }
 
+export interface OpenRisk {
+  bets: number;
+  stakeUnits: number; // total units currently in play
+  potentialReturnUnits: number; // sum of stake * odds if everything wins
+}
+
+/** Exposure across pending bets: units at risk + best-case total return. */
+export function openRisk(bets: BetLike[]): OpenRisk {
+  let n = 0;
+  let stake = 0;
+  let potential = 0;
+  for (const b of bets) {
+    if (b.outcome !== "pending") continue;
+    n += 1;
+    stake += b.stakeUnits;
+    potential += b.stakeUnits * b.odds;
+  }
+  return { bets: n, stakeUnits: round2(stake), potentialReturnUnits: round2(potential) };
+}
+
+export interface DrawdownInfo {
+  maxUnits: number; // largest peak-to-trough drop in bankroll units
+  pctOfPeak: number | null; // that drop as % of the peak it fell from
+}
+
+/** Largest peak-to-trough drop over a bankroll series. */
+export function maxDrawdown(points: BankrollPoint[]): DrawdownInfo {
+  let peak = -Infinity;
+  let maxDd = 0;
+  let pct: number | null = null;
+  for (const p of points) {
+    if (p.bankrollUnits > peak) peak = p.bankrollUnits;
+    const dd = peak - p.bankrollUnits;
+    if (dd > maxDd) {
+      maxDd = dd;
+      pct = peak > 0 ? (dd / peak) * 100 : null;
+    }
+  }
+  return { maxUnits: round2(maxDd), pctOfPeak: pct };
+}
+
 /** Combined decimal odds for an accumulator: product of leg odds. */
 export function accaOdds(legOdds: number[]): number {
   return legOdds.reduce((acc, o) => acc * o, 1);

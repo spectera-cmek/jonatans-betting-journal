@@ -95,6 +95,49 @@ export function serializeBet(b: BetRow): BetDTO {
   };
 }
 
+// Compact row for list/calendar views — skips the heavy fields (notes, legs,
+// teams, refs) so 8k+ rows stay a small payload. Keep in sync with the
+// `select` in GET /api/bets?fields=list.
+export interface BetListDTO {
+  id: string;
+  placedAt: string;
+  eventAt: string | null;
+  sport: string | null;
+  league: string | null;
+  event: string;
+  market: string;
+  selection: string;
+  odds: number;
+  stakeUnits: number;
+  outcome: Outcome;
+  profitUnits: number | null;
+  bookmaker: string | null;
+}
+
+export type BetListRow = Pick<
+  BetRow,
+  | "id" | "placedAt" | "eventAt" | "sport" | "league" | "event" | "market"
+  | "selection" | "odds" | "stakeUnits" | "outcome" | "profitUnits" | "bookmaker"
+>;
+
+export function serializeBetList(b: BetListRow): BetListDTO {
+  return {
+    id: b.id,
+    placedAt: b.placedAt.toISOString(),
+    eventAt: b.eventAt ? b.eventAt.toISOString() : null,
+    sport: b.sport,
+    league: b.league,
+    event: b.event,
+    market: b.market,
+    selection: b.selection,
+    odds: b.odds,
+    stakeUnits: b.stakeUnits,
+    outcome: b.outcome as Outcome,
+    profitUnits: b.profitUnits,
+    bookmaker: b.bookmaker,
+  };
+}
+
 export interface SettingsDTO {
   username?: string; // present on GET (who's logged in), not echoed by PUT
   unitValue: number;

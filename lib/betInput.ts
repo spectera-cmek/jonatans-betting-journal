@@ -136,12 +136,16 @@ export function buildBetData(
   if (input.legs !== undefined)
     data.legs = input.legs ? JSON.stringify(input.legs) : null;
 
-  // Recompute profit when we have enough info.
+  // Recompute profit only when a profit input (outcome/odds/stake) actually
+  // changed. A PATCH that touches e.g. notes must NOT overwrite an imported
+  // authoritative profitUnits (real payout) with the formula value.
+  const profitInputTouched =
+    data.outcome !== undefined || data.odds !== undefined || data.stakeUnits !== undefined;
   const finalOutcome = (data.outcome ?? existing?.outcome) as Outcome | undefined;
   const finalOdds = (data.odds ?? existing?.odds) as number | undefined;
   const finalStake = (data.stakeUnits ?? existing?.stakeUnits) as number | undefined;
 
-  if (finalOutcome !== undefined && finalOdds !== undefined && finalStake !== undefined) {
+  if (profitInputTouched && finalOutcome !== undefined && finalOdds !== undefined && finalStake !== undefined) {
     if (finalOutcome === "pending") {
       data.profitUnits = null;
       data.gradedAt = null;

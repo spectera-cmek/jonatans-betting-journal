@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/fetcher";
-import { SPORTS, MARKETS, SIDES, BOOKMAKERS, OUTCOMES } from "@/lib/constants";
+import { SPORTS, MARKETS, SIDES, BOOKMAKERS } from "@/lib/constants";
 import { inferSelection } from "@/lib/grading";
-import { krFmt } from "@/lib/format";
+import { evaluateBet } from "@/lib/discipline";
 import { I, IC } from "./icons";
+import type { BetDTO } from "@/lib/types";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
   hasOddsApiKey: boolean;
+  /** When set, the modal edits this bet (PATCH with only the changed fields). */
+  bet?: BetDTO | null;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -38,6 +41,29 @@ const empty = {
 };
 type Form = typeof empty;
 
+function formFromBet(b: BetDTO): Form {
+  return {
+    eventAt: (b.eventAt ?? b.placedAt).slice(0, 10),
+    sport: b.sport ?? "Football",
+    sportKey: b.sportKey ?? "",
+    league: b.league ?? "",
+    event: b.event,
+    homeTeam: b.homeTeam ?? "",
+    awayTeam: b.awayTeam ?? "",
+    market: b.market,
+    selection: b.selection,
+    selectionSide: b.selectionSide ?? "home",
+    line: b.line != null ? String(b.line) : "",
+    odds: String(b.odds),
+    stakeUnits: String(b.stakeUnits),
+    outcome: b.outcome,
+    bookmaker: b.bookmaker ?? "Unibet",
+    tipster: b.tipster ?? "",
+    externalRef: b.externalRef ?? "",
+    notes: b.notes ?? "",
+  };
+}
+
 interface SearchEvent {
   id: string;
   sportKey: string;
@@ -56,8 +82,18 @@ const RESULT_SEG: [string, string][] = [
   ["push", "Push"],
 ];
 
-export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
+// Edit mode exposes the full outcome set (half wins from cashouts etc.).
+const RESULT_SEG_FULL: [string, string][] = [
+  ...RESULT_SEG,
+  ["half_win", "½ Vunnen"],
+  ["half_loss", "½ Förlorad"],
+  ["void", "Void"],
+];
+
+export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Props) {
+  const editing = !!bet;
   const [form, setForm] = useState<Form>(empty);
+  const initial = useRef<Form>(empty);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
@@ -70,13 +106,15 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
 
   useEffect(() => {
     if (open) {
-      setForm({ ...empty, eventAt: today() });
+      const f = bet ? formFromBet(bet) : { ...empty, eventAt: today() };
+      initial.current = f;
+      setForm(f);
       setError(null);
       setShowSearch(false);
       setSearchResults([]);
       setTimeout(() => firstField.current?.focus(), 50);
     }
-  }, [open]);
+  }, [open, bet]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -85,6 +123,20 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  // Live leak/edge check against the personal loss-analysis rules.
+  const verdict = useMemo(
+    () =>
+      evaluateBet({
+        sport: form.sport,
+        selection: form.selection,
+        market: form.market,
+        odds: parseFloat(form.odds) || null,
+        stakeUnits: parseFloat(form.stakeUnits) || null,
+        betType: bet?.betType ?? "single",
+      }),
+    [form.sport, form.selection, form.market, form.odds, form.stakeUnits, bet]
+  );
 
   if (!open) return null;
 
@@ -136,11 +188,23 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
     setSaving(true);
     setError(null);
     try {
-      await api.post("/api/bets", {
-        ...form,
-        line: form.line === "" ? null : form.line,
-        externalRef: form.externalRef || null,
-      });
+      if (editing && bet) {
+        // PATCH only what changed — keeps imported payouts (profitUnits)
+        // intact unless outcome/odds/stake actually moved.
+        const payload: Record<string, unknown> = {};
+        for (const k of Object.keys(form) as (keyof Form)[]) {
+          if (form[k] !== initial.current[k]) payload[k] = form[k] === "" ? null : form[k];
+        }
+        if (Object.keys(payload).length > 0) {
+          await api.patch(`/api/bets/${bet.id}`, payload);
+        }
+      } else {
+        await api.post("/api/bets", {
+          ...form,
+          line: form.line === "" ? null : form.line,
+          externalRef: form.externalRef || null,
+        });
+      }
       onSaved();
       onClose();
     } catch (e) {
@@ -151,20 +215,30 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
   };
 
   const sides = SIDES[form.market] || [];
+  // Imported bets carry values outside the standard option lists (Swedish
+  // market categories, other bookmakers/sports) — keep them selectable.
+  const sportOpts = SPORTS.includes(form.sport) ? SPORTS : [form.sport, ...SPORTS];
+  const marketOpts = MARKETS.some((m) => m.value === form.market)
+    ? MARKETS
+    : [{ value: form.market, label: form.market }, ...MARKETS];
+  const bookOpts = BOOKMAKERS.includes(form.bookmaker) ? BOOKMAKERS : [form.bookmaker, ...BOOKMAKERS];
+  const resultSeg = editing ? RESULT_SEG_FULL : RESULT_SEG;
 
   return (
     <div className="ap-overlay" onClick={onClose}>
       <div className="ap-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ap-modal-head">
           <div>
-            <div className="ap-card-title" style={{ fontSize: 17 }}>Logga ny bet</div>
-            <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 3 }}>Fyll i detaljerna nedan</div>
+            <div className="ap-card-title" style={{ fontSize: 17 }}>{editing ? "Redigera bet" : "Logga ny bet"}</div>
+            <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 3 }}>
+              {editing ? "Bara ändrade fält sparas" : "Fyll i detaljerna nedan"}
+            </div>
           </div>
           <button className="ap-close" onClick={onClose}><I p={IC.x} size={15} /></button>
         </div>
 
         <div className="ap-modal-body">
-          {hasOddsApiKey && (
+          {hasOddsApiKey && !editing && (
             <div className="ap-field">
               <button type="button" className="ap-link" style={{ textAlign: "left" }} onClick={() => setShowSearch((v) => !v)}>
                 {showSearch ? "▾ Dölj event-sök" : "▸ Sök event (autofyll + auto-rättning)"}
@@ -201,7 +275,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
             <div className="ap-field">
               <label>Sport</label>
               <select className="ap-input" value={form.sport} onChange={(e) => set("sport", e.target.value)}>
-                {SPORTS.map((x) => <option key={x}>{x}</option>)}
+                {sportOpts.map((x) => <option key={x}>{x}</option>)}
               </select>
             </div>
           </div>
@@ -224,9 +298,9 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
 
           <div className="ap-x2">
             <div className="ap-field">
-              <label>Markandstyp</label>
+              <label>Marknadstyp</label>
               <select className="ap-input" value={form.market} onChange={(e) => set("market", e.target.value)}>
-                {MARKETS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                {marketOpts.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
             {sides.length > 0 ? (
@@ -255,7 +329,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
             <div className="ap-field">
               <label>Bookmaker</label>
               <select className="ap-input" value={form.bookmaker} onChange={(e) => set("bookmaker", e.target.value)}>
-                {BOOKMAKERS.map((x) => <option key={x}>{x}</option>)}
+                {bookOpts.map((x) => <option key={x}>{x}</option>)}
               </select>
             </div>
             <div className="ap-field">
@@ -278,11 +352,46 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
           <div className="ap-field">
             <label>Resultat</label>
             <div className="ap-seg2">
-              {RESULT_SEG.map(([v, l]) => (
+              {resultSeg.map(([v, l]) => (
                 <button key={v} className={form.outcome === v ? "is-active" : ""} onClick={() => set("outcome", v)}>{l}</button>
               ))}
             </div>
           </div>
+
+          <div className="ap-field">
+            <label>Anteckningar (valfritt)</label>
+            <textarea
+              className="ap-input"
+              rows={2}
+              style={{ resize: "vertical", minHeight: 38 }}
+              value={form.notes}
+              onChange={(e) => set("notes", e.target.value)}
+            />
+          </div>
+
+          {verdict.notes.length > 0 && (
+            <div
+              style={{
+                borderRadius: 10,
+                padding: "10px 12px",
+                background: "var(--hover, rgba(255,255,255,.04))",
+                border: `1px solid ${verdict.level === "edge" ? "var(--pos)" : verdict.level === "warn" ? "var(--red)" : "var(--line, rgba(255,255,255,.08))"}33`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 11, color: "var(--dim2)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+                Disciplinvakt
+              </span>
+              {verdict.notes.map((n, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.45 }}>
+                  <span className={n.tone} style={{ fontWeight: 700 }}>{n.tone === "pos" ? "✓" : "⚠"}</span>
+                  <span style={{ color: n.tone === "pos" ? "var(--pos)" : "var(--red)" }}>{n.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="ap-payout">
             <div>
@@ -295,7 +404,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
             </div>
           </div>
 
-          {form.externalRef && (
+          {form.externalRef && !editing && (
             <div style={{ fontSize: 12, color: "var(--pos)" }}>
               ✓ Länkad till event {form.externalRef.slice(0, 8)}… — kan auto-rättas vid synk.
             </div>
@@ -305,7 +414,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey }: Props) {
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
             <button className="ap-btn ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Avbryt</button>
             <button className="ap-btn" style={{ flex: 2, justifyContent: "center" }} onClick={submit} disabled={saving}>
-              {saving ? "Sparar…" : "Spara bet"}
+              {saving ? "Sparar…" : editing ? "Spara ändringar" : "Spara bet"}
             </button>
           </div>
         </div>

@@ -93,6 +93,8 @@ export default function AnalyticsPage() {
   const { data } = useMetrics();
   const m = data?.metrics;
   const ins = data?.insights;
+  const dd = data?.drawdown;
+  const risk = data?.openRisk;
   const unit = data?.settings.unitValue ?? 100;
 
   const roiCurve = (data?.monthly ?? []).map((mo) => mo.roiPct ?? 0);
@@ -143,6 +145,32 @@ export default function AnalyticsPage() {
         <StatTile label="Win rate" value={pctFmt(m?.winRatePct ?? null)} sub={`${m?.wins ?? 0}V · ${m?.losses ?? 0}F`} />
         <StatTile label="Snittodds" value={(m?.avgOdds ?? 0).toFixed(2)} sub={`${m?.settledBets ?? 0} avgjorda`} />
         <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : "ingen data"} />
+      </div>
+
+      <div className="ap-kpi-row">
+        <StatTile
+          label="Max drawdown"
+          value={dd ? `−${krShort(dd.maxUnits * unit)}` : "—"}
+          sub={dd?.pctOfPeak != null ? `−${dd.pctOfPeak.toFixed(1).replace(".", ",")} % från toppen · ${uFmt(-dd.maxUnits, true)}` : "största tapp från toppen"}
+          tone="neg"
+        />
+        <StatTile
+          label="Öppen risk"
+          value={risk ? krShort(risk.stakeUnits * unit) : "—"}
+          sub={risk ? `${risk.bets} öppna · möjlig retur ${krShort(risk.potentialReturnUnits * unit)}` : "inga öppna bets"}
+        />
+        <StatTile
+          label="Bästa dag"
+          value={ins?.best ? krShort(ins.best.profitUnits * unit, true) : "—"}
+          sub={ins?.best ? `${dateShort(ins.best.date)} · ${ins.best.bets} bets` : "ingen data"}
+          tone="pos"
+        />
+        <StatTile
+          label="Sämsta dag"
+          value={ins?.worst ? krShort(ins.worst.profitUnits * unit, true) : "—"}
+          sub={ins?.worst ? `${dateShort(ins.worst.date)} · ${ins.worst.bets} bets` : "ingen data"}
+          tone="neg"
+        />
       </div>
 
       {/* Per år */}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Topbar } from "@/components/Shell";
 import { Card, Kpi } from "@/components/ui";
-import { LineChart, PLBars, Donut, Ring } from "@/components/charts";
+import { LineChart, PLBars, Donut } from "@/components/charts";
 import { ResultBadge } from "@/components/ResultBadge";
 import { AddBetModal } from "@/components/AddBetModal";
 import { SyncButton } from "@/components/SyncButton";
@@ -12,7 +12,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
 import { krFmt, krShort, uFmt, pctFmt, sportTag, dateShort } from "@/lib/format";
-import type { BetDTO } from "@/lib/types";
+import type { BetListDTO } from "@/lib/types";
 import type { StreakInfo } from "@/lib/insights";
 import { I, IC } from "@/components/icons";
 import { useEffect } from "react";
@@ -21,10 +21,12 @@ export default function OverviewPage() {
   const { cc, glow } = useTheme();
   const { data, settings, loading, reload } = useMetrics();
   const [adding, setAdding] = useState(false);
-  const [recent, setRecent] = useState<BetDTO[]>([]);
+  const [recent, setRecent] = useState<BetListDTO[]>([]);
 
+  // Re-fetch the short list whenever the metrics refresh (a save/settle
+  // triggers reload → new data → fresh recent rows).
   useEffect(() => {
-    api.get<BetDTO[]>("/api/bets").then((b) => setRecent(b.slice(0, 7)));
+    api.get<BetListDTO[]>("/api/bets?limit=7&fields=list").then(setRecent);
   }, [data]);
 
   const m = data?.metrics;
@@ -51,6 +53,7 @@ export default function OverviewPage() {
   const allMonths = data?.byMonth ?? [];
   const rangeLabel = allMonths.length ? allMonths[0].month.slice(0, 4) : "";
   const ins = data?.insights;
+  const risk = data?.openRisk;
 
   // Per-user header: "Jonatans Betting Journal" for jonatan, etc.
   const username = data?.username;
@@ -137,8 +140,19 @@ export default function OverviewPage() {
             <PLBars data={months} w={400} h={150} pos={cc.pos} neg={cc.red} labelColor={cc.dim} track={cc.line} />
           </div>
         </Card>
-        <Card style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Ring pct={m?.winRatePct ?? 0} size={134} thickness={11} color={cc.acc} track={cc.line} textColor={cc.txt} sub="WIN RATE" subColor={cc.dim} />
+        <Card style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 }}>
+          <span className="ap-label">Öppen risk</span>
+          {risk && risk.bets > 0 ? (
+            <>
+              <div className="ap-num" style={{ fontSize: 26, fontWeight: 600 }}>{krFmt(risk.stakeUnits * unit)}</div>
+              <div style={{ fontSize: 12.5, color: "var(--dim)", lineHeight: 1.5 }}>
+                {risk.bets} öppna bets i spel<br />
+                Möjlig retur <span className="pos" style={{ fontWeight: 600 }}>{krFmt(risk.potentialReturnUnits * unit)}</span>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 13, color: "var(--dim2)" }}>Inga öppna bets just nu.</div>
+          )}
         </Card>
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>

@@ -6,6 +6,19 @@ import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+// GET /api/bets/:id — full bet (the list endpoint serves compact rows; the
+// edit modal needs every field).
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
+  const userId = getSessionUserId();
+  if (!userId) return apiUnauthorized();
+  const bet = await prisma.bet.findFirst({ where: { id: params.id, userId } });
+  if (!bet) return NextResponse.json({ error: "Bet not found" }, { status: 404 });
+  return NextResponse.json(serializeBet(bet));
+}
+
 // PATCH /api/bets/:id — update fields on a bet (must belong to the current user).
 export async function PATCH(
   req: Request,
