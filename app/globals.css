@@ -702,7 +702,9 @@ select.ap-input {
   position: fixed;
   right: 18px;
   bottom: 18px;
-  z-index: 1100;
+  /* Below the modal overlay (1000) so the FAB doesn't float over a full-screen
+     sheet on mobile, but above the bottom nav (900) so it stays tappable. */
+  z-index: 990;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -854,6 +856,77 @@ select.ap-input {
   }
 }
 
+/* ---- focus-visible (keyboard) & disabled a11y ---- */
+.ap-btn:focus-visible,
+.ap-segbtn:focus-visible,
+.ap-navitem:focus-visible,
+.ap-iconbtn:focus-visible,
+.ap-chip:focus-visible,
+.ap-link:focus-visible,
+.ap-close:focus-visible,
+.ap-input:focus-visible,
+.ap-seg2 button:focus-visible,
+.ap-select select:focus-visible,
+.ap-eventrow:focus-visible,
+.ap-mobnav a:focus-visible,
+.ap-tweaks-fab:focus-visible,
+.ap-swatch:focus-visible,
+.ap-switch:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+/* The search input clears its own outline — ring the whole field instead. */
+.ap-search:focus-within {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+  border-color: transparent;
+}
+.ap-btn:disabled,
+.ap-input:disabled,
+.ap-select select:disabled,
+.ap-seg2 button:disabled,
+.ap-iconbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- empty states ---- */
+.ap-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 44px 20px;
+  text-align: center;
+}
+.ap-empty-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--card2);
+  color: var(--dim2);
+  margin-bottom: 2px;
+}
+.ap-empty-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+.ap-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dim);
+}
+.ap-empty-hint {
+  font-size: 12.5px;
+  color: var(--dim2);
+  line-height: 1.5;
+  max-width: 340px;
+}
+
 /* mobile bottom nav (hidden on desktop) */
 .ap-mobnav {
   display: none;
@@ -873,7 +946,9 @@ select.ap-input {
     display: none;
   }
   .ap-main {
-    padding: 16px 16px 96px;
+    /* max() keeps the 16px gutter on normal phones but clears the corner notch
+       in landscape (safe-area insets are 0 in portrait). */
+    padding: 16px max(16px, env(safe-area-inset-right)) 96px max(16px, env(safe-area-inset-left));
   }
   .ap-burger {
     display: grid;
@@ -952,6 +1027,16 @@ select.ap-input {
   }
   .ap-seg {
     display: none;
+  }
+}
+/* Very narrow phones: drop the bottom-nav labels (icon-only) so 6 tabs never
+   truncate to "Inst…". */
+@media (max-width: 380px) {
+  .ap-mobnav-label {
+    display: none;
+  }
+  .ap-mobnav a {
+    gap: 0;
   }
 }
 
@@ -1157,7 +1242,9 @@ select.ap-input {
 .ap-betcards {
   display: none;
 }
-@media (max-width: 700px) {
+/* Switch the fixed-width bet table for stacked cards already on tablets — the
+   table's px columns force horizontal scroll well before phone widths. */
+@media (max-width: 860px) {
   .ap-table-wrap {
     display: none;
   }
@@ -1165,6 +1252,12 @@ select.ap-input {
     display: flex;
     flex-direction: column;
     gap: 10px;
+  }
+  /* Bigger tap targets for the settle/edit/delete buttons on touch screens. */
+  .ap-iconbtn {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
   }
 }
 .ap-betcard {

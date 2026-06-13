@@ -5,8 +5,29 @@ import { api } from "@/lib/fetcher";
 import { SPORTS, MARKETS, SIDES, BOOKMAKERS } from "@/lib/constants";
 import { inferSelection } from "@/lib/grading";
 import { evaluateBet } from "@/lib/discipline";
+import { accaOdds } from "@/lib/betting";
 import { I, IC } from "./icons";
 import type { BetDTO } from "@/lib/types";
+
+// One parsed accumulator leg (bet365 import shape). outcome is the raw Swedish
+// token from the statement ("Vinst", "Förlust", "Pågående", "Annullerat"…).
+interface LegView {
+  selection?: string;
+  event?: string;
+  market?: string | null;
+  odds?: number | null;
+  outcome?: string;
+}
+
+function legOutcome(token?: string): { label: string; badge: string } {
+  const t = (token || "").toLowerCase();
+  if (/pågå/.test(t)) return { label: "Öppen", badge: "open" };
+  if (/halv/.test(t)) return { label: "Halv", badge: "push" };
+  if (/annul|återbet|cancel/.test(t)) return { label: "Void", badge: "open" };
+  if (/vinst|vunn|won/.test(t)) return { label: "Vunnen", badge: "won" };
+  if (/förlus|förlor|lost/.test(t)) return { label: "Förlorad", badge: "lost" };
+  return { label: token || "—", badge: "open" };
+}
 
 interface Props {
   open: boolean;
@@ -136,6 +157,21 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
         betType: bet?.betType ?? "single",
       }),
     [form.sport, form.selection, form.market, form.odds, form.stakeUnits, bet]
+  );
+
+  // Parsed accumulator legs (only present on imported combos).
+  const legs = useMemo<LegView[]>(() => {
+    if (!bet?.legs) return [];
+    try {
+      const arr = JSON.parse(bet.legs);
+      return Array.isArray(arr) ? (arr as LegView[]) : [];
+    } catch {
+      return [];
+    }
+  }, [bet]);
+  const comboOdds = useMemo(
+    () => accaOdds(legs.map((l) => Number(l.odds)).filter((o) => Number.isFinite(o) && o > 1)),
+    [legs]
   );
 
   if (!open) return null;
@@ -295,6 +331,45 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
             <label>Spel / marknad</label>
             <input className="ap-input" placeholder="t.ex. Över 2.5 mål" value={form.selection} onChange={(e) => set("selection", e.target.value)} onBlur={onSelectionBlur} />
           </div>
+
+          {editing && legs.length > 1 && (
+            <div className="ap-field">
+              <label>
+                Ben i kombinationen ({legs.length}){comboOdds > 1 ? ` · kombinerat odds ${comboOdds.toFixed(2)}` : ""}
+              </label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {legs.map((l, i) => {
+                  const oc = legOutcome(l.outcome);
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "8px 10px",
+                        background: "var(--card2)",
+                        border: "1px solid var(--line)",
+                        borderRadius: 10,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div className="ap-ell" style={{ fontSize: 12.5, fontWeight: 600 }}>{l.selection || "—"}</div>
+                        {l.event && <div className="ap-ell" style={{ fontSize: 11, color: "var(--dim2)" }}>{l.event}</div>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                        <span className="ap-num" style={{ fontSize: 12.5, color: "var(--dim)" }}>
+                          {Number(l.odds) > 1 ? Number(l.odds).toFixed(2) : "—"}
+                        </span>
+                        <span className={"ap-badge " + oc.badge}>{oc.label}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="ap-x2">
             <div className="ap-field">

@@ -76,6 +76,25 @@ export function SkeletonCard({ chartH }: { chartH?: number }) {
   );
 }
 
+/** Polished empty state: optional icon, a title line and a dim hint line. */
+export function Empty({
+  title,
+  hint,
+  icon,
+}: {
+  title: string;
+  hint?: React.ReactNode;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="ap-empty">
+      {icon && <div className="ap-empty-icon" aria-hidden="true">{icon}</div>}
+      <div className="ap-empty-title">{title}</div>
+      {hint && <div className="ap-empty-hint">{hint}</div>}
+    </div>
+  );
+}
+
 /**
  * Animates a number change with an ease-out count-up (~0.65 s). The formatter
  * runs on every frame, so pass one that rounds (krFmt/uFmt/pctFmt all do).

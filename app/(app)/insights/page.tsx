@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card, Skeleton, SkeletonCard } from "@/components/ui";
 import { HBar, CompareChart, type TimePoint } from "@/components/charts";
+import { KellyCard } from "@/components/KellyCard";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics, useBets } from "@/lib/useData";
 import { uFmt, krShort, krFmt, pctFmt, dateShort } from "@/lib/format";
@@ -38,6 +39,8 @@ export default function InsightsPage() {
   const { bets, loading: betsLoading } = useBets();
   const unit = data?.settings.unitValue ?? 100;
   const ins = data?.insights;
+  // Bankroll for the Kelly calculator: starting bankroll + realised P/L.
+  const bankrollU = (data?.settings.startingBankrollUnits ?? 100) + (data?.metrics.profitUnits ?? 0);
 
   const streakValue = !ins || ins.streaks.currentType === "none"
     ? "—"
@@ -141,6 +144,8 @@ export default function InsightsPage() {
               ))}
             </div>
           </Card>
+
+          <KellyCard defaultBankrollUnits={bankrollU} unit={unit} />
 
           {!betsLoading && bets.length > 0 && (
             <>

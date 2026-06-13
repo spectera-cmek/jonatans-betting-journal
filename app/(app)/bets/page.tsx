@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card } from "@/components/ui";
+import { Card, Empty } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
 import { AddBetModal } from "@/components/AddBetModal";
 import { useBets } from "@/lib/useData";
@@ -43,6 +43,38 @@ export default function BetsPage() {
   const [year, setYear] = useState("Alla år");
   const [month, setMonth] = useState("Alla månader");
   const [shown, setShown] = useState(PAGE);
+
+  // Mirror filters in the URL query so a filtered view is shareable and survives
+  // reload. Read once on mount; the first write is skipped so it can't clobber.
+  const urlSynced = useRef(false);
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.has("q")) setQ(sp.get("q") || "");
+    if (sp.has("sport")) setSport(sp.get("sport") || "Alla sporter");
+    if (sp.has("book")) setBook(sp.get("book") || "Alla bookmakers");
+    if (sp.has("market")) setMarket(sp.get("market") || "");
+    if (sp.has("res")) setRes(sp.get("res") || "alla");
+    if (sp.has("day")) setDay(sp.get("day") || "");
+    if (sp.has("year")) setYear(sp.get("year") || "Alla år");
+    if (sp.has("month")) setMonth(sp.get("month") || "Alla månader");
+  }, []);
+  useEffect(() => {
+    if (!urlSynced.current) {
+      urlSynced.current = true;
+      return;
+    }
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (sport !== "Alla sporter") sp.set("sport", sport);
+    if (book !== "Alla bookmakers") sp.set("book", book);
+    if (market) sp.set("market", market);
+    if (res !== "alla") sp.set("res", res);
+    if (day) sp.set("day", day);
+    if (year !== "Alla år") sp.set("year", year);
+    if (month !== "Alla månader") sp.set("month", month);
+    const qs = sp.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [q, sport, book, market, res, day, year, month]);
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
@@ -219,7 +251,11 @@ export default function BetsPage() {
             </div>
             {loading && <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>}
             {!loading && filtered.length === 0 && (
-              <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets matchar filtren.</div>
+              <Empty
+                icon={<I p={IC.search} />}
+                title="Inga bets matchar filtren"
+                hint="Justera sökningen eller rensa filtren för att se fler."
+              />
             )}
             {visible.map((b) => (
               <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: GRID }}>
@@ -244,7 +280,13 @@ export default function BetsPage() {
       {/* cards (mobile) */}
       <div className="ap-betcards">
         {loading && <div className="ap-betcard-empty">Laddar…</div>}
-        {!loading && filtered.length === 0 && <div className="ap-betcard-empty">Inga bets matchar filtren.</div>}
+        {!loading && filtered.length === 0 && (
+          <Empty
+            icon={<I p={IC.search} />}
+            title="Inga bets matchar filtren"
+            hint="Justera sökningen eller rensa filtren för att se fler."
+          />
+        )}
         {!loading && visible.map((b) => (
           <div key={b.id} className="ap-betcard">
             <div className="ap-betcard-top">

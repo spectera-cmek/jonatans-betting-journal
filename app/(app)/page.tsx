@@ -9,6 +9,7 @@ import { ResultBadge } from "@/components/ResultBadge";
 import { AddBetModal } from "@/components/AddBetModal";
 import { SyncButton } from "@/components/SyncButton";
 import { TiltBanner } from "@/components/TiltBanner";
+import { GoalCard } from "@/components/GoalCard";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
@@ -96,6 +97,12 @@ export default function OverviewPage() {
   const ins = data?.insights;
   const risk = data?.openRisk;
 
+  // Current month/year realised P/L (units) for the goal-pace card.
+  const now = new Date();
+  const curYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const monthProfitU = (data?.byMonth ?? []).find((mo) => mo.month === curYM)?.profitUnits ?? 0;
+  const yearProfitU = (data?.byYear ?? []).find((y) => y.key === String(now.getFullYear()))?.profitUnits ?? 0;
+
   // Per-user header: "Jonatans Betting Journal" for jonatan, etc.
   const username = data?.username;
   const title = username
@@ -139,6 +146,11 @@ export default function OverviewPage() {
           <Kpi label="+Units" value={<CountUp value={m?.profitUnits ?? 0} format={(n) => uFmt(n, true)} />} valueClass={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
           <Kpi label="Win rate" value={m?.winRatePct != null ? <CountUp value={m.winRatePct} format={(n) => pctFmt(n)} /> : "—"} />
         </div>
+      )}
+
+      {/* Goals & pace */}
+      {!loading && data && (
+        <GoalCard monthProfitUnits={monthProfitU} yearProfitUnits={yearProfitU} unit={unit} />
       )}
 
       {/* Cumulative P/L + sport donut */}

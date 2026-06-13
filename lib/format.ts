@@ -67,12 +67,6 @@ export function fmtDateTime(d: Date | string | null | undefined): string {
   });
 }
 
-/** Tailwind text-color class for a signed value (legacy callers). */
-export function signClass(n: number | null | undefined): string {
-  if (n == null || n === 0) return "text-text-mid";
-  return n > 0 ? "text-pos" : "text-neg";
-}
-
 /* ---------- Aurora-style formatters (sv-SE, signed) ---------- */
 
 // "+18 420 kr" / "−1 500 kr"

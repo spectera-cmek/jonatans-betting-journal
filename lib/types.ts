@@ -27,6 +27,7 @@ export interface BetDTO {
   bookmaker: string | null;
   tipster: string | null;
   notes: string | null;
+  legs: string | null; // JSON-encoded accumulator legs (for the edit modal)
   gradedAt: string | null;
   createdAt: string;
   clvPct: number | null;
@@ -57,6 +58,7 @@ type BetRow = {
   bookmaker: string | null;
   tipster: string | null;
   notes: string | null;
+  legs: string | null;
   gradedAt: Date | null;
   createdAt: Date;
 };
@@ -86,6 +88,7 @@ export function serializeBet(b: BetRow): BetDTO {
     bookmaker: b.bookmaker,
     tipster: b.tipster,
     notes: b.notes,
+    legs: b.legs,
     gradedAt: b.gradedAt ? b.gradedAt.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
     clvPct:

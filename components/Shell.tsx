@@ -52,7 +52,7 @@ export function MobileNav() {
     <div className="ap-mobnav">
       {NAV.map((n) => (
         <Link key={n.href} href={n.href} className={isActive(pathname, n.href) ? "is-active" : ""}>
-          <I p={n.icon} size={20} /> {n.label}
+          <I p={n.icon} size={20} /> <span className="ap-mobnav-label">{n.label}</span>
         </Link>
       ))}
     </div>

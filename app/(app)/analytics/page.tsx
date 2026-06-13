@@ -191,6 +191,40 @@ export default function AnalyticsPage() {
         />
       </div>
 
+      {/* CLV — closing line value */}
+      <Card style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <span className="ap-label">Closing line value (CLV)</span>
+          <span style={{ color: "var(--dim2)", fontSize: 11 }}>
+            {m && m.clvSampleSize > 0 ? `${m.clvSampleSize} bets med stängningsodds` : "kräver Odds API-nyckel"}
+          </span>
+        </div>
+        {m && m.clvSampleSize > 0 ? (
+          <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
+            <div>
+              <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
+                <span className={(m.clvPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(m.clvPct, true)}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>Snitt-CLV</div>
+            </div>
+            <div>
+              <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
+                {pctFmt((m.clvBeatCount / m.clvSampleSize) * 100)}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
+                Slog stängningsoddset · {m.clvBeatCount}/{m.clvSampleSize}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ color: "var(--dim2)", fontSize: 13, lineHeight: 1.5, maxWidth: 560 }}>
+            Inga stängningsodds insamlade än. CLV mäter om du tog bättre odds än marknadens
+            stängningsodds — den starkaste enskilda indikatorn på edge. Lägg till en The Odds
+            API-nyckel under Inställningar så hämtas closing-odds automatiskt.
+          </div>
+        )}
+      </Card>
+
       {/* Per år */}
       <Card style={{ padding: 0, marginBottom: 12 }}>
         <div className="ap-card-head"><span className="ap-card-title">Per år</span><span style={{ color: "var(--dim2)", fontSize: 12 }}>{rangeLabel}</span></div>
@@ -248,9 +282,10 @@ export default function AnalyticsPage() {
         <BreakdownCard title="Singel vs ackumulator" rows={data?.byBetType ?? []} unit={unit} />
       </div>
 
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
+      <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
         <BreakdownCard title="P/L per odds-spann" rows={oddsBands} unit={unit} />
         <BreakdownCard title="P/L per liga" rows={data?.byLeague ?? []} unit={unit} />
+        <BreakdownCard title="P/L per bookmaker" rows={data?.byBookmaker ?? []} unit={unit} />
       </div>
 
       {/* Per månad med år-väljare */}
