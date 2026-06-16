@@ -9,6 +9,7 @@ const NAV = [
   { href: "/bets", label: "Bets", icon: IC.list },
   { href: "/calendar", label: "Kalender", icon: IC.calendar },
   { href: "/analytics", label: "Analys", icon: IC.chart },
+  { href: "/vm2026", label: "VM 2026", icon: IC.trophy },
   { href: "/insights", label: "Insikter", icon: IC.spark },
   { href: "/settings", label: "Inställningar", icon: IC.gear },
 ];
