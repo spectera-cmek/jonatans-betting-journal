@@ -318,7 +318,14 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
 
           <div className="ap-x2">
             <div className="ap-field">
-              <label>Liga</label>
+              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Liga</span>
+                <button
+                  type="button"
+                  onClick={() => set("league", form.league.trim() === "VM 2026" ? "" : "VM 2026")}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, padding: 0, color: form.league.trim() === "VM 2026" ? "var(--pos)" : "var(--dim2)" }}
+                >🏆 VM 2026</button>
+              </label>
               <input className="ap-input" placeholder="t.ex. Premier League" value={form.league} onChange={(e) => set("league", e.target.value)} />
             </div>
             <div className="ap-field">

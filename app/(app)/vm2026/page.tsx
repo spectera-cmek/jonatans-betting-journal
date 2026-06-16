@@ -18,17 +18,13 @@ import {
 import type { BetListDTO } from "@/lib/types";
 import { I, IC } from "@/components/icons";
 
-// World Cup 2026 ran 11 June – 19 July 2026. A bet counts as a WC bet when it is
-// football and its event falls inside that window — during the tournament the only
-// international football is the World Cup, so this cleanly separates it from the rest
-// (esports/hockey/basket in the same days are excluded by sport).
-const WC_START = Date.parse("2026-06-11T00:00:00Z");
-const WC_END = Date.parse("2026-07-20T00:00:00Z");
+// A bet counts as a World Cup 2026 bet when it carries the explicit league tag
+// "VM 2026". Tag/untag any bet from the bets list (🏆) or the add/edit modal — this
+// is fully manual so it tracks exactly what you decide, across every bookmaker/sport.
+const VM_TAG = "VM 2026";
 
 function isWorldCup(b: BetListDTO): boolean {
-  if (b.sport !== "Football") return false;
-  const t = Date.parse((b.eventAt ?? b.placedAt) as string);
-  return Number.isFinite(t) && t >= WC_START && t < WC_END;
+  return (b.league ?? "").trim() === VM_TAG;
 }
 
 function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
@@ -131,8 +127,8 @@ export default function WorldCupPage() {
         <Card>
           <Empty
             icon={<I p={IC.trophy} />}
-            title="Inga VM-bets ännu"
-            hint="Spel på fotbollsmatcher från och med 11 juni 2026 dyker upp här automatiskt."
+            title="Inga VM-bets taggade ännu"
+            hint='Markera ett spel som VM genom att klicka på 🏆 i bets-listan, eller sätt liga till "VM 2026" när du loggar.'
           />
         </Card>
       </div>

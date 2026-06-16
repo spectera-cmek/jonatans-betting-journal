@@ -154,6 +154,12 @@ export default function BetsPage() {
     await api.del(`/api/bets/${b.id}`);
     reload();
   };
+  // One-click VM 2026 tag toggle (stored in the league field; drives the VM 2026 page).
+  const toggleVM = async (b: BetListDTO) => {
+    const isVM = (b.league ?? "").trim() === "VM 2026";
+    await api.patch(`/api/bets/${b.id}`, { league: isVM ? null : "VM 2026" });
+    reload();
+  };
   const openEdit = async (b: BetListDTO) => {
     try {
       const full = await api.get<BetDTO>(`/api/bets/${b.id}`);
@@ -172,6 +178,12 @@ export default function BetsPage() {
           <button className="ap-iconbtn" title="Push (insats tillbaka)" onClick={() => settle(b.id, "push")}>P</button>
         </>
       )}
+      <button
+        className="ap-iconbtn"
+        title={(b.league ?? "").trim() === "VM 2026" ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
+        style={{ opacity: (b.league ?? "").trim() === "VM 2026" ? 1 : 0.38 }}
+        onClick={() => toggleVM(b)}
+      >🏆</button>
       <button className="ap-iconbtn" title="Redigera" onClick={() => openEdit(b)}>✎</button>
       <button className="ap-iconbtn x" title="Ta bort" onClick={() => del(b)}>✕</button>
     </>
