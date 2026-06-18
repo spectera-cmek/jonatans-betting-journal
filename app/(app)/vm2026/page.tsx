@@ -158,9 +158,9 @@ export default function WorldCupPage() {
 
       <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px", marginBottom: 12 }}>
         <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
             <span className="ap-label">Ackumulerad P/L under turneringen</span>
-            <span className="ap-num" style={{ fontWeight: 600 }}>
+            <span className="ap-num" style={{ fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0 }}>
               <span className={metrics.profitUnits >= 0 ? "pos" : "neg"}>{krFmt(metrics.profitUnits * unit, true)}</span>
             </span>
           </div>
@@ -197,18 +197,40 @@ export default function WorldCupPage() {
       {/* Per match */}
       <Card style={{ padding: 0, marginBottom: 12 }}>
         <div className="ap-card-head"><span className="ap-card-title">Per match</span><span style={{ color: "var(--dim2)", fontSize: 12 }}>{perMatch.length} matcher</span></div>
-        <div className="ap-table">
-          <div className="ap-thead" style={{ gridTemplateColumns: "70px 1fr 70px 120px 90px 90px" }}>
-            <span>Datum</span><span>Match</span><span className="ap-r">Bets</span><span className="ap-r">P/L</span><span className="ap-r">ROI</span><span className="ap-r">Win rate</span>
+        <div className="ap-table-wrap">
+          <div className="ap-table">
+            <div className="ap-thead" style={{ gridTemplateColumns: "70px 1fr 70px 120px 90px 90px" }}>
+              <span>Datum</span><span>Match</span><span className="ap-r">Bets</span><span className="ap-r">P/L</span><span className="ap-r">ROI</span><span className="ap-r">Win rate</span>
+            </div>
+            {perMatch.map((mm) => (
+              <div key={mm.event} className="ap-trow" style={{ gridTemplateColumns: "70px 1fr 70px 120px 90px 90px" }}>
+                <span style={{ color: "var(--dim)" }}>{dateShort(new Date(mm.t).toISOString())}</span>
+                <span className="ap-ell">{mm.event}{mm.pending ? <span style={{ color: "var(--dim2)" }}> · {mm.pending} öppna</span> : null}</span>
+                <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{mm.count}</span>
+                <span className="ap-r ap-num" style={{ fontWeight: 600 }}><em className={mm.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(mm.profitUnits * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(mm.profitUnits, true)}</span></span>
+                <span className="ap-r ap-num"><em className={(mm.roiPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{pctFmt(mm.roiPct, true)}</em></span>
+                <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{pctFmt(mm.winRatePct)}</span>
+              </div>
+            ))}
           </div>
+        </div>
+        {/* Mobile: stacked cards so P/L, ROI and win rate stay visible without sideways scroll. */}
+        <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
           {perMatch.map((mm) => (
-            <div key={mm.event} className="ap-trow" style={{ gridTemplateColumns: "70px 1fr 70px 120px 90px 90px" }}>
-              <span style={{ color: "var(--dim)" }}>{dateShort(new Date(mm.t).toISOString())}</span>
-              <span className="ap-ell">{mm.event}{mm.pending ? <span style={{ color: "var(--dim2)" }}> · {mm.pending} öppna</span> : null}</span>
-              <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{mm.count}</span>
-              <span className="ap-r ap-num" style={{ fontWeight: 600 }}><em className={mm.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(mm.profitUnits * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(mm.profitUnits, true)}</span></span>
-              <span className="ap-r ap-num"><em className={(mm.roiPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{pctFmt(mm.roiPct, true)}</em></span>
-              <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{pctFmt(mm.winRatePct)}</span>
+            <div key={mm.event} className="ap-betcard">
+              <div className="ap-betcard-top">
+                <span className="ap-betcard-date">
+                  {dateShort(new Date(mm.t).toISOString())}
+                  {mm.pending ? <span style={{ color: "var(--dim2)" }}> · {mm.pending} öppna</span> : null}
+                </span>
+                <b className={"ap-num " + (mm.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 700, fontSize: 15 }}>{krShort(mm.profitUnits * unit, true)}</b>
+              </div>
+              <div className="ap-betcard-event">{mm.event}</div>
+              <div className="ap-betcard-stats">
+                <div><span>Bets</span><b className="ap-num">{mm.count}</b></div>
+                <div><span>ROI</span><b className={"ap-num " + ((mm.roiPct ?? 0) >= 0 ? "pos" : "neg")}>{pctFmt(mm.roiPct, true)}</b></div>
+                <div><span>Win rate</span><b className="ap-num">{pctFmt(mm.winRatePct)}</b></div>
+              </div>
             </div>
           ))}
         </div>

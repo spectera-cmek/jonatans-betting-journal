@@ -47,6 +47,34 @@ function BreakdownCard({ title, rows, unit, sub }: { title: string; rows: Breakd
   );
 }
 
+// Mobile rendering for the period tables (Per år / Per månad) — stacked cards so
+// the P/L, ROI and win-rate columns don't get pushed off-screen by a sideways scroll.
+function PerfCards({
+  rows,
+  unit,
+}: {
+  rows: { label: string; bets: number; profitUnits: number; roiPct: number | null; winRatePct: number | null }[];
+  unit: number;
+}) {
+  return (
+    <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
+      {rows.map((r) => (
+        <div key={r.label} className="ap-betcard">
+          <div className="ap-betcard-top">
+            <span className="ap-betcard-event" style={{ textTransform: "capitalize" }}>{r.label}</span>
+            <b className={"ap-num " + (r.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 700, fontSize: 15 }}>{krShort(r.profitUnits * unit, true)}</b>
+          </div>
+          <div className="ap-betcard-stats">
+            <div><span>Bets</span><b className="ap-num">{r.bets}</b></div>
+            <div><span>ROI</span><b className={"ap-num " + ((r.roiPct ?? 0) >= 0 ? "pos" : "neg")}>{pctFmt(r.roiPct, true)}</b></div>
+            <div><span>Win rate</span><b className="ap-num">{pctFmt(r.winRatePct)}</b></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function LeaderboardCard({ title, sub, entries, unit }: { title: string; sub?: string; entries: LeaderboardEntry[]; unit: number }) {
   return (
     <Card>
@@ -228,21 +256,26 @@ export default function AnalyticsPage() {
       {/* Per år */}
       <Card style={{ padding: 0, marginBottom: 12 }}>
         <div className="ap-card-head"><span className="ap-card-title">Per år</span><span style={{ color: "var(--dim2)", fontSize: 12 }}>{rangeLabel}</span></div>
-        <div className="ap-table">
-          <div className="ap-thead" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
-            <span>År</span><span className="ap-r">Bets</span><span className="ap-r">P/L</span><span className="ap-r">ROI</span><span className="ap-r">Win rate</span>
-          </div>
-          {byYear.length === 0 && <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--dim2)" }}>Ingen data än.</div>}
-          {byYear.map((y) => (
-            <div key={y.key} className="ap-trow" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
-              <span style={{ fontWeight: 600 }}>{y.key}</span>
-              <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{y.bets}</span>
-              <span className="ap-r ap-num" style={{ fontWeight: 600 }}><em className={y.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(y.profitUnits * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(y.profitUnits, true)}</span></span>
-              <span className="ap-r ap-num"><em className={(y.roiPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{pctFmt(y.roiPct, true)}</em></span>
-              <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{pctFmt(y.winRatePct)}</span>
+        <div className="ap-table-wrap">
+          <div className="ap-table">
+            <div className="ap-thead" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
+              <span>År</span><span className="ap-r">Bets</span><span className="ap-r">P/L</span><span className="ap-r">ROI</span><span className="ap-r">Win rate</span>
             </div>
-          ))}
+            {byYear.length === 0 && <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--dim2)" }}>Ingen data än.</div>}
+            {byYear.map((y) => (
+              <div key={y.key} className="ap-trow" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
+                <span style={{ fontWeight: 600 }}>{y.key}</span>
+                <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{y.bets}</span>
+                <span className="ap-r ap-num" style={{ fontWeight: 600 }}><em className={y.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(y.profitUnits * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(y.profitUnits, true)}</span></span>
+                <span className="ap-r ap-num"><em className={(y.roiPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{pctFmt(y.roiPct, true)}</em></span>
+                <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{pctFmt(y.winRatePct)}</span>
+              </div>
+            ))}
+          </div>
         </div>
+        {byYear.length > 0 && (
+          <PerfCards rows={byYear.map((y) => ({ label: String(y.key), bets: y.bets, profitUnits: y.profitUnits, roiPct: y.roiPct, winRatePct: y.winRatePct }))} unit={unit} />
+        )}
       </Card>
 
       <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px", marginBottom: 12 }}>
@@ -298,21 +331,26 @@ export default function AnalyticsPage() {
             </select>
           </div>
         </div>
-        <div className="ap-table">
-          <div className="ap-thead" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
-            <span>Månad</span><span className="ap-r">Bets</span><span className="ap-r">P/L</span><span className="ap-r">ROI</span><span className="ap-r">Win rate</span>
-          </div>
-          {monthRows.length === 0 && <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--dim2)" }}>Ingen data för {activeYear}.</div>}
-          {monthRows.map((mo) => (
-            <div key={mo.month} className="ap-trow" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
-              <span style={{ fontWeight: 600, textTransform: "capitalize" }}>{monthLabel(mo.month)} {mo.month.slice(0, 4)}</span>
-              <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{mo.bets}</span>
-              <span className="ap-r ap-num" style={{ fontWeight: 600 }}><em className={mo.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(mo.profitUnits * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(mo.profitUnits, true)}</span></span>
-              <span className="ap-r ap-num"><em className={(mo.roiPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{pctFmt(mo.roiPct, true)}</em></span>
-              <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{pctFmt(mo.winRatePct ?? null)}</span>
+        <div className="ap-table-wrap">
+          <div className="ap-table">
+            <div className="ap-thead" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
+              <span>Månad</span><span className="ap-r">Bets</span><span className="ap-r">P/L</span><span className="ap-r">ROI</span><span className="ap-r">Win rate</span>
             </div>
-          ))}
+            {monthRows.length === 0 && <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--dim2)" }}>Ingen data för {activeYear}.</div>}
+            {monthRows.map((mo) => (
+              <div key={mo.month} className="ap-trow" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
+                <span style={{ fontWeight: 600, textTransform: "capitalize" }}>{monthLabel(mo.month)} {mo.month.slice(0, 4)}</span>
+                <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{mo.bets}</span>
+                <span className="ap-r ap-num" style={{ fontWeight: 600 }}><em className={mo.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(mo.profitUnits * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(mo.profitUnits, true)}</span></span>
+                <span className="ap-r ap-num"><em className={(mo.roiPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{pctFmt(mo.roiPct, true)}</em></span>
+                <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{pctFmt(mo.winRatePct ?? null)}</span>
+              </div>
+            ))}
+          </div>
         </div>
+        {monthRows.length > 0 && (
+          <PerfCards rows={monthRows.map((mo) => ({ label: `${monthLabel(mo.month)} ${mo.month.slice(0, 4)}`, bets: mo.bets, profitUnits: mo.profitUnits, roiPct: mo.roiPct, winRatePct: mo.winRatePct ?? null }))} unit={unit} />
+        )}
       </Card>
 
       {/* Hall of Fame & Biggest L */}

@@ -44,7 +44,11 @@ export default function InsightsPage() {
 
   const streakValue = !ins || ins.streaks.currentType === "none"
     ? "—"
-    : `${ins.streaks.current} ${ins.streaks.currentType === "win" ? "vinster" : "förluster"}`;
+    : `${ins.streaks.current} ${
+        ins.streaks.currentType === "win"
+          ? ins.streaks.current === 1 ? "vinst" : "vinster"
+          : ins.streaks.current === 1 ? "förlust" : "förluster"
+      }`;
   const streakTone = ins?.streaks.currentType === "win" ? "pos" : ins?.streaks.currentType === "loss" ? "neg" : "";
 
   const mom = ins?.monthCurrent;

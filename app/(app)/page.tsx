@@ -282,25 +282,51 @@ export default function OverviewPage() {
           <span className="ap-card-title">Senaste bets</span>
           <Link href="/bets" className="ap-link">Visa alla →</Link>
         </div>
-        <div className="ap-table">
-          <div className="ap-thead" style={{ gridTemplateColumns: "66px 50px 1.7fr 1.2fr 100px 58px 76px 84px" }}>
-            <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
+        <div className="ap-table-wrap">
+          <div className="ap-table">
+            <div className="ap-thead" style={{ gridTemplateColumns: "66px 50px 1.7fr 1.2fr 100px 58px 76px 84px" }}>
+              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
+            </div>
+            {recent.map((b) => (
+              <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: "66px 50px 1.7fr 1.2fr 100px 58px 76px 84px" }}>
+                <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
+                <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
+                <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
+                <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
+                <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
+                <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
+                <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
+                <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
+              </div>
+            ))}
+            {recent.length === 0 && (
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets än — logga din första bet.</div>
+            )}
           </div>
+        </div>
+        {/* Mobile: stacked cards instead of a sideways-scrolling 8-column table. */}
+        <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
+          {recent.length === 0 && <div className="ap-betcard-empty">Inga bets än — logga din första bet.</div>}
           {recent.map((b) => (
-            <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: "66px 50px 1.7fr 1.2fr 100px 58px 76px 84px" }}>
-              <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
-              <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
-              <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
-              <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
-              <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
-              <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
-              <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
-              <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
+            <div key={b.id} className="ap-betcard">
+              <div className="ap-betcard-top">
+                <span className="ap-betcard-date"><span className="ap-tag">{sportTag(b.sport)}</span> {dateShort(b.eventAt ?? b.placedAt)}</span>
+                <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
+              </div>
+              <div className="ap-betcard-event">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</div>
+              <div className="ap-betcard-sel">{b.selection || "—"}</div>
+              <div className="ap-betcard-stats">
+                <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
+                <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
+                <div>
+                  <span>P/L</span>
+                  <b className={"ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>
+                    {b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}
+                  </b>
+                </div>
+              </div>
             </div>
           ))}
-          {recent.length === 0 && (
-            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets än — logga din första bet.</div>
-          )}
         </div>
       </Card>
 

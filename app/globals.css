@@ -187,6 +187,10 @@ body {
   min-width: 0;
   padding: 22px 26px 90px;
   position: relative;
+  /* The decorative .ap-glow is absolutely positioned and can extend past the right
+     edge on narrow desktops / large tablets, creating phantom horizontal scroll.
+     Clip horizontally (keeps vertical scrolling intact) so it never widens the page. */
+  overflow-x: clip;
 }
 .ap-glow {
   position: absolute;
@@ -297,6 +301,15 @@ body {
 .ap-row {
   display: flex;
   gap: 12px;
+}
+/* Grid items default to min-width:auto and refuse to shrink below their content,
+   which overflows a "1fr 330px" row on narrow desktops / large tablets (sidebar
+   still shown, ~920–1300px). Let every grid track shrink to its column. */
+.ap-grid > *,
+.ap-two > *,
+.ap-three > *,
+.ap-kpi-row > * {
+  min-width: 0;
 }
 
 /* kpi */
@@ -1130,14 +1143,6 @@ select.ap-input {
   .ap-glow {
     display: none;
   }
-  /* Grid items default to min-width:auto, so a card refuses to shrink below its
-     content and overflows the page on a phone. Let them shrink to their track. */
-  .ap-grid > *,
-  .ap-two > *,
-  .ap-three > *,
-  .ap-kpi-row > * {
-    min-width: 0;
-  }
 }
 
 /* Grid-tables on the other pages (dashboard, analytics, calendar) have fixed-px
@@ -1293,7 +1298,9 @@ select.ap-input {
 .ap-betcard-stats {
   display: flex;
   align-items: flex-end;
+  flex-wrap: wrap;
   gap: 16px;
+  row-gap: 12px;
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line2);
@@ -1315,9 +1322,13 @@ select.ap-input {
   font-weight: 600;
 }
 .ap-betcard-act {
+  /* The settle/tag/edit/delete buttons (up to 6 for a pending bet) don't fit next
+     to the Odds/Insats/P/L stats on a phone — give them their own full-width row. */
+  flex-basis: 100%;
   margin-left: auto;
   flex-direction: row !important;
-  gap: 5px !important;
+  justify-content: flex-end;
+  gap: 6px !important;
   align-items: center;
 }
 .ap-betcard-empty {
