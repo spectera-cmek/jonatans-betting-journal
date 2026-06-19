@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/fetcher";
-import { SPORTS, MARKETS, SIDES, BOOKMAKERS } from "@/lib/constants";
+import { SPORTS, MARKETS, SIDES, BOOKMAKERS, MARKET_CATEGORIES_BY_SPORT, GENERIC_MARKET_CATEGORIES, SCOPES } from "@/lib/constants";
 import { inferSelection } from "@/lib/grading";
+import { categorizeDetail } from "@/lib/categorize";
 import { evaluateBet } from "@/lib/discipline";
 import { accaOdds } from "@/lib/betting";
 import { I, IC } from "./icons";
@@ -49,6 +50,8 @@ const empty = {
   homeTeam: "",
   awayTeam: "",
   market: "h2h",
+  marketCategory: "",
+  marketScope: "",
   selection: "",
   selectionSide: "home",
   line: "",
@@ -72,6 +75,8 @@ function formFromBet(b: BetDTO): Form {
     homeTeam: b.homeTeam ?? "",
     awayTeam: b.awayTeam ?? "",
     market: b.market,
+    marketCategory: b.marketCategory ?? "",
+    marketScope: b.marketScope ?? "",
     selection: b.selection,
     selectionSide: b.selectionSide ?? "home",
     line: b.line != null ? String(b.line) : "",
@@ -188,6 +193,10 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
     if (inferred.market) set("market", inferred.market);
     if (inferred.side) set("selectionSide", inferred.side);
     if (inferred.line != null) set("line", String(inferred.line));
+    // Auto-tagga detaljerad marknad + scope — bara om fälten är tomma (skriv inte över ett val).
+    const det = categorizeDetail(form.selection, form.event, [], form.homeTeam, form.awayTeam);
+    if (!form.marketCategory && det.marketCategory && det.marketCategory !== "Övrigt") set("marketCategory", det.marketCategory);
+    if (!form.marketScope && det.marketScope) set("marketScope", det.marketScope);
   };
 
   const runSearch = async () => {
@@ -259,6 +268,12 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
     : [{ value: form.market, label: form.market }, ...MARKETS];
   const bookOpts = BOOKMAKERS.includes(form.bookmaker) ? BOOKMAKERS : [form.bookmaker, ...BOOKMAKERS];
   const resultSeg = editing ? RESULT_SEG_FULL : RESULT_SEG;
+  // Detalj-marknad: curated lista per sport (fallback generisk); behåll ett
+  // importerat/avvikande värde valbart.
+  const catBase = MARKET_CATEGORIES_BY_SPORT[form.sport] ?? GENERIC_MARKET_CATEGORIES;
+  const catOpts = form.marketCategory && !catBase.includes(form.marketCategory)
+    ? [form.marketCategory, ...catBase]
+    : catBase;
 
   return (
     <div className="ap-overlay" onClick={onClose}>
@@ -339,6 +354,23 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
             <input className="ap-input" placeholder="t.ex. Över 2.5 mål" value={form.selection} onChange={(e) => set("selection", e.target.value)} onBlur={onSelectionBlur} />
           </div>
 
+          <div className="ap-x2">
+            <div className="ap-field">
+              <label>Marknad (detalj)</label>
+              <select className="ap-input" value={form.marketCategory} onChange={(e) => set("marketCategory", e.target.value)}>
+                <option value="">— välj —</option>
+                {catOpts.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="ap-field">
+              <label>Avser</label>
+              <select className="ap-input" value={form.marketScope} onChange={(e) => set("marketScope", e.target.value)}>
+                <option value="">—</option>
+                {SCOPES.map((sc) => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
+              </select>
+            </div>
+          </div>
+
           {editing && legs.length > 1 && (
             <div className="ap-field">
               <label>
@@ -380,7 +412,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
 
           <div className="ap-x2">
             <div className="ap-field">
-              <label>Marknadstyp</label>
+              <label>Avräkning (auto-rättning)</label>
               <select className="ap-input" value={form.market} onChange={(e) => set("market", e.target.value)}>
                 {marketOpts.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>

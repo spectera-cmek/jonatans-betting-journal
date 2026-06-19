@@ -2,6 +2,7 @@
 // Shared by POST (create) and PATCH (update).
 
 import { profitUnits, type Outcome } from "./betting";
+import { categorizeDetail, type LegLike } from "./categorize";
 
 const OUTCOMES: Outcome[] = [
   "pending",
@@ -14,6 +15,7 @@ const OUTCOMES: Outcome[] = [
 ];
 const MARKETS = ["h2h", "totals", "spreads", "other"];
 const SIDES = ["home", "away", "draw", "over", "under"];
+const SCOPES = ["player", "team", "match"];
 
 export interface BetInput {
   eventAt?: string | null;
@@ -24,6 +26,8 @@ export interface BetInput {
   homeTeam?: string | null;
   awayTeam?: string | null;
   market?: string;
+  marketCategory?: string | null;
+  marketScope?: string | null;
   selection?: string;
   selectionSide?: string | null;
   line?: number | string | null;
@@ -103,6 +107,18 @@ export function buildBetData(
     data.selectionSide = side;
   }
 
+  // Detaljerad marknad: marketCategory är fritext (curated i UI), marketScope
+  // är en av player|team|match. Båda valfria.
+  if (input.marketCategory !== undefined) {
+    data.marketCategory = str(input.marketCategory);
+  }
+  if (input.marketScope !== undefined) {
+    const scope = str(input.marketScope)?.toLowerCase() ?? null;
+    if (scope && !SCOPES.includes(scope))
+      throw new ValidationError(`marketScope must be one of ${SCOPES.join(", ")}`);
+    data.marketScope = scope;
+  }
+
   if (!partial || input.outcome !== undefined) {
     const outcome = (str(input.outcome) || "pending").toLowerCase();
     if (!OUTCOMES.includes(outcome as Outcome))
@@ -135,6 +151,28 @@ export function buildBetData(
   if (input.notes !== undefined) data.notes = str(input.notes);
   if (input.legs !== undefined)
     data.legs = input.legs ? JSON.stringify(input.legs) : null;
+
+  // On create, auto-derive the detailed market/scope from the selection text
+  // (and any imported legs) when the caller didn't supply them — so quick entry
+  // and API imports still get tagged. The user can always override later.
+  if (!partial) {
+    const needCat = data.marketCategory === undefined || data.marketCategory === null;
+    const needScope = data.marketScope === undefined || data.marketScope === null;
+    const selection = (data.selection as string | undefined) ?? "";
+    if ((needCat || needScope) && (selection || data.event)) {
+      const legsArr = Array.isArray(input.legs) ? (input.legs as LegLike[]) : [];
+      const det = categorizeDetail(
+        selection,
+        (data.event as string | undefined) ?? null,
+        legsArr,
+        (data.homeTeam as string | undefined) ?? null,
+        (data.awayTeam as string | undefined) ?? null
+      );
+      if (needCat && det.marketCategory && det.marketCategory !== "Övrigt")
+        data.marketCategory = det.marketCategory;
+      if (needScope && det.marketScope) data.marketScope = det.marketScope;
+    }
+  }
 
   // Recompute profit only when a profit input (outcome/odds/stake) actually
   // changed. A PATCH that touches e.g. notes must NOT overwrite an imported

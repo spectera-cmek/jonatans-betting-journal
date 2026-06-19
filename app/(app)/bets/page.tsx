@@ -10,6 +10,7 @@ import { api } from "@/lib/fetcher";
 import { uFmt, pctFmt, krShort, sportTag, dateShort } from "@/lib/format";
 import { computeMetrics, type BetLike, type Outcome } from "@/lib/betting";
 import { I, IC } from "@/components/icons";
+import { SCOPES, SCOPE_LABELS } from "@/lib/constants";
 import type { BetDTO, BetListDTO } from "@/lib/types";
 
 const GRID = "62px 46px 1.5fr 1.1fr 92px 64px 52px 70px 80px 116px";
@@ -22,13 +23,6 @@ const RES_CHIPS: [string, string][] = [
   ["push", "Push"],
 ];
 const MONTHS_SV = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
-// Labels for the four raw market codes; imported bets carry Swedish categories already.
-const MARKET_LABELS: Record<string, string> = {
-  h2h: "H2H / 1X2",
-  totals: "Över/Under",
-  spreads: "Spread/Handikapp",
-  other: "Övrigt (manuellt)",
-};
 
 export default function BetsPage() {
   const { bets, settings, loading, reload } = useBets();
@@ -37,7 +31,8 @@ export default function BetsPage() {
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("Alla sporter");
   const [book, setBook] = useState("Alla bookmakers");
-  const [market, setMarket] = useState("");
+  const [market, setMarket] = useState(""); // detaljerad marknad (marketCategory)
+  const [scope, setScope] = useState(""); // player | team | match
   const [res, setRes] = useState("alla");
   const [day, setDay] = useState(""); // YYYY-MM-DD, specific day
   const [year, setYear] = useState("Alla år");
@@ -53,6 +48,7 @@ export default function BetsPage() {
     if (sp.has("sport")) setSport(sp.get("sport") || "Alla sporter");
     if (sp.has("book")) setBook(sp.get("book") || "Alla bookmakers");
     if (sp.has("market")) setMarket(sp.get("market") || "");
+    if (sp.has("scope")) setScope(sp.get("scope") || "");
     if (sp.has("res")) setRes(sp.get("res") || "alla");
     if (sp.has("day")) setDay(sp.get("day") || "");
     if (sp.has("year")) setYear(sp.get("year") || "Alla år");
@@ -68,13 +64,14 @@ export default function BetsPage() {
     if (sport !== "Alla sporter") sp.set("sport", sport);
     if (book !== "Alla bookmakers") sp.set("book", book);
     if (market) sp.set("market", market);
+    if (scope) sp.set("scope", scope);
     if (res !== "alla") sp.set("res", res);
     if (day) sp.set("day", day);
     if (year !== "Alla år") sp.set("year", year);
     if (month !== "Alla månader") sp.set("month", month);
     const qs = sp.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [q, sport, book, market, res, day, year, month]);
+  }, [q, sport, book, market, scope, res, day, year, month]);
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
@@ -83,9 +80,13 @@ export default function BetsPage() {
   const books = useMemo(() => Array.from(new Set(bets.map((b) => b.bookmaker).filter(Boolean))) as string[], [bets]);
   const markets = useMemo(
     () =>
-      Array.from(new Set(bets.map((b) => b.market).filter(Boolean)))
-        .map((m) => ({ value: m, label: MARKET_LABELS[m] ?? m }))
-        .sort((a, b) => a.label.localeCompare(b.label, "sv")),
+      (Array.from(new Set(bets.map((b) => b.marketCategory).filter(Boolean))) as string[])
+        .sort((a, b) => a.localeCompare(b, "sv")),
+    [bets]
+  );
+  // Only offer scopes that actually occur in the data.
+  const scopes = useMemo(
+    () => SCOPES.filter((sc) => bets.some((b) => b.marketScope === sc.value)),
     [bets]
   );
   const years = useMemo(
@@ -98,7 +99,8 @@ export default function BetsPage() {
     return bets.filter((b) => {
       if (sport !== "Alla sporter" && b.sport !== sport) return false;
       if (book !== "Alla bookmakers" && b.bookmaker !== book) return false;
-      if (market && b.market !== market) return false;
+      if (market && b.marketCategory !== market) return false;
+      if (scope && b.marketScope !== scope) return false;
       if (res === "win" && !(b.outcome === "win" || b.outcome === "half_win")) return false;
       if (res === "loss" && !(b.outcome === "loss" || b.outcome === "half_loss")) return false;
       if (res === "pending" && b.outcome !== "pending") return false;
@@ -112,17 +114,17 @@ export default function BetsPage() {
         if (month !== "Alla månader" && String(d.getMonth() + 1) !== month) return false;
       }
       if (q) {
-        const s = `${b.event} ${b.league ?? ""} ${b.selection} ${b.bookmaker ?? ""}`.toLowerCase();
+        const s = `${b.event} ${b.league ?? ""} ${b.selection} ${b.bookmaker ?? ""} ${b.marketCategory ?? ""} ${b.marketScope ? SCOPE_LABELS[b.marketScope] ?? "" : ""}`.toLowerCase();
         if (!s.includes(q.toLowerCase())) return false;
       }
       return true;
     });
-  }, [bets, sport, book, market, res, q, day, year, month]);
+  }, [bets, sport, book, market, scope, res, q, day, year, month]);
 
   // Render at most `shown` rows; reset when any filter changes.
   useEffect(() => {
     setShown(PAGE);
-  }, [sport, book, market, res, q, day, year, month]);
+  }, [sport, book, market, scope, res, q, day, year, month]);
   const visible = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
   const remaining = filtered.length - visible.length;
 
@@ -221,9 +223,17 @@ export default function BetsPage() {
         <div className="ap-select">
           <select value={market} onChange={(e) => setMarket(e.target.value)}>
             <option value="">Alla marknader</option>
-            {markets.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            {markets.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
+        {scopes.length > 0 && (
+          <div className="ap-select">
+            <select value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="">Spelare / lag / match</option>
+              {scopes.map((sc) => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
+            </select>
+          </div>
+        )}
       </div>
       <div className="ap-filters">
         <div className="ap-select">
@@ -274,7 +284,14 @@ export default function BetsPage() {
                 <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
                 <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
-                <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
+                <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)", display: "flex", flexDirection: "column", gap: 2, justifyContent: "center" }}>
+                  <span className="ap-ell">{b.selection || "—"}</span>
+                  {b.marketCategory && (
+                    <span className="ap-ell" style={{ fontSize: 11, color: "var(--dim2)" }}>
+                      {b.marketCategory}{b.marketScope ? ` · ${SCOPE_LABELS[b.marketScope] ?? b.marketScope}` : ""}
+                    </span>
+                  )}
+                </span>
                 <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
                 <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
                 <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
@@ -313,6 +330,11 @@ export default function BetsPage() {
             <div className="ap-betcard-sel">
               {b.selection || "—"}{b.bookmaker ? ` · ${b.bookmaker}` : ""}
             </div>
+            {b.marketCategory && (
+              <div className="ap-betcard-sel" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: -2 }}>
+                {b.marketCategory}{b.marketScope ? ` · ${SCOPE_LABELS[b.marketScope] ?? b.marketScope}` : ""}
+              </div>
+            )}
             <div className="ap-betcard-stats">
               <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
               <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>

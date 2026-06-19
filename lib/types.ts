@@ -14,6 +14,8 @@ export interface BetDTO {
   homeTeam: string | null;
   awayTeam: string | null;
   market: string;
+  marketCategory: string | null;
+  marketScope: string | null;
   selection: string;
   selectionSide: string | null;
   line: number | null;
@@ -45,6 +47,8 @@ type BetRow = {
   homeTeam: string | null;
   awayTeam: string | null;
   market: string;
+  marketCategory: string | null;
+  marketScope: string | null;
   selection: string;
   selectionSide: string | null;
   line: number | null;
@@ -75,6 +79,8 @@ export function serializeBet(b: BetRow): BetDTO {
     homeTeam: b.homeTeam,
     awayTeam: b.awayTeam,
     market: b.market,
+    marketCategory: b.marketCategory,
+    marketScope: b.marketScope,
     selection: b.selection,
     selectionSide: b.selectionSide,
     line: b.line,
@@ -109,6 +115,8 @@ export interface BetListDTO {
   league: string | null;
   event: string;
   market: string;
+  marketCategory: string | null;
+  marketScope: string | null;
   selection: string;
   betType: string;
   odds: number;
@@ -121,6 +129,7 @@ export interface BetListDTO {
 export type BetListRow = Pick<
   BetRow,
   | "id" | "placedAt" | "eventAt" | "sport" | "league" | "event" | "market"
+  | "marketCategory" | "marketScope"
   | "selection" | "betType" | "odds" | "stakeUnits" | "outcome" | "profitUnits" | "bookmaker"
 >;
 
@@ -133,6 +142,8 @@ export function serializeBetList(b: BetListRow): BetListDTO {
     league: b.league,
     event: b.event,
     market: b.market,
+    marketCategory: b.marketCategory,
+    marketScope: b.marketScope,
     selection: b.selection,
     betType: b.betType,
     odds: b.odds,

@@ -76,7 +76,19 @@ export default function WorldCupPage() {
     return series.map((p) => ({ t: Date.parse(p.date), v: p.profitUnits * unit }));
   }, [wc, unit]);
 
-  const byMarket = useMemo(() => breakdownBy(wc, (b) => (b as BetListDTO).market), [wc]);
+  const byMarketDetail = useMemo(() => breakdownBy(wc, (b) => (b as BetListDTO).marketCategory, "Okänd"), [wc]);
+  const byScope = useMemo(
+    () =>
+      breakdownBy(
+        wc,
+        (b) => {
+          const sc = (b as BetListDTO).marketScope;
+          return sc === "player" ? "Spelare" : sc === "team" ? "Lag" : sc === "match" ? "Match (totalt)" : null;
+        },
+        "Okänd"
+      ),
+    [wc]
+  );
   const byType = useMemo(
     () => breakdownBy(wc, (b) => ((b as BetListDTO).betType === "accumulator" ? "Ackumulator / Bet Builder" : "Singel")),
     [wc]
@@ -236,8 +248,9 @@ export default function WorldCupPage() {
         </div>
       </Card>
 
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
-        <BreakdownCard title="P/L per marknad" rows={byMarket} unit={unit} />
+      <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
+        <BreakdownCard title="P/L per marknad" rows={byMarketDetail} unit={unit} />
+        <BreakdownCard title="Spelare / lag / match" rows={byScope} unit={unit} />
         <BreakdownCard title="Singel vs ackumulator" rows={byType} unit={unit} />
       </div>
 

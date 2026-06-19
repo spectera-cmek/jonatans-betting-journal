@@ -45,7 +45,8 @@
     "sync": "tsx scripts/sync.ts",
     "import:bet365": "tsx scripts/importBet365.ts",
     "import:unibet": "tsx scripts/importUnibet.ts",
-    "recategorize": "tsx scripts/recategorize.ts"
+    "recategorize": "tsx scripts/recategorize.ts",
+    "recategorize:detail": "tsx scripts/recategorizeDetail.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

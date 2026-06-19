@@ -43,6 +43,8 @@ export interface MetricsResponse {
   bySport: Breakdown[];
   byLeague: Breakdown[];
   byMarket: Breakdown[];
+  byMarketDetail: Breakdown[];
+  byScope: Breakdown[];
   byBookmaker: Breakdown[];
   byYear: Breakdown[];
   byBetType: Breakdown[];

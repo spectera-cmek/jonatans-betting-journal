@@ -28,6 +28,8 @@ const METRICS_SELECT = {
   sport: true,
   league: true,
   market: true,
+  marketCategory: true,
+  marketScope: true,
   bookmaker: true,
   betType: true,
   odds: true,
@@ -73,6 +75,16 @@ export async function GET() {
   const keyed = bets.map(toKeyed);
   const byLeague = breakdownBy(keyed, (b) => (b as KeyedBet).league, "Unknown");
   const byMarket = breakdownBy(keyed, (b) => (b as KeyedBet).market, "Övrigt");
+  // Detaljerad, semantisk marknad ("vad") + scope (Spelare/Lag/Match).
+  const byMarketDetail = breakdownBy(keyed, (b) => (b as KeyedBet).marketCategory, "Okänd");
+  const byScope = breakdownBy(
+    keyed,
+    (b) => {
+      const sc = (b as KeyedBet).marketScope;
+      return sc === "player" ? "Spelare" : sc === "team" ? "Lag" : sc === "match" ? "Match (totalt)" : null;
+    },
+    "Okänd"
+  );
   const byBookmaker = breakdownBy(keyed, (b) => (b as KeyedBet).bookmaker, "Unknown");
 
   // Per year (chronological) and per bet type.
@@ -138,6 +150,8 @@ export async function GET() {
     bySport,
     byLeague,
     byMarket,
+    byMarketDetail,
+    byScope,
     byBookmaker,
     byYear,
     byBetType,
@@ -158,6 +172,8 @@ interface KeyedBet extends BetLike {
   sport: string | null;
   league: string | null;
   market: string;
+  marketCategory: string | null;
+  marketScope: string | null;
   bookmaker: string | null;
   betType: string;
 }
@@ -174,6 +190,8 @@ function toKeyed(b: {
   sport: string | null;
   league: string | null;
   market: string;
+  marketCategory: string | null;
+  marketScope: string | null;
   bookmaker: string | null;
   betType: string;
 }): KeyedBet {
@@ -189,6 +207,8 @@ function toKeyed(b: {
     sport: b.sport,
     league: b.league,
     market: b.market,
+    marketCategory: b.marketCategory,
+    marketScope: b.marketScope,
     bookmaker: b.bookmaker,
     betType: b.betType,
   };

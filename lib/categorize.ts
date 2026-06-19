@@ -22,13 +22,18 @@ export function normalizeMarket(raw: string | null | undefined): string {
   const has = (re: RegExp) => re.test(t);
 
   if (has(/vinstmetod|method of victory/)) return "Vinstmetod";
-  if (has(/trepoäng|trepoangare|3-?poäng|gjorda treor|three[- ]point/)) return "Trepoängare";
+  if (has(/trepoäng|trepoangare|3-?poäng|gjorda treor|\btreor\b|three[- ]point/)) return "Trepoängare";
+  if (has(/frikast|free ?throws?/)) return "Frikast";
   if (has(/assist/)) return "Assists";
   if (has(/returer|rebound/)) return "Returer";
   if (has(/poäng|points/)) return "Spelarpoäng";
+  // "Skott på mål" is a stricter market than plain "Skott" — match it first.
+  if (has(/skott på mål|skott pa mal|on target|shots on goal|\bsog\b/)) return "Skott på mål";
   if (has(/skott|shots?\b/)) return "Skott";
+  if (has(/räddning|\bsaves?\b/)) return "Räddningar";
   if (has(/hörn|corner/)) return "Hörnor";
   if (has(/kort|foul|varnad|tackling|utvisning|booking|card/)) return "Kort & fouls";
+  if (has(/\bess\b|\baces?\b/)) return "Ess";
   if (has(/båda lagen|gör båda|btts|both teams/)) return "BTTS";
   if (has(/dubbelchans|double chance/)) return "Dubbelchans";
   if (has(/handikapp|handicap|spread|run ?line/)) return "Handikapp";
@@ -103,7 +108,7 @@ const BASEBALL_MKT = /inning|home ?run|strikeout|run ?line|slagman|slagträ/;
 const TENNIS_MKT = /\bset\b|\bgames?\b|tie-?break|game-handikapp|serve|ess\b/;
 const MMA_MKT = /vinstmetod|to win fight|method of victory|genom (ko|tko|submission|dq|domslut|tekniskt)|antal rundor|\brond/;
 
-function splitTeams(event: string): string[] {
+export function splitTeams(event: string): string[] {
   const e = event.trim();
   if (/ @ /.test(e)) return e.split(/ @ /).map((s) => s.trim());
   if (/ vs /i.test(e)) return e.split(/ vs /i).map((s) => s.trim());
@@ -186,4 +191,75 @@ export function categorizeBet(
   const { sport, league } = inferSport(event, legs);
   const market = normalizeMarket(legs[0]?.market ?? null);
   return { sport, league, market };
+}
+
+/* ------------------------------ Market scope ------------------------------- */
+
+export type MarketScope = "player" | "team" | "match";
+
+// Categories that are per-player by definition.
+const PLAYER_PROP = new Set(["Spelarpoäng", "Returer", "Assists", "Trepoängare", "Frikast"]);
+// Categories that describe the match outcome as a whole.
+const MATCH_CATEGORY = new Set([
+  "Matchvinnare", "Dubbelchans", "BTTS", "Handikapp", "Halvlek", "Vinstmetod", "Totalt",
+]);
+// Stat categories that can be player, team or match — disambiguated from the text.
+const AMBIG_STAT = new Set(["Skott", "Skott på mål", "Hörnor", "Kort & fouls", "Räddningar", "Ess"]);
+
+/**
+ * Best-effort scope of a bet — Spelare / Lag / Match (totalt). Heuristic by
+ * design; returns null ("Okänd") when nothing is conclusive. Never throws.
+ *  - `selectionRaw` keeps original casing so a leading name can be detected.
+ *  - `teams` are candidate team names (home/away) used to spot team-level props.
+ */
+export function inferScope(
+  selectionRaw: string | null | undefined,
+  marketCategory: string,
+  teams: (string | null | undefined)[] = []
+): MarketScope | null {
+  const raw = (selectionRaw || "").trim();
+  const s = raw.toLowerCase();
+
+  // Per-player categories are unambiguous.
+  if (PLAYER_PROP.has(marketCategory)) return "player";
+
+  // Explicit match-wide phrasing wins over category guesses.
+  if (/\btotalt\b|\btotal\b|i matchen|båda lagen|both teams|\bbtts\b/.test(s)) return "match";
+
+  // Match-outcome categories (incl. over/under match totals & handicaps).
+  if (MATCH_CATEGORY.has(marketCategory)) return "match";
+
+  // A named team in the selection → team-level prop (e.g. team corners).
+  const teamHit = teams.some((t) => t && s.includes(t.trim().toLowerCase()));
+  if (teamHit) return "team";
+
+  // Ambiguous stat props: a leading over/under reads as a match total; a leading
+  // name + line reads as a player line (e.g. "Saka 1+ skott på mål").
+  if (AMBIG_STAT.has(marketCategory) && s) {
+    if (/^(över|under|o|u|ö|total|totalt)\b/.test(s)) return "match";
+    if (/\d/.test(s) && /^[a-zåäöéèüáàç.'\-]+/i.test(raw)) return "player";
+  }
+
+  return null;
+}
+
+/**
+ * Detailed market for a whole bet: the semantic category + best-effort scope.
+ * Uses the free-text selection first (manual bets), falling back to the first
+ * leg's market text (imports) and the event for team detection.
+ */
+export function categorizeDetail(
+  selection: string | null | undefined,
+  event: string | null | undefined,
+  legs: LegLike[] = [],
+  homeTeam?: string | null,
+  awayTeam?: string | null
+): { marketCategory: string; marketScope: MarketScope | null } {
+  const fromSelection = normalizeMarket(selection);
+  const marketCategory =
+    fromSelection !== "Övrigt" ? fromSelection : normalizeMarket(legs[0]?.market ?? null);
+  const scopeText = selection || legs[0]?.market || "";
+  const teams = homeTeam || awayTeam ? [homeTeam, awayTeam] : splitTeams(event || "");
+  const marketScope = inferScope(scopeText, marketCategory, teams);
+  return { marketCategory, marketScope };
 }
