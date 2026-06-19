@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card, Empty, SkeletonCard } from "@/components/ui";
 import { InteractiveLineChart, Donut, HBar } from "@/components/charts";
+import { ResultBadgeKr } from "@/components/ResultBadge";
 import { useTheme } from "@/components/ThemeProvider";
 import { useBets } from "@/lib/useData";
 import { uFmt, pctFmt, krShort, krFmt, dateShort } from "@/lib/format";
@@ -62,10 +63,37 @@ function BreakdownCard({ title, rows, unit }: { title: string; rows: Breakdown[]
   );
 }
 
+// Individual bets for one match — rendered when a "Per match" row is expanded.
+function MatchDetail({ bets, unit }: { bets: BetListDTO[]; unit: number }) {
+  const sorted = [...bets].sort((a, b) => (b.profitUnits ?? 0) - (a.profitUnits ?? 0));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7 }} onClick={(e) => e.stopPropagation()}>
+      {sorted.map((b) => (
+        <div
+          key={b.id}
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 11px", background: "var(--card2)", borderRadius: 10 }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, lineHeight: 1.35 }}>{b.selection || "—"}</div>
+            <div style={{ fontSize: 11, color: "var(--dim2)", marginTop: 3 }}>
+              {b.bookmaker ? `${b.bookmaker} · ` : ""}
+              {b.betType === "accumulator" ? "ack · " : ""}odds {b.odds.toFixed(2)} · insats {uFmt(b.stakeUnits)}
+            </div>
+          </div>
+          <div style={{ flexShrink: 0, textAlign: "right" }}>
+            <ResultBadgeKr outcome={b.outcome} profitKr={(b.profitUnits ?? 0) * unit} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function WorldCupPage() {
   const { cc } = useTheme();
   const { bets, settings, loading } = useBets();
   const unit = settings?.unitValue ?? 100;
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const wc = useMemo(() => bets.filter(isWorldCup), [bets]);
   const metrics = useMemo(() => computeMetrics(wc), [wc]);
@@ -94,7 +122,7 @@ export default function WorldCupPage() {
       .map(([event, group]) => {
         const m = computeMetrics(group);
         const t = Math.min(...group.map((g) => Date.parse((g.eventAt ?? g.placedAt) as string)));
-        return { event, t, count: group.length, profitUnits: m.profitUnits, roiPct: m.roiPct, winRatePct: m.winRatePct, pending: m.pendingBets };
+        return { event, t, count: group.length, bets: group, profitUnits: m.profitUnits, roiPct: m.roiPct, winRatePct: m.winRatePct, pending: m.pendingBets };
       })
       .sort((a, b) => a.t - b.t);
   }, [wc]);
@@ -196,43 +224,77 @@ export default function WorldCupPage() {
 
       {/* Per match */}
       <Card style={{ padding: 0, marginBottom: 12 }}>
-        <div className="ap-card-head"><span className="ap-card-title">Per match</span><span style={{ color: "var(--dim2)", fontSize: 12 }}>{perMatch.length} matcher</span></div>
+        <div className="ap-card-head"><span className="ap-card-title">Per match</span><span style={{ color: "var(--dim2)", fontSize: 12 }}>{perMatch.length} matcher · klicka för spel</span></div>
         <div className="ap-table-wrap">
           <div className="ap-table">
             <div className="ap-thead" style={{ gridTemplateColumns: "70px 1fr 70px 120px 90px 90px" }}>
               <span>Datum</span><span>Match</span><span className="ap-r">Bets</span><span className="ap-r">P/L</span><span className="ap-r">ROI</span><span className="ap-r">Win rate</span>
             </div>
-            {perMatch.map((mm) => (
-              <div key={mm.event} className="ap-trow" style={{ gridTemplateColumns: "70px 1fr 70px 120px 90px 90px" }}>
-                <span style={{ color: "var(--dim)" }}>{dateShort(new Date(mm.t).toISOString())}</span>
-                <span className="ap-ell">{mm.event}{mm.pending ? <span style={{ color: "var(--dim2)" }}> · {mm.pending} öppna</span> : null}</span>
-                <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{mm.count}</span>
-                <span className="ap-r ap-num" style={{ fontWeight: 600 }}><em className={mm.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(mm.profitUnits * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(mm.profitUnits, true)}</span></span>
-                <span className="ap-r ap-num"><em className={(mm.roiPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{pctFmt(mm.roiPct, true)}</em></span>
-                <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{pctFmt(mm.winRatePct)}</span>
-              </div>
-            ))}
+            {perMatch.map((mm) => {
+              const open = expanded === mm.event;
+              return (
+                <Fragment key={mm.event}>
+                  <div
+                    className="ap-trow"
+                    style={{ gridTemplateColumns: "70px 1fr 70px 120px 90px 90px", cursor: "pointer" }}
+                    onClick={() => setExpanded(open ? null : mm.event)}
+                    role="button"
+                    aria-expanded={open}
+                  >
+                    <span style={{ color: "var(--dim)" }}>{dateShort(new Date(mm.t).toISOString())}</span>
+                    <span className="ap-ell">
+                      <span style={{ color: "var(--dim2)", display: "inline-block", width: 12 }}>{open ? "▾" : "▸"}</span>
+                      {mm.event}{mm.pending ? <span style={{ color: "var(--dim2)" }}> · {mm.pending} öppna</span> : null}
+                    </span>
+                    <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{mm.count}</span>
+                    <span className="ap-r ap-num" style={{ fontWeight: 600 }}><em className={mm.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(mm.profitUnits * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(mm.profitUnits, true)}</span></span>
+                    <span className="ap-r ap-num"><em className={(mm.roiPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{pctFmt(mm.roiPct, true)}</em></span>
+                    <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{pctFmt(mm.winRatePct)}</span>
+                  </div>
+                  {open && (
+                    <div style={{ padding: "2px 20px 14px 36px", borderBottom: "1px solid var(--line2)" }}>
+                      <MatchDetail bets={mm.bets} unit={unit} />
+                    </div>
+                  )}
+                </Fragment>
+              );
+            })}
           </div>
         </div>
         {/* Mobile: stacked cards so P/L, ROI and win rate stay visible without sideways scroll. */}
         <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
-          {perMatch.map((mm) => (
-            <div key={mm.event} className="ap-betcard">
-              <div className="ap-betcard-top">
-                <span className="ap-betcard-date">
-                  {dateShort(new Date(mm.t).toISOString())}
-                  {mm.pending ? <span style={{ color: "var(--dim2)" }}> · {mm.pending} öppna</span> : null}
-                </span>
-                <b className={"ap-num " + (mm.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 700, fontSize: 15 }}>{krShort(mm.profitUnits * unit, true)}</b>
+          {perMatch.map((mm) => {
+            const open = expanded === mm.event;
+            return (
+              <div
+                key={mm.event}
+                className="ap-betcard"
+                style={{ cursor: "pointer" }}
+                onClick={() => setExpanded(open ? null : mm.event)}
+                role="button"
+                aria-expanded={open}
+              >
+                <div className="ap-betcard-top">
+                  <span className="ap-betcard-date">
+                    {dateShort(new Date(mm.t).toISOString())}
+                    {mm.pending ? <span style={{ color: "var(--dim2)" }}> · {mm.pending} öppna</span> : null}
+                  </span>
+                  <b className={"ap-num " + (mm.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 700, fontSize: 15 }}>{krShort(mm.profitUnits * unit, true)}</b>
+                </div>
+                <div className="ap-betcard-event"><span style={{ color: "var(--dim2)" }}>{open ? "▾ " : "▸ "}</span>{mm.event}</div>
+                <div className="ap-betcard-stats">
+                  <div><span>Bets</span><b className="ap-num">{mm.count}</b></div>
+                  <div><span>ROI</span><b className={"ap-num " + ((mm.roiPct ?? 0) >= 0 ? "pos" : "neg")}>{pctFmt(mm.roiPct, true)}</b></div>
+                  <div><span>Win rate</span><b className="ap-num">{pctFmt(mm.winRatePct)}</b></div>
+                </div>
+                {open && (
+                  <div style={{ marginTop: 11, paddingTop: 11, borderTop: "1px solid var(--line2)" }}>
+                    <MatchDetail bets={mm.bets} unit={unit} />
+                  </div>
+                )}
               </div>
-              <div className="ap-betcard-event">{mm.event}</div>
-              <div className="ap-betcard-stats">
-                <div><span>Bets</span><b className="ap-num">{mm.count}</b></div>
-                <div><span>ROI</span><b className={"ap-num " + ((mm.roiPct ?? 0) >= 0 ? "pos" : "neg")}>{pctFmt(mm.roiPct, true)}</b></div>
-                <div><span>Win rate</span><b className="ap-num">{pctFmt(mm.winRatePct)}</b></div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 
