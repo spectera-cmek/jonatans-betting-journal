@@ -32,7 +32,9 @@ model Bet {
   event         String // "Team A vs Team B"
   homeTeam      String?
   awayTeam      String?
-  market        String    @default("h2h") // h2h | totals | spreads | other
+  market        String    @default("h2h") // h2h | totals | spreads | other (avräkningstyp -> grading)
+  marketCategory String? // semantisk marknad, t.ex. "Skott på mål", "Returer", "Hörnor"
+  marketScope   String? // player | team | match (vem/vad spelet avser)
   selection     String // label, e.g. "Team A", "Over 2.5"
   selectionSide String? // home | away | draw | over | under (structured -> grading)
   line          Float? // for totals/spreads

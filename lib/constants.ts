@@ -40,6 +40,50 @@ export const SIDES: Record<string, { value: string; label: string }[]> = {
   other: [],
 };
 
+// Detaljerad marknad ("vad" du bettat på) — en semantisk dimension fristående
+// från MARKETS ovan (som bara är avräkningstyp för auto-rättning). Värdena
+// matchar normalizeMarket() i lib/categorize.ts så backfill och dropdown rimmar.
+// Sportnycklarna är de engelska SPORTS-värdena. Övriga sporter får GENERIC + fritext.
+export const GENERIC_MARKET_CATEGORIES = [
+  "Matchvinnare", "Dubbelchans", "Totalt", "Handikapp", "BTTS", "Halvlek",
+  "Hörnor", "Kort & fouls", "Skott", "Skott på mål", "Räddningar",
+  "Spelarpoäng", "Returer", "Assists", "Trepoängare", "Frikast", "Ess",
+  "Vinstmetod", "Övrigt",
+];
+
+export const MARKET_CATEGORIES_BY_SPORT: Record<string, string[]> = {
+  Football: [
+    "Matchvinnare", "Dubbelchans", "Totalt", "BTTS", "Handikapp", "Hörnor",
+    "Kort & fouls", "Skott", "Skott på mål", "Frisparkar", "Offside",
+    "Räddningar", "Halvlek", "Övrigt",
+  ],
+  Basketball: [
+    "Matchvinnare", "Handikapp", "Totalt", "Spelarpoäng", "Returer", "Assists",
+    "Trepoängare", "Frikast", "Steals", "Blocks", "PRA", "Halvlek", "Övrigt",
+  ],
+  "Ice Hockey": [
+    "Matchvinnare", "Totalt", "Handikapp", "Skott", "Skott på mål", "Mål",
+    "Assists", "Spelarpoäng", "Räddningar", "Utvisningar", "Period", "Övrigt",
+  ],
+  Tennis: [
+    "Matchvinnare", "Set-vinnare", "Totalt", "Handikapp", "Tiebreak", "Ess",
+    "Dubbelfel", "Övrigt",
+  ],
+};
+
+// Vem/vad spelet avser. Lagras lowercase (likt selectionSide).
+export const SCOPES: { value: string; label: string }[] = [
+  { value: "player", label: "Spelare" },
+  { value: "team", label: "Lag" },
+  { value: "match", label: "Match (totalt)" },
+];
+
+export const SCOPE_LABELS: Record<string, string> = {
+  player: "Spelare",
+  team: "Lag",
+  match: "Match (totalt)",
+};
+
 export const BOOKMAKERS = [
   "Unibet",
   "Bet365",

@@ -30,6 +30,7 @@ export interface DisciplineVerdict {
 // Categories that historically print money at sane odds.
 const EDGE_CATEGORIES: Record<string, string> = {
   Skott: "Skott: +5,9 % ROI över 1 261 bets — din starkaste marknad",
+  "Skott på mål": "Skott på mål: del av din starkaste marknad (Skott, +5,9 % ROI)",
   Returer: "Returer: +14,6 % ROI historiskt",
   Hörnor: "Hörnor: +8,4 % ROI historiskt",
   Halvlek: "Halvlek: +1 879 kr historiskt",

@@ -311,13 +311,17 @@ export default function AnalyticsPage() {
 
       <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
         <BreakdownCard title="P/L per sport" rows={data?.bySport ?? []} unit={unit} />
-        <BreakdownCard title="P/L per marknad" rows={data?.byMarket ?? []} unit={unit} />
-        <BreakdownCard title="Singel vs ackumulator" rows={data?.byBetType ?? []} unit={unit} />
+        <BreakdownCard title="P/L per marknad" sub="vad du bettat på" rows={data?.byMarketDetail ?? []} unit={unit} />
+        <BreakdownCard title="P/L: spelare / lag / match" rows={data?.byScope ?? []} unit={unit} />
       </div>
 
       <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
+        <BreakdownCard title="Singel vs ackumulator" rows={data?.byBetType ?? []} unit={unit} />
         <BreakdownCard title="P/L per odds-spann" rows={oddsBands} unit={unit} />
         <BreakdownCard title="P/L per liga" rows={data?.byLeague ?? []} unit={unit} />
+      </div>
+
+      <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
         <BreakdownCard title="P/L per bookmaker" rows={data?.byBookmaker ?? []} unit={unit} />
       </div>
 
