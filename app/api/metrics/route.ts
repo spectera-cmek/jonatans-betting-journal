@@ -8,6 +8,7 @@ import {
   singleRoiPct,
   settledProfit,
   openRisk,
+  openRiskBy,
   maxDrawdown,
   type BetLike,
 } from "@/lib/betting";
@@ -111,6 +112,7 @@ export async function GET() {
 
   // Exposure on pending bets + worst historical peak-to-trough drop.
   const risk = openRisk(betLikes);
+  const riskByBookmaker = openRiskBy(keyed, (b) => (b as KeyedBet).bookmaker, "Okänd bookmaker");
   const drawdown = maxDrawdown(bankroll);
 
   // Tilt guard (stake budgets + chasing) and the weekly report.
@@ -143,6 +145,7 @@ export async function GET() {
     metrics,
     insights,
     openRisk: risk,
+    openRiskByBookmaker: riskByBookmaker,
     drawdown,
     tilt,
     weekly,

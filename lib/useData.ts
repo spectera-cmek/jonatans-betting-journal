@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./fetcher";
-import type { Metrics, BankrollPoint, Breakdown, OpenRisk, DrawdownInfo } from "./betting";
+import type { Metrics, BankrollPoint, Breakdown, OpenRisk, OpenRiskGroup, DrawdownInfo } from "./betting";
 import type { Insights } from "./insights";
 import type { TiltStatus } from "./tilt";
 import type { WeeklyReport } from "./weekly";
@@ -36,6 +36,7 @@ export interface MetricsResponse {
   metrics: Metrics;
   insights: Insights;
   openRisk: OpenRisk;
+  openRiskByBookmaker: OpenRiskGroup[];
   drawdown: DrawdownInfo;
   tilt: TiltStatus;
   weekly: WeeklyReport;

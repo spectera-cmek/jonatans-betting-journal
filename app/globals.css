@@ -319,6 +319,9 @@ body {
   gap: 12px;
   margin-bottom: 12px;
 }
+.ap-kpi-row-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
 .ap-kpi-val {
   font-family: var(--disp);
   font-size: 24px;

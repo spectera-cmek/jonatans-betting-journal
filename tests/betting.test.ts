@@ -9,6 +9,7 @@ import {
   topBetsByProfit,
   singleRoiPct,
   openRisk,
+  openRiskBy,
   maxDrawdown,
   type BankrollPoint,
   type BetLike,
@@ -202,6 +203,47 @@ describe("openRisk", () => {
       stakeUnits: 0,
       potentialReturnUnits: 0,
     });
+  });
+});
+
+describe("openRiskBy", () => {
+  interface Tagged extends BetLike {
+    book: string;
+  }
+  const bets: Tagged[] = [
+    { odds: 2.0, stakeUnits: 1, outcome: "pending", book: "Bet365" },
+    { odds: 1.5, stakeUnits: 2, outcome: "pending", book: "Bet365" },
+    { odds: 3.0, stakeUnits: 4, outcome: "pending", book: "Unibet" },
+    { odds: 3.0, stakeUnits: 5, outcome: "win", book: "Unibet" }, // settled — ignored
+  ];
+
+  it("groups pending stake/return by key", () => {
+    const groups = openRiskBy(bets, (b) => (b as Tagged).book);
+    const bet365 = groups.find((g) => g.key === "Bet365")!;
+    const unibet = groups.find((g) => g.key === "Unibet")!;
+    expect(bet365.bets).toBe(2);
+    expect(bet365.stakeUnits).toBeCloseTo(3);
+    expect(bet365.potentialReturnUnits).toBeCloseTo(2 * 1 + 1.5 * 2); // 5
+    expect(unibet.bets).toBe(1);
+    expect(unibet.stakeUnits).toBeCloseTo(4);
+    expect(unibet.potentialReturnUnits).toBeCloseTo(3 * 4); // 12
+  });
+
+  it("sorts groups by stake descending", () => {
+    const groups = openRiskBy(bets, (b) => (b as Tagged).book);
+    expect(groups.map((g) => g.key)).toEqual(["Unibet", "Bet365"]);
+  });
+
+  it("falls back for missing keys", () => {
+    const groups = openRiskBy([{ odds: 2, stakeUnits: 1, outcome: "pending" }], () => null, "Okänd");
+    expect(groups).toEqual([{ key: "Okänd", bets: 1, stakeUnits: 1, potentialReturnUnits: 2 }]);
+  });
+
+  it("openRisk() still matches its own totals after the refactor", () => {
+    const r = openRisk(bets);
+    expect(r.bets).toBe(3);
+    expect(r.stakeUnits).toBeCloseTo(7);
+    expect(r.potentialReturnUnits).toBeCloseTo(2 * 1 + 1.5 * 2 + 3 * 4); // 17
   });
 });
 

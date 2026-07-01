@@ -7,8 +7,8 @@ import { ResultBadge } from "@/components/ResultBadge";
 import { AddBetModal } from "@/components/AddBetModal";
 import { useBets } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
-import { uFmt, pctFmt, krShort, sportTag, dateShort } from "@/lib/format";
-import { computeMetrics, type BetLike, type Outcome } from "@/lib/betting";
+import { uFmt, pctFmt, krFmt, krShort, sportTag, dateShort, daysAgo } from "@/lib/format";
+import { computeMetrics, openRisk, type BetLike, type Outcome } from "@/lib/betting";
 import { I, IC } from "@/components/icons";
 import { SCOPES, SCOPE_LABELS } from "@/lib/constants";
 import type { BetDTO, BetListDTO } from "@/lib/types";
@@ -37,6 +37,7 @@ export default function BetsPage() {
   const [day, setDay] = useState(""); // YYYY-MM-DD, specific day
   const [year, setYear] = useState("Alla år");
   const [month, setMonth] = useState("Alla månader");
+  const [sort, setSort] = useState<"date" | "stake">("date");
   const [shown, setShown] = useState(PAGE);
 
   // Mirror filters in the URL query so a filtered view is shareable and survives
@@ -53,6 +54,7 @@ export default function BetsPage() {
     if (sp.has("day")) setDay(sp.get("day") || "");
     if (sp.has("year")) setYear(sp.get("year") || "Alla år");
     if (sp.has("month")) setMonth(sp.get("month") || "Alla månader");
+    if (sp.has("sort")) setSort(sp.get("sort") === "stake" ? "stake" : "date");
   }, []);
   useEffect(() => {
     if (!urlSynced.current) {
@@ -69,9 +71,10 @@ export default function BetsPage() {
     if (day) sp.set("day", day);
     if (year !== "Alla år") sp.set("year", year);
     if (month !== "Alla månader") sp.set("month", month);
+    if (sort !== "date") sp.set("sort", sort);
     const qs = sp.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [q, sport, book, market, scope, res, day, year, month]);
+  }, [q, sport, book, market, scope, res, day, year, month, sort]);
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
@@ -121,12 +124,19 @@ export default function BetsPage() {
     });
   }, [bets, sport, book, market, scope, res, q, day, year, month]);
 
-  // Render at most `shown` rows; reset when any filter changes.
+  // Sorting is a separate concern from filtering — keep `filtered` in its
+  // natural (date) order for the summary stats and only reorder for display.
+  const sorted = useMemo(() => {
+    if (sort !== "stake") return filtered;
+    return [...filtered].sort((a, b) => b.stakeUnits - a.stakeUnits);
+  }, [filtered, sort]);
+
+  // Render at most `shown` rows; reset when any filter or sort changes.
   useEffect(() => {
     setShown(PAGE);
-  }, [sport, book, market, scope, res, q, day, year, month]);
-  const visible = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
-  const remaining = filtered.length - visible.length;
+  }, [sport, book, market, scope, res, q, day, year, month, sort]);
+  const visible = useMemo(() => sorted.slice(0, shown), [sorted, shown]);
+  const remaining = sorted.length - visible.length;
 
   const metrics = useMemo(() => {
     const likes: BetLike[] = filtered.map((b) => ({
@@ -137,6 +147,20 @@ export default function BetsPage() {
       profitUnits: b.profitUnits,
     }));
     return computeMetrics(likes);
+  }, [filtered]);
+
+  // Stake still at risk within the current filter (any combo, not just the
+  // "Öppna" chip) — computeMetrics() above zeroes out pending bets, so this
+  // is the only place that answers "how much money is still in play here".
+  const openInFilter = useMemo(() => {
+    const likes: BetLike[] = filtered.map((b) => ({
+      odds: b.odds,
+      stakeUnits: b.stakeUnits,
+      outcome: b.outcome as Outcome,
+      closingOdds: null,
+      profitUnits: b.profitUnits,
+    }));
+    return openRisk(likes);
   }, [filtered]);
 
   const sel = (val: string, set: (v: string) => void, opts: string[]) => (
@@ -205,11 +229,20 @@ export default function BetsPage() {
       />
 
       {/* summary strip */}
-      <div className="ap-grid ap-kpi-row">
+      <div className="ap-grid ap-kpi-row ap-kpi-row-5">
         <div className="ap-card"><span className="ap-label">Filtrerad P/L</span><div className="ap-num ap-kpi-val"><span className={metrics.profitUnits >= 0 ? "pos" : "neg"}>{uFmt(metrics.profitUnits, true)}</span></div></div>
         <div className="ap-card"><span className="ap-label">ROI</span><div className="ap-num ap-kpi-val"><span className={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(metrics.roiPct, true)}</span></div></div>
         <div className="ap-card"><span className="ap-label">Win rate</span><div className="ap-num ap-kpi-val">{pctFmt(metrics.winRatePct)}</div></div>
         <div className="ap-card"><span className="ap-label">Antal bets</span><div className="ap-num ap-kpi-val">{filtered.length}</div></div>
+        <div className="ap-card">
+          <span className="ap-label">Insats i spel</span>
+          <div className="ap-num ap-kpi-val">{krFmt(openInFilter.stakeUnits * unit)}</div>
+          {openInFilter.bets > 0 && (
+            <div style={{ fontSize: 11.5, color: "var(--dim)", marginTop: 4 }}>
+              {openInFilter.bets} öppna · retur {krFmt(openInFilter.potentialReturnUnits * unit)}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* filters */}
@@ -259,6 +292,12 @@ export default function BetsPage() {
         {RES_CHIPS.map(([v, l]) => (
           <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} onClick={() => setRes(v)}>{l}</button>
         ))}
+        <div className="ap-select">
+          <select value={sort} onChange={(e) => setSort(e.target.value === "stake" ? "stake" : "date")}>
+            <option value="date">Sortera: Datum</option>
+            <option value="stake">Sortera: Insats, störst → minst</option>
+          </select>
+        </div>
         <div style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--dim)", alignSelf: "center" }}>
           Visar <strong style={{ color: "var(--txt)" }}>{Math.min(visible.length, filtered.length)}</strong> av {filtered.length} träffar
         </div>
@@ -281,7 +320,12 @@ export default function BetsPage() {
             )}
             {visible.map((b) => (
               <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: GRID }}>
-                <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
+                <span style={{ color: "var(--dim)", display: "flex", flexDirection: "column", gap: 2, justifyContent: "center" }}>
+                  {dateShort(b.eventAt ?? b.placedAt)}
+                  {b.outcome === "pending" && (
+                    <span className="ap-pill flat" style={{ padding: "1px 5px", fontSize: 10, alignSelf: "flex-start" }}>{daysAgo(b.placedAt)}d</span>
+                  )}
+                </span>
                 <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
                 <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
                 <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)", display: "flex", flexDirection: "column", gap: 2, justifyContent: "center" }}>
@@ -321,6 +365,9 @@ export default function BetsPage() {
             <div className="ap-betcard-top">
               <span className="ap-betcard-date">
                 {dateShort(b.eventAt ?? b.placedAt)} <span className="ap-tag">{sportTag(b.sport)}</span>
+                {b.outcome === "pending" && (
+                  <span className="ap-pill flat" style={{ marginLeft: 6 }}>{daysAgo(b.placedAt)}d</span>
+                )}
               </span>
               <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
             </div>

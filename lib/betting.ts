@@ -313,16 +313,42 @@ export interface OpenRisk {
 
 /** Exposure across pending bets: units at risk + best-case total return. */
 export function openRisk(bets: BetLike[]): OpenRisk {
-  let n = 0;
-  let stake = 0;
-  let potential = 0;
+  const [g] = openRiskBy(bets, () => "_all");
+  return g
+    ? { bets: g.bets, stakeUnits: g.stakeUnits, potentialReturnUnits: g.potentialReturnUnits }
+    : { bets: 0, stakeUnits: 0, potentialReturnUnits: 0 };
+}
+
+export interface OpenRiskGroup {
+  key: string;
+  bets: number;
+  stakeUnits: number;
+  potentialReturnUnits: number;
+}
+
+/** Exposure across pending bets, grouped by an arbitrary key (bookmaker, sport...). Sorted by stake descending. */
+export function openRiskBy(
+  bets: BetLike[],
+  keyFn: (b: BetLike) => string | null | undefined,
+  fallback = "Okänd"
+): OpenRiskGroup[] {
+  const map = new Map<string, OpenRiskGroup>();
   for (const b of bets) {
     if (b.outcome !== "pending") continue;
-    n += 1;
-    stake += b.stakeUnits;
-    potential += b.stakeUnits * b.odds;
+    const k = (keyFn(b) || fallback).toString();
+    const g = map.get(k) ?? { key: k, bets: 0, stakeUnits: 0, potentialReturnUnits: 0 };
+    g.bets += 1;
+    g.stakeUnits += b.stakeUnits;
+    g.potentialReturnUnits += b.stakeUnits * b.odds;
+    map.set(k, g);
   }
-  return { bets: n, stakeUnits: round2(stake), potentialReturnUnits: round2(potential) };
+  const out = Array.from(map.values()).map((g) => ({
+    ...g,
+    stakeUnits: round2(g.stakeUnits),
+    potentialReturnUnits: round2(g.potentialReturnUnits),
+  }));
+  out.sort((a, b) => b.stakeUnits - a.stakeUnits);
+  return out;
 }
 
 export interface DrawdownInfo {

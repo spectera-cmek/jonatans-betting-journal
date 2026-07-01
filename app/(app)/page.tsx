@@ -10,6 +10,7 @@ import { AddBetModal } from "@/components/AddBetModal";
 import { SyncButton } from "@/components/SyncButton";
 import { TiltBanner } from "@/components/TiltBanner";
 import { GoalCard } from "@/components/GoalCard";
+import { OpenRiskCard } from "@/components/OpenRiskCard";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
@@ -238,27 +239,13 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      {/* Monthly bars + win ring + books */}
-      <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 200px 310px", marginBottom: 12 }}>
+      {/* Monthly bars + form & record */}
+      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 310px", marginBottom: 12 }}>
         <Card>
           <span className="ap-label">P/L per månad (units)</span>
           <div style={{ marginTop: 14 }}>
             <PLBars data={months} w={400} h={150} pos={cc.pos} neg={cc.red} labelColor={cc.dim} track={cc.line} />
           </div>
-        </Card>
-        <Card style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 }}>
-          <span className="ap-label">Öppen risk</span>
-          {risk && risk.bets > 0 ? (
-            <>
-              <div className="ap-num" style={{ fontSize: 26, fontWeight: 600 }}>{krFmt(risk.stakeUnits * unit)}</div>
-              <div style={{ fontSize: 12.5, color: "var(--dim)", lineHeight: 1.5 }}>
-                {risk.bets} öppna bets i spel<br />
-                Möjlig retur <span className="pos" style={{ fontWeight: 600 }}>{krFmt(risk.potentialReturnUnits * unit)}</span>
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize: 13, color: "var(--dim2)" }}>Inga öppna bets just nu.</div>
-          )}
         </Card>
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -274,6 +261,16 @@ export default function OverviewPage() {
             <FormRow label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U · ${krFmt(ins.avgStakeUnits * unit)}` : "—"} />
           </div>
         </Card>
+      </div>
+
+      {/* Open risk — full width so the per-bookmaker breakdown has room */}
+      <div style={{ marginBottom: 12 }}>
+        <OpenRiskCard
+          risk={risk ?? { bets: 0, stakeUnits: 0, potentialReturnUnits: 0 }}
+          groups={data?.openRiskByBookmaker ?? []}
+          unit={unit}
+          href="/bets?res=pending"
+        />
       </div>
 
       {/* Recent bets */}

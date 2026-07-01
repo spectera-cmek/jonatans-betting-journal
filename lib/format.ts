@@ -139,3 +139,11 @@ export function dateShort(d: Date | string | null | undefined): string {
   if (Number.isNaN(date.getTime())) return "—";
   return `${date.getDate()} ${MONTHS_SV[date.getMonth()]}`;
 }
+
+// Whole days since a date (e.g. how long a pending bet has been open), floored, never negative.
+export function daysAgo(d: Date | string | null | undefined): number {
+  if (!d) return 0;
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return 0;
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / 864e5));
+}
