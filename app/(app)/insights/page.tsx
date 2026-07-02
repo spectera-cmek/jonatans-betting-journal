@@ -2,18 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card, Skeleton, SkeletonCard } from "@/components/ui";
+import { Card, Skeleton, SkeletonCard, SectionHead } from "@/components/ui";
 import { HBar, CompareChart, type TimePoint } from "@/components/charts";
 import { KellyCard } from "@/components/KellyCard";
+import { ReportCard } from "@/components/ReportCard";
+import { EdgePanel } from "@/components/EdgePanel";
+import { StatTile, MiniStat } from "@/components/stats";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics, useBets } from "@/lib/useData";
 import { uFmt, krShort, krFmt, pctFmt, dateShort } from "@/lib/format";
 import { settledProfit, isSettled, countsForWinRate, isWinLike } from "@/lib/betting";
 import { betCategory } from "@/lib/discipline";
 import { noEdgeVariance, varianceByKey } from "@/lib/variance";
-import type { WeeklyReport, WeekAgg, WeekBetRef } from "@/lib/weekly";
 import type { BetListDTO } from "@/lib/types";
 import type { ChartColors } from "@/lib/theme";
+import { I, IC } from "@/components/icons";
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 const MONTH_NAMES = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
@@ -21,16 +24,6 @@ function monthLabel(ym?: string): string {
   if (!ym) return "—";
   const [y, m] = ym.split("-");
   return `${MONTH_NAMES[Number(m) - 1] ?? m} ${y}`;
-}
-
-function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
-  return (
-    <div className="ap-card ap-lift">
-      <span className="ap-label">{label}</span>
-      <div className="ap-num ap-kpi-val"><span className={tone || ""}>{value}</span></div>
-      {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 6 }}>{sub}</div>}
-    </div>
-  );
 }
 
 export default function InsightsPage() {
@@ -60,7 +53,7 @@ export default function InsightsPage() {
 
   return (
     <div>
-      <Topbar title="Insikter" sub="Din form, dina rekord och dina mönster" />
+      <Topbar title="Insikter" sub="Din form, dina rekord och dina mönster" icon={<I p={IC.spark} />} />
 
       {loading && !data && (
         <>
@@ -76,13 +69,46 @@ export default function InsightsPage() {
 
       {data && (
         <>
-          {data.weekly && <WeeklyCard weekly={data.weekly} unit={unit} />}
+          {(data.weekly || data.monthlyReport) && (
+            <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
+              {data.weekly && (
+                <ReportCard
+                  title="Veckorapport"
+                  periodLabel={`v.${data.weekly.current.weekNo} · ${dateShort(data.weekly.current.start)}–${dateShort(data.weekly.current.end)}`}
+                  currentTitle={`Denna vecka (v.${data.weekly.current.weekNo})`}
+                  previousTitle={`Förra veckan (v.${data.weekly.previous.weekNo})`}
+                  compareLabel="vs förra veckan"
+                  bestLabel="Veckans bästa"
+                  worstLabel="Veckans sämsta"
+                  current={data.weekly.current}
+                  previous={data.weekly.previous}
+                  unit={unit}
+                />
+              )}
+              {data.monthlyReport && (
+                <ReportCard
+                  title="Månadsrapport"
+                  periodLabel={`${dateShort(data.monthlyReport.current.start)}–${dateShort(data.monthlyReport.current.end)}`}
+                  currentTitle={monthLabel(data.monthlyReport.current.month)}
+                  previousTitle={monthLabel(data.monthlyReport.previous.month)}
+                  compareLabel={`vs ${monthLabel(data.monthlyReport.previous.month)}`}
+                  bestLabel="Månadens bästa"
+                  worstLabel="Månadens sämsta"
+                  current={data.monthlyReport.current}
+                  previous={data.monthlyReport.previous}
+                  unit={unit}
+                />
+              )}
+            </div>
+          )}
+
+          {!betsLoading && bets.length > 0 && <EdgePanel bets={bets} unit={unit} />}
 
           <div className="ap-kpi-row">
-            <Tile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} />
-            <Tile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" />
-            <Tile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" />
-            <Tile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : undefined} />
+            <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} />
+            <StatTile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" />
+            <StatTile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" />
+            <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : undefined} />
           </div>
 
           <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
@@ -149,6 +175,8 @@ export default function InsightsPage() {
             </div>
           </Card>
 
+          <SectionHead icon={<I p={IC.gear} />} title="Verktyg" sub="Kelly, tur-index och simulatorn" />
+
           <KellyCard defaultBankrollUnits={bankrollU} unit={unit} />
 
           {!betsLoading && bets.length > 0 && (
@@ -160,86 +188,6 @@ export default function InsightsPage() {
         </>
       )}
     </div>
-  );
-}
-
-/* ------------------------------- Veckorapport ------------------------------ */
-
-function WeekCol({ title, agg, unit, dim }: { title: string; agg: WeekAgg; unit: number; dim?: boolean }) {
-  return (
-    <div style={{ opacity: dim ? 0.75 : 1 }}>
-      <div style={{ fontSize: 12, color: "var(--dim)", fontWeight: 600 }}>{title}</div>
-      <div className="ap-num" style={{ fontSize: 27, fontWeight: 700, marginTop: 6 }}>
-        <span className={agg.profitUnits >= 0 ? "pos" : "neg"}>{krFmt(agg.profitUnits * unit, true)}</span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 10, fontSize: 12.5, color: "var(--dim)" }}>
-        <span>{agg.bets} bets{agg.pending > 0 ? ` · ${agg.pending} öppna` : ""}</span>
-        <span>Träff {agg.winRatePct != null ? pctFmt(agg.winRatePct) : "—"} · ROI {agg.roiPct != null ? pctFmt(agg.roiPct, true) : "—"}</span>
-        <span>Omsatt {uFmt(agg.stakedUnits)} · {krFmt(agg.stakedUnits * unit)}</span>
-      </div>
-    </div>
-  );
-}
-
-function WeekBetLine({ label, bet, unit, tone }: { label: string; bet: WeekBetRef | null; unit: number; tone: "pos" | "neg" }) {
-  if (!bet) return null;
-  return (
-    <div className="ap-leg" style={{ fontSize: 12.5 }}>
-      <span style={{ color: "var(--dim2)", width: 100, flexShrink: 0 }}>{label}</span>
-      <span className="ap-ell" style={{ flex: 1, color: "var(--dim)" }}>{bet.event}{bet.selection ? ` · ${bet.selection}` : ""}</span>
-      <span className={"ap-num " + tone} style={{ fontWeight: 600 }}>{krFmt(bet.profitUnits * unit, true)}</span>
-    </div>
-  );
-}
-
-function disciplineGradeLabel(pct: number | null): { text: string; tone: string } {
-  if (pct == null) return { text: "—", tone: "" };
-  if (pct >= 85) return { text: "A", tone: "pos" };
-  if (pct >= 70) return { text: "B", tone: "pos" };
-  if (pct >= 50) return { text: "C", tone: "" };
-  if (pct >= 30) return { text: "D", tone: "neg" };
-  return { text: "E", tone: "neg" };
-}
-
-function WeeklyCard({ weekly, unit }: { weekly: WeeklyReport; unit: number }) {
-  const cur = weekly.current;
-  const prev = weekly.previous;
-  const delta = cur.profitUnits - prev.profitUnits;
-  const grade = disciplineGradeLabel(cur.disciplinePct);
-  return (
-    <Card style={{ padding: 0, marginBottom: 12 }}>
-      <div className="ap-card-head">
-        <span className="ap-card-title">Veckorapport</span>
-        <span style={{ color: "var(--dim2)", fontSize: 12 }}>
-          v.{cur.weekNo} · {dateShort(cur.start)}–{dateShort(cur.end)}
-        </span>
-      </div>
-      <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 18, alignItems: "start" }} className="ap-week-grid">
-        <WeekCol title={`Denna vecka (v.${cur.weekNo})`} agg={cur} unit={unit} />
-        <WeekCol title={`Förra veckan (v.${prev.weekNo})`} agg={prev} unit={unit} dim />
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-          <span className={"ap-pill " + (delta >= 0 ? "pos" : "neg")}>{delta >= 0 ? "▲" : "▼"} {krFmt(Math.abs(delta) * unit)} vs förra veckan</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <span
-              className={"ap-num " + grade.tone}
-              style={{ fontSize: 24, fontWeight: 700, width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", background: "var(--card2)", border: "1px solid var(--line)" }}
-            >
-              {grade.text}
-            </span>
-            <span style={{ fontSize: 11.5, color: "var(--dim)", lineHeight: 1.4 }}>
-              Disciplin<br />
-              {cur.disciplinePct != null ? `${Math.round(cur.disciplinePct)} % av insatserna utan kända läckor` : "ingen data ännu"}
-            </span>
-          </div>
-        </div>
-      </div>
-      {(cur.best || cur.worst) && (
-        <div style={{ padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: 7 }}>
-          <WeekBetLine label="Veckans bästa" bet={cur.best} unit={unit} tone="pos" />
-          <WeekBetLine label="Veckans sämsta" bet={cur.worst} unit={unit} tone="neg" />
-        </div>
-      )}
-    </Card>
   );
 }
 
@@ -491,14 +439,5 @@ function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: C
         </div>
       </div>
     </Card>
-  );
-}
-
-function MiniStat({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return (
-    <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
-      <div className="ap-label">{label}</div>
-      <div className={"ap-num " + (tone ?? "")} style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{value}</div>
-    </div>
   );
 }

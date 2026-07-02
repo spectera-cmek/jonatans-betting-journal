@@ -64,14 +64,21 @@ export function Topbar({
   title,
   sub,
   actions,
+  icon,
 }: {
   title: string;
   sub?: React.ReactNode;
   actions?: React.ReactNode;
+  icon?: React.ReactNode;
 }) {
   return (
-    <div className="ap-top">
+    <div className={"ap-top" + (icon ? " ap-hero" : "")}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        {icon && (
+          <div className="ap-hero-icon" aria-hidden="true">
+            {icon}
+          </div>
+        )}
         <div style={{ minWidth: 0 }}>
           <div className="ap-h1">{title}</div>
           {sub && <div className="ap-sub">{sub}</div>}

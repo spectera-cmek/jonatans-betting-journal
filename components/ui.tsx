@@ -27,6 +27,7 @@ export function Kpi({
   deltaPos,
   spark,
   valueClass,
+  tone,
 }: {
   label: string;
   value: React.ReactNode;
@@ -34,10 +35,11 @@ export function Kpi({
   deltaPos?: boolean;
   spark?: number[];
   valueClass?: string;
+  tone?: "pos" | "neg";
 }) {
   const { cc } = useTheme();
   return (
-    <div className="ap-card ap-lift">
+    <div className={"ap-card ap-lift ap-kpi" + (tone ? ` is-${tone}` : "")}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <span className="ap-label">{label}</span>
         {delta && <span className={"ap-pill " + (deltaPos ? "pos" : "neg")}>{delta}</span>}
@@ -48,6 +50,29 @@ export function Kpi({
           <Spark data={spark} w={150} h={26} stroke={cc.acc} />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Section header between card groups: icon chip + title, optional right-aligned sub. */
+export function SectionHead({
+  icon,
+  title,
+  sub,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  sub?: React.ReactNode;
+}) {
+  return (
+    <div className="ap-sec">
+      {icon && (
+        <div className="ap-sec-icon" aria-hidden="true">
+          {icon}
+        </div>
+      )}
+      <div className="ap-sec-title">{title}</div>
+      {sub && <div className="ap-sec-sub">{sub}</div>}
     </div>
   );
 }

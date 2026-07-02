@@ -1,5 +1,5 @@
-// Weekly report: this week vs last week (Swedish calendar, Monday–Sunday)
-// with a discipline grade — the stake-weighted share of the week's bets that
+// Weekly & monthly reports: this period vs the previous one (Swedish calendar)
+// with a discipline grade — the stake-weighted share of the period's bets that
 // avoided the known leak patterns from lib/discipline.
 //
 // Pure & dependency-free (besides betting/discipline/time helpers) so it is
@@ -7,7 +7,7 @@
 
 import { isSettled, settledProfit, countsForWinRate, isWinLike, round2, type BetLike } from "./betting";
 import { evaluateBet } from "./discipline";
-import { dayIso, weekOf, addDays, isoWeekNo, type WeekWindow } from "./time";
+import { dayIso, weekOf, monthOf, addDays, isoWeekNo, type WeekWindow } from "./time";
 
 export interface WeeklyBetInput extends BetLike {
   event?: string;
@@ -25,10 +25,9 @@ export interface WeekBetRef {
   profitUnits: number;
 }
 
-export interface WeekAgg {
-  start: string; // Monday ISO day
-  end: string; // Sunday ISO day
-  weekNo: number;
+export interface PeriodAgg {
+  start: string; // first day, inclusive (ISO)
+  end: string; // last day, inclusive (ISO)
   bets: number;
   settled: number;
   pending: number;
@@ -41,9 +40,22 @@ export interface WeekAgg {
   worst: WeekBetRef | null;
 }
 
+export interface WeekAgg extends PeriodAgg {
+  weekNo: number;
+}
+
 export interface WeeklyReport {
   current: WeekAgg;
   previous: WeekAgg;
+}
+
+export interface MonthAgg extends PeriodAgg {
+  month: string; // YYYY-MM
+}
+
+export interface MonthlyReport {
+  current: MonthAgg;
+  previous: MonthAgg;
 }
 
 function toTime(d?: Date | string | null): number {
@@ -57,7 +69,8 @@ function betTime(b: BetLike): number {
   return toTime(b.eventAt) || toTime(b.placedAt) || toTime(b.createdAt);
 }
 
-function aggWeek(bets: WeeklyBetInput[], win: WeekWindow): WeekAgg {
+/** Aggregate one arbitrary {start,end} window — the week/month reports both wrap this. */
+export function aggPeriod(bets: WeeklyBetInput[], win: WeekWindow): PeriodAgg {
   let settled = 0;
   let pending = 0;
   let staked = 0;
@@ -115,7 +128,6 @@ function aggWeek(bets: WeeklyBetInput[], win: WeekWindow): WeekAgg {
   return {
     start: win.start,
     end: win.end,
-    weekNo: isoWeekNo(win.start),
     bets: settled + pending,
     settled,
     pending,
@@ -132,5 +144,18 @@ function aggWeek(bets: WeeklyBetInput[], win: WeekWindow): WeekAgg {
 export function weeklyReport(bets: WeeklyBetInput[], now: Date | number = Date.now()): WeeklyReport {
   const cur = weekOf(now);
   const prev: WeekWindow = { start: addDays(cur.start, -7), end: addDays(cur.start, -1) };
-  return { current: aggWeek(bets, cur), previous: aggWeek(bets, prev) };
+  return {
+    current: { ...aggPeriod(bets, cur), weekNo: isoWeekNo(cur.start) },
+    previous: { ...aggPeriod(bets, prev), weekNo: isoWeekNo(prev.start) },
+  };
+}
+
+/** Calendar-month version of the weekly report: this month vs last month. */
+export function monthlyReport(bets: WeeklyBetInput[], now: Date | number = Date.now()): MonthlyReport {
+  const cur = monthOf(now);
+  const prev = monthOf(addDays(cur.start, -1) + "T12:00:00Z");
+  return {
+    current: { ...aggPeriod(bets, cur), month: cur.start.slice(0, 7) },
+    previous: { ...aggPeriod(bets, prev), month: prev.start.slice(0, 7) },
+  };
 }

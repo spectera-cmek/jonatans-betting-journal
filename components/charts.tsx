@@ -138,6 +138,8 @@ export function InteractiveLineChart({
           />
         )}
         <path d={area} fill={`url(#g${gid})`} />
+        {/* soft glow under the stroke (no SVG filters — just a fat translucent twin) */}
+        <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW * 3} strokeLinejoin="round" strokeLinecap="round" opacity="0.15" />
         <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round" strokeLinecap="round" />
         {hover != null && (
           <line x1={x(hover)} y1={pad} x2={x(hover)} y2={h - pad} stroke={stroke} strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
@@ -285,6 +287,7 @@ export function LineChart({
         <line key={i} x1={pad} y1={gy} x2={w - pad} y2={gy} stroke={grid} strokeWidth="1" />
       ))}
       <path d={area} fill={`url(#g${gid})`} />
+      <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW * 3} strokeLinejoin="round" strokeLinecap="round" opacity="0.15" />
       <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={x(data.length - 1)} cy={y(data[data.length - 1])} r="3.5" fill={stroke} />
     </svg>
@@ -308,6 +311,7 @@ export function PLBars({
   labelColor?: string;
   track?: string;
 }) {
+  const gid = useId().replace(/:/g, "");
   if (!data || !data.length) {
     return <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>Ingen data</div>;
   }
@@ -320,6 +324,17 @@ export function PLBars({
   const scale = (Math.min(zero, h - zero) - 18) / max;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{ display: "block" }}>
+      <defs>
+        {/* solid at the bar tip, fading toward the zero line */}
+        <linearGradient id={`pb${gid}p`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={pos} />
+          <stop offset="100%" stopColor={pos} stopOpacity="0.45" />
+        </linearGradient>
+        <linearGradient id={`pb${gid}n`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={neg} stopOpacity="0.45" />
+          <stop offset="100%" stopColor={neg} />
+        </linearGradient>
+      </defs>
       {track && <line x1="0" y1={zero} x2={w} y2={zero} stroke={track} strokeWidth="1" />}
       {data.map((d, i) => {
         const v = d.units;
@@ -328,7 +343,15 @@ export function PLBars({
         const by = v >= 0 ? zero - bh : zero;
         return (
           <g key={i}>
-            <rect x={bx} y={by} width={bw} height={Math.max(bh, 1)} rx="3" fill={v >= 0 ? pos : neg} opacity={v >= 0 ? 1 : 0.9} />
+            <rect
+              x={bx}
+              y={by}
+              width={bw}
+              height={Math.max(bh, 1)}
+              rx="4"
+              fill={v >= 0 ? `url(#pb${gid}p)` : `url(#pb${gid}n)`}
+              opacity={i === n - 1 ? 1 : 0.85}
+            />
             <text x={bx + bw / 2} y={h - 2} textAnchor="middle" fontSize="11" fill={labelColor} fontFamily="inherit">
               {d.m}
             </text>
@@ -369,6 +392,8 @@ export function Donut({
       <circle cx={c} cy={c} r={r} fill="none" stroke={track} strokeWidth={thickness} />
       {data.map((d, i) => {
         const len = (d.pct / 100) * circ;
+        // 1.5px gap between segments (skipped for slivers so they stay visible)
+        const g = len > 3 ? 1.5 : 0;
         const el = (
           <circle
             key={i}
@@ -378,8 +403,8 @@ export function Donut({
             fill="none"
             stroke={colors[i % colors.length]}
             strokeWidth={thickness}
-            strokeDasharray={`${len} ${circ - len}`}
-            strokeDashoffset={-offset}
+            strokeDasharray={`${Math.max(len - g, 0.1)} ${circ - len + g}`}
+            strokeDashoffset={-(offset + g / 2)}
             transform={`rotate(-90 ${c} ${c})`}
             strokeLinecap="butt"
           />

@@ -9,12 +9,13 @@ import {
   settledProfit,
   openRisk,
   maxDrawdown,
+  hasRealOdds,
   type BetLike,
 } from "@/lib/betting";
 import type { Outcome } from "@/lib/betting";
 import { computeInsights } from "@/lib/insights";
 import { tiltStatus } from "@/lib/tilt";
-import { weeklyReport, type WeeklyBetInput } from "@/lib/weekly";
+import { weeklyReport, monthlyReport, type WeeklyBetInput } from "@/lib/weekly";
 import { getSessionUser, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,9 @@ export async function GET() {
   }));
 
   const metrics = computeMetrics(betLikes);
+  // Placeholder odds (1.01 = imported loss with unknown odds) are fake prices —
+  // the displayed average is computed on real odds only. P/L is unaffected.
+  const avgOddsReal = computeMetrics(betLikes.filter(hasRealOdds)).avgOdds;
   const bankroll = bankrollSeries(betLikes, settings.startingBankrollUnits);
 
   const bySport = breakdownBy(betLikes, (_b) => null).length
@@ -137,15 +141,42 @@ export async function GET() {
     betType: b.betType,
   }));
   const weekly = weeklyReport(weeklyInput, new Date());
+  const monthlyRep = monthlyReport(weeklyInput, new Date());
+
+  // Pending bets, soonest event first (nulls last) — the dashboard "Öppna spel" panel.
+  const openBets = bets
+    .filter((b) => b.outcome === "pending")
+    .sort((a, b) => {
+      const ta = a.eventAt ? a.eventAt.getTime() : Infinity;
+      const tb = b.eventAt ? b.eventAt.getTime() : Infinity;
+      if (ta !== tb) return ta - tb;
+      return a.placedAt.getTime() - b.placedAt.getTime();
+    })
+    .slice(0, 25)
+    .map((b) => ({
+      id: b.id,
+      event: b.event,
+      selection: b.selection,
+      sport: b.sport,
+      league: b.league,
+      bookmaker: b.bookmaker,
+      betType: b.betType,
+      odds: b.odds,
+      stakeUnits: b.stakeUnits,
+      eventAt: b.eventAt ? b.eventAt.toISOString() : null,
+      placedAt: b.placedAt.toISOString(),
+    }));
 
   return NextResponse.json({
     username: user.username,
-    metrics,
+    metrics: { ...metrics, avgOdds: avgOddsReal },
     insights,
     openRisk: risk,
     drawdown,
     tilt,
     weekly,
+    monthlyReport: monthlyRep,
+    openBets,
     bankroll,
     bySport,
     byLeague,
@@ -307,15 +338,18 @@ function leaderboard(
 }
 
 function oddsBandBreakdown(bets: BetLike[]) {
+  // Placeholder odds (1.01 = imported loss with unknown odds) would otherwise
+  // pollute the lowest band with fake prices — real odds only here.
+  const real = bets.filter(hasRealOdds);
   const bands = [
-    { label: "1.01–1.50", min: 1.01, max: 1.5 },
+    { label: "1.02–1.50", min: 1.01, max: 1.5 },
     { label: "1.50–2.00", min: 1.5, max: 2.0 },
     { label: "2.00–3.00", min: 2.0, max: 3.0 },
     { label: "3.00–5.00", min: 3.0, max: 5.0 },
     { label: "5.00+", min: 5.0, max: Infinity },
   ];
   return bands.map((band) => {
-    const inBand = bets.filter((b) => b.odds >= band.min && b.odds < band.max);
+    const inBand = real.filter((b) => b.odds >= band.min && b.odds < band.max);
     const m = computeMetrics(inBand);
     return {
       label: band.label,

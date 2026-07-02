@@ -5,6 +5,7 @@ import { Topbar } from "@/components/Shell";
 import { Card, Empty } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
 import { AddBetModal } from "@/components/AddBetModal";
+import { StatTile } from "@/components/stats";
 import { useBets } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
 import { uFmt, pctFmt, krShort, sportTag, dateShort } from "@/lib/format";
@@ -196,6 +197,7 @@ export default function BetsPage() {
       <Topbar
         title="Alla bets"
         sub={`${bets.length} bets loggade${rangeLabel ? ` · ${rangeLabel}` : ""}`}
+        icon={<I p={IC.list} />}
         actions={
           <>
             <a className="ap-btn ghost" href="/api/bets/export"><I p={IC.download} size={15} /><span className="ap-hide-sm">CSV</span></a>
@@ -206,10 +208,10 @@ export default function BetsPage() {
 
       {/* summary strip */}
       <div className="ap-grid ap-kpi-row">
-        <div className="ap-card"><span className="ap-label">Filtrerad P/L</span><div className="ap-num ap-kpi-val"><span className={metrics.profitUnits >= 0 ? "pos" : "neg"}>{uFmt(metrics.profitUnits, true)}</span></div></div>
-        <div className="ap-card"><span className="ap-label">ROI</span><div className="ap-num ap-kpi-val"><span className={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(metrics.roiPct, true)}</span></div></div>
-        <div className="ap-card"><span className="ap-label">Win rate</span><div className="ap-num ap-kpi-val">{pctFmt(metrics.winRatePct)}</div></div>
-        <div className="ap-card"><span className="ap-label">Antal bets</span><div className="ap-num ap-kpi-val">{filtered.length}</div></div>
+        <StatTile label="Filtrerad P/L" value={uFmt(metrics.profitUnits, true)} tone={metrics.profitUnits >= 0 ? "pos" : "neg"} />
+        <StatTile label="ROI" value={pctFmt(metrics.roiPct, true)} tone={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
+        <StatTile label="Win rate" value={pctFmt(metrics.winRatePct)} />
+        <StatTile label="Antal bets" value={String(filtered.length)} />
       </div>
 
       {/* filters */}

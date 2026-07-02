@@ -49,7 +49,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <Topbar title="Inställningar" sub="Enhetsvärde, valuta och synkronisering" />
+      <Topbar title="Inställningar" sub="Enhetsvärde, valuta och synkronisering" icon={<I p={IC.gear} />} />
 
       <div style={{ maxWidth: 620 }}>
         <Card>

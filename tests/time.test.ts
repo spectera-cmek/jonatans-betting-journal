@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dayIso, weekdayIdx, addDays, weekOf, isoWeekNo } from "../lib/time";
+import { dayIso, weekdayIdx, addDays, weekOf, monthOf, isoWeekNo } from "../lib/time";
 
 describe("dayIso", () => {
   it("formats in Swedish local time, not UTC", () => {
@@ -38,6 +38,23 @@ describe("weekOf", () => {
   it("a Sunday late evening UTC already belongs to the next Swedish week", () => {
     // Sunday 23:00 UTC = Monday 01:00 in Stockholm.
     expect(weekOf("2026-06-14T23:00:00Z")).toEqual({ start: "2026-06-15", end: "2026-06-21" });
+  });
+});
+
+describe("monthOf", () => {
+  it("returns the first–last day window of the calendar month", () => {
+    expect(monthOf("2026-06-12T10:00:00Z")).toEqual({ start: "2026-06-01", end: "2026-06-30" });
+    expect(monthOf("2026-07-02T10:00:00Z")).toEqual({ start: "2026-07-01", end: "2026-07-31" });
+  });
+
+  it("handles February and leap years", () => {
+    expect(monthOf("2026-02-10T12:00:00Z")).toEqual({ start: "2026-02-01", end: "2026-02-28" });
+    expect(monthOf("2024-02-10T12:00:00Z")).toEqual({ start: "2024-02-01", end: "2024-02-29" });
+  });
+
+  it("uses the Swedish calendar day at month boundaries", () => {
+    // 23:00 UTC on May 31 is already June 1 in Stockholm (UTC+2 in summer).
+    expect(monthOf("2026-05-31T23:00:00Z")).toEqual({ start: "2026-06-01", end: "2026-06-30" });
   });
 });
 

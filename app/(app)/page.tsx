@@ -10,6 +10,7 @@ import { AddBetModal } from "@/components/AddBetModal";
 import { SyncButton } from "@/components/SyncButton";
 import { TiltBanner } from "@/components/TiltBanner";
 import { GoalCard } from "@/components/GoalCard";
+import { OpenBetsPanel } from "@/components/OpenBetsPanel";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
@@ -114,6 +115,7 @@ export default function OverviewPage() {
       {glow && <div className="ap-glow" />}
       <Topbar
         title={title}
+        icon={<I p={IC.grid} />}
         sub={
           loading ? (
             "Laddar…"
@@ -141,9 +143,9 @@ export default function OverviewPage() {
         </div>
       ) : (
         <div className="ap-kpi-row">
-          <Kpi label="Total P/L" value={<CountUp value={profitKr} format={(n) => krFmt(n, true)} />} valueClass={profitKr >= 0 ? "pos" : "neg"} spark={curve.slice(-16)} />
-          <Kpi label="ROI" value={m?.roiPct != null ? <CountUp value={m.roiPct} format={(n) => pctFmt(n, true)} /> : "—"} valueClass={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
-          <Kpi label="+Units" value={<CountUp value={m?.profitUnits ?? 0} format={(n) => uFmt(n, true)} />} valueClass={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
+          <Kpi label="Total P/L" value={<CountUp value={profitKr} format={(n) => krFmt(n, true)} />} valueClass={profitKr >= 0 ? "pos" : "neg"} tone={profitKr >= 0 ? "pos" : "neg"} spark={curve.slice(-16)} />
+          <Kpi label="ROI" value={m?.roiPct != null ? <CountUp value={m.roiPct} format={(n) => pctFmt(n, true)} /> : "—"} valueClass={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} tone={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
+          <Kpi label="+Units" value={<CountUp value={m?.profitUnits ?? 0} format={(n) => uFmt(n, true)} />} valueClass={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} tone={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
           <Kpi label="Win rate" value={m?.winRatePct != null ? <CountUp value={m.winRatePct} format={(n) => pctFmt(n)} /> : "—"} />
         </div>
       )}
@@ -238,27 +240,13 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      {/* Monthly bars + win ring + books */}
-      <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 200px 310px", marginBottom: 12 }}>
+      {/* Monthly bars + form */}
+      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 310px", marginBottom: 12 }}>
         <Card>
           <span className="ap-label">P/L per månad (units)</span>
           <div style={{ marginTop: 14 }}>
             <PLBars data={months} w={400} h={150} pos={cc.pos} neg={cc.red} labelColor={cc.dim} track={cc.line} />
           </div>
-        </Card>
-        <Card style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 }}>
-          <span className="ap-label">Öppen risk</span>
-          {risk && risk.bets > 0 ? (
-            <>
-              <div className="ap-num" style={{ fontSize: 26, fontWeight: 600 }}>{krFmt(risk.stakeUnits * unit)}</div>
-              <div style={{ fontSize: 12.5, color: "var(--dim)", lineHeight: 1.5 }}>
-                {risk.bets} öppna bets i spel<br />
-                Möjlig retur <span className="pos" style={{ fontWeight: 600 }}>{krFmt(risk.potentialReturnUnits * unit)}</span>
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize: 13, color: "var(--dim2)" }}>Inga öppna bets just nu.</div>
-          )}
         </Card>
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -275,6 +263,9 @@ export default function OverviewPage() {
           </div>
         </Card>
       </div>
+
+      {/* Öppna spel — absorbs the old "Öppen risk" card */}
+      {data && risk && <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} />}
 
       {/* Recent bets */}
       <Card style={{ padding: 0 }}>

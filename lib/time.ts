@@ -36,6 +36,16 @@ export function weekOf(d: Date | string | number, tz: string = TZ): WeekWindow {
   return { start, end: addDays(start, 6) };
 }
 
+/** First–last day window of the calendar month containing the given time (Swedish calendar). */
+export function monthOf(d: Date | string | number, tz: string = TZ): WeekWindow {
+  const day = dayIso(d, tz);
+  const start = day.slice(0, 7) + "-01";
+  // Day 0 of the next month = the last day of this month (UTC noon dodges DST).
+  const end = new Date(start + "T12:00:00Z");
+  end.setUTCMonth(end.getUTCMonth() + 1, 0);
+  return { start, end: end.toISOString().slice(0, 10) };
+}
+
 /** ISO 8601 week number of an ISO day string (for display: "v.24"). */
 export function isoWeekNo(iso: string): number {
   const d = new Date(iso + "T12:00:00Z");

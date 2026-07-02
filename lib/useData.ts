@@ -5,7 +5,7 @@ import { api } from "./fetcher";
 import type { Metrics, BankrollPoint, Breakdown, OpenRisk, DrawdownInfo } from "./betting";
 import type { Insights } from "./insights";
 import type { TiltStatus } from "./tilt";
-import type { WeeklyReport } from "./weekly";
+import type { WeeklyReport, MonthlyReport } from "./weekly";
 import type { BetListDTO, SettingsDTO } from "./types";
 
 export interface MonthRow {
@@ -31,6 +31,21 @@ export interface LeaderboardEntry {
   roiPct: number | null;
 }
 
+/** One pending bet in the dashboard "Öppna spel" panel (soonest event first). */
+export interface OpenBetRow {
+  id: string;
+  event: string;
+  selection: string;
+  sport: string | null;
+  league: string | null;
+  bookmaker: string | null;
+  betType: string;
+  odds: number;
+  stakeUnits: number;
+  eventAt: string | null;
+  placedAt: string;
+}
+
 export interface MetricsResponse {
   username: string;
   metrics: Metrics;
@@ -39,6 +54,8 @@ export interface MetricsResponse {
   drawdown: DrawdownInfo;
   tilt: TiltStatus;
   weekly: WeeklyReport;
+  monthlyReport: MonthlyReport;
+  openBets: OpenBetRow[];
   bankroll: BankrollPoint[];
   bySport: Breakdown[];
   byLeague: Breakdown[];

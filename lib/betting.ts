@@ -96,6 +96,17 @@ export function settledProfit(b: BetLike): number {
   return profitUnits(b.outcome, b.odds, b.stakeUnits);
 }
 
+/**
+ * Importers store losses with unknown odds at exactly 1.01 (bet365 effectiveOdds,
+ * Unibet LOSS_PLACEHOLDER). P/L is still correct for those bets, but the odds value
+ * is fake — exclude them from any odds-based analysis (bands, averages, edge search).
+ */
+export const PLACEHOLDER_ODDS = 1.01;
+
+export function hasRealOdds(b: { odds: number }): boolean {
+  return b.odds > PLACEHOLDER_ODDS;
+}
+
 export interface Metrics {
   totalBets: number;
   settledBets: number;

@@ -3,8 +3,9 @@
 import { Fragment, useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card, Empty, SkeletonCard } from "@/components/ui";
-import { InteractiveLineChart, Donut, HBar } from "@/components/charts";
+import { InteractiveLineChart, Donut } from "@/components/charts";
 import { ResultBadgeKr } from "@/components/ResultBadge";
+import { StatTile, BreakdownCard, LeaderboardCard } from "@/components/stats";
 import { useTheme } from "@/components/ThemeProvider";
 import { useBets } from "@/lib/useData";
 import { uFmt, pctFmt, krShort, krFmt, dateShort } from "@/lib/format";
@@ -13,8 +14,8 @@ import {
   breakdownBy,
   bankrollSeries,
   topBetsByProfit,
-  type BetLike,
-  type Breakdown,
+  settledProfit,
+  singleRoiPct,
 } from "@/lib/betting";
 import type { BetListDTO } from "@/lib/types";
 import { I, IC } from "@/components/icons";
@@ -28,39 +29,22 @@ function isWorldCup(b: BetListDTO): boolean {
   return (b.league ?? "").trim() === VM_TAG;
 }
 
-function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
-  return (
-    <div className="ap-card ap-lift">
-      <span className="ap-label">{label}</span>
-      <div className="ap-num ap-kpi-val"><span className={tone || ""}>{value}</span></div>
-      {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 6 }}>{sub}</div>}
-    </div>
-  );
-}
-
-function BreakdownCard({ title, rows, unit }: { title: string; rows: Breakdown[]; unit: number }) {
-  const { cc } = useTheme();
-  const max = Math.max(1, ...rows.map((r) => Math.abs(r.profitUnits)));
-  return (
-    <Card>
-      <span className="ap-label">{title}</span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
-        {rows.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data</span>}
-        {rows.map((r) => (
-          <div key={r.key}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-              <span>{r.key} <span style={{ color: "var(--dim2)", fontSize: 12 }}>· {r.bets} bets{r.winRatePct != null ? ` · ${pctFmt(r.winRatePct)}` : ""}</span></span>
-              <span className="ap-num" style={{ fontWeight: 600 }}>
-                <em className={r.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(r.profitUnits * unit, true)}</em>
-                <span style={{ color: "var(--dim2)", marginLeft: 8 }}>{pctFmt(r.roiPct, true)}</span>
-              </span>
-            </div>
-            <HBar pct={Math.max((Math.abs(r.profitUnits) / max) * 100, 3)} color={r.profitUnits >= 0 ? cc.acc : cc.red} track={cc.grid} h={7} />
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
+// The shared LeaderboardCard renders metrics-API entries; map the locally
+// filtered list rows into the same shape.
+function toLeaderboardEntry(b: BetListDTO) {
+  return {
+    id: b.id,
+    event: b.event,
+    selection: b.selection ?? "",
+    sport: b.sport,
+    league: b.league,
+    bookmaker: b.bookmaker,
+    eventAt: (b.eventAt ?? b.placedAt) as string,
+    odds: b.odds,
+    stakeUnits: b.stakeUnits,
+    profitUnits: settledProfit(b),
+    roiPct: singleRoiPct(b),
+  };
 }
 
 // Individual bets for one match — rendered when a "Per match" row is expanded.
@@ -153,7 +137,7 @@ export default function WorldCupPage() {
   if (loading && bets.length === 0) {
     return (
       <div>
-        <Topbar title="VM 2026 🏆" sub="Laddar…" />
+        <Topbar title="VM 2026" sub="Laddar…" icon={<I p={IC.trophy} />} />
         <div className="ap-kpi-row"><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
         <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px" }}><SkeletonCard chartH={200} /><SkeletonCard chartH={200} /></div>
       </div>
@@ -163,7 +147,7 @@ export default function WorldCupPage() {
   if (!loading && wc.length === 0) {
     return (
       <div>
-        <Topbar title="VM 2026 🏆" sub="Fotbolls-VM 11 juni – 19 juli 2026" />
+        <Topbar title="VM 2026" sub="Fotbolls-VM 11 juni – 19 juli 2026" icon={<I p={IC.trophy} />} />
         <Card>
           <Empty
             icon={<I p={IC.trophy} />}
@@ -182,7 +166,7 @@ export default function WorldCupPage() {
 
   return (
     <div>
-      <Topbar title="VM 2026 🏆" sub={`${wc.length} bets${span ? ` · ${span}` : ""} · fotbolls-VM`} />
+      <Topbar title="VM 2026" sub={`${wc.length} bets${span ? ` · ${span}` : ""} · fotbolls-VM`} icon={<I p={IC.trophy} />} />
 
       <div className="ap-kpi-row">
         <StatTile
@@ -318,30 +302,8 @@ export default function WorldCupPage() {
 
       {/* Biggest wins / losses */}
       <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        {([["Största vinster 🏆", wins], ["Största förluster 💀", losses]] as const).map(([title, list]) => (
-          <Card key={title}>
-            <span className="ap-label">{title}</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-              {list.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data</span>}
-              {list.map((b, i) => {
-                const p = (b.profitUnits ?? 0) * unit;
-                return (
-                  <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="ap-num" style={{ width: 16, textAlign: "center", color: "var(--dim2)", fontWeight: 700, fontSize: 13 }}>{i + 1}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="ap-ell" style={{ fontSize: 13 }}>{b.event}</div>
-                      <div className="ap-ell" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 2 }}>{b.selection || "—"}</div>
-                      <div className="ap-ell" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>{dateShort(b.eventAt ?? b.placedAt)} · odds {b.odds.toFixed(2)} · insats {uFmt(b.stakeUnits)}</div>
-                    </div>
-                    <div className="ap-num" style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
-                      <em className={p >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krFmt(p, true)}</em>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        ))}
+        <LeaderboardCard title="Största vinster 🏆" sub="under turneringen" entries={wins.map(toLeaderboardEntry)} unit={unit} />
+        <LeaderboardCard title="Största förluster 💀" sub="under turneringen" entries={losses.map(toLeaderboardEntry)} unit={unit} />
       </div>
     </div>
   );

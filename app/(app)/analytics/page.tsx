@@ -2,113 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card, SkeletonCard } from "@/components/ui";
-import { LineChart, Donut, HBar } from "@/components/charts";
+import { Card, SkeletonCard, SectionHead } from "@/components/ui";
+import { LineChart, Donut } from "@/components/charts";
+import { StatTile, BreakdownCard, PerfCards, LeaderboardCard, BookmakerTable } from "@/components/stats";
 import { useTheme } from "@/components/ThemeProvider";
-import { useMetrics, type LeaderboardEntry } from "@/lib/useData";
-import { uFmt, pctFmt, krShort, krFmt, sportTag, dateShort } from "@/lib/format";
+import { useMetrics } from "@/lib/useData";
+import { uFmt, pctFmt, krShort, krFmt } from "@/lib/format";
 import type { Breakdown } from "@/lib/betting";
-
-function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
-  return (
-    <div className="ap-card ap-lift">
-      <span className="ap-label">{label}</span>
-      <div className="ap-num ap-kpi-val"><span className={tone || ""}>{value}</span></div>
-      {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 6 }}>{sub}</div>}
-    </div>
-  );
-}
-
-function BreakdownCard({ title, rows, unit, sub }: { title: string; rows: Breakdown[]; unit: number; sub?: string }) {
-  const { cc } = useTheme();
-  const max = Math.max(1, ...rows.map((r) => Math.abs(r.profitUnits)));
-  return (
-    <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span className="ap-label">{title}</span>
-        {sub && <span style={{ color: "var(--dim2)", fontSize: 11 }}>{sub}</span>}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
-        {rows.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data</span>}
-        {rows.map((r) => (
-          <div key={r.key}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-              <span>{r.key} <span style={{ color: "var(--dim2)", fontSize: 12 }}>· {r.bets} bets{r.winRatePct != null ? ` · ${pctFmt(r.winRatePct)}` : ""}</span></span>
-              <span className="ap-num" style={{ fontWeight: 600 }}>
-                <em className={r.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(r.profitUnits * unit, true)}</em>
-                <span style={{ color: "var(--dim2)", marginLeft: 8 }}>{pctFmt(r.roiPct, true)}</span>
-              </span>
-            </div>
-            <HBar pct={Math.max((Math.abs(r.profitUnits) / max) * 100, 3)} color={r.profitUnits >= 0 ? cc.acc : cc.red} track={cc.grid} h={7} />
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-// Mobile rendering for the period tables (Per år / Per månad) — stacked cards so
-// the P/L, ROI and win-rate columns don't get pushed off-screen by a sideways scroll.
-function PerfCards({
-  rows,
-  unit,
-}: {
-  rows: { label: string; bets: number; profitUnits: number; roiPct: number | null; winRatePct: number | null }[];
-  unit: number;
-}) {
-  return (
-    <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
-      {rows.map((r) => (
-        <div key={r.label} className="ap-betcard">
-          <div className="ap-betcard-top">
-            <span className="ap-betcard-event" style={{ textTransform: "capitalize" }}>{r.label}</span>
-            <b className={"ap-num " + (r.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 700, fontSize: 15 }}>{krShort(r.profitUnits * unit, true)}</b>
-          </div>
-          <div className="ap-betcard-stats">
-            <div><span>Bets</span><b className="ap-num">{r.bets}</b></div>
-            <div><span>ROI</span><b className={"ap-num " + ((r.roiPct ?? 0) >= 0 ? "pos" : "neg")}>{pctFmt(r.roiPct, true)}</b></div>
-            <div><span>Win rate</span><b className="ap-num">{pctFmt(r.winRatePct)}</b></div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function LeaderboardCard({ title, sub, entries, unit }: { title: string; sub?: string; entries: LeaderboardEntry[]; unit: number }) {
-  return (
-    <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span className="ap-label">{title}</span>
-        {sub && <span style={{ color: "var(--dim2)", fontSize: 11 }}>{sub}</span>}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-        {entries.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data</span>}
-        {entries.map((e, i) => (
-          <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="ap-num" style={{ width: 16, textAlign: "center", color: "var(--dim2)", fontWeight: 700, fontSize: 13 }}>{i + 1}</span>
-            <span className="ap-tag">{sportTag(e.sport)}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="ap-ell" style={{ fontSize: 13 }}>{e.event}</div>
-              <div className="ap-ell" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 2 }}>
-                {e.selection || "—"}
-              </div>
-              <div className="ap-ell" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>
-                {dateShort(e.eventAt)} · odds {e.odds.toFixed(2)} · insats {uFmt(e.stakeUnits)} ({krFmt(e.stakeUnits * unit)})
-              </div>
-            </div>
-            <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-              <div className="ap-num" style={{ fontWeight: 700 }}>
-                <em className={e.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krFmt(e.profitUnits * unit, true)}</em>
-              </div>
-              <div className="ap-num" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 2 }}>{pctFmt(e.roiPct, true)} ROI</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
+import { I, IC } from "@/components/icons";
 
 const MONTH_NAMES = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 function monthLabel(ym: string): string {
@@ -122,7 +23,6 @@ export default function AnalyticsPage() {
   const m = data?.metrics;
   const ins = data?.insights;
   const dd = data?.drawdown;
-  const risk = data?.openRisk;
   const unit = data?.settings.unitValue ?? 100;
 
   const roiCurve = (data?.monthly ?? []).map((mo) => mo.roiPct ?? 0);
@@ -142,6 +42,16 @@ export default function AnalyticsPage() {
     [byMonth, activeYear]
   );
   const rangeLabel = years.length ? `${years[years.length - 1]}–${years[0]}` : "";
+
+  // Best/worst calendar month over the full history (for the KPI row).
+  const bestMonth = useMemo(
+    () => (byMonth.length ? byMonth.reduce((a, b) => (b.profitUnits > a.profitUnits ? b : a)) : null),
+    [byMonth]
+  );
+  const worstMonth = useMemo(
+    () => (byMonth.length ? byMonth.reduce((a, b) => (b.profitUnits < a.profitUnits ? b : a)) : null),
+    [byMonth]
+  );
 
   const outcomes = m
     ? [
@@ -167,7 +77,7 @@ export default function AnalyticsPage() {
   if (loading && !data) {
     return (
       <div>
-        <Topbar title="Analys" sub="Laddar…" />
+        <Topbar title="Analys" sub="Laddar…" icon={<I p={IC.chart} />} />
         <div className="ap-kpi-row">
           <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
         </div>
@@ -184,7 +94,7 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <Topbar title="Analys" sub={`${m?.totalBets ?? 0} bets · ${rangeLabel}`} />
+      <Topbar title="Analys" sub={`${m?.totalBets ?? 0} bets · ${rangeLabel}`} icon={<I p={IC.chart} />} />
 
       <div className="ap-kpi-row">
         <StatTile label="Total P/L" value={uFmt(m?.profitUnits ?? null, true)} sub={`ROI ${pctFmt(m?.roiPct ?? null, true)}`} tone={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
@@ -201,23 +111,25 @@ export default function AnalyticsPage() {
           tone="neg"
         />
         <StatTile
-          label="Öppen risk"
-          value={risk ? krShort(risk.stakeUnits * unit) : "—"}
-          sub={risk ? `${risk.bets} öppna · möjlig retur ${krShort(risk.potentialReturnUnits * unit)}` : "inga öppna bets"}
+          label="Omsatt"
+          value={m ? krShort(m.stakedUnits * unit) : "—"}
+          sub={m ? `${uFmt(m.stakedUnits)} över ${m.settledBets} avgjorda` : "ingen data"}
         />
         <StatTile
-          label="Bästa dag"
-          value={ins?.best ? krShort(ins.best.profitUnits * unit, true) : "—"}
-          sub={ins?.best ? `${dateShort(ins.best.date)} · ${ins.best.bets} bets` : "ingen data"}
+          label="Bästa månad"
+          value={bestMonth ? krShort(bestMonth.profitUnits * unit, true) : "—"}
+          sub={bestMonth ? `${monthLabel(bestMonth.month)} ${bestMonth.month.slice(0, 4)} · ${bestMonth.bets} bets` : "ingen data"}
           tone="pos"
         />
         <StatTile
-          label="Sämsta dag"
-          value={ins?.worst ? krShort(ins.worst.profitUnits * unit, true) : "—"}
-          sub={ins?.worst ? `${dateShort(ins.worst.date)} · ${ins.worst.bets} bets` : "ingen data"}
+          label="Sämsta månad"
+          value={worstMonth ? krShort(worstMonth.profitUnits * unit, true) : "—"}
+          sub={worstMonth ? `${monthLabel(worstMonth.month)} ${worstMonth.month.slice(0, 4)} · ${worstMonth.bets} bets` : "ingen data"}
           tone="neg"
         />
       </div>
+
+      <SectionHead icon={<I p={IC.chart} />} title="Utveckling" sub="CLV, år och trend" />
 
       {/* CLV — closing line value */}
       <Card style={{ marginBottom: 12 }}>
@@ -309,6 +221,8 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
+      <SectionHead icon={<I p={IC.grid} />} title="Fördelningar" sub="var pengarna kommer ifrån" />
+
       <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
         <BreakdownCard title="P/L per sport" rows={data?.bySport ?? []} unit={unit} />
         <BreakdownCard title="P/L per marknad" sub="vad du bettat på" rows={data?.byMarketDetail ?? []} unit={unit} />
@@ -321,9 +235,11 @@ export default function AnalyticsPage() {
         <BreakdownCard title="P/L per liga" rows={data?.byLeague ?? []} unit={unit} />
       </div>
 
-      <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
-        <BreakdownCard title="P/L per bookmaker" rows={data?.byBookmaker ?? []} unit={unit} />
-      </div>
+      <SectionHead icon={<I p={IC.book} />} title="Bookmakers" sub="P/L, ROI och volym per bolag" />
+
+      <BookmakerTable rows={data?.byBookmaker ?? []} unit={unit} />
+
+      <SectionHead icon={<I p={IC.calendar} />} title="Historik" sub="månad för månad" />
 
       {/* Per månad med år-väljare */}
       <Card style={{ padding: 0 }}>
@@ -357,8 +273,10 @@ export default function AnalyticsPage() {
         )}
       </Card>
 
+      <SectionHead icon={<I p={IC.trophy} />} title="Rekord" sub="största vinster och förluster" />
+
       {/* Hall of Fame & Biggest L */}
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 12 }}>
+      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <LeaderboardCard title="Hall of Fame 🏆" sub="Största vinster" entries={data?.hallOfFame ?? []} unit={unit} />
         <LeaderboardCard title="Biggest L 💀" sub="Största förluster" entries={data?.biggestL ?? []} unit={unit} />
       </div>
