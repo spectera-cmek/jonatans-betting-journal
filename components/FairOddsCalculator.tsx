@@ -15,6 +15,7 @@ import {
   devigProportional,
   matchKeyOf,
   priceEdge,
+  type ComboMode,
   type DevigResult,
   type FairLeg,
 } from "@/lib/fairOdds";
@@ -78,6 +79,7 @@ export function FairOddsCalculator({
 }) {
   const nextId = useRef(2);
   const [legs, setLegs] = useState<LegState[]>([emptyLeg(0), emptyLeg(1)]);
+  const [comboMode, setComboMode] = useState<ComboMode>("all");
   const [rho, setRho] = useState(0);
   const [offered, setOffered] = useState("");
   const [stake, setStake] = useState("1");
@@ -108,7 +110,8 @@ export function FairOddsCalculator({
   const combo = allValid
     ? combineLegs(
         legs.map((l, i): FairLeg => ({ p: results[i]!.p, overround: results[i]!.overround, matchKey: matchKeyOf(l.match) })),
-        rho
+        rho,
+        comboMode
       )
     : null;
 
@@ -126,6 +129,18 @@ export function FairOddsCalculator({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
           <span className="ap-label">Ben i spelet</span>
           <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Odds från spelbolagets marknad, per ben</span>
+        </div>
+
+        <div className="ap-field" style={{ marginTop: 12, maxWidth: 360 }}>
+          <label>Spelet vinner om</label>
+          <div className="ap-seg2">
+            <button className={comboMode === "all" ? "is-active" : ""} onClick={() => setComboMode("all")}>
+              Alla ben går in
+            </button>
+            <button className={comboMode === "any" ? "is-active" : ""} onClick={() => setComboMode("any")}>
+              Minst ett ben (eller)
+            </button>
+          </div>
         </div>
 
         {legs.map((l, i) => {
@@ -152,7 +167,13 @@ export function FairOddsCalculator({
                   <input
                     className="ap-input"
                     value={l.desc}
-                    placeholder={l.mode === "goals" ? "t.ex. Haaland & Vinícius Ö1,5 mål" : "t.ex. Över 5,5 mål"}
+                    placeholder={
+                      l.mode === "goals"
+                        ? "t.ex. Haaland & Vinícius Ö1,5 mål"
+                        : l.mode === "one"
+                          ? "t.ex. Haaland första målet"
+                          : "t.ex. Över 5,5 mål"
+                    }
                     onChange={(e) => patchLeg(l.id, { desc: e.target.value })}
                   />
                 </div>
@@ -371,7 +392,11 @@ export function FairOddsCalculator({
                   </div>
                 )}
               </div>
-              <MiniStat label="Fair sannolikhet" value={pctFmt(combo.pAdjusted * 100)} sub={`${combo.n} ben`} />
+              <MiniStat
+                label="Fair sannolikhet"
+                value={pctFmt(combo.pAdjusted * 100)}
+                sub={comboMode === "any" ? `minst 1 av ${combo.n} ben` : `${combo.n} ben`}
+              />
               <MiniStat label="Snittmarginal/ben" value={pctFmt(combo.avgOverround * 100)} />
               {edge != null && <MiniStat label="Edge (EV)" value={pctFmt(edge * 100, true)} tone={edge > 0 ? "pos" : "neg"} />}
               {edge != null && stakeU > 0 && (
@@ -409,8 +434,10 @@ export function FairOddsCalculator({
           Fair odds bygger på att spelbolagets grundmarknad prissätter rätt sånär som på marginalen (proportionell
           de-vig). &quot;Bara min sida&quot; antar en marginal när motsatt odds inte visas. &quot;Mål tillsammans&quot; räknar
           Poisson på spelarnas anytime-odds (oberoende antas mellan spelarna) — ET-tillägget (~7 % i slutspel) används
-          när specialen inkluderar förlängning men anytime-oddsen gäller 90 minuter. Korrelationsjusteringen är en
-          tumregel — ben i samma match kan samvariera mer eller mindre än så.
+          när specialen inkluderar förlängning men anytime-oddsen gäller 90 minuter. &quot;Minst ett ben&quot; räknar
+          unionen 1 − Π(1−p) för eller-spel som &quot;X eller Y gör första målet&quot; — där behövs varje spelares
+          första målskytt-odds, och målskyttemarknader bär hög marginal: anta 20–40 % i &quot;Bara min sida&quot;-läget.
+          Korrelationsjusteringen är en tumregel — ben i samma match kan samvariera mer eller mindre än så.
         </details>
       </Card>
     </>

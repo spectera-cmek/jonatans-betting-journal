@@ -5,7 +5,7 @@
 
 export const DEFAULT_ONE_SIDED_MARGIN_PCT = 6; // typical player-prop overround
 export const MARGIN_PCT_MIN = 0;
-export const MARGIN_PCT_MAX = 25;
+export const MARGIN_PCT_MAX = 50; // goalscorer books (första/anytime målskytt) run 25–45%
 export const ET_BOOST_PCT_MAX = 30; // extra-time playing-time bonus, ~7% typical in knockouts
 export const RHO_MIN = -0.2;
 export const RHO_MAX = 0.6;
@@ -134,15 +134,25 @@ export interface ComboResult {
   correlatedGroups: number[][]; // leg indexes sharing a matchKey (groups of ≥2)
 }
 
+/** How the legs make the special win: "all" = every leg must hit (kombo),
+ *  "any" = at least one leg hits ("X eller Y"-specials). */
+export type ComboMode = "all" | "any";
+
 /**
  * Combine legs into one special. Legs sharing a matchKey get the pairwise
  * correlation `rho` applied via a chained jointProb fold — exact at rho 0,
- * a rough but always-valid approximation otherwise. Distinct groups multiply
- * independently. Null when there are no legs or a p is out of range.
+ * a rough but always-valid approximation otherwise. Distinct groups are
+ * independent. Mode "all" multiplies the group joints; mode "any" computes
+ * 1 − P(no leg hits), where each group's miss probability is the same fold
+ * over the complements (a Bernoulli pair's complements share the same rho).
+ * Null when there are no legs or a p is out of range.
  */
-export function combineLegs(legs: FairLeg[], rho = 0): ComboResult | null {
+export function combineLegs(legs: FairLeg[], rho = 0, mode: ComboMode = "all"): ComboResult | null {
   if (legs.length === 0 || legs.some((l) => !(l.p > 0) || !(l.p < 1))) return null;
   const r = Math.min(RHO_MAX, Math.max(RHO_MIN, rho));
+  const any = mode === "any";
+  // In "any" mode we track miss probabilities and complement at the end.
+  const legP = (l: FairLeg) => (any ? 1 - l.p : l.p);
 
   // matchKey → leg indexes; unlabelled legs each get their own bucket.
   const groups = new Map<string, number[]>();
@@ -154,23 +164,23 @@ export function combineLegs(legs: FairLeg[], rho = 0): ComboResult | null {
   });
 
   let pIndependent = 1;
-  for (const l of legs) pIndependent *= l.p;
+  for (const l of legs) pIndependent *= legP(l);
 
   let pAdjusted = 1;
   const correlatedGroups: number[][] = [];
   for (const idxs of groups.values()) {
     if (idxs.length === 1) {
-      pAdjusted *= legs[idxs[0]].p;
+      pAdjusted *= legP(legs[idxs[0]]);
     } else {
       correlatedGroups.push(idxs);
-      let pg = legs[idxs[0]].p;
-      for (let j = 1; j < idxs.length; j++) pg = jointProb(pg, legs[idxs[j]].p, r);
+      let pg = legP(legs[idxs[0]]);
+      for (let j = 1; j < idxs.length; j++) pg = jointProb(pg, legP(legs[idxs[j]]), r);
       pAdjusted *= pg;
     }
   }
 
-  pIndependent = clampProb(pIndependent);
-  pAdjusted = clampProb(pAdjusted);
+  pIndependent = clampProb(any ? 1 - pIndependent : pIndependent);
+  pAdjusted = clampProb(any ? 1 - pAdjusted : pAdjusted);
   return {
     n: legs.length,
     pIndependent,

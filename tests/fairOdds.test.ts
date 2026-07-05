@@ -54,8 +54,9 @@ describe("devigOneSided", () => {
     expect(devigOneSided(1.85, 0)!.p).toBeCloseTo(1 / 1.85, 10);
   });
 
-  it("clamps the margin to 0–25%", () => {
-    expect(devigOneSided(2, 40)!.p).toBeCloseTo(0.5 / 1.25, 10);
+  it("clamps the margin to 0–50%", () => {
+    expect(devigOneSided(2, 40)!.p).toBeCloseTo(0.5 / 1.4, 10); // goalscorer books get this high
+    expect(devigOneSided(2, 60)!.p).toBeCloseTo(0.5 / 1.5, 10);
     expect(devigOneSided(2, -5)!.p).toBeCloseTo(0.5, 10);
   });
 
@@ -196,6 +197,60 @@ describe("combineLegs", () => {
     expect(combineLegs([], 0)).toBeNull();
     expect(combineLegs([leg(0)], 0)).toBeNull();
     expect(combineLegs([leg(1)], 0)).toBeNull();
+  });
+
+  it("defaults to all-legs mode", () => {
+    const def = combineLegs([leg(0.5), leg(0.25)], 0)!;
+    const all = combineLegs([leg(0.5), leg(0.25)], 0, "all")!;
+    expect(def.pAdjusted).toBeCloseTo(all.pAdjusted, 12);
+  });
+});
+
+describe("combineLegs — minst ett ben (any)", () => {
+  const leg = (p: number, matchKey?: string) => ({ p, overround: 0.2, matchKey });
+
+  it("computes the union of independent legs", () => {
+    const r = combineLegs([leg(0.5), leg(0.25)], 0.5, "any")!;
+    expect(r.pAdjusted).toBeCloseTo(1 - 0.5 * 0.75, 10); // 0.625; rho ignored without groups
+    expect(r.fairOdds).toBeCloseTo(1.6, 8);
+    expect(r.correlatedGroups).toEqual([]);
+  });
+
+  it("treats a shared matchKey at rho 0 as independent", () => {
+    const r = combineLegs([leg(0.5, "m"), leg(0.5, "m")], 0, "any")!;
+    expect(r.pAdjusted).toBeCloseTo(0.75, 10);
+  });
+
+  it("shrinks the union under positive correlation", () => {
+    const r = combineLegs([leg(0.5, "m"), leg(0.5, "m")], 0.5, "any")!;
+    // P(ingen träff) = jointProb(0.5, 0.5, 0.5) = 0.375 → union 0.625
+    expect(r.pAdjusted).toBeCloseTo(0.625, 10);
+    expect(r.pAdjusted).toBeLessThan(r.pIndependent);
+    expect(r.fairOdds).toBeGreaterThan(r.fairOddsIndependent);
+    expect(r.correlatedGroups).toEqual([[0, 1]]);
+  });
+
+  it("chains complements for 3+ legs in one match", () => {
+    const r = combineLegs([leg(0.4, "m"), leg(0.3, "m"), leg(0.2, "m")], 0.2, "any")!;
+    const miss = jointProb(jointProb(0.6, 0.7, 0.2), 0.8, 0.2);
+    expect(r.pAdjusted).toBeCloseTo(1 - miss, 10);
+  });
+
+  it("prices the Haaland/Kane-boosten (första målet, eller)", () => {
+    // FGS 4.50 & 5.00 de-viggade @ 20% målskyttmarginal, olika matcher.
+    const a = devigOneSided(4.5, 20)!;
+    const b = devigOneSided(5.0, 20)!;
+    const r = combineLegs(
+      [
+        { p: a.p, overround: a.overround },
+        { p: b.p, overround: b.overround },
+      ],
+      0,
+      "any"
+    )!;
+    expect(r.pAdjusted).toBeCloseTo(0.32099, 5);
+    expect(r.fairOdds).toBeCloseTo(3.12, 2);
+    expect(priceEdge(2.5, r.pAdjusted)).toBeCloseTo(-0.1975, 3);
   });
 });
 
