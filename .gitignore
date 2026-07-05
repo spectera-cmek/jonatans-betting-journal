@@ -43,3 +43,6 @@ yarn-error.log*
 
 # vitest
 /coverage
+
+.vercel
+.env*
