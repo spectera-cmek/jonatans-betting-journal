@@ -11,6 +11,8 @@ const NAV = [
   { href: "/analytics", label: "Analys", icon: IC.chart },
   { href: "/vm2026", label: "VM 2026", icon: IC.trophy },
   { href: "/insights", label: "Insikter", icon: IC.spark },
+  { href: "/fairodds", label: "Fair odds", icon: IC.percent },
+  { href: "/verktyg", label: "Verktyg", icon: IC.wrench },
   { href: "/settings", label: "Inställningar", icon: IC.gear },
 ];
 

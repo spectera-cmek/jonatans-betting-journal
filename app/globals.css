@@ -1165,7 +1165,7 @@ select.ap-input {
     display: none;
   }
 }
-/* Very narrow phones: drop the bottom-nav labels (icon-only) so 6 tabs never
+/* Very narrow phones: drop the bottom-nav labels (icon-only) so 9 tabs never
    truncate to "Inst…". */
 @media (max-width: 380px) {
   .ap-mobnav-label {
