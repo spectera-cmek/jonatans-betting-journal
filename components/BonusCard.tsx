@@ -51,27 +51,18 @@ export function BonusCard() {
             <MiniStat label="Bonusens nettovärde" value={krFmt(b.netValue, true)} tone={b.netValue >= 0 ? "pos" : "neg"} />
             <MiniStat label="Du behåller" value={pctFmt(b.retained * 100)} tone={b.retained >= 0 ? undefined : "neg"} />
           </div>
-          <div style={{ fontSize: 13, marginTop: 14, lineHeight: 1.5 }}>
-            {b.netValue > 0 ? (
-              <>
-                Bonusen är värd <strong className="ap-num pos">{krFmt(b.netValue)}</strong> i väntevärde efter att kravet
-                spelats igenom.
-              </>
-            ) : (
-              <>
-                Villkoren äter upp hela bonusen — förväntat <strong className="ap-num neg">{krFmt(b.netValue, true)}</strong>.
-                Tacka nej.
-              </>
-            )}
+          <div className={"ap-num " + (b.netValue > 0 ? "pos" : "neg")} style={{ marginTop: 14, fontSize: 14, fontWeight: 700 }}>
+            {b.netValue > 0 ? `✓ Ta bonusen · ${krFmt(b.netValue, true)}` : `✗ Tacka nej · ${krFmt(b.netValue, true)}`}
           </div>
         </>
       )}
 
-      <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
+      <details className="ap-fine">
+        <summary>Bra att veta</summary>
         Minimioddset påverkar inte väntevärdet — bara svängningarna. Det som avgör är marginalen på det du omsätter:
         välj låg-marginalmarknader (asian handicap, över/under ~5 %) hellre än 1X2 (~6–7 %) eller specialer (10 %+).
         Kolla alltid omsättningskrav, minimiodds och tidsram i det finstilta. Svensk licens = en bonus per bolag.
-      </p>
+      </details>
     </Card>
   );
 }

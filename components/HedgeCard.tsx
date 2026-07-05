@@ -90,12 +90,10 @@ export function HedgeCard() {
                     <span className="ap-num">{fmtOdds(arbOdds[i])}</span>
                   </div>
                 ))}
-                <div style={{ marginTop: 6 }}>
-                  {arb.isArb ? (
-                    <>→ <strong className="pos">surebet</strong> — samma utbetalning oavsett utfall.</>
-                  ) : (
-                    <>→ ingen arb: oddsen prissätter {pctFmt(arb.impliedSum * 100)} tillsammans (över 100 %).</>
-                  )}
+                <div className={"ap-num " + (arb.isArb ? "pos" : "neg")} style={{ marginTop: 8, fontSize: 14, fontWeight: 700 }}>
+                  {arb.isArb
+                    ? "✓ Surebet — samma utbetalning oavsett utfall"
+                    : `✗ Ingen arb · ${pctFmt(arb.impliedSum * 100)} implicit`}
                 </div>
               </div>
             </>
@@ -144,30 +142,23 @@ export function HedgeCard() {
                   />
                 )}
               </div>
-              <div style={{ fontSize: 13, marginTop: 14, lineHeight: 1.5 }}>
-                Lägg <strong className="ap-num">{krFmt(h.hedgeStake)}</strong> på motsatta sidan @{" "}
-                <span className="ap-num">{fmtOdds(num(oppOdds))}</span> så får du{" "}
-                <strong className="ap-num">{krFmt(h.lockedReturn)}</strong> oavsett utfall.
-                {hedgeVsCashout != null && (
-                  <>
-                    {" "}
-                    {hedgeVsCashout >= 0 ? (
-                      <>Det slår cashout-budet med <strong className="ap-num pos">{krFmt(hedgeVsCashout)}</strong>.</>
-                    ) : (
-                      <>Cashout-budet är faktiskt <strong className="ap-num pos">{krFmt(-hedgeVsCashout)}</strong> bättre än hedgen.</>
-                    )}
-                  </>
-                )}
-              </div>
+              {hedgeVsCashout != null && (
+                <div className="ap-num pos" style={{ marginTop: 14, fontSize: 14, fontWeight: 700 }}>
+                  {hedgeVsCashout >= 0
+                    ? `→ Hedga · ${krFmt(hedgeVsCashout, true)} vs cashout`
+                    : `→ Ta cashouten · ${krFmt(-hedgeVsCashout, true)} vs hedge`}
+                </div>
+              )}
             </>
           )}
         </>
       )}
 
-      <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
+      <details className="ap-fine">
+        <summary>Bra att veta</summary>
         Surebets kräver snabbhet — oddsen korrigeras fort och bolag kan limitera konton som arbar systematiskt.
         Marginalerna är ofta små (&lt;5 %), så räkna alltid innan du låser.
-      </p>
+      </details>
     </Card>
   );
 }

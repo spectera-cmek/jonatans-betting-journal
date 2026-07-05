@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { Card } from "./ui";
-import { MiniStat } from "./stats";
+import { InlineStat, MiniStat } from "./stats";
 import { cashoutAdvice } from "@/lib/tools";
 import { devigOneSided } from "@/lib/fairOdds";
-import { krFmt, pctFmt, fmtOdds } from "@/lib/format";
+import { krFmt, pctFmt } from "@/lib/format";
 
 const num = (v: string) => parseFloat(v.replace(",", "."));
 
@@ -81,11 +81,9 @@ export function CashoutCard() {
       </div>
 
       {payout != null && (
-        <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 10 }}>
-          Potentiell utbetalning <span className="ap-num" style={{ color: "var(--txt)" }}>{krFmt(payout)}</span>
-          {" "}({fmtOdds(o)} × {krFmt(s)}){pNow != null && (
-            <> · chans just nu <span className="ap-num" style={{ color: "var(--txt)" }}>{pctFmt(pNow * 100)}</span></>
-          )}
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 12 }}>
+          <InlineStat label="Utbetalning" value={krFmt(payout)} />
+          {pNow != null && <InlineStat label="Chans nu" value={pctFmt(pNow * 100)} />}
         </div>
       )}
 
@@ -101,26 +99,17 @@ export function CashoutCard() {
             <MiniStat label="EV hålla vs sälja" value={krFmt(a.evDiff, true)} tone={a.evDiff >= 0 ? "pos" : "neg"} />
             <MiniStat label="Break-even-chans" value={pctFmt(a.breakEvenProb * 100)} />
           </div>
-          <div style={{ fontSize: 13, marginTop: 14, lineHeight: 1.5 }}>
-            {a.evDiff > 0 ? (
-              <>
-                Att <strong>hålla</strong> är värt <strong className="ap-num pos">{krFmt(a.evDiff, true)}</strong> mer i EV än
-                erbjudandet. Sälj bara om du behöver riskminskningen — eller kolla om en hedge hos annan bookie betalar bättre.
-              </>
-            ) : (
-              <>
-                Erbjudandet ligger <strong className="ap-num pos">{krFmt(-a.evDiff)}</strong> över fair värde — ovanligt
-                generöst, cashout är +EV här.
-              </>
-            )}
+          <div className="ap-num pos" style={{ marginTop: 14, fontSize: 14, fontWeight: 700 }}>
+            {a.evDiff > 0 ? `→ Håll · ${krFmt(a.evDiff, true)} EV` : `→ Sälj · ${krFmt(-a.evDiff, true)} över fair`}
           </div>
         </>
       )}
 
-      <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
+      <details className="ap-fine">
+        <summary>Så räknas det</summary>
         Fair cashout = potentiell utbetalning ÷ live-odds (de-viggat). Bookies tar normalt upp till ~5 % på cashout —
         break-even-chansen visar hur säker vinsten måste vara för att erbjudandet ska matcha att hålla.
-      </p>
+      </details>
     </Card>
   );
 }

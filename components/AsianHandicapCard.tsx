@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Card } from "./ui";
+import { InlineStat } from "./stats";
 import { ahOutcome, ahProfit, type AhOutcome } from "@/lib/tools";
 import { devigProportional } from "@/lib/fairOdds";
 import { krFmt, pctFmt, fmtOdds } from "@/lib/format";
@@ -81,11 +82,10 @@ export function AsianHandicapCard() {
       </div>
 
       {devig && (
-        <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 10 }}>
-          Fair sannolikhet{" "}
-          <strong className="ap-num" style={{ color: "var(--txt)" }}>{pctFmt(devig.p * 100)}</strong> · fair odds{" "}
-          <span className="ap-num">{fmtOdds(1 / devig.p)}</span> · marginal{" "}
-          <span className="ap-num">{pctFmt(devig.overround * 100)}</span>
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 12 }}>
+          <InlineStat label="Fair %" value={pctFmt(devig.p * 100)} />
+          <InlineStat label="Fair odds" value={fmtOdds(1 / devig.p)} />
+          <InlineStat label="Marginal" value={pctFmt(devig.overround * 100)} />
         </div>
       )}
 
@@ -123,11 +123,12 @@ export function AsianHandicapCard() {
         </div>
       )}
 
-      <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
+      <details className="ap-fine">
+        <summary>Så funkar kvartslinjer</summary>
         Kvartslinjer (±0,25 / ±0,75) delar insatsen på de två närmaste linjerna — därav halva vinster och förluster.
         AH har oftast lägre marginal än 1X2, så samma spelidé betalar ofta bättre här. Fyll i motsatta sidans odds för
         att se fair sannolikhet.
-      </p>
+      </details>
     </Card>
   );
 }

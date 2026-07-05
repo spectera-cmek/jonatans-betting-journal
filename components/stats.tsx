@@ -176,14 +176,29 @@ export function LeaderboardCard({
 }
 
 /** Compact card2 stat block (simulator figures, open-bets strip…). */
-export function MiniStat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+export function MiniStat({ label, value, tone, sub }: { label: string; value: string; tone?: string; sub?: string }) {
   return (
     <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
       <div className="ap-label">{label}</div>
       <div className={"ap-num " + (tone ?? "")} style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
         {value}
       </div>
+      {sub && <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>{sub}</div>}
     </div>
+  );
+}
+
+/** Inline variant: tiny label over a bold number, several-in-a-row in a flex container. */
+export function InlineStat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 3 }}>
+      <span className="ap-label" style={{ fontSize: 9.5 }}>
+        {label}
+      </span>
+      <span className={"ap-num " + (tone ?? "")} style={{ fontSize: 14.5, fontWeight: 700 }}>
+        {value}
+      </span>
+    </span>
   );
 }
 

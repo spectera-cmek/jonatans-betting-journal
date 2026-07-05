@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Card } from "./ui";
+import { InlineStat, MiniStat } from "./stats";
 import { kellyAdvice } from "@/lib/staking";
 import {
   DEFAULT_ONE_SIDED_MARGIN_PCT,
@@ -260,34 +261,27 @@ export function FairOddsCalculator({
                 )}
               </div>
 
-              <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>
-                {r ? (
-                  <>
-                    Fair sannolikhet{" "}
-                    <strong className="ap-num" style={{ color: "var(--txt)" }}>
-                      {pctFmt(r.p * 100)}
-                    </strong>{" "}
-                    · fair odds <span className="ap-num">{fmtOdds(1 / r.p)}</span> · marginal{" "}
-                    <span className="ap-num">{pctFmt(r.overround * 100)}</span>
-                    {r.lambda != null && (
-                      <>
-                        {" "}
-                        · ≈
-                        <span className="ap-num">
-                          {r.lambda.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>{" "}
-                        väntade mål
-                      </>
-                    )}
-                  </>
-                ) : l.mode === "two" ? (
-                  "Fyll i ditt odds och motsatta sidans odds (båda > 1)."
-                ) : l.mode === "goals" ? (
-                  "Fyll i anytime-odds (> 1) för minst en spelare."
-                ) : (
-                  "Fyll i ditt odds (> 1) och antagen marginal."
-                )}
-              </div>
+              {r ? (
+                <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 10 }}>
+                  <InlineStat label="Fair %" value={pctFmt(r.p * 100)} />
+                  <InlineStat label="Fair odds" value={fmtOdds(1 / r.p)} />
+                  <InlineStat label="Marginal" value={pctFmt(r.overround * 100)} />
+                  {r.lambda != null && (
+                    <InlineStat
+                      label="Väntade mål"
+                      value={r.lambda.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>
+                  {l.mode === "two"
+                    ? "Ange ditt och motsatta sidans odds (> 1)."
+                    : l.mode === "goals"
+                      ? "Ange anytime-odds (> 1) för minst en spelare."
+                      : "Ange odds (> 1) och antagen marginal."}
+                </div>
+              )}
             </div>
           );
         })}
@@ -311,11 +305,9 @@ export function FairOddsCalculator({
             lineHeight: 1.55,
           }}
         >
-          <strong>⚠️ Korrelerade ben:</strong>{" "}
-          {matchGroups.map((g) => `ben ${g.map((i) => i + 1).join(" & ")}`).join(", ")} ligger i samma match. Att
-          multiplicera sannolikheterna rakt av förutsätter att benen är oberoende — i samma match stämmer det sällan
-          (t.ex. lyfter en öppen match både mål och skott). Justera med samvariationen nedan.
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+          <strong>⚠️ Samma match:</strong>{" "}
+          {matchGroups.map((g) => `ben ${g.map((i) => i + 1).join(" & ")}`).join(", ")} — justera samvariationen.
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
             <input
               type="range"
               min={RHO_MIN}
@@ -329,9 +321,7 @@ export function FairOddsCalculator({
             <span className="ap-num" style={{ fontWeight: 700 }}>
               ρ = {rho.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
-          </div>
-          <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 6 }}>
-            0 = oberoende · 0,1 svag · 0,3 måttlig · 0,5 stark samvariation. Grov uppskattning, ingen exakt modell.
+            <span style={{ fontSize: 11, color: "var(--dim2)" }}>0 oberoende · 0,3 måttlig · 0,5 stark</span>
           </div>
         </div>
       )}
@@ -372,87 +362,56 @@ export function FairOddsCalculator({
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 16 }}>
               <div style={{ background: "var(--acc-soft)", borderRadius: 12, padding: "12px 14px" }}>
                 <div className="ap-label">Fair odds</div>
-                <div className="ap-num" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{fmtOdds(combo.fairOdds)}</div>
+                <div className="ap-num" style={{ fontSize: 26, fontWeight: 800, marginTop: 4, letterSpacing: "-0.02em" }}>
+                  {fmtOdds(combo.fairOdds)}
+                </div>
                 {rhoActive && (
                   <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>
                     utan korrelation {fmtOdds(combo.fairOddsIndependent)}
                   </div>
                 )}
               </div>
-              <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
-                <div className="ap-label">Fair sannolikhet</div>
-                <div className="ap-num" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{pctFmt(combo.pAdjusted * 100)}</div>
-                <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>{combo.n} ben</div>
-              </div>
-              <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
-                <div className="ap-label">Snittmarginal/ben</div>
-                <div className="ap-num" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{pctFmt(combo.avgOverround * 100)}</div>
-              </div>
-              {edge != null && (
-                <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
-                  <div className="ap-label">Edge (EV)</div>
-                  <div className={"ap-num " + (edge > 0 ? "pos" : "neg")} style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
-                    {pctFmt(edge * 100, true)}
-                  </div>
-                </div>
-              )}
+              <MiniStat label="Fair sannolikhet" value={pctFmt(combo.pAdjusted * 100)} sub={`${combo.n} ben`} />
+              <MiniStat label="Snittmarginal/ben" value={pctFmt(combo.avgOverround * 100)} />
+              {edge != null && <MiniStat label="Edge (EV)" value={pctFmt(edge * 100, true)} tone={edge > 0 ? "pos" : "neg"} />}
               {edge != null && stakeU > 0 && (
-                <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
-                  <div className="ap-label">EV per spel</div>
-                  <div className={"ap-num " + (edge > 0 ? "pos" : "neg")} style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
-                    {krFmt(edge * stakeU * unit, true)}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>vid {uFmt(stakeU)} insats</div>
-                </div>
+                <MiniStat
+                  label="EV per spel"
+                  value={krFmt(edge * stakeU * unit, true)}
+                  tone={edge > 0 ? "pos" : "neg"}
+                  sub={`vid ${uFmt(stakeU)} insats`}
+                />
               )}
               {advice != null && advice.hasEdge && (
-                <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
-                  <div className="ap-label">½ Kelly (rek.)</div>
-                  <div className="ap-num" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{uFmt(advice.halfUnits)}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>
-                    {pctFmt(advice.half * 100)} · {krFmt(advice.halfUnits * unit)}
-                  </div>
-                </div>
+                <MiniStat
+                  label="½ Kelly (rek.)"
+                  value={uFmt(advice.halfUnits)}
+                  sub={`${pctFmt(advice.half * 100)} · ${krFmt(advice.halfUnits * unit)}`}
+                />
               )}
             </div>
 
             {edge == null ? (
-              <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
-                Fyll i det erbjudna oddset på specialen för edge, EV och Kelly-förslag.
-              </div>
-            ) : edge > 0 ? (
-              <div style={{ fontSize: 13, marginTop: 14 }}>
-                Erbjudet <strong className="ap-num">{fmtOdds(O)}</strong> mot fair{" "}
-                <strong className="ap-num">{fmtOdds(combo.fairOdds)}</strong> →{" "}
-                <strong className="ap-num pos">{pctFmt(edge * 100, true)}</strong> i din favör.
+              <div style={{ fontSize: 12.5, color: "var(--dim2)", marginTop: 14 }}>
+                Ange erbjudet odds för edge, EV och Kelly.
               </div>
             ) : (
-              <div
-                style={{
-                  marginTop: 14,
-                  borderRadius: 10,
-                  padding: "12px 14px",
-                  background: "var(--red-soft)",
-                  border: "1px solid var(--red)",
-                  color: "var(--red)",
-                  fontSize: 13,
-                  lineHeight: 1.5,
-                }}
-              >
-                Inget värde — erbjudet <strong className="ap-num">{fmtOdds(O)}</strong> ligger under fair odds{" "}
-                <strong className="ap-num">{fmtOdds(combo.fairOdds)}</strong>. Kelly säger: <strong>lägg inget</strong>.
+              <div className={"ap-num " + (edge > 0 ? "pos" : "neg")} style={{ marginTop: 14, fontSize: 14, fontWeight: 700 }}>
+                {edge > 0 ? "✓" : "✗"} {fmtOdds(O)} vs fair {fmtOdds(combo.fairOdds)} → {pctFmt(edge * 100, true)}
+                {edge <= 0 && " · lägg inget"}
               </div>
             )}
           </>
         )}
 
-        <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
+        <details className="ap-fine">
+          <summary>Så räknas det</summary>
           Fair odds bygger på att spelbolagets grundmarknad prissätter rätt sånär som på marginalen (proportionell
           de-vig). &quot;Bara min sida&quot; antar en marginal när motsatt odds inte visas. &quot;Mål tillsammans&quot; räknar
           Poisson på spelarnas anytime-odds (oberoende antas mellan spelarna) — ET-tillägget (~7 % i slutspel) används
           när specialen inkluderar förlängning men anytime-oddsen gäller 90 minuter. Korrelationsjusteringen är en
           tumregel — ben i samma match kan samvariera mer eller mindre än så.
-        </p>
+        </details>
       </Card>
     </>
   );
