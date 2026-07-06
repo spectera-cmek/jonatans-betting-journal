@@ -17,7 +17,9 @@ const clampProb = (p: number) => Math.min(1 - P_EPS, Math.max(P_EPS, p));
 export interface DevigResult {
   p: number; // fair probability of the bettor's outcome, in (0,1)
   overround: number; // market margin as a fraction (0.053 = 5.3%)
-  lambda?: number; // Poisson mode only: combined expected goals
+  lambda?: number; // Poisson modes: match/combined expected goals
+  lambdaPlayer?: number; // player+Ö/U mode: player involvement rate
+  q?: number; // player+Ö/U mode: share of match goals involving the player
 }
 
 /**
@@ -95,6 +97,56 @@ export function devigPoissonGoals(
   }
   lambda *= boost;
   return { p: clampProb(poissonAtLeast(minGoals, lambda)), overround: margin, lambda };
+}
+
+/**
+ * Invert an over-line probability into a Poisson rate: the λ that gives
+ * P(N ≥ k) = pOver. poissonAtLeast is strictly increasing in λ → bisection.
+ */
+export function lambdaFromOverProb(k: number, pOver: number): number | null {
+  if (!Number.isInteger(k) || k < 1 || !Number.isFinite(pOver)) return null;
+  const p = clampProb(pOver);
+  let lo = 0;
+  let hi = 40; // P(N ≥ 6) at λ = 40 is ≈ 1 — far beyond any football line
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    if (poissonAtLeast(k, mid) < p) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * "Spelare + Ö/U i samma match" — gamblingcabins specialspels-metod (betingade
+ * sannolikheter i stället för oberoende multiplikation): dela upp på matchens
+ * måltal N ~ Poisson(λ), där λ backas ut ur Ö/U-marknaden, och låt varje mål
+ * involvera spelaren (mål eller assist) med samma chans q. Poisson-tunning ger
+ * q = λ_spelare/λ med λ_spelare = −ln(1 − p_spelare), och grensumman
+ * Σ P(N = n)·P(involverad | n) har sluten form:
+ *   P(involverad ∧ N ≥ k) = P(N ≥ k) − e^(−λq)·P(N' ≥ k),  N' ~ Poisson(λ(1−q))
+ * Konsistens: k = 1 kollapsar till exakt p_spelare (involvering kräver mål).
+ * `underOdds` null ⇒ ensidig de-vig av över-oddset med `marginPct`; spelar-
+ * oddset de-viggas alltid ensidigt (mål/assist-marknader visar en sida).
+ * q klampas till 1 när spelarpriset är inkonsistent med Ö/U-marknaden.
+ */
+export function devigPlayerOverJoint(
+  playerOdds: number,
+  overOdds: number,
+  underOdds: number | null,
+  minGoals: number,
+  marginPct: number = DEFAULT_ONE_SIDED_MARGIN_PCT
+): DevigResult | null {
+  if (!Number.isInteger(minGoals) || minGoals < 1) return null;
+  const player = devigOneSided(playerOdds, marginPct);
+  const over = underOdds == null ? devigOneSided(overOdds, marginPct) : devigProportional(overOdds, [underOdds]);
+  if (!player || !over) return null;
+  const lambda = lambdaFromOverProb(minGoals, over.p);
+  if (lambda == null || !(lambda > 0)) return null;
+  const lambdaPlayer = lambdaFromScoreProb(player.p);
+  const q = Math.min(1, lambdaPlayer / lambda);
+  const pJoint =
+    poissonAtLeast(minGoals, lambda) - Math.exp(-lambda * q) * poissonAtLeast(minGoals, lambda * (1 - q));
+  return { p: clampProb(pJoint), overround: over.overround, lambda, lambdaPlayer, q };
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   RHO_MIN,
   combineLegs,
   devigOneSided,
+  devigPlayerOverJoint,
   devigPoissonGoals,
   devigProportional,
   matchKeyOf,
@@ -25,14 +26,16 @@ interface LegState {
   id: number;
   desc: string; // display only, e.g. "Över 5,5 mål"
   match: string; // correlation grouping via matchKeyOf()
-  mode: "two" | "one" | "goals";
-  odds: string; // my side / goals: player A anytime odds
+  mode: "two" | "one" | "goals" | "playerou";
+  odds: string; // my side / goals: player A anytime odds / playerou: mål/assist-odds
   oppOdds: string; // two-way: opposing side
   thirdOdds: string; // two-way: optional 3rd outcome (1X2)
-  marginPct: string; // one-sided & goals: assumed market margin
+  marginPct: string; // one-sided, goals & playerou: assumed market margin
   oddsB: string; // goals: optional player B anytime odds
-  line: string; // goals: combined-goals threshold, "1" = Ö0.5, "2" = Ö1.5, "3" = Ö2.5
+  line: string; // goals/playerou: over-line threshold, "1" = Ö0.5 … "4" = Ö3.5
   etPct: string; // goals: extra-time boost when the special includes ET
+  ouOver: string; // playerou: match over odds at the line
+  ouUnder: string; // playerou: match under odds (optional → one-sided margin)
 }
 
 function emptyLeg(id: number): LegState {
@@ -48,6 +51,8 @@ function emptyLeg(id: number): LegState {
     oddsB: "",
     line: "2",
     etPct: "0",
+    ouOver: "",
+    ouUnder: "",
   };
 }
 
@@ -60,6 +65,10 @@ function legResult(l: LegState): DevigResult | null {
     const players = l.oddsB.trim() === "" ? [o] : [o, num(l.oddsB)];
     const et = l.etPct.trim() === "" ? 0 : num(l.etPct);
     return devigPoissonGoals(players, parseInt(l.line, 10), num(l.marginPct), et);
+  }
+  if (l.mode === "playerou") {
+    const under = l.ouUnder.trim() === "" ? null : num(l.ouUnder);
+    return devigPlayerOverJoint(o, num(l.ouOver), under, parseInt(l.line, 10), num(l.marginPct));
   }
   const opp = num(l.oppOdds);
   // A filled-in third outcome must be valid — silently ignoring garbage would
@@ -172,7 +181,9 @@ export function FairOddsCalculator({
                         ? "t.ex. Haaland & Vinícius Ö1,5 mål"
                         : l.mode === "one"
                           ? "t.ex. Haaland första målet"
-                          : "t.ex. Över 5,5 mål"
+                          : l.mode === "playerou"
+                            ? "t.ex. Bellingham mål/assist + Ö1,5"
+                            : "t.ex. Över 5,5 mål"
                     }
                     onChange={(e) => patchLeg(l.id, { desc: e.target.value })}
                   />
@@ -198,16 +209,24 @@ export function FairOddsCalculator({
                     <button className={l.mode === "goals" ? "is-active" : ""} onClick={() => patchLeg(l.id, { mode: "goals" })}>
                       Mål tillsammans
                     </button>
+                    <button
+                      className={l.mode === "playerou" ? "is-active" : ""}
+                      onClick={() => patchLeg(l.id, { mode: "playerou" })}
+                    >
+                      Spelare + Ö/U
+                    </button>
                   </div>
                 </div>
 
-                <div className="ap-field" style={{ width: l.mode === "goals" ? 110 : 96 }}>
-                  <label>{l.mode === "goals" ? "Anytime A" : "Mitt odds"}</label>
+                <div className="ap-field" style={{ width: l.mode === "goals" || l.mode === "playerou" ? 116 : 96 }}>
+                  <label>
+                    {l.mode === "goals" ? "Anytime A" : l.mode === "playerou" ? "Spelarens odds" : "Mitt odds"}
+                  </label>
                   <input
                     className="ap-input ap-num"
                     inputMode="decimal"
                     value={l.odds}
-                    placeholder={l.mode === "goals" ? "2.30" : "1.90"}
+                    placeholder={l.mode === "goals" ? "2.30" : l.mode === "playerou" ? "3.00" : "1.90"}
                     onChange={(e) => patchLeg(l.id, { odds: e.target.value })}
                   />
                 </div>
@@ -254,6 +273,7 @@ export function FairOddsCalculator({
                           <option value="1">Ö0.5</option>
                           <option value="2">Ö1.5</option>
                           <option value="3">Ö2.5</option>
+                          <option value="4">Ö3.5</option>
                         </select>
                       </div>
                     </div>
@@ -266,6 +286,41 @@ export function FairOddsCalculator({
                         placeholder="0"
                         onChange={(e) => patchLeg(l.id, { etPct: e.target.value })}
                       />
+                    </div>
+                  </>
+                )}
+                {l.mode === "playerou" && (
+                  <>
+                    <div className="ap-field" style={{ width: 100 }}>
+                      <label>Över-odds</label>
+                      <input
+                        className="ap-input ap-num"
+                        inputMode="decimal"
+                        value={l.ouOver}
+                        placeholder="1.30"
+                        onChange={(e) => patchLeg(l.id, { ouOver: e.target.value })}
+                      />
+                    </div>
+                    <div className="ap-field" style={{ width: 130 }}>
+                      <label>Under-odds (valfri)</label>
+                      <input
+                        className="ap-input ap-num"
+                        inputMode="decimal"
+                        value={l.ouUnder}
+                        placeholder="—"
+                        onChange={(e) => patchLeg(l.id, { ouUnder: e.target.value })}
+                      />
+                    </div>
+                    <div className="ap-field" style={{ width: 96 }}>
+                      <label>Linje</label>
+                      <div className="ap-select">
+                        <select value={l.line} onChange={(e) => patchLeg(l.id, { line: e.target.value })}>
+                          <option value="1">Ö0.5</option>
+                          <option value="2">Ö1.5</option>
+                          <option value="3">Ö2.5</option>
+                          <option value="4">Ö3.5</option>
+                        </select>
+                      </div>
                     </div>
                   </>
                 )}
@@ -293,6 +348,7 @@ export function FairOddsCalculator({
                       value={r.lambda.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     />
                   )}
+                  {r.q != null && <InlineStat label="Spelarandel/mål" value={pctFmt(r.q * 100)} />}
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>
@@ -300,7 +356,9 @@ export function FairOddsCalculator({
                     ? "Ange ditt och motsatta sidans odds (> 1)."
                     : l.mode === "goals"
                       ? "Ange anytime-odds (> 1) för minst en spelare."
-                      : "Ange odds (> 1) och antagen marginal."}
+                      : l.mode === "playerou"
+                        ? "Ange spelarens mål/assist-odds och matchens Över-odds (> 1)."
+                        : "Ange odds (> 1) och antagen marginal."}
                 </div>
               )}
             </div>
@@ -437,6 +495,9 @@ export function FairOddsCalculator({
           när specialen inkluderar förlängning men anytime-oddsen gäller 90 minuter. &quot;Minst ett ben&quot; räknar
           unionen 1 − Π(1−p) för eller-spel som &quot;X eller Y gör första målet&quot; — där behövs varje spelares
           första målskytt-odds, och målskyttemarknader bär hög marginal: anta 20–40 % i &quot;Bara min sida&quot;-läget.
+          &quot;Spelare + Ö/U&quot; räknar som gamblingcabins specialspels-artikel — betingade sannolikheter över
+          matchens måltal (Poisson) i stället för oberoende multiplikation, eftersom spelarben och målben i samma
+          match samvarierar starkt; benet är då redan korrelationsjusterat och ska inte ρ-justeras en gång till.
           Korrelationsjusteringen är en tumregel — ben i samma match kan samvariera mer eller mindre än så.
         </details>
       </Card>

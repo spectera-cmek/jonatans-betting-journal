@@ -3,9 +3,11 @@ import {
   DEFAULT_ONE_SIDED_MARGIN_PCT,
   combineLegs,
   devigOneSided,
+  devigPlayerOverJoint,
   devigPoissonGoals,
   devigProportional,
   jointProb,
+  lambdaFromOverProb,
   lambdaFromScoreProb,
   matchKeyOf,
   poissonAtLeast,
@@ -282,5 +284,59 @@ describe("end-to-end special", () => {
     expect(combo.pAdjusted).toBeCloseTo(0.067386, 5);
     expect(combo.fairOdds).toBeCloseTo(14.84, 2);
     expect(priceEdge(16.0, combo.pAdjusted)).toBeCloseTo(0.0782, 3);
+  });
+});
+
+describe("lambdaFromOverProb", () => {
+  it("round-trips the over probability", () => {
+    const L = lambdaFromOverProb(2, 0.72917)!;
+    expect(poissonAtLeast(2, L)).toBeCloseTo(0.72917, 8);
+  });
+
+  it("matches the closed form at k=1", () => {
+    // P(N ≥ 1) = 1 − e^(−λ) → λ = 1 när p = 1 − e^(−1)
+    expect(lambdaFromOverProb(1, 1 - Math.exp(-1))!).toBeCloseTo(1, 6);
+  });
+
+  it("guards invalid input", () => {
+    expect(lambdaFromOverProb(0, 0.5)).toBeNull();
+    expect(lambdaFromOverProb(1.5, 0.5)).toBeNull();
+    expect(lambdaFromOverProb(1, NaN)).toBeNull();
+  });
+});
+
+describe("devigPlayerOverJoint (gamblingcabin: betingade sannolikheter)", () => {
+  it("collapses to the de-vigged player probability at Ö0.5", () => {
+    const r = devigPlayerOverJoint(3.0, 1.3, 3.5, 1, 8)!;
+    expect(r.p).toBeCloseTo(1 / 3.0 / 1.08, 8);
+  });
+
+  it("prices Bellingham-typen: mål/assist + Ö1.5 ligger mellan oberoende och Fréchet", () => {
+    const r = devigPlayerOverJoint(3.0, 1.3, 3.5, 2, 8)!;
+    const pInv = 1 / 3.0 / 1.08;
+    const pOver = devigProportional(1.3, [3.5])!.p;
+    expect(r.p).toBeGreaterThan(pInv * pOver); // positiv samvariation
+    expect(r.p).toBeLessThan(Math.min(pInv, pOver)); // giltig joint
+    // Sluten form ur grensumman Σ P(N=n)·P(involverad|n)
+    const L = r.lambda!;
+    const mu = L * (1 - r.q!);
+    expect(r.p).toBeCloseTo(poissonAtLeast(2, L) - Math.exp(-L * r.q!) * poissonAtLeast(2, mu), 10);
+    // λ reproducerar Ö/U-marknaden och λ_spelare spelarpriset
+    expect(poissonAtLeast(2, L)).toBeCloseTo(pOver, 8);
+    expect(1 - Math.exp(-r.lambdaPlayer!)).toBeCloseTo(pInv, 8);
+  });
+
+  it("caps q at 1 when the player price is inconsistent with the O/U market", () => {
+    const r = devigPlayerOverJoint(1.2, 3.0, 1.36, 2, 0)!;
+    expect(r.q).toBe(1);
+    expect(r.p).toBeCloseTo(poissonAtLeast(2, r.lambda!), 10);
+  });
+
+  it("guards invalid inputs", () => {
+    expect(devigPlayerOverJoint(1.0, 1.3, 3.5, 2, 6)).toBeNull();
+    expect(devigPlayerOverJoint(3.0, 1.0, 3.5, 2, 6)).toBeNull();
+    expect(devigPlayerOverJoint(3.0, 1.3, 1.0, 2, 6)).toBeNull();
+    expect(devigPlayerOverJoint(3.0, 1.3, 3.5, 0, 6)).toBeNull();
+    expect(devigPlayerOverJoint(3.0, 1.3, null, 2, NaN)).toBeNull();
   });
 });
