@@ -68,6 +68,15 @@ function emptyLeg(id: number): LegState {
 
 const num = (v: string) => parseFloat(v.replace(",", "."));
 
+// One-line what-is-this per oddskälla-läge, shown under the mode switch.
+const MODE_HINT: Record<LegState["mode"], string> = {
+  two: "Vanligt ben där du ser båda sidornas odds (Ö/U, 1X2) — marginalen räknas bort automatiskt.",
+  one: "Bara ditt odds syns (props, målskytt) — ange antagen marginal: props ~6–10 %, målskytt 20–40 %.",
+  goals: "Flera spelares mål ihop via deras anytime-odds — t.ex. Haaland & Vinícius Ö1,5 tillsammans.",
+  playerou: "Spelare gör mål/assist OCH matchen går över linjen — samvariationen räknas exakt (samma match).",
+  oucombo: "Lagens/matchernas mål ihop: Över A/B = källornas egna Ö/U-odds, totallinjen = spelets linje.",
+};
+
 function legResult(l: LegState): DevigResult | null {
   const o = num(l.odds);
   if (l.mode === "one") return devigOneSided(o, num(l.marginPct));
@@ -159,6 +168,28 @@ export function FairOddsCalculator({
           <span className="ap-label">Ben i spelet</span>
           <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Odds från spelbolagets marknad, per ben</span>
         </div>
+
+        <details className="ap-fine" style={{ marginTop: 6 }}>
+          <summary>Vilket läge ska benet ha?</summary>
+          <div style={{ display: "grid", gap: 3, marginTop: 4 }}>
+            <span>
+              <strong>Båda sidorna</strong> — du ser bägge oddsen (Ö/U, 1X2). Ex: Över 5,5 hörnor 1.90/1.90.
+            </span>
+            <span>
+              <strong>Bara min sida</strong> — bara ditt odds syns; anta marginal. Ex: Haaland första målet @4.50, 25 %.
+            </span>
+            <span>
+              <strong>Mål tillsammans</strong> — flera spelares mål ihop via anytime-odds. Ex: Haaland &amp; Vinícius Ö1,5.
+            </span>
+            <span>
+              <strong>Spelare + Ö/U</strong> — spelare + över-linje i samma match. Ex: Bellingham mål/assist + Ö1,5.
+            </span>
+            <span>
+              <strong>Ö/U-kombo</strong> — lagens/matchernas mål ihop. Ex: Spanien &amp; Belgien Ö3,5 tillsammans → Över A =
+              Spaniens Ö1,5-odds, Över B = Belgiens Ö1,5-odds, totallinje Ö3,5.
+            </span>
+          </div>
+        </details>
 
         <div className="ap-field" style={{ marginTop: 12, maxWidth: 360 }}>
           <label>Spelet vinner om</label>
@@ -445,6 +476,8 @@ export function FairOddsCalculator({
                   </div>
                 )}
               </div>
+
+              <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 8 }}>{MODE_HINT[l.mode]}</div>
 
               {r ? (
                 <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 10 }}>
