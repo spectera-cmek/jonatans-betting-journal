@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_ONE_SIDED_MARGIN_PCT,
   combineLegs,
+  devigCombinedOver,
   devigOneSided,
   devigPlayerOverJoint,
   devigPoissonGoals,
@@ -338,5 +339,49 @@ describe("devigPlayerOverJoint (gamblingcabin: betingade sannolikheter)", () => 
     expect(devigPlayerOverJoint(3.0, 1.3, 1.0, 2, 6)).toBeNull();
     expect(devigPlayerOverJoint(3.0, 1.3, 3.5, 0, 6)).toBeNull();
     expect(devigPlayerOverJoint(3.0, 1.3, null, 2, NaN)).toBeNull();
+  });
+});
+
+describe("devigCombinedOver (gamblingcabin: oddsmarknaden räknar på specialare)", () => {
+  it("reproducerar Rangers–FCK-exemplet: 2+ mål tillsammans", () => {
+    // Artikeln: Rangers Ö1.5 @3.22, FCK Ö1.5 @2.85 (råa priser, marginal 0),
+    // grensumma 0,695 → fair 1,44; Poisson-slutna formen landar strax intill.
+    const r = devigCombinedOver(
+      [
+        { overOdds: 3.22, underOdds: null, line: 2 },
+        { overOdds: 2.85, underOdds: null, line: 2 },
+      ],
+      2,
+      0
+    )!;
+    expect(r.p).toBeGreaterThan(0.66);
+    expect(r.p).toBeLessThan(0.71);
+    // Sluten form: λ per källa ur dess Ö/U-pris, totalen Poisson(Σλ)
+    const LA = lambdaFromOverProb(2, 1 / 3.22)!;
+    const LB = lambdaFromOverProb(2, 1 / 2.85)!;
+    expect(r.lambda).toBeCloseTo(LA + LB, 10);
+    expect(r.p).toBeCloseTo(poissonAtLeast(2, LA + LB), 10);
+    // Erbjudna 1.80 var "kanon" i artikeln → tydligt plus-EV även här
+    expect(priceEdge(1.8, r.p)).toBeGreaterThan(0.15);
+  });
+
+  it("round-trips a single source at its own line", () => {
+    const r = devigCombinedOver([{ overOdds: 1.9, underOdds: 1.9, line: 2 }], 2, 0)!;
+    expect(r.p).toBeCloseTo(0.5, 6);
+  });
+
+  it("transposes a line: fair Ö2.5 out of the Ö1.5 market lowers p", () => {
+    const base = devigCombinedOver([{ overOdds: 1.5, underOdds: 2.6, line: 2 }], 2, 0)!;
+    const up = devigCombinedOver([{ overOdds: 1.5, underOdds: 2.6, line: 2 }], 3, 0)!;
+    expect(up.p).toBeLessThan(base.p);
+    expect(up.lambda).toBeCloseTo(base.lambda!, 10);
+  });
+
+  it("guards invalid inputs", () => {
+    expect(devigCombinedOver([], 2, 0)).toBeNull();
+    expect(devigCombinedOver([{ overOdds: 1.0, underOdds: null, line: 2 }], 2, 6)).toBeNull();
+    expect(devigCombinedOver([{ overOdds: 2.0, underOdds: null, line: 0 }], 2, 6)).toBeNull();
+    expect(devigCombinedOver([{ overOdds: 2.0, underOdds: null, line: 2 }], 0, 6)).toBeNull();
+    expect(devigCombinedOver([{ overOdds: 2.0, underOdds: 1.0, line: 2 }], 2, 6)).toBeNull();
   });
 });

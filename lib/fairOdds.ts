@@ -149,6 +149,40 @@ export function devigPlayerOverJoint(
   return { p: clampProb(pJoint), overround: over.overround, lambda, lambdaPlayer, q };
 }
 
+export interface OverComponent {
+  overOdds: number;
+  underOdds: number | null; // null → one-sided de-vig with the assumed margin
+  line: number; // over-line threshold k: Ö0.5 → 1, Ö1.5 → 2 …
+}
+
+/**
+ * "Kombinerade mål över en linje" — gamblingcabins uppställning ("oddsmarknaden
+ * räknar på specialare") i sluten form: artikeln räknar grenar med lagens/
+ * matchernas Ö/U-priser (A=0 & B≥2, A=1 & B≥1, A≥2 …) och antar oberoende
+ * mellan källorna. Med varje källa ~ Poisson(λᵢ), där λᵢ backas ut ur källans
+ * Ö/U-marknad, är totalen Poisson(Σλᵢ) och grensumman exakt P(total ≥ K).
+ * En ensam källa fungerar som linjeflytt (fair Ö2.5 ur Ö1.5-marknaden).
+ */
+export function devigCombinedOver(
+  components: OverComponent[],
+  totalLine: number,
+  marginPct: number = DEFAULT_ONE_SIDED_MARGIN_PCT
+): DevigResult | null {
+  if (components.length === 0 || !Number.isInteger(totalLine) || totalLine < 1) return null;
+  let lambda = 0;
+  let overroundSum = 0;
+  for (const c of components) {
+    if (!Number.isInteger(c.line) || c.line < 1) return null;
+    const d = c.underOdds == null ? devigOneSided(c.overOdds, marginPct) : devigProportional(c.overOdds, [c.underOdds]);
+    if (!d) return null;
+    const L = lambdaFromOverProb(c.line, d.p);
+    if (L == null || !(L > 0)) return null;
+    lambda += L;
+    overroundSum += d.overround;
+  }
+  return { p: clampProb(poissonAtLeast(totalLine, lambda)), overround: overroundSum / components.length, lambda };
+}
+
 /**
  * P(A ∩ B) for two Bernoulli events with correlation `rho`:
  *   pA·pB + rho·√(pA·qA·pB·qB)
