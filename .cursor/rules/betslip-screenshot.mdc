@@ -1,0 +1,41 @@
+---
+description: Logga bet i trackern när användaren klistrar in en spelkvitto-screenshot
+alwaysApply: true
+---
+
+# Screenshot av spelkvitto → logga bet
+
+När användaren klistrar in en screenshot av ett spelkvitto (Betsson/Unibet/bet365 m.fl.)
+ska betet loggas i databasen — fråga inte om lov, gör det direkt och visa en kort
+sammanfattning efteråt.
+
+## Flöde
+
+1. Läs bilden och extrahera: event, lag (home/away), selection, marknad, linje,
+   odds (decimal), insats i kr, bookmaker, betslip-referens (t.ex. "Ref XP…"),
+   samt eventuell matchtid.
+2. Skriv en JSON-fil (t.ex. `.claude/tmp/bet.json`) med fälten i
+   `lib/betInput.ts` (`BetInput`) plus `stakeKr`, `importRef`, `placedAt`.
+3. Kör: `npx tsx scripts/agent/logBet.ts --file <bet.json> --user jonatan`
+   - Skriptet konverterar `stakeKr` → units via användarens `unitValue` (100 kr/unit)
+     och hoppar över dubbletter på `importRef`.
+4. Rapportera: event, selection, odds, insats (kr + units) och bet-id.
+
+## Mappning
+
+- `market`: bara `h2h` | `totals` | `spreads` | `other`. Spelarprops (baser, skott,
+  poäng etc.) = `other` — sätt `marketScope: "player"` och lämna en beskrivande
+  `selection` (t.ex. "JJ Bleday Över 1.5 totala baser").
+- "PHI Phillies @ CIN Reds" betyder PHI borta, CIN hemma → `event: "CIN Reds vs PHI Phillies"`,
+  `homeTeam: "CIN Reds"`, `awayTeam: "PHI Phillies"`.
+- `selectionSide`: over/under för Ö/U-spel, home/away/draw för matchvinnare.
+- Sätt `sport`/`league` när det går att härleda (MLB, NHL, NBA, Allsvenskan …).
+- `eventAt`: matchstart om den syns/kan härledas, annars utelämna.
+- `bookmaker`: härleds från kvittots utseende (grönt Betsson-kvitto = "Betsson").
+
+## Rättning av öppna bets
+
+- Lista öppna bets: `npx tsx scripts/agent/openBets.ts`
+- Rätta efter research: skriv `[{ id, outcome, reason }]` till en JSON-fil och kör
+  `npx tsx scripts/agent/settleBets.ts --file <results.json>` (backar upp raderna
+  först; rör aldrig redan rättade bets).
