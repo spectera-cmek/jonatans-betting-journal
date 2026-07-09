@@ -15,10 +15,14 @@ export const PARSE_MODEL = process.env.BETSLIP_PARSE_MODEL ?? "claude-haiku-4-5"
 export const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 export type AllowedMediaType = (typeof ALLOWED_MEDIA_TYPES)[number];
 
+// Fälten här hålls icke-nullable med tomma defaults (tom sträng / 0) för att
+// hålla nere antalet union-typade parametrar — Claudes strukturerade output
+// tillåter max 16 i hela schemat. 0 tolkas som "okänt odds" (klientens
+// accaOdds filtrerar bort ben ≤ 1).
 const ParsedLeg = z.object({
   selection: z.string(),
-  event: z.string().nullable(),
-  odds: z.number().nullable(),
+  event: z.string(),
+  odds: z.number(),
 });
 
 const ParsedBetSchema = z.object({
@@ -98,7 +102,7 @@ const EXTRACTION_PROMPT = `Du läser skärmdumpar av spelkvitton från svenska b
 - Osäker → null. Gissa inte.
 
 ## Singlar och kombinationer
-- Ett kvitto med FLERA val som EN kombination (dubbel/trippel/system, en gemensam insats och totalodds) → betType: "accumulator", "legs" med varje ben (selection, event, odds — null om benets odds inte syns), "odds" = det kombinerade totaloddset. Sätt event till en kort sammanfattning (t.ex. "Trippel: Arsenal / Real / Bayern") om ingen enskild match gäller.
+- Ett kvitto med FLERA val som EN kombination (dubbel/trippel/system, en gemensam insats och totalodds) → betType: "accumulator", "legs" med varje ben (selection alltid ifylld; event = benets match eller tom sträng; odds = benets odds eller 0 om det inte syns), "odds" = det kombinerade totaloddset. Sätt event till en kort sammanfattning (t.ex. "Trippel: Arsenal / Real / Bayern") om ingen enskild match gäller.
 - FLERA SEPARATA singlar i samma skärmdump → flera element i "bets", varje med betType: "single" och legs: null.
 
 ## Sport, liga och tider
