@@ -39,6 +39,7 @@ export default function BetsPage() {
   const [year, setYear] = useState("Alla år");
   const [month, setMonth] = useState("Alla månader");
   const [shown, setShown] = useState(PAGE);
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
   // Mirror filters in the URL query so a filtered view is shareable and survives
   // reload. Read once on mount; the first write is skipped so it can't clobber.
@@ -54,6 +55,7 @@ export default function BetsPage() {
     if (sp.has("day")) setDay(sp.get("day") || "");
     if (sp.has("year")) setYear(sp.get("year") || "Alla år");
     if (sp.has("month")) setMonth(sp.get("month") || "Alla månader");
+    if (sp.has("sort")) setSortOrder((sp.get("sort") as "desc" | "asc") || "desc");
   }, []);
   useEffect(() => {
     if (!urlSynced.current) {
@@ -70,9 +72,10 @@ export default function BetsPage() {
     if (day) sp.set("day", day);
     if (year !== "Alla år") sp.set("year", year);
     if (month !== "Alla månader") sp.set("month", month);
+    if (sortOrder !== "desc") sp.set("sort", sortOrder);
     const qs = sp.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [q, sport, book, market, scope, res, day, year, month]);
+  }, [q, sport, book, market, scope, res, day, year, month, sortOrder]);
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
@@ -122,12 +125,23 @@ export default function BetsPage() {
     });
   }, [bets, sport, book, market, scope, res, q, day, year, month]);
 
-  // Render at most `shown` rows; reset when any filter changes.
+  // Render at most `shown` rows; reset when any filter or sort order changes.
   useEffect(() => {
     setShown(PAGE);
-  }, [sport, book, market, scope, res, q, day, year, month]);
-  const visible = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
-  const remaining = filtered.length - visible.length;
+  }, [sport, book, market, scope, res, q, day, year, month, sortOrder]);
+
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    list.sort((a, b) => {
+      const da = new Date(a.eventAt ?? a.placedAt).getTime();
+      const db = new Date(b.eventAt ?? b.placedAt).getTime();
+      return sortOrder === "desc" ? db - da : da - db;
+    });
+    return list;
+  }, [filtered, sortOrder]);
+
+  const visible = useMemo(() => sorted.slice(0, shown), [sorted, shown]);
+  const remaining = sorted.length - visible.length;
 
   const metrics = useMemo(() => {
     const likes: BetLike[] = filtered.map((b) => ({
@@ -261,8 +275,16 @@ export default function BetsPage() {
         {RES_CHIPS.map(([v, l]) => (
           <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} onClick={() => setRes(v)}>{l}</button>
         ))}
-        <div style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--dim)", alignSelf: "center" }}>
-          Visar <strong style={{ color: "var(--txt)" }}>{Math.min(visible.length, filtered.length)}</strong> av {filtered.length} träffar
+        <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
+          <div className="ap-select">
+            <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "desc" | "asc")}>
+              <option value="desc">Datum: Nyast först</option>
+              <option value="asc">Datum: Äldst först</option>
+            </select>
+          </div>
+          <div className="ap-hide-sm" style={{ fontSize: 12.5, color: "var(--dim)" }}>
+            Visar <strong style={{ color: "var(--txt)" }}>{Math.min(visible.length, filtered.length)}</strong> av {filtered.length} träffar
+          </div>
         </div>
       </div>
 
