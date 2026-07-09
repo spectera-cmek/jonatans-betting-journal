@@ -101,9 +101,11 @@ const EXTRACTION_PROMPT = `Du läser skärmdumpar av spelkvitton från svenska b
 - Mr Green → "Mr Green". LeoVegas → "LeoVegas". BetMGM → "BetMGM". Betfair → "Betfair". Pinnacle → "Pinnacle". Lucky → "Lucky"
 - Osäker → null. Gissa inte.
 
-## Singlar och kombinationer
-- Ett kvitto med FLERA val som EN kombination (dubbel/trippel/system, en gemensam insats och totalodds) → betType: "accumulator", "legs" med varje ben (selection alltid ifylld; event = benets match eller tom sträng; odds = benets odds eller 0 om det inte syns), "odds" = det kombinerade totaloddset. Sätt event till en kort sammanfattning (t.ex. "Trippel: Arsenal / Real / Bayern") om ingen enskild match gäller.
-- FLERA SEPARATA singlar i samma skärmdump → flera element i "bets", varje med betType: "single" och legs: null.
+## Singlar, kombinationer och Bet Builder
+- **Bet Builder / "Bygg bet" / samma-match-kombo** (rubrik som "BET BUILDER", eller flera val listade under EN gemensam insats och ETT kombinerat totalodds, oftast INOM SAMMA match): detta är ETT enda bet, ALDRIG flera. Sätt betType: "accumulator" och lägg VARJE listad rad som ett eget ben i "legs" — missa aldrig ett ben, plocka ALDRIG bara en av raderna. event = matchen (t.ex. "Frankrike vs Marocko"). selection = kort sammanfattning av alla ben (t.ex. "Bet Builder: Under 3 mål + Hakimi 1+ skott på mål + Marocko Ö1.5 skott på mål"). market = "other" (avräknas manuellt), marketScope = "match". odds = det kombinerade totaloddset (INTE ett enskilt bens odds). stakeKr = den gemensamma insatsen.
+- Vanlig kombination över FLERA matcher (dubbel/trippel/system, en insats + ett totalodds) → samma princip: betType: "accumulator", ett ben per match i "legs", event = kort sammanfattning ("Trippel: Arsenal / Real / Bayern"), odds = totaloddset.
+- I varje ben (legs): selection alltid ifylld; event = benets match eller tom sträng; odds = benets odds eller 0 om det inte syns.
+- FLERA SEPARATA singlar (var och en med EGEN insats och EGET odds) i samma skärmdump → flera element i "bets", varje med betType: "single" och legs: null.
 
 ## Sport, liga och tider
 - "sport": helst ett av: ${SPORTS.join(", ")}. Härled från lag/liga (Phillies/Reds → Baseball). Osäker → null.

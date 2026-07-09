@@ -182,16 +182,20 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
     [form.sport, form.selection, form.market, form.odds, form.stakeUnits, bet]
   );
 
-  // Parsed accumulator legs (only present on imported combos).
+  // Accumulator-ben: från den redigerade betet (JSON-sträng) eller, vid kvitto-
+  // import, direkt från prefillens legs-array så användaren kan bekräfta dem.
   const legs = useMemo<LegView[]>(() => {
-    if (!bet?.legs) return [];
-    try {
-      const arr = JSON.parse(bet.legs);
-      return Array.isArray(arr) ? (arr as LegView[]) : [];
-    } catch {
-      return [];
+    if (bet?.legs) {
+      try {
+        const arr = JSON.parse(bet.legs);
+        return Array.isArray(arr) ? (arr as LegView[]) : [];
+      } catch {
+        return [];
+      }
     }
-  }, [bet]);
+    if (!bet && Array.isArray(prefill?.legs)) return prefill!.legs as LegView[];
+    return [];
+  }, [bet, prefill]);
   const comboOdds = useMemo(
     () => accaOdds(legs.map((l) => Number(l.odds)).filter((o) => Number.isFinite(o) && o > 1)),
     [legs]
@@ -398,7 +402,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
             </div>
           </div>
 
-          {editing && legs.length > 1 && (
+          {legs.length > 1 && (
             <div className="ap-field">
               <label>
                 Ben i kombinationen ({legs.length}){comboOdds > 1 ? ` · kombinerat odds ${comboOdds.toFixed(2)}` : ""}
