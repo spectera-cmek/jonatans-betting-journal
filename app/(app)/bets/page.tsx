@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card, Empty } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
-import { AddBetModal } from "@/components/AddBetModal";
+import { AddBetModal, type BetPrefill } from "@/components/AddBetModal";
+import { ScreenshotImportButton } from "@/components/ScreenshotImportButton";
+import type { ParsedBetWithDupe } from "@/lib/betslipExtract";
 import { StatTile } from "@/components/stats";
 import { useBets } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
@@ -29,6 +31,9 @@ export default function BetsPage() {
   const { bets, settings, loading, reload } = useBets();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<BetDTO | null>(null);
+  // Kö av kvitto-tolkade bets som gås igenom en och en i modalen.
+  const [queue, setQueue] = useState<ParsedBetWithDupe[]>([]);
+  const [queueIndex, setQueueIndex] = useState(0);
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("Alla sporter");
   const [book, setBook] = useState("Alla bookmakers");
@@ -79,6 +84,51 @@ export default function BetsPage() {
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
+
+  // Nästa kvitto-tolkade bet i kön → förifyllning för modalen (kr → units här).
+  const prefill = useMemo<BetPrefill | null>(() => {
+    const p = queue[queueIndex];
+    if (!p) return null;
+    const form: BetPrefill["form"] = {
+      eventAt: (p.eventAt ?? p.placedAt ?? new Date().toISOString()).slice(0, 10),
+      event: p.event,
+      selection: p.selection,
+      market: p.market,
+      odds: p.odds != null ? String(p.odds) : "",
+      stakeUnits: p.stakeKr != null ? String(+(p.stakeKr / unit).toFixed(2)) : "",
+    };
+    if (p.sport) form.sport = p.sport;
+    if (p.league) form.league = p.league;
+    if (p.homeTeam) form.homeTeam = p.homeTeam;
+    if (p.awayTeam) form.awayTeam = p.awayTeam;
+    if (p.marketCategory) form.marketCategory = p.marketCategory;
+    if (p.marketScope) form.marketScope = p.marketScope;
+    if (p.selectionSide) form.selectionSide = p.selectionSide;
+    if (p.line != null) form.line = String(p.line);
+    if (p.bookmaker) form.bookmaker = p.bookmaker;
+    return {
+      form,
+      importRef: p.importRef,
+      placedAt: p.placedAt,
+      legs: p.legs && p.legs.length ? p.legs : undefined,
+      betType: p.betType === "accumulator" ? "accumulator" : undefined,
+      duplicate: p.duplicate,
+      queue: { index: queueIndex, total: queue.length },
+    };
+  }, [queue, queueIndex, unit]);
+
+  const closeModal = () => {
+    setAdding(false);
+    setEditing(null);
+    // Kvitto-kön: gå vidare till nästa bet, eller töm när sista är hanterad.
+    if (queue.length) {
+      if (queueIndex + 1 < queue.length) setQueueIndex(queueIndex + 1);
+      else {
+        setQueue([]);
+        setQueueIndex(0);
+      }
+    }
+  };
 
   const sports = useMemo(() => Array.from(new Set(bets.map((b) => b.sport).filter(Boolean))) as string[], [bets]);
   const books = useMemo(() => Array.from(new Set(bets.map((b) => b.bookmaker).filter(Boolean))) as string[], [bets]);
@@ -215,6 +265,7 @@ export default function BetsPage() {
         actions={
           <>
             <a className="ap-btn ghost" href="/api/bets/export"><I p={IC.download} size={15} /><span className="ap-hide-sm">CSV</span></a>
+            <ScreenshotImportButton onParsed={(bets) => { setQueue(bets); setQueueIndex(0); }} />
             <button className="ap-btn" onClick={() => setAdding(true)}><I p={IC.plus} size={15} /><span className="ap-hide-sm">Logga bet</span></button>
           </>
         }
@@ -386,9 +437,10 @@ export default function BetsPage() {
       )}
 
       <AddBetModal
-        open={adding || !!editing}
+        open={adding || !!editing || !!prefill}
         bet={editing}
-        onClose={() => { setAdding(false); setEditing(null); }}
+        prefill={editing ? null : prefill}
+        onClose={closeModal}
         onSaved={reload}
         hasOddsApiKey={hasKey}
       />
