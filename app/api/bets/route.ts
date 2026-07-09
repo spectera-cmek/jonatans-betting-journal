@@ -53,6 +53,14 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const data = buildBetData(body, { partial: false });
+    // Kvitto-import (parse-screenshot-flödet) skickar med referens + speltid;
+    // samma semantik som scripts/agent/logBet.ts.
+    if (typeof body.importRef === "string" && body.importRef.trim() !== "") {
+      data.importRef = body.importRef.trim();
+    }
+    if (typeof body.placedAt === "string" && !Number.isNaN(new Date(body.placedAt).getTime())) {
+      data.placedAt = new Date(body.placedAt);
+    }
     const bet = await prisma.bet.create({ data: { ...(data as object), userId } as never });
     return NextResponse.json(serializeBet(bet), { status: 201 });
   } catch (e) {

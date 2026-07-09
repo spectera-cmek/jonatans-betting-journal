@@ -52,19 +52,23 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@prisma/client": "5.22.0",
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.4.5",
     "next": "14.2.18",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "recharts": "2.13.3"
+    "recharts": "2.13.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "20.17.6",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "autoprefixer": "10.4.20",
+    "nodemailer": "^9.0.3",
     "pdfjs-dist": "^4.0.379",
     "postcss": "8.4.49",
     "prisma": "5.22.0",

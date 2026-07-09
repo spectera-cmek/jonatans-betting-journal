@@ -30,6 +30,18 @@ function legOutcome(token?: string): { label: string; badge: string } {
   return { label: token || "—", badge: "open" };
 }
 
+// Förifyllning från kvitto-tolkningen (parse-screenshot). `form` är formulärfält;
+// importRef/placedAt/legs/betType följer med skapande-POST:en utan synliga fält.
+export interface BetPrefill {
+  form: Partial<Form>;
+  importRef?: string | null;
+  placedAt?: string | null;
+  legs?: unknown;
+  betType?: string | null;
+  duplicate?: { betId: string; event: string; selection: string } | null;
+  queue?: { index: number; total: number };
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -37,6 +49,8 @@ interface Props {
   hasOddsApiKey: boolean;
   /** When set, the modal edits this bet (PATCH with only the changed fields). */
   bet?: BetDTO | null;
+  /** When set (and not editing), the create form is prefilled from a parsed betslip. */
+  prefill?: BetPrefill | null;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -116,7 +130,7 @@ const RESULT_SEG_FULL: [string, string][] = [
   ["void", "Void"],
 ];
 
-export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Props) {
+export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefill }: Props) {
   const editing = !!bet;
   const [form, setForm] = useState<Form>(empty);
   const initial = useRef<Form>(empty);
@@ -132,7 +146,11 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
 
   useEffect(() => {
     if (open) {
-      const f = bet ? formFromBet(bet) : { ...empty, eventAt: today() };
+      const f = bet
+        ? formFromBet(bet)
+        : prefill
+          ? { ...empty, eventAt: today(), ...prefill.form }
+          : { ...empty, eventAt: today() };
       initial.current = f;
       setForm(f);
       setError(null);
@@ -140,7 +158,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
       setSearchResults([]);
       setTimeout(() => firstField.current?.focus(), 50);
     }
-  }, [open, bet]);
+  }, [open, bet, prefill]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -248,6 +266,11 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
           ...form,
           line: form.line === "" ? null : form.line,
           externalRef: form.externalRef || null,
+          // Kvitto-metadata från tolkningen (dedupe-referens, speltid, kombo-ben).
+          ...(prefill?.importRef ? { importRef: prefill.importRef } : {}),
+          ...(prefill?.placedAt ? { placedAt: prefill.placedAt } : {}),
+          ...(prefill?.legs ? { legs: prefill.legs } : {}),
+          ...(prefill?.betType ? { betType: prefill.betType } : {}),
         });
       }
       onSaved();
@@ -282,7 +305,11 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
           <div>
             <div className="ap-card-title" style={{ fontSize: 17 }}>{editing ? "Redigera bet" : "Logga ny bet"}</div>
             <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 3 }}>
-              {editing ? "Bara ändrade fält sparas" : "Fyll i detaljerna nedan"}
+              {editing
+                ? "Bara ändrade fält sparas"
+                : prefill
+                  ? `Tolkad från kvitto${prefill.queue && prefill.queue.total > 1 ? ` · bet ${prefill.queue.index + 1} av ${prefill.queue.total}` : ""} — kontrollera fälten`
+                  : "Fyll i detaljerna nedan"}
             </div>
           </div>
           <button className="ap-close" onClick={onClose}><I p={IC.x} size={15} /></button>
@@ -517,6 +544,23 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet }: Prop
               <div className="ap-num pos" style={{ fontSize: 22, fontWeight: 600, marginTop: 4 }}>+{profit.toFixed(2)}U</div>
             </div>
           </div>
+
+          {!editing && prefill?.duplicate && (
+            <div
+              style={{
+                borderRadius: 10,
+                padding: "10px 12px",
+                background: "var(--hover, rgba(255,255,255,.04))",
+                border: "1px solid var(--red)55",
+                fontSize: 12.5,
+                lineHeight: 1.45,
+              }}
+            >
+              <span style={{ color: "var(--red)", fontWeight: 700 }}>⚠ Redan loggad:</span>{" "}
+              {prefill.duplicate.event} — {prefill.duplicate.selection}
+              {prefill.importRef ? ` (Ref ${prefill.importRef})` : ""}. Spara ändå?
+            </div>
+          )}
 
           {form.externalRef && !editing && (
             <div style={{ fontSize: 12, color: "var(--pos)" }}>
