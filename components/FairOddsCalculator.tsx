@@ -24,51 +24,90 @@ import {
 } from "@/lib/fairOdds";
 import { fmtOdds, krFmt, pctFmt, uFmt } from "@/lib/format";
 
+// Bet types in the bettor's terms — each maps to one de-vig method in
+// lib/fairOdds so the user never has to pick the math themselves.
+type BetType = "market" | "prop" | "playersgoals" | "playerou" | "multigoals";
+
+const BET_TYPES: { id: BetType; label: string }[] = [
+  { id: "market", label: "Vanlig marknad" },
+  { id: "prop", label: "Prop, bara mitt odds" },
+  { id: "playersgoals", label: "Spelares mål ihop" },
+  { id: "playerou", label: "Spelare + Ö/U" },
+  { id: "multigoals", label: "Mål över flera matcher" },
+];
+
+// One-line what-is-this per speltyp, shown under the type switch.
+const TYPE_HINT: Record<BetType, string> = {
+  market: "Ö/U, 1X2 eller handikapp där du ser båda/alla sidornas odds — marginalen räknas bort automatiskt.",
+  prop: "Spelarprop eller målskytt där bara ditt odds syns — ange antagen marginal: props ~6–10 %, målskytt 20–40 %.",
+  playersgoals: "Flera spelares mål tillsammans via deras anytime-odds — t.ex. Haaland & Vinícius Ö1,5 ihop.",
+  playerou: "Spelare gör mål/assist OCH matchen går över linjen — samvariationen räknas exakt (samma match).",
+  multigoals: "Mål sammanlagt över flera matcher/lag — en rad per match med dess egna Ö/U-odds, t.ex. minst 10 mål i tre matcher.",
+};
+
+const TYPE_EMPTY: Record<BetType, string> = {
+  market: "Ange ditt och motsatta sidans odds (> 1).",
+  prop: "Ange odds (> 1) och antagen marginal.",
+  playersgoals: "Ange anytime-odds (> 1) för minst en spelare.",
+  playerou: "Ange spelarens mål/assist-odds och matchens Över-odds (> 1).",
+  multigoals: "Ange Över-odds (> 1) för minst en match/ett lag.",
+};
+
+const DESC_PLACEHOLDER: Record<BetType, string> = {
+  market: "t.ex. Över 5,5 mål",
+  prop: "t.ex. Haaland första målet",
+  playersgoals: "t.ex. Haaland & Vinícius Ö1,5 mål",
+  playerou: "t.ex. Bellingham mål/assist + Ö1,5",
+  multigoals: "t.ex. Minst 10 mål i 3 matcher",
+};
+
+interface OuSource {
+  label: string; // match/team, display only
+  over: string;
+  under: string; // optional → one-sided de-vig with the assumed margin
+  line: string; // over-line threshold, "1" = Ö0.5 …
+}
+
 interface LegState {
   id: number;
-  desc: string; // display only, e.g. "Över 5,5 mål"
+  desc: string; // display only
   match: string; // correlation grouping via matchKeyOf()
-  mode: "two" | "one" | "goals" | "playerou" | "oucombo";
-  odds: string; // my side / goals: player A anytime odds / playerou: mål/assist-odds
-  oppOdds: string; // two-way: opposing side
-  thirdOdds: string; // two-way: optional 3rd outcome (1X2)
-  marginPct: string; // one-sided, goals & playerou: assumed market margin
-  oddsB: string; // goals: optional player B anytime odds
-  line: string; // goals/playerou: over-line threshold, "1" = Ö0.5 … "4" = Ö3.5
-  etPct: string; // goals: extra-time boost when the special includes ET
-  ouOver: string; // playerou/oucombo: over odds (match resp. källa A)
-  ouUnder: string; // playerou/oucombo: under odds (optional → one-sided margin)
-  ouOverB: string; // oucombo: källa B over odds (optional → single source)
-  ouUnderB: string; // oucombo: källa B under odds (optional)
-  lineB: string; // oucombo: källa B over-line threshold
-  ouOverC: string; // oucombo: källa C over odds (optional)
-  ouUnderC: string; // oucombo: källa C under odds (optional)
-  lineC: string; // oucombo: källa C over-line threshold
-  totalLine: string; // oucombo: combined-goals threshold, "1" = Ö0.5 …
+  betType: BetType;
+  odds: string; // market/prop: my odds · playerou: spelarens mål/assist-odds
+  oppOdds: string; // market: opposing side
+  thirdOdds: string; // market: optional 3rd outcome (1X2)
+  marginPct: string; // assumed market margin for one-sided prices
+  players: string[]; // playersgoals: anytime odds per player
+  line: string; // playersgoals/playerou: over-line threshold
+  etPct: string; // playersgoals: extra-time boost
+  ouOver: string; // playerou: match over odds
+  ouUnder: string; // playerou: match under odds (optional)
+  sources: OuSource[]; // multigoals: one row per match/team
+  totalLine: string; // multigoals: combined-goals threshold
 }
+
+const MAX_PLAYERS = 4;
+const MAX_SOURCES = 6;
+
+const emptySource = (): OuSource => ({ label: "", over: "", under: "", line: "3" });
 
 function emptyLeg(id: number): LegState {
   return {
     id,
     desc: "",
     match: "",
-    mode: "two",
+    betType: "market",
     odds: "",
     oppOdds: "",
     thirdOdds: "",
     marginPct: String(DEFAULT_ONE_SIDED_MARGIN_PCT),
-    oddsB: "",
+    players: ["", ""],
     line: "2",
     etPct: "0",
     ouOver: "",
     ouUnder: "",
-    ouOverB: "",
-    ouUnderB: "",
-    lineB: "2",
-    ouOverC: "",
-    ouUnderC: "",
-    lineC: "2",
-    totalLine: "2",
+    sources: [emptySource(), emptySource()],
+    totalLine: "4",
   };
 }
 
@@ -80,43 +119,36 @@ const lineLabel = (k: number) => `Ö${k - 1},5`;
 
 const num = (v: string) => parseFloat(v.replace(",", "."));
 
-// One-line what-is-this per oddskälla-läge, shown under the mode switch.
-const MODE_HINT: Record<LegState["mode"], string> = {
-  two: "Vanligt ben där du ser båda sidornas odds (Ö/U, 1X2) — marginalen räknas bort automatiskt.",
-  one: "Bara ditt odds syns (props, målskytt) — ange antagen marginal: props ~6–10 %, målskytt 20–40 %.",
-  goals: "Flera spelares mål ihop via deras anytime-odds — t.ex. Haaland & Vinícius Ö1,5 tillsammans.",
-  playerou: "Spelare gör mål/assist OCH matchen går över linjen — samvariationen räknas exakt (samma match).",
-  oucombo: "Lagens/matchernas mål ihop: Över A/B/C = källornas egna Ö/U-odds, totallinjen = spelets linje.",
-};
-
 function legResult(l: LegState): DevigResult | null {
-  const o = num(l.odds);
-  if (l.mode === "one") return devigOneSided(o, num(l.marginPct));
-  if (l.mode === "goals") {
-    const players = l.oddsB.trim() === "" ? [o] : [o, num(l.oddsB)];
+  if (l.betType === "prop") return devigOneSided(num(l.odds), num(l.marginPct));
+  if (l.betType === "playersgoals") {
+    const anytime = l.players.filter((p) => p.trim() !== "").map(num);
+    if (anytime.length === 0) return null;
     const et = l.etPct.trim() === "" ? 0 : num(l.etPct);
-    return devigPoissonGoals(players, parseInt(l.line, 10), num(l.marginPct), et);
+    return devigPoissonGoals(anytime, parseInt(l.line, 10), num(l.marginPct), et);
   }
-  if (l.mode === "playerou") {
+  if (l.betType === "playerou") {
     const under = l.ouUnder.trim() === "" ? null : num(l.ouUnder);
-    return devigPlayerOverJoint(o, num(l.ouOver), under, parseInt(l.line, 10), num(l.marginPct));
+    return devigPlayerOverJoint(num(l.odds), num(l.ouOver), under, parseInt(l.line, 10), num(l.marginPct));
   }
-  if (l.mode === "oucombo") {
-    const comp = (over: string, under: string, line: string): OverComponent => ({
-      overOdds: num(over),
-      underOdds: under.trim() === "" ? null : num(under),
-      line: parseInt(line, 10),
-    });
-    const comps = [comp(l.ouOver, l.ouUnder, l.line)];
-    if (l.ouOverB.trim() !== "") comps.push(comp(l.ouOverB, l.ouUnderB, l.lineB));
-    if (l.ouOverC.trim() !== "") comps.push(comp(l.ouOverC, l.ouUnderC, l.lineC));
+  if (l.betType === "multigoals") {
+    // Rows without an over price are treated as not-yet-filled; a row with an
+    // invalid over price must fail loudly (devigCombinedOver returns null).
+    const comps: OverComponent[] = l.sources
+      .filter((s) => s.over.trim() !== "")
+      .map((s) => ({
+        overOdds: num(s.over),
+        underOdds: s.under.trim() === "" ? null : num(s.under),
+        line: parseInt(s.line, 10),
+      }));
+    if (comps.length === 0) return null;
     return devigCombinedOver(comps, parseInt(l.totalLine, 10), num(l.marginPct));
   }
   const opp = num(l.oppOdds);
   // A filled-in third outcome must be valid — silently ignoring garbage would
   // skew the de-vig without the user noticing.
   const third = l.thirdOdds.trim() === "" ? null : num(l.thirdOdds);
-  return devigProportional(o, third == null ? [opp] : [opp, third]);
+  return devigProportional(num(l.odds), third == null ? [opp] : [opp, third]);
 }
 
 // Multi-leg fair-odds calculator for specials/bet builders: de-vig each leg,
@@ -128,8 +160,8 @@ export function FairOddsCalculator({
   defaultBankrollUnits: number;
   unit: number;
 }) {
-  const nextId = useRef(2);
-  const [legs, setLegs] = useState<LegState[]>([emptyLeg(0), emptyLeg(1)]);
+  const nextId = useRef(1);
+  const [legs, setLegs] = useState<LegState[]>([emptyLeg(0)]);
   const [comboMode, setComboMode] = useState<ComboMode>("all");
   const [rho, setRho] = useState(0);
   const [offered, setOffered] = useState("");
@@ -141,8 +173,23 @@ export function FairOddsCalculator({
   const addLeg = () => setLegs((ls) => (ls.length >= MAX_LEGS ? ls : [...ls, emptyLeg(nextId.current++)]));
   const removeLeg = (id: number) => setLegs((ls) => (ls.length <= 1 ? ls : ls.filter((l) => l.id !== id)));
 
+  const patchPlayer = (l: LegState, idx: number, v: string) =>
+    patchLeg(l.id, { players: l.players.map((p, i) => (i === idx ? v : p)) });
+  const addPlayer = (l: LegState) =>
+    l.players.length < MAX_PLAYERS && patchLeg(l.id, { players: [...l.players, ""] });
+  const removePlayer = (l: LegState, idx: number) =>
+    l.players.length > 1 && patchLeg(l.id, { players: l.players.filter((_, i) => i !== idx) });
+
+  const patchSource = (l: LegState, idx: number, patch: Partial<OuSource>) =>
+    patchLeg(l.id, { sources: l.sources.map((s, i) => (i === idx ? { ...s, ...patch } : s)) });
+  const addSource = (l: LegState) =>
+    l.sources.length < MAX_SOURCES && patchLeg(l.id, { sources: [...l.sources, emptySource()] });
+  const removeSource = (l: LegState, idx: number) =>
+    l.sources.length > 1 && patchLeg(l.id, { sources: l.sources.filter((_, i) => i !== idx) });
+
   const results = legs.map(legResult);
   const allValid = results.every((r) => r != null);
+  const multi = legs.length >= 2;
 
   // Warn about shared matches as soon as labels collide, even mid-typing.
   const matchGroups = useMemo(() => {
@@ -156,13 +203,13 @@ export function FairOddsCalculator({
     });
     return [...m.values()].filter((g) => g.length >= 2);
   }, [legs]);
-  const correlated = matchGroups.length > 0;
+  const correlated = multi && matchGroups.length > 0;
 
   const combo = allValid
     ? combineLegs(
         legs.map((l, i): FairLeg => ({ p: results[i]!.p, overround: results[i]!.overround, matchKey: matchKeyOf(l.match) })),
-        rho,
-        comboMode
+        multi ? rho : 0,
+        multi ? comboMode : "all"
       )
     : null;
 
@@ -174,48 +221,87 @@ export function FairOddsCalculator({
   const advice = combo && offeredValid && bank > 0 ? kellyAdvice(O, combo.pAdjusted, bank) : null;
   const rhoActive = correlated && rho !== 0;
 
+  const numField = (
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    opts?: { width?: number; placeholder?: string }
+  ) => (
+    <div className="ap-field" style={{ width: opts?.width ?? 110 }}>
+      <label>{label}</label>
+      <input
+        className="ap-input ap-num"
+        inputMode="decimal"
+        value={value}
+        placeholder={opts?.placeholder ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+
+  const marginField = (l: LegState) => numField("Antagen marginal %", l.marginPct, (v) => patchLeg(l.id, { marginPct: v }), { width: 130 });
+
+  const lineSelect = (label: string, value: string, lines: number[], onChange: (v: string) => void, width = 96) => (
+    <div className="ap-field" style={{ width }}>
+      <label>{label}</label>
+      <div className="ap-select">
+        <select value={value} onChange={(e) => onChange(e.target.value)}>
+          {lines.map((k) => (
+            <option key={k} value={String(k)}>
+              {lineLabel(k)}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-          <span className="ap-label">Ben i spelet</span>
+          <span className="ap-label">Spelet</span>
           <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Odds från spelbolagets marknad, per ben</span>
         </div>
 
         <details className="ap-fine" style={{ marginTop: 6 }}>
-          <summary>Vilket läge ska benet ha?</summary>
+          <summary>Vilken speltyp ska jag välja?</summary>
           <div style={{ display: "grid", gap: 3, marginTop: 4 }}>
             <span>
-              <strong>Båda sidorna</strong> — du ser bägge oddsen (Ö/U, 1X2). Ex: Över 5,5 hörnor 1.90/1.90.
+              <strong>Vanlig marknad</strong> — Ö/U, 1X2 eller handikapp där du ser båda oddsen. Ex: Över 5,5 hörnor 1.90/1.90.
             </span>
             <span>
-              <strong>Bara min sida</strong> — bara ditt odds syns; anta marginal. Ex: Haaland första målet @4.50, 25 %.
+              <strong>Prop, bara mitt odds</strong> — spelarprop/målskytt där bara ditt odds syns. Ex: Haaland första målet
+              @4.50 med ~25 % marginal.
             </span>
             <span>
-              <strong>Mål tillsammans</strong> — flera spelares mål ihop via anytime-odds. Ex: Haaland &amp; Vinícius Ö1,5.
+              <strong>Spelares mål ihop</strong> — flera spelares mål tillsammans via anytime-odds. Ex: Haaland &amp;
+              Vinícius Ö1,5 mål ihop.
             </span>
             <span>
-              <strong>Spelare + Ö/U</strong> — spelare + över-linje i samma match. Ex: Bellingham mål/assist + Ö1,5.
+              <strong>Spelare + Ö/U</strong> — spelare gör mål/assist och matchen går över linjen, i samma match. Ex:
+              Bellingham mål/assist + Ö1,5.
             </span>
             <span>
-              <strong>Ö/U-kombo</strong> — lagens/matchernas mål ihop, upp till tre källor. Ex: Spanien &amp; Belgien Ö3,5
-              tillsammans → Över A = Spaniens Ö1,5-odds, Över B = Belgiens Ö1,5-odds, totallinje Ö3,5. Eller: minst 10 mål
-              i tre matcher → varje matchs Ö2,5-odds som källa A/B/C, totallinje Ö9,5.
+              <strong>Mål över flera matcher</strong> — mål sammanlagt över flera matcher/lag, en rad per match med dess
+              egna Ö/U-odds. Ex: minst 10 mål i tre matcher → tre rader med varje matchs Ö2,5-odds, totallinje Ö9,5.
             </span>
           </div>
         </details>
 
-        <div className="ap-field" style={{ marginTop: 12, maxWidth: 360 }}>
-          <label>Spelet vinner om</label>
-          <div className="ap-seg2">
-            <button className={comboMode === "all" ? "is-active" : ""} onClick={() => setComboMode("all")}>
-              Alla ben går in
-            </button>
-            <button className={comboMode === "any" ? "is-active" : ""} onClick={() => setComboMode("any")}>
-              Minst ett ben (eller)
-            </button>
+        {multi && (
+          <div className="ap-field" style={{ marginTop: 12, maxWidth: 360 }}>
+            <label>Spelet vinner om</label>
+            <div className="ap-seg2">
+              <button className={comboMode === "all" ? "is-active" : ""} onClick={() => setComboMode("all")}>
+                Alla ben går in
+              </button>
+              <button className={comboMode === "any" ? "is-active" : ""} onClick={() => setComboMode("any")}>
+                Minst ett ben (eller)
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {legs.map((l, i) => {
           const r = results[i];
@@ -236,22 +322,12 @@ export function FairOddsCalculator({
               </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
-                <div className="ap-field" style={{ flex: "1 1 150px", minWidth: 130 }}>
+                <div className="ap-field" style={{ flex: "1 1 170px", minWidth: 140 }}>
                   <label>Beskrivning (valfri)</label>
                   <input
                     className="ap-input"
                     value={l.desc}
-                    placeholder={
-                      l.mode === "goals"
-                        ? "t.ex. Haaland & Vinícius Ö1,5 mål"
-                        : l.mode === "one"
-                          ? "t.ex. Haaland första målet"
-                          : l.mode === "playerou"
-                            ? "t.ex. Bellingham mål/assist + Ö1,5"
-                            : l.mode === "oucombo"
-                              ? "t.ex. Rangers & FCK 2+ mål ihop"
-                              : "t.ex. Över 5,5 mål"
-                    }
+                    placeholder={DESC_PLACEHOLDER[l.betType]}
                     onChange={(e) => patchLeg(l.id, { desc: e.target.value })}
                   />
                 </div>
@@ -264,267 +340,150 @@ export function FairOddsCalculator({
                     onChange={(e) => patchLeg(l.id, { match: e.target.value })}
                   />
                 </div>
-                <div className="ap-field" style={{ flex: "1 1 300px", minWidth: 240 }}>
-                  <label>Oddskälla</label>
+                <div className="ap-field" style={{ flex: "1 1 320px", minWidth: 260 }}>
+                  <label>Typ av spel</label>
                   <div className="ap-seg2">
-                    <button className={l.mode === "two" ? "is-active" : ""} onClick={() => patchLeg(l.id, { mode: "two" })}>
-                      Båda sidorna
-                    </button>
-                    <button className={l.mode === "one" ? "is-active" : ""} onClick={() => patchLeg(l.id, { mode: "one" })}>
-                      Bara min sida
-                    </button>
-                    <button className={l.mode === "goals" ? "is-active" : ""} onClick={() => patchLeg(l.id, { mode: "goals" })}>
-                      Mål tillsammans
+                    {BET_TYPES.map((t) => (
+                      <button
+                        key={t.id}
+                        className={l.betType === t.id ? "is-active" : ""}
+                        onClick={() => patchLeg(l.id, { betType: t.id })}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 8 }}>{TYPE_HINT[l.betType]}</div>
+
+              {l.betType === "market" && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+                  {numField("Mitt odds", l.odds, (v) => patchLeg(l.id, { odds: v }), { width: 96, placeholder: "1.90" })}
+                  {numField("Motsatt sida", l.oppOdds, (v) => patchLeg(l.id, { oppOdds: v }), { placeholder: "1.90" })}
+                  {numField("Utfall 3 (valfri)", l.thirdOdds, (v) => patchLeg(l.id, { thirdOdds: v }), { width: 120, placeholder: "—" })}
+                </div>
+              )}
+
+              {l.betType === "prop" && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+                  {numField("Mitt odds", l.odds, (v) => patchLeg(l.id, { odds: v }), { width: 96, placeholder: "4.50" })}
+                  {marginField(l)}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      className="ap-btn ghost"
+                      style={{ padding: "6px 10px", fontSize: 12 }}
+                      onClick={() => patchLeg(l.id, { marginPct: "6" })}
+                    >
+                      Props 6 %
                     </button>
                     <button
-                      className={l.mode === "playerou" ? "is-active" : ""}
-                      onClick={() => patchLeg(l.id, { mode: "playerou" })}
+                      className="ap-btn ghost"
+                      style={{ padding: "6px 10px", fontSize: 12 }}
+                      onClick={() => patchLeg(l.id, { marginPct: "30" })}
                     >
-                      Spelare + Ö/U
-                    </button>
-                    <button
-                      className={l.mode === "oucombo" ? "is-active" : ""}
-                      onClick={() => patchLeg(l.id, { mode: "oucombo" })}
-                    >
-                      Ö/U-kombo
+                      Målskytt 30 %
                     </button>
                   </div>
                 </div>
+              )}
 
-                {l.mode !== "oucombo" && (
-                  <div className="ap-field" style={{ width: l.mode === "goals" || l.mode === "playerou" ? 116 : 96 }}>
-                    <label>
-                      {l.mode === "goals" ? "Anytime A" : l.mode === "playerou" ? "Spelarens odds" : "Mitt odds"}
-                    </label>
-                    <input
-                      className="ap-input ap-num"
-                      inputMode="decimal"
-                      value={l.odds}
-                      placeholder={l.mode === "goals" ? "2.30" : l.mode === "playerou" ? "3.00" : "1.90"}
-                      onChange={(e) => patchLeg(l.id, { odds: e.target.value })}
-                    />
+              {l.betType === "playersgoals" && (
+                <>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+                    {l.players.map((p, pi) => (
+                      <div key={pi} style={{ display: "flex", gap: 4, alignItems: "flex-end" }}>
+                        {numField(
+                          `Spelare ${pi + 1} anytime`,
+                          p,
+                          (v) => patchPlayer(l, pi, v),
+                          { width: 130, placeholder: pi === 0 ? "2.30" : "—" }
+                        )}
+                        {l.players.length > 1 && (
+                          <button
+                            className="ap-btn ghost"
+                            style={{ padding: "6px 9px", fontSize: 13, lineHeight: 1.2 }}
+                            onClick={() => removePlayer(l, pi)}
+                            aria-label={`Ta bort spelare ${pi + 1}`}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      className="ap-btn ghost"
+                      style={{ padding: "6px 10px", fontSize: 12 }}
+                      onClick={() => addPlayer(l)}
+                      disabled={l.players.length >= MAX_PLAYERS}
+                    >
+                      + Lägg till spelare
+                    </button>
                   </div>
-                )}
-                {l.mode === "two" && (
-                  <>
-                    <div className="ap-field" style={{ width: 110 }}>
-                      <label>Motsatt sida</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.oppOdds}
-                        placeholder="1.90"
-                        onChange={(e) => patchLeg(l.id, { oppOdds: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 120 }}>
-                      <label>Utfall 3 (valfri)</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.thirdOdds}
-                        placeholder="—"
-                        onChange={(e) => patchLeg(l.id, { thirdOdds: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
-                {l.mode === "goals" && (
-                  <>
-                    <div className="ap-field" style={{ width: 130 }}>
-                      <label>Anytime B (valfri)</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.oddsB}
-                        placeholder="—"
-                        onChange={(e) => patchLeg(l.id, { oddsB: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 96 }}>
-                      <label>Linje</label>
-                      <div className="ap-select">
-                        <select value={l.line} onChange={(e) => patchLeg(l.id, { line: e.target.value })}>
-                          <option value="1">Ö0.5</option>
-                          <option value="2">Ö1.5</option>
-                          <option value="3">Ö2.5</option>
-                          <option value="4">Ö3.5</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="ap-field" style={{ width: 110 }}>
-                      <label>ET-tillägg %</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.etPct}
-                        placeholder="0"
-                        onChange={(e) => patchLeg(l.id, { etPct: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
-                {l.mode === "playerou" && (
-                  <>
-                    <div className="ap-field" style={{ width: 100 }}>
-                      <label>Över-odds</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.ouOver}
-                        placeholder="1.30"
-                        onChange={(e) => patchLeg(l.id, { ouOver: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 130 }}>
-                      <label>Under-odds (valfri)</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.ouUnder}
-                        placeholder="—"
-                        onChange={(e) => patchLeg(l.id, { ouUnder: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 96 }}>
-                      <label>Linje</label>
-                      <div className="ap-select">
-                        <select value={l.line} onChange={(e) => patchLeg(l.id, { line: e.target.value })}>
-                          <option value="1">Ö0.5</option>
-                          <option value="2">Ö1.5</option>
-                          <option value="3">Ö2.5</option>
-                          <option value="4">Ö3.5</option>
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                )}
-                {l.mode === "oucombo" && (
-                  <>
-                    <div className="ap-field" style={{ width: 96 }}>
-                      <label>Över A</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.ouOver}
-                        placeholder="3.22"
-                        onChange={(e) => patchLeg(l.id, { ouOver: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 118 }}>
-                      <label>Under A (valfri)</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.ouUnder}
-                        placeholder="—"
-                        onChange={(e) => patchLeg(l.id, { ouUnder: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 90 }}>
-                      <label>Linje A</label>
-                      <div className="ap-select">
-                        <select value={l.line} onChange={(e) => patchLeg(l.id, { line: e.target.value })}>
-                          {SOURCE_LINES.map((k) => (
-                            <option key={k} value={String(k)}>
-                              {lineLabel(k)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="ap-field" style={{ width: 110 }}>
-                      <label>Över B (valfri)</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.ouOverB}
-                        placeholder="2.85"
-                        onChange={(e) => patchLeg(l.id, { ouOverB: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 118 }}>
-                      <label>Under B (valfri)</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.ouUnderB}
-                        placeholder="—"
-                        onChange={(e) => patchLeg(l.id, { ouUnderB: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 90 }}>
-                      <label>Linje B</label>
-                      <div className="ap-select">
-                        <select value={l.lineB} onChange={(e) => patchLeg(l.id, { lineB: e.target.value })}>
-                          {SOURCE_LINES.map((k) => (
-                            <option key={k} value={String(k)}>
-                              {lineLabel(k)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="ap-field" style={{ width: 110 }}>
-                      <label>Över C (valfri)</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.ouOverC}
-                        placeholder="1.95"
-                        onChange={(e) => patchLeg(l.id, { ouOverC: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 118 }}>
-                      <label>Under C (valfri)</label>
-                      <input
-                        className="ap-input ap-num"
-                        inputMode="decimal"
-                        value={l.ouUnderC}
-                        placeholder="—"
-                        onChange={(e) => patchLeg(l.id, { ouUnderC: e.target.value })}
-                      />
-                    </div>
-                    <div className="ap-field" style={{ width: 90 }}>
-                      <label>Linje C</label>
-                      <div className="ap-select">
-                        <select value={l.lineC} onChange={(e) => patchLeg(l.id, { lineC: e.target.value })}>
-                          {SOURCE_LINES.map((k) => (
-                            <option key={k} value={String(k)}>
-                              {lineLabel(k)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="ap-field" style={{ width: 100 }}>
-                      <label>Totallinje</label>
-                      <div className="ap-select">
-                        <select value={l.totalLine} onChange={(e) => patchLeg(l.id, { totalLine: e.target.value })}>
-                          {TOTAL_LINES.map((k) => (
-                            <option key={k} value={String(k)}>
-                              {lineLabel(k)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                )}
-                {l.mode !== "two" && (
-                  <div className="ap-field" style={{ width: 130 }}>
-                    <label>Antagen marginal %</label>
-                    <input
-                      className="ap-input ap-num"
-                      inputMode="decimal"
-                      value={l.marginPct}
-                      onChange={(e) => patchLeg(l.id, { marginPct: e.target.value })}
-                    />
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+                    {lineSelect("Linje", l.line, SOURCE_LINES.slice(0, 4), (v) => patchLeg(l.id, { line: v }))}
+                    {numField("ET-tillägg %", l.etPct, (v) => patchLeg(l.id, { etPct: v }), { placeholder: "0" })}
+                    {marginField(l)}
                   </div>
-                )}
-              </div>
+                </>
+              )}
 
-              <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 8 }}>{MODE_HINT[l.mode]}</div>
+              {l.betType === "playerou" && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+                  {numField("Spelarens odds", l.odds, (v) => patchLeg(l.id, { odds: v }), { width: 120, placeholder: "3.00" })}
+                  {numField("Över-odds", l.ouOver, (v) => patchLeg(l.id, { ouOver: v }), { width: 100, placeholder: "1.30" })}
+                  {numField("Under-odds (valfri)", l.ouUnder, (v) => patchLeg(l.id, { ouUnder: v }), { width: 130, placeholder: "—" })}
+                  {lineSelect("Linje", l.line, SOURCE_LINES.slice(0, 4), (v) => patchLeg(l.id, { line: v }))}
+                  {marginField(l)}
+                </div>
+              )}
+
+              {l.betType === "multigoals" && (
+                <>
+                  {l.sources.map((s, si) => (
+                    <div
+                      key={si}
+                      style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}
+                    >
+                      <div className="ap-field" style={{ flex: "1 1 170px", minWidth: 140 }}>
+                        <label>Match/lag {si + 1}</label>
+                        <input
+                          className="ap-input"
+                          value={s.label}
+                          placeholder="t.ex. Malmö FF–IFK Göteborg"
+                          onChange={(e) => patchSource(l, si, { label: e.target.value })}
+                        />
+                      </div>
+                      {numField("Över", s.over, (v) => patchSource(l, si, { over: v }), { width: 96, placeholder: "1.66" })}
+                      {numField("Under (valfri)", s.under, (v) => patchSource(l, si, { under: v }), { width: 118, placeholder: "—" })}
+                      {lineSelect("Linje", s.line, SOURCE_LINES, (v) => patchSource(l, si, { line: v }), 90)}
+                      {l.sources.length > 1 && (
+                        <button
+                          className="ap-btn ghost"
+                          style={{ padding: "6px 9px", fontSize: 13, lineHeight: 1.2 }}
+                          onClick={() => removeSource(l, si)}
+                          aria-label={`Ta bort match ${si + 1}`}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+                    <button
+                      className="ap-btn ghost"
+                      style={{ padding: "6px 10px", fontSize: 12 }}
+                      onClick={() => addSource(l)}
+                      disabled={l.sources.length >= MAX_SOURCES}
+                    >
+                      + Lägg till match
+                    </button>
+                    {lineSelect("Totallinje", l.totalLine, TOTAL_LINES, (v) => patchLeg(l.id, { totalLine: v }), 100)}
+                    {marginField(l)}
+                  </div>
+                </>
+              )}
 
               {r ? (
                 <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 10 }}>
@@ -540,17 +499,7 @@ export function FairOddsCalculator({
                   {r.q != null && <InlineStat label="Spelarandel/mål" value={pctFmt(r.q * 100)} />}
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>
-                  {l.mode === "two"
-                    ? "Ange ditt och motsatta sidans odds (> 1)."
-                    : l.mode === "goals"
-                      ? "Ange anytime-odds (> 1) för minst en spelare."
-                      : l.mode === "playerou"
-                        ? "Ange spelarens mål/assist-odds och matchens Över-odds (> 1)."
-                        : l.mode === "oucombo"
-                          ? "Ange Över-odds (> 1) för källa A — källa B och C är valfria."
-                          : "Ange odds (> 1) och antagen marginal."}
-                </div>
+                <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>{TYPE_EMPTY[l.betType]}</div>
               )}
             </div>
           );
@@ -625,7 +574,7 @@ export function FairOddsCalculator({
 
         {combo == null ? (
           <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
-            Fyll i alla ben ovan så räknas fair odds ut här.
+            Fyll i {multi ? "alla ben" : "benet"} ovan så räknas fair odds ut här.
           </div>
         ) : (
           <>
@@ -644,7 +593,7 @@ export function FairOddsCalculator({
               <MiniStat
                 label="Fair sannolikhet"
                 value={pctFmt(combo.pAdjusted * 100)}
-                sub={comboMode === "any" ? `minst 1 av ${combo.n} ben` : `${combo.n} ben`}
+                sub={multi && comboMode === "any" ? `minst 1 av ${combo.n} ben` : `${combo.n} ben`}
               />
               <MiniStat label="Snittmarginal/ben" value={pctFmt(combo.avgOverround * 100)} />
               {edge != null && <MiniStat label="Edge (EV)" value={pctFmt(edge * 100, true)} tone={edge > 0 ? "pos" : "neg"} />}
@@ -681,18 +630,18 @@ export function FairOddsCalculator({
         <details className="ap-fine">
           <summary>Så räknas det</summary>
           Fair odds bygger på att spelbolagets grundmarknad prissätter rätt sånär som på marginalen (proportionell
-          de-vig). &quot;Bara min sida&quot; antar en marginal när motsatt odds inte visas. &quot;Mål tillsammans&quot; räknar
-          Poisson på spelarnas anytime-odds (oberoende antas mellan spelarna) — ET-tillägget (~7 % i slutspel) används
-          när specialen inkluderar förlängning men anytime-oddsen gäller 90 minuter. &quot;Minst ett ben&quot; räknar
-          unionen 1 − Π(1−p) för eller-spel som &quot;X eller Y gör första målet&quot; — där behövs varje spelares
-          första målskytt-odds, och målskyttemarknader bär hög marginal: anta 20–40 % i &quot;Bara min sida&quot;-läget.
-          &quot;Spelare + Ö/U&quot; räknar som gamblingcabins specialspels-artikel — betingade sannolikheter över
-          matchens måltal (Poisson) i stället för oberoende multiplikation, eftersom spelarben och målben i samma
-          match samvarierar starkt; benet är då redan korrelationsjusterat och ska inte ρ-justeras en gång till.
-          &quot;Ö/U-kombo&quot; är gamblingcabins &quot;oddsmarknaden räknar på specialare&quot;-uppställning i sluten
-          form: λ per källa backas ut ur dess Ö/U-marknad, källorna antas oberoende och totalen blir Poisson-summan —
-          med bara källa A ifylld flyttar den en linje (t.ex. fair Ö2.5 ur Ö1.5-priset).
-          Korrelationsjusteringen är en tumregel — ben i samma match kan samvariera mer eller mindre än så.
+          de-vig). &quot;Prop, bara mitt odds&quot; antar en marginal när motsatt odds inte visas — props bär ofta
+          6–10 %, målskyttemarknader 20–40 %. &quot;Spelares mål ihop&quot; räknar Poisson på spelarnas anytime-odds
+          (oberoende antas mellan spelarna) — ET-tillägget (~7 % i slutspel) används när specialen inkluderar
+          förlängning men anytime-oddsen gäller 90 minuter. &quot;Minst ett ben&quot; räknar unionen 1 − Π(1−p) för
+          eller-spel som &quot;X eller Y gör första målet&quot;. &quot;Spelare + Ö/U&quot; räknar som gamblingcabins
+          specialspels-artikel — betingade sannolikheter över matchens måltal (Poisson) i stället för oberoende
+          multiplikation, eftersom spelarben och målben i samma match samvarierar starkt; benet är då redan
+          korrelationsjusterat och ska inte ρ-justeras en gång till. &quot;Mål över flera matcher&quot; backar ut
+          väntade mål (λ) per match ur dess Ö/U-marknad, antar oberoende mellan matcherna och räknar totalen som
+          Poisson-summan mot totallinjen — med bara en rad ifylld fungerar den som linjeflytt (t.ex. fair Ö2,5 ur
+          Ö1,5-priset). Korrelationsjusteringen mellan ben är en tumregel — ben i samma match kan samvariera mer
+          eller mindre än så.
         </details>
       </Card>
     </>
