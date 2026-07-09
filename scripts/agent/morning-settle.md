@@ -12,10 +12,18 @@ Körs som schemalagd Claude-uppgift ca 08:00 Europe/Stockholm, i **huvud-checkou
   pending — lista dem i rapporten med anledning.
 - Accumulators rättas bara om ALLA ben är säkra matchnivå-resultat och avgjorda;
   annars pending.
-- Rätta bara bets vars `eventAt` ligger minst 3 timmar bakåt i tiden (matchen ska
-  vara färdigspelad, inkl. förlängning/straffar).
-- Varje rättning kräver en tydlig webbkälla (officiell liga, ESPN, Flashscore e.d.).
-  Slutresultat + källa skrivs i `reason`. Hittas ingen entydig källa → pending.
+- Matchen MÅSTE vara färdigspelad (inkl. förlängning/straffar) innan du rättar:
+  - Har spelet ett `eventAt`: rätta bara om det ligger minst 3 timmar bakåt i tiden.
+  - Saknar spelet `eventAt` (vanligt — kvitto-skärmdumpar har ofta ingen matchtid):
+    exkludera det INTE per automatik. Sök upp matchen på lagnamnen/spelarna och
+    rätta om — och bara om — webben bekräftar att matchen är slutspelad med ett
+    entydigt resultat. Kan du inte bekräfta att den är över → pending.
+- Varje rättning kräver en tydlig webbkälla (officiell liga, ESPN, Flashscore, HLTV,
+  Sofascore e.d.). Slutresultat + källa skrivs i `reason`. Hittas ingen entydig
+  källa, eller är matchen inte färdigspelad → pending.
+- Futures/outright/"specialspel" (t.ex. "att nå finalen", "vinnare av grupp",
+  "i semifinal") avgörs först när turneringen/gruppen är klar — rätta bara om
+  utfallet är definitivt avgjort, annars pending.
 - Obs: "UTE ur turneringen" på straffar räknas som förlust för "vidare"-spel men
   matchresultatspel efter 90 min kan vara oavgjort — läs marknaden noga.
 - Kör ALLTID `--dry-run` först och granska utskriften före skarp körning.
