@@ -41,6 +41,9 @@ interface LegState {
   ouOverB: string; // oucombo: källa B over odds (optional → single source)
   ouUnderB: string; // oucombo: källa B under odds (optional)
   lineB: string; // oucombo: källa B over-line threshold
+  ouOverC: string; // oucombo: källa C over odds (optional)
+  ouUnderC: string; // oucombo: källa C under odds (optional)
+  lineC: string; // oucombo: källa C over-line threshold
   totalLine: string; // oucombo: combined-goals threshold, "1" = Ö0.5 …
 }
 
@@ -62,9 +65,18 @@ function emptyLeg(id: number): LegState {
     ouOverB: "",
     ouUnderB: "",
     lineB: "2",
+    ouOverC: "",
+    ouUnderC: "",
+    lineC: "2",
     totalLine: "2",
   };
 }
+
+// Over-line choices: per source (Ö0.5–Ö5.5) and for the special's combined
+// total (Ö0.5–Ö11.5 — multi-match specials like "10+ mål i tre matcher").
+const SOURCE_LINES = Array.from({ length: 6 }, (_, i) => i + 1);
+const TOTAL_LINES = Array.from({ length: 12 }, (_, i) => i + 1);
+const lineLabel = (k: number) => `Ö${k - 1},5`;
 
 const num = (v: string) => parseFloat(v.replace(",", "."));
 
@@ -74,7 +86,7 @@ const MODE_HINT: Record<LegState["mode"], string> = {
   one: "Bara ditt odds syns (props, målskytt) — ange antagen marginal: props ~6–10 %, målskytt 20–40 %.",
   goals: "Flera spelares mål ihop via deras anytime-odds — t.ex. Haaland & Vinícius Ö1,5 tillsammans.",
   playerou: "Spelare gör mål/assist OCH matchen går över linjen — samvariationen räknas exakt (samma match).",
-  oucombo: "Lagens/matchernas mål ihop: Över A/B = källornas egna Ö/U-odds, totallinjen = spelets linje.",
+  oucombo: "Lagens/matchernas mål ihop: Över A/B/C = källornas egna Ö/U-odds, totallinjen = spelets linje.",
 };
 
 function legResult(l: LegState): DevigResult | null {
@@ -97,6 +109,7 @@ function legResult(l: LegState): DevigResult | null {
     });
     const comps = [comp(l.ouOver, l.ouUnder, l.line)];
     if (l.ouOverB.trim() !== "") comps.push(comp(l.ouOverB, l.ouUnderB, l.lineB));
+    if (l.ouOverC.trim() !== "") comps.push(comp(l.ouOverC, l.ouUnderC, l.lineC));
     return devigCombinedOver(comps, parseInt(l.totalLine, 10), num(l.marginPct));
   }
   const opp = num(l.oppOdds);
@@ -185,8 +198,9 @@ export function FairOddsCalculator({
               <strong>Spelare + Ö/U</strong> — spelare + över-linje i samma match. Ex: Bellingham mål/assist + Ö1,5.
             </span>
             <span>
-              <strong>Ö/U-kombo</strong> — lagens/matchernas mål ihop. Ex: Spanien &amp; Belgien Ö3,5 tillsammans → Över A =
-              Spaniens Ö1,5-odds, Över B = Belgiens Ö1,5-odds, totallinje Ö3,5.
+              <strong>Ö/U-kombo</strong> — lagens/matchernas mål ihop, upp till tre källor. Ex: Spanien &amp; Belgien Ö3,5
+              tillsammans → Över A = Spaniens Ö1,5-odds, Över B = Belgiens Ö1,5-odds, totallinje Ö3,5. Eller: minst 10 mål
+              i tre matcher → varje matchs Ö2,5-odds som källa A/B/C, totallinje Ö9,5.
             </span>
           </div>
         </details>
@@ -411,10 +425,11 @@ export function FairOddsCalculator({
                       <label>Linje A</label>
                       <div className="ap-select">
                         <select value={l.line} onChange={(e) => patchLeg(l.id, { line: e.target.value })}>
-                          <option value="1">Ö0.5</option>
-                          <option value="2">Ö1.5</option>
-                          <option value="3">Ö2.5</option>
-                          <option value="4">Ö3.5</option>
+                          {SOURCE_LINES.map((k) => (
+                            <option key={k} value={String(k)}>
+                              {lineLabel(k)}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -442,10 +457,43 @@ export function FairOddsCalculator({
                       <label>Linje B</label>
                       <div className="ap-select">
                         <select value={l.lineB} onChange={(e) => patchLeg(l.id, { lineB: e.target.value })}>
-                          <option value="1">Ö0.5</option>
-                          <option value="2">Ö1.5</option>
-                          <option value="3">Ö2.5</option>
-                          <option value="4">Ö3.5</option>
+                          {SOURCE_LINES.map((k) => (
+                            <option key={k} value={String(k)}>
+                              {lineLabel(k)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="ap-field" style={{ width: 110 }}>
+                      <label>Över C (valfri)</label>
+                      <input
+                        className="ap-input ap-num"
+                        inputMode="decimal"
+                        value={l.ouOverC}
+                        placeholder="1.95"
+                        onChange={(e) => patchLeg(l.id, { ouOverC: e.target.value })}
+                      />
+                    </div>
+                    <div className="ap-field" style={{ width: 118 }}>
+                      <label>Under C (valfri)</label>
+                      <input
+                        className="ap-input ap-num"
+                        inputMode="decimal"
+                        value={l.ouUnderC}
+                        placeholder="—"
+                        onChange={(e) => patchLeg(l.id, { ouUnderC: e.target.value })}
+                      />
+                    </div>
+                    <div className="ap-field" style={{ width: 90 }}>
+                      <label>Linje C</label>
+                      <div className="ap-select">
+                        <select value={l.lineC} onChange={(e) => patchLeg(l.id, { lineC: e.target.value })}>
+                          {SOURCE_LINES.map((k) => (
+                            <option key={k} value={String(k)}>
+                              {lineLabel(k)}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -453,12 +501,11 @@ export function FairOddsCalculator({
                       <label>Totallinje</label>
                       <div className="ap-select">
                         <select value={l.totalLine} onChange={(e) => patchLeg(l.id, { totalLine: e.target.value })}>
-                          <option value="1">Ö0.5</option>
-                          <option value="2">Ö1.5</option>
-                          <option value="3">Ö2.5</option>
-                          <option value="4">Ö3.5</option>
-                          <option value="5">Ö4.5</option>
-                          <option value="6">Ö5.5</option>
+                          {TOTAL_LINES.map((k) => (
+                            <option key={k} value={String(k)}>
+                              {lineLabel(k)}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -501,7 +548,7 @@ export function FairOddsCalculator({
                       : l.mode === "playerou"
                         ? "Ange spelarens mål/assist-odds och matchens Över-odds (> 1)."
                         : l.mode === "oucombo"
-                          ? "Ange Över-odds (> 1) för källa A — källa B är valfri."
+                          ? "Ange Över-odds (> 1) för källa A — källa B och C är valfria."
                           : "Ange odds (> 1) och antagen marginal."}
                 </div>
               )}
