@@ -266,7 +266,6 @@ export default function BetsPage() {
           <>
             <a className="ap-btn ghost" href="/api/bets/export"><I p={IC.download} size={15} /><span className="ap-hide-sm">CSV</span></a>
             <ScreenshotImportButton onParsed={(bets) => { setQueue(bets); setQueueIndex(0); }} />
-            <button className="ap-btn" onClick={() => setAdding(true)}><I p={IC.plus} size={15} /><span className="ap-hide-sm">Logga bet</span></button>
           </>
         }
       />

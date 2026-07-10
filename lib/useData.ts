@@ -78,6 +78,16 @@ export interface MetricsResponse {
 // refreshes it in the background, so navigation never shows a spinner twice.
 const cache = new Map<string, unknown>();
 
+// Every mounted hook registers its reloader here so a global action (the top-nav
+// "Logga bet" / "Synka", which live outside any data page) can refresh whatever
+// the current page is showing.
+const reloaders = new Set<() => void>();
+
+/** Re-fetch every cached endpoint that a mounted hook is currently reading. */
+export function revalidateAll() {
+  reloaders.forEach((fn) => fn());
+}
+
 function useCachedGet<T>(url: string) {
   const [data, setData] = useState<T | null>(() => (cache.get(url) as T) ?? null);
   const [loading, setLoading] = useState(!cache.has(url));
@@ -95,6 +105,10 @@ function useCachedGet<T>(url: string) {
 
   useEffect(() => {
     load();
+    reloaders.add(load);
+    return () => {
+      reloaders.delete(load);
+    };
   }, [load]);
 
   return { data, loading, reload: load };

@@ -6,8 +6,6 @@ import { Topbar } from "@/components/Shell";
 import { Card, Kpi, Skeleton, SkeletonCard, CountUp } from "@/components/ui";
 import { InteractiveLineChart, PLBars, Donut, type TimePoint } from "@/components/charts";
 import { ResultBadge } from "@/components/ResultBadge";
-import { AddBetModal } from "@/components/AddBetModal";
-import { SyncButton } from "@/components/SyncButton";
 import { TiltBanner } from "@/components/TiltBanner";
 import { GoalCard } from "@/components/GoalCard";
 import { OpenBetsPanel } from "@/components/OpenBetsPanel";
@@ -17,7 +15,6 @@ import { api } from "@/lib/fetcher";
 import { krFmt, krShort, uFmt, pctFmt, sportTag, dateShort } from "@/lib/format";
 import type { BetListDTO } from "@/lib/types";
 import type { StreakInfo } from "@/lib/insights";
-import { I, IC } from "@/components/icons";
 import { useEffect } from "react";
 
 const PERIODS = [
@@ -31,8 +28,7 @@ type PeriodKey = (typeof PERIODS)[number]["key"];
 
 export default function OverviewPage() {
   const { cc, glow } = useTheme();
-  const { data, settings, loading, reload } = useMetrics();
-  const [adding, setAdding] = useState(false);
+  const { data, loading } = useMetrics();
   const [recent, setRecent] = useState<BetListDTO[]>([]);
   const [period, setPeriod] = useState<PeriodKey>("all");
 
@@ -44,8 +40,6 @@ export default function OverviewPage() {
 
   const m = data?.metrics;
   const unit = data?.settings.unitValue ?? 100;
-  const currency = data?.settings.currency ?? "kr";
-  const hasKey = settings?.hasOddsApiKey ?? false;
   const profitKr = (m?.profitUnits ?? 0) * unit;
 
   // Cumulative P/L in kr (no bankroll framing — the starting-bankroll number
@@ -115,21 +109,12 @@ export default function OverviewPage() {
       {glow && <div className="ap-glow" />}
       <Topbar
         title={title}
-        icon={<I p={IC.grid} />}
         sub={
           loading ? (
             "Laddar…"
           ) : (
             <>Du är {profitKr >= 0 ? "upp" : "ner"} <span className={profitKr >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{krFmt(Math.abs(profitKr))}</span> {rangeLabel ? `sedan ${rangeLabel}` : "totalt"}</>
           )
-        }
-        actions={
-          <>
-            {hasKey && <SyncButton onDone={reload} />}
-            <button className="ap-btn" onClick={() => setAdding(true)}>
-              <I p={IC.plus} size={15} /> <span className="ap-hide-sm">Logga bet</span>
-            </button>
-          </>
         }
       />
 
@@ -320,8 +305,6 @@ export default function OverviewPage() {
           ))}
         </div>
       </Card>
-
-      <AddBetModal open={adding} onClose={() => setAdding(false)} onSaved={reload} hasOddsApiKey={hasKey} />
     </div>
   );
 }

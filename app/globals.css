@@ -12,45 +12,47 @@
 :root {
   --disp: "Space Grotesk", system-ui, sans-serif;
   --sans: "Hanken Grotesk", system-ui, sans-serif;
-  --acc: #8f74ff;
-  --acc-soft: rgba(143, 116, 255, 0.16);
-  --acc-text: #16102a;
+  /* Default accent is a near-white silver — the "Mörk premium" look. The
+     ThemeProvider overrides these inline if the user picks a coloured accent. */
+  --acc: #e6e8f0;
+  --acc-soft: rgba(230, 232, 240, 0.1);
+  --acc-text: #0a0b0f;
 }
 .ap[data-mode="dark"] {
-  --bg: #0b0d14;
-  --side: #0e1019;
-  --card: #161a26;
-  --card2: #1b2030;
-  --line: rgba(255, 255, 255, 0.07);
+  --bg: #0a0b0f;
+  --side: #0c0e12;
+  --card: #111318;
+  --card2: #171a21;
+  --line: rgba(255, 255, 255, 0.06);
   --line2: rgba(255, 255, 255, 0.045);
-  --txt: #eef0f7;
-  --dim: #9298ab;
-  --dim2: #646b81;
-  --pos: #3fe0a8;
-  --pos-soft: rgba(63, 224, 168, 0.14);
-  --red: #ff6079;
-  --red-soft: rgba(255, 96, 121, 0.13);
-  --hover: rgba(255, 255, 255, 0.045);
-  --shadow: 0 10px 34px rgba(0, 0, 0, 0.35);
-  --glow: 0.18;
+  --txt: #f2f3f7;
+  --dim: #8b90a3;
+  --dim2: #6b7080;
+  --pos: #35d492;
+  --pos-soft: rgba(53, 212, 146, 0.12);
+  --red: #ff5c74;
+  --red-soft: rgba(255, 92, 116, 0.12);
+  --hover: rgba(255, 255, 255, 0.035);
+  --shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+  --glow: 0.14;
 }
 .ap[data-mode="light"] {
-  --bg: #edeff5;
+  --bg: #f4f5f8;
   --side: #ffffff;
   --card: #ffffff;
   --card2: #f4f6fb;
   --line: rgba(20, 22, 34, 0.09);
   --line2: rgba(20, 22, 34, 0.05);
-  --txt: #161a26;
+  --txt: #14161c;
   --dim: #5a6075;
-  --dim2: #959cb1;
+  --dim2: #8b90a3;
   --pos: #10a06b;
   --pos-soft: rgba(16, 160, 107, 0.12);
   --red: #e23b52;
   --red-soft: rgba(226, 59, 82, 0.1);
   --hover: rgba(20, 22, 34, 0.035);
-  --shadow: 0 10px 30px rgba(30, 34, 60, 0.1);
-  --glow: 0.1;
+  --shadow: 0 16px 40px rgba(30, 34, 60, 0.12);
+  --glow: 0.08;
 }
 
 * {
@@ -65,7 +67,7 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: #0b0d14;
+  background: #0a0b0f;
 }
 .ap {
   font-family: var(--sans);
@@ -80,65 +82,70 @@ body {
   font-feature-settings: "tnum" 1;
 }
 
-/* ---- shell ---- */
-.ap-shell {
-  display: flex;
-  min-height: 100vh;
-}
-.ap-side {
-  width: 222px;
-  flex-shrink: 0;
-  background: var(--side);
-  border-right: 1px solid var(--line);
-  padding: 20px 14px;
-  display: flex;
-  flex-direction: column;
+/* ---- top nav (sticky global header) ---- */
+.ap-topnav {
   position: sticky;
   top: 0;
-  height: 100vh;
+  z-index: 50;
+  background: var(--side);
+  border-bottom: 1px solid var(--line);
 }
-.ap-logo {
+.ap-topnav-inner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 32px;
+  max-width: 1160px;
+  margin: 0 auto;
+}
+.ap-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 8px 22px;
+  margin-right: 4px;
+  text-decoration: none;
+  color: var(--txt);
+  flex-shrink: 0;
 }
-.ap-logo .mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, var(--acc), #ffffff55);
+.ap-brand .mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--acc);
   display: grid;
   place-items: center;
   font-family: var(--disp);
   font-weight: 700;
   color: var(--acc-text);
-  font-size: 16px;
+  font-size: 14px;
 }
-.ap-logo .name {
+.ap-brand .name {
   font-family: var(--disp);
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 .ap-nav {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  gap: 4px;
+  flex: 1;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .ap-navitem {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 11px;
-  border-radius: 10px;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 8px;
   color: var(--dim);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   border: none;
-  background: none;
-  text-align: left;
-  width: 100%;
+  background: transparent;
+  white-space: nowrap;
   transition: background 0.12s, color 0.12s;
   text-decoration: none;
 }
@@ -147,45 +154,44 @@ body {
   color: var(--txt);
 }
 .ap-navitem.is-active {
-  background: var(--acc-soft);
+  background: rgba(255, 255, 255, 0.07);
   color: var(--txt);
   font-weight: 600;
 }
-.ap-navitem.is-active svg {
-  stroke: var(--acc);
+.ap[data-mode="light"] .ap-navitem.is-active {
+  background: var(--hover);
 }
 .ap-navitem svg {
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
   stroke: currentColor;
 }
-.ap-side-foot {
-  margin-top: auto;
+.ap-topnav-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px;
-  border-radius: 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
+  flex-shrink: 0;
 }
 .ap-avatar {
   width: 30px;
   height: 30px;
   border-radius: 50%;
   background: var(--card2);
+  border: 1px solid var(--line);
   display: grid;
   place-items: center;
   font-weight: 700;
   font-size: 12px;
-  color: var(--acc);
+  color: var(--txt);
   flex-shrink: 0;
+  text-decoration: none;
 }
 
 .ap-main {
-  flex: 1;
   min-width: 0;
-  padding: 22px 26px 90px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 30px 32px 90px;
   position: relative;
   /* The decorative .ap-glow is absolutely positioned and can extend past the right
      edge on narrow desktops / large tablets, creating phantom horizontal scroll.
@@ -211,13 +217,15 @@ body {
   z-index: 1;
 }
 
-/* ---- topbar ---- */
+/* ---- topbar (per-page header) ---- */
 .ap-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
-  gap: 14px;
+  gap: 16px;
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
 }
 .ap-h1 {
   font-family: var(--disp);
@@ -271,10 +279,13 @@ body {
   font-family: var(--sans);
 }
 .ap-btn.ghost {
-  background: var(--card);
+  background: transparent;
   color: var(--txt);
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   font-weight: 600;
+}
+.ap[data-mode="light"] .ap-btn.ghost {
+  border-color: var(--line);
 }
 .ap-btn:active {
   transform: translateY(1px);
@@ -353,36 +364,10 @@ body {
   text-align: right;
 }
 
-/* ---- KPI cards (Aurora 2): accent hairline + corner glow ---- */
+/* ---- KPI cells: flat, grouped into one bordered container (see .ap-kpi-row) ---- */
 .ap-kpi {
   position: relative;
   overflow: hidden;
-}
-.ap-kpi::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--acc), transparent 75%);
-}
-.ap-kpi.is-pos::before {
-  background: linear-gradient(90deg, var(--pos), transparent 75%);
-}
-.ap-kpi.is-neg::before {
-  background: linear-gradient(90deg, var(--red), transparent 75%);
-}
-.ap-kpi::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 140px;
-  height: 90px;
-  pointer-events: none;
-  background: radial-gradient(140px 90px at 100% 0%, var(--acc-soft), transparent 70%);
-  opacity: 0.55;
 }
 
 /* discipline grade square (vecko-/månadsrapport) */
@@ -402,17 +387,14 @@ body {
 
 /* ---- cards ---- */
 .ap-card {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--card2) 55%, var(--card)), var(--card) 46%);
+  background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 18px;
-}
-.ap[data-mode="dark"] .ap-card {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  border-radius: 12px;
+  padding: 20px;
 }
 .ap-label {
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  font-size: 10.5px;
+  letter-spacing: 0.13em;
   color: var(--dim2);
   text-transform: uppercase;
   font-weight: 600;
@@ -435,18 +417,35 @@ body {
   min-width: 0;
 }
 
-/* kpi */
+/* kpi — grouped bordered strip: a 1px gap over the container's line-coloured
+   background renders hairline dividers between cells at any column count. */
 .ap-kpi-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 1px;
+  margin-bottom: 16px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.ap-kpi-row > * {
+  background: var(--card);
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 18px 22px;
+}
+/* Don't let a cell lift out of the grouped strip on hover. */
+.ap-kpi-row > .ap-lift:hover {
+  transform: none;
+  box-shadow: none;
 }
 .ap-kpi-val {
   font-family: var(--disp);
-  font-size: 26px;
+  font-size: 23px;
   font-weight: 600;
-  margin-top: 12px;
+  margin-top: 9px;
   white-space: nowrap;
 }
 .ap-pill {
@@ -651,17 +650,17 @@ body {
 }
 .ap-chip {
   font-size: 12px;
-  padding: 6px 11px;
-  border-radius: 20px;
+  padding: 6px 12px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   color: var(--dim);
   cursor: pointer;
-  background: var(--card);
+  background: transparent;
   font-weight: 500;
 }
 .ap-chip.is-active {
   background: var(--acc-soft);
-  border-color: transparent;
+  border-color: var(--line);
   color: var(--txt);
   font-weight: 600;
 }
@@ -1078,8 +1077,16 @@ select.ap-input {
   }
 }
 @media (max-width: 920px) {
-  .ap-side {
+  /* On phones the top-nav pills are replaced by the fixed bottom nav. */
+  .ap-topnav .ap-nav {
     display: none;
+  }
+  .ap-topnav-inner {
+    padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+    gap: 12px;
+  }
+  .ap-brand {
+    margin-right: auto;
   }
   .ap-main {
     /* max() keeps the 16px gutter on normal phones but clears the corner notch
@@ -1205,7 +1212,7 @@ select.ap-input {
   width: 46px;
   height: 46px;
   border-radius: 13px;
-  background: linear-gradient(135deg, var(--acc), #ffffff55);
+  background: var(--acc);
   display: grid;
   place-items: center;
   font-family: var(--disp);

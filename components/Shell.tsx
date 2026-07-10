@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { I, IC } from "./icons";
+import { GlobalActions } from "./GlobalActions";
 
 const NAV = [
   { href: "/", label: "Översikt", icon: IC.grid },
@@ -20,32 +21,32 @@ function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
-export function Sidebar({ username }: { username?: string }) {
+/** Sticky global header: brand + horizontal nav pills + global actions + avatar. */
+export function TopNav({ username }: { username?: string }) {
   const pathname = usePathname();
-  const displayName = username ? username[0].toUpperCase() + username.slice(1) : "—";
+  const initial = username ? username[0].toUpperCase() : "?";
   return (
-    <aside className="ap-side">
-      <div className="ap-logo">
-        <div className="mark">J</div>
-        <span className="name">Journal</span>
-      </div>
-      <nav className="ap-nav">
-        {NAV.map((n) => (
-          <Link key={n.href} href={n.href} className={"ap-navitem" + (isActive(pathname, n.href) ? " is-active" : "")}>
-            <I p={n.icon} /> {n.label}
+    <header className="ap-topnav">
+      <div className="ap-topnav-inner">
+        <Link href="/" className="ap-brand" aria-label="Översikt">
+          <div className="mark">J</div>
+          <span className="name">Journal</span>
+        </Link>
+        <nav className="ap-nav">
+          {NAV.map((n) => (
+            <Link key={n.href} href={n.href} className={"ap-navitem" + (isActive(pathname, n.href) ? " is-active" : "")}>
+              {n.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="ap-topnav-actions">
+          <GlobalActions />
+          <Link href="/settings" className="ap-avatar" title={username ? username[0].toUpperCase() + username.slice(1) : "Konto"}>
+            {initial}
           </Link>
-        ))}
-      </nav>
-      <div className="ap-side-foot">
-        <div className="ap-avatar">{username ? username[0].toUpperCase() : "?"}</div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {displayName}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--dim2)" }}>Personlig journal</div>
         </div>
       </div>
-    </aside>
+    </header>
   );
 }
 
@@ -66,27 +67,21 @@ export function Topbar({
   title,
   sub,
   actions,
-  icon,
 }: {
   title: string;
   sub?: React.ReactNode;
   actions?: React.ReactNode;
+  /** Accepted for backwards-compat with pages that still pass one; the redesign
+   *  renders a clean bordered header with no icon chip. */
   icon?: React.ReactNode;
 }) {
   return (
-    <div className={"ap-top" + (icon ? " ap-hero" : "")}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-        {icon && (
-          <div className="ap-hero-icon" aria-hidden="true">
-            {icon}
-          </div>
-        )}
-        <div style={{ minWidth: 0 }}>
-          <div className="ap-h1">{title}</div>
-          {sub && <div className="ap-sub">{sub}</div>}
-        </div>
+    <div className="ap-top">
+      <div style={{ minWidth: 0 }}>
+        <div className="ap-h1">{title}</div>
+        {sub && <div className="ap-sub">{sub}</div>}
       </div>
-      <div className="ap-top-actions">{actions}</div>
+      {actions && <div className="ap-top-actions">{actions}</div>}
     </div>
   );
 }
