@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { TopNav, MobileNav } from "@/components/Shell";
-import { TweaksPanel } from "@/components/TweaksPanel";
 
 // Layout for the authenticated app pages — everything except /login and
 // /register lives here, so those screens render standalone without the
@@ -17,7 +16,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <TopNav username={user.username} />
       <main className="ap-main">{children}</main>
       <MobileNav />
-      <TweaksPanel />
     </>
   );
 }

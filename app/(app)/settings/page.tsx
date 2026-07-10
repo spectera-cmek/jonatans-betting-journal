@@ -8,8 +8,11 @@ import { ImportPanel } from "@/components/ImportPanel";
 import { api } from "@/lib/fetcher";
 import type { SettingsDTO } from "@/lib/types";
 import { I, IC } from "@/components/icons";
+import { useTheme } from "@/components/ThemeProvider";
+import { ACCENTS } from "@/lib/theme";
 
 export default function SettingsPage() {
+  const { accent, mode, glow, setAccent, setMode, setGlow } = useTheme();
   const [settings, setSettings] = useState<SettingsDTO | null>(null);
   const [unitValue, setUnitValue] = useState("100");
   const [currency, setCurrency] = useState("kr");
@@ -52,6 +55,48 @@ export default function SettingsPage() {
       <Topbar title="Inställningar" sub="Enhetsvärde, valuta och synkronisering" icon={<I p={IC.gear} />} />
 
       <div style={{ maxWidth: 620 }}>
+        <Card>
+          <span className="ap-label">Utseende</span>
+          <p style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 12, marginBottom: 16, lineHeight: 1.55 }}>
+            Editorial sportsbook använder en mörk grafitbas och blå accent. Grönt och rött är reserverat för resultat.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--dim)", marginBottom: 8 }}>Accentfärg</div>
+              <div className="ap-swatches">
+                {ACCENTS.map((a) => (
+                  <button
+                    key={a.key}
+                    className={"ap-swatch" + (accent.hex === a.hex ? " is-active" : "")}
+                    style={{ background: a.hex }}
+                    title={a.label}
+                    aria-label={`Välj ${a.label}`}
+                    onClick={() => setAccent(a.hex)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="ap-toggle">
+              <span>Mörkt läge</span>
+              <button
+                className={"ap-switch" + (mode === "dark" ? " on" : "")}
+                onClick={() => setMode(mode === "dark" ? "light" : "dark")}
+                aria-label="Växla mörkt läge"
+              />
+            </div>
+            <div className="ap-toggle">
+              <span>Bakgrundsglöd</span>
+              <button
+                className={"ap-switch" + (glow ? " on" : "")}
+                onClick={() => setGlow(!glow)}
+                aria-label="Växla glöd"
+              />
+            </div>
+          </div>
+        </Card>
+
+        <div style={{ height: 12 }} />
+
         <Card>
           <span className="ap-label">Konfiguration</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>

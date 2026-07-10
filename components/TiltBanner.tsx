@@ -2,6 +2,7 @@
 
 import type { TiltStatus } from "@/lib/tilt";
 import { krFmt } from "@/lib/format";
+import { I, IC } from "./icons";
 
 function BudgetBar({
   label,
@@ -41,7 +42,7 @@ export function TiltBanner({ tilt, unit }: { tilt: TiltStatus; unit: number }) {
   return (
     <div className={"ap-tilt " + (danger ? "danger" : "warn")} role="status">
       <div className="ap-tilt-head">
-        <span aria-hidden="true">{danger ? "⛔" : "⚠️"}</span>
+        <span aria-hidden="true"><I p={IC.alert} size={16} /></span>
         <span>Tilt-vakt — {danger ? "dags att ta en paus" : "håll koll på insatserna"}</span>
       </div>
       <ul className="ap-tilt-notes">

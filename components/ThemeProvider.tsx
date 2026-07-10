@@ -22,10 +22,10 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Defaults = the "Mörk premium" look: silver accent, dark, no glow. The
+  // Defaults = the editorial sportsbook look: blue accent, dark, no glow. The
   // storage keys are namespaced "bj.*" (new) so the redesign shows for everyone
   // regardless of accent/glow they'd saved under the old "vigg.*" keys.
-  const [accentHex, setAccentHex] = useState("#e6e8f0");
+  const [accentHex, setAccentHex] = useState("#5b8cff");
   const [mode, setModeState] = useState<"dark" | "light">("dark");
   const [glow, setGlowState] = useState(false);
   const [ready, setReady] = useState(false);

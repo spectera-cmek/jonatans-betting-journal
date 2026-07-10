@@ -18,6 +18,19 @@ export function I({ p, size = 17 }: { p: React.ReactNode; size?: number }) {
 }
 
 export const IC = {
+  dashboard: (
+    <>
+      <path d="M4 13a8 8 0 1 1 16 0" />
+      <path d="M12 13l4-4" />
+      <path d="M5 19h14" />
+    </>
+  ),
+  ticket: (
+    <>
+      <path d="M4 5h16v4a3 3 0 0 0 0 6v4H4v-4a3 3 0 0 0 0-6V5z" />
+      <path d="M9 8v8" strokeDasharray="2 2" />
+    </>
+  ),
   grid: (
     <>
       <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -70,6 +83,49 @@ export const IC = {
     <>
       <line x1="6" y1="6" x2="18" y2="18" />
       <line x1="18" y1="6" x2="6" y2="18" />
+    </>
+  ),
+  check: (
+    <>
+      <path d="M5 12.5l4.2 4.2L19 7" />
+    </>
+  ),
+  closeCircle: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9 9l6 6M15 9l-6 6" />
+    </>
+  ),
+  minus: (
+    <>
+      <path d="M6 12h12" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-4-4L4 16v4z" />
+      <path d="M13.5 6.5l4 4" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M9 7V4h6v3" />
+      <path d="M7 7l1 13h8l1-13" />
+      <path d="M10 11v5M14 11v5" />
+    </>
+  ),
+  alert: (
+    <>
+      <path d="M12 4L3.5 19h17L12 4z" />
+      <path d="M12 9v4" />
+      <circle cx="12" cy="16.5" r=".6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
     </>
   ),
   menu: (

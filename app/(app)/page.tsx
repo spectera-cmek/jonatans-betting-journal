@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Topbar } from "@/components/Shell";
-import { Card, Kpi, Skeleton, SkeletonCard, CountUp } from "@/components/ui";
+import { Card, Skeleton, CountUp } from "@/components/ui";
 import { InteractiveLineChart, PLBars, Donut, type TimePoint } from "@/components/charts";
 import { ResultBadge } from "@/components/ResultBadge";
 import { TiltBanner } from "@/components/TiltBanner";
@@ -41,10 +40,6 @@ export default function OverviewPage() {
   const m = data?.metrics;
   const unit = data?.settings.unitValue ?? 100;
   const profitKr = (m?.profitUnits ?? 0) * unit;
-
-  // Cumulative P/L in kr (no bankroll framing — the starting-bankroll number
-  // was arbitrary, so the chart shows pure result over time instead).
-  const curve = (data?.bankroll ?? []).map((p) => p.profitUnits * unit);
 
   // Chart points cut to the chosen period. The point just before the cutoff
   // is kept so the curve enters at its real level.
@@ -105,128 +100,87 @@ export default function OverviewPage() {
     : "Betting Journal";
 
   return (
-    <div>
+    <div className="ap-dashboard">
       {glow && <div className="ap-glow" />}
-      <Topbar
-        title={title}
-        sub={
-          loading ? (
-            "Laddar…"
-          ) : (
-            <>Du är {profitKr >= 0 ? "upp" : "ner"} <span className={profitKr >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{krFmt(Math.abs(profitKr))}</span> {rangeLabel ? `sedan ${rangeLabel}` : "totalt"}</>
-          )
-        }
-      />
+      <header className="ap-terminal-head">
+        <div>
+          <h1>{title}</h1>
+          <p>{m?.totalBets?.toLocaleString("sv-SE") ?? 0} bets · {rangeLabel ? `${rangeLabel}` : "ingen historik"}</p>
+        </div>
+        <div className="ap-terminal-status">
+          <span>Portfölj</span>
+          <strong>{risk ? krFmt(risk.stakeUnits * unit) : "—"} exponerat</strong>
+        </div>
+      </header>
 
       {/* Tilt guard — only visible when budgets/chasing trip */}
       {data?.tilt && <TiltBanner tilt={data.tilt} unit={unit} />}
 
-      {/* KPI row */}
-      {loading && !data ? (
-        <div className="ap-kpi-row">
-          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
-        </div>
-      ) : (
-        <div className="ap-kpi-row">
-          <Kpi label="Total P/L" value={<CountUp value={profitKr} format={(n) => krFmt(n, true)} />} valueClass={profitKr >= 0 ? "pos" : "neg"} tone={profitKr >= 0 ? "pos" : "neg"} spark={curve.slice(-16)} />
-          <Kpi label="ROI" value={m?.roiPct != null ? <CountUp value={m.roiPct} format={(n) => pctFmt(n, true)} /> : "—"} valueClass={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} tone={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
-          <Kpi label="+Units" value={<CountUp value={m?.profitUnits ?? 0} format={(n) => uFmt(n, true)} />} valueClass={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} tone={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
-          <Kpi label="Win rate" value={m?.winRatePct != null ? <CountUp value={m.winRatePct} format={(n) => pctFmt(n)} /> : "—"} />
-        </div>
-      )}
-
-      {/* Goals & pace */}
-      {!loading && data && (
-        <GoalCard monthProfitUnits={monthProfitU} yearProfitUnits={yearProfitU} unit={unit} />
-      )}
-
-      {/* Cumulative P/L + sport donut */}
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px", marginBottom: 12 }}>
-        <Card style={{ background: `linear-gradient(180deg, ${cc.fill}, transparent 55%), var(--card)` }}>
-          {loading && !data ? (
-            <>
-              <Skeleton w={90} h={10} />
-              <Skeleton w={170} h={30} style={{ marginTop: 12 }} />
-              <Skeleton h={184} style={{ marginTop: 16 }} />
-            </>
-          ) : (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
-                <div>
-                  <span className="ap-label">
-                    P/L {showPeriod ? `senaste ${PERIODS.find((p) => p.key === period)?.label}` : "över tid"}
-                  </span>
-                  <div className="ap-num" style={{ fontSize: 33, fontWeight: 600, marginTop: 8 }}>
-                    <span className={headlineKr >= 0 ? "pos" : "neg"}>
-                      <CountUp value={headlineKr} format={(n) => krFmt(n, true)} />
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>
-                    {showPeriod ? (
-                      <>
-                        {periodBets.toLocaleString("sv-SE")} avgjorda bets i perioden · totalt{" "}
-                        <span className={profitKr >= 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>{krFmt(profitKr, true)}</span>
-                      </>
-                    ) : (
-                      <>{(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda bets</>
-                    )}
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    {PERIODS.map((p) => (
-                      <button
-                        key={p.key}
-                        className={"ap-chip" + (period === p.key ? " is-active" : "")}
-                        onClick={() => setPeriod(p.key)}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                  {visDdKr > 0 && (
-                    <span className="ap-pill neg">max drawdown {krShort(-visDdKr, false)}</span>
-                  )}
-                </div>
-              </div>
-              <div style={{ marginTop: 14 }}>
-                <InteractiveLineChart
-                  points={pts}
-                  w={640}
-                  h={184}
-                  stroke={cc.acc}
-                  fill={cc.fill}
-                  grid={cc.grid}
-                  formatValue={(v) => krFmt(v)}
-                />
-              </div>
-            </>
-          )}
-        </Card>
-
-        <Card>
-          <span className="ap-label">Fördelning per sport</span>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 14 }}>
-            <Donut data={sportsWithPct} size={132} thickness={20} colors={cc.palette} track={cc.grid} centerLabel={pctFmt(m?.roiPct ?? null, true)} centerSub="ROI" centerColor={cc.txt} centerSubColor={cc.dim} />
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 9 }}>
-              {sportsWithPct.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data än</span>}
-              {sportsWithPct.map((s, i) => (
-                <div key={s.key} className="ap-leg">
-                  <span className="ap-dot" style={{ background: cc.palette[i % cc.palette.length] }} />
-                  <span style={{ flex: 1, color: "var(--dim)" }}>{s.key}</span>
-                  <span style={{ color: "var(--dim2)" }}>{s.pct}%</span>
-                  <span className="ap-num" style={{ width: 54, textAlign: "right", fontWeight: 600 }}>
-                    <em className={s.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(s.profitUnits * unit, true)}</em>
-                  </span>
-                </div>
-              ))}
-            </div>
+      {/* Compact terminal overview */}
+      <section className="ap-terminal-overview">
+        <div className="ap-terminal-strip">
+          <div className="ap-terminal-primary">
+            <span>Nettoresultat</span>
+            {loading && !data ? (
+              <Skeleton w={150} h={30} style={{ marginTop: 8 }} />
+            ) : (
+              <strong className={headlineKr >= 0 ? "pos" : "neg"}>
+                <CountUp value={headlineKr} format={(n) => krFmt(n, true)} />
+              </strong>
+            )}
           </div>
-        </Card>
+          <div><span>ROI</span><strong className={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(m?.roiPct ?? null, true)}</strong></div>
+          <div><span>Units</span><strong className={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"}>{uFmt(m?.profitUnits ?? 0, true)}</strong></div>
+          <div><span>Win rate</span><strong>{pctFmt(m?.winRatePct ?? null)}</strong></div>
+          <div><span>Avgjorda</span><strong>{(m?.settledBets ?? 0).toLocaleString("sv-SE")}</strong></div>
+          <div><span>Max DD</span><strong className="neg">{visDdKr > 0 ? krShort(-visDdKr, false) : "—"}</strong></div>
+        </div>
+
+        <div className="ap-terminal-chart-head">
+          <div>
+            <strong>Resultatutveckling</strong>
+            <span>
+              {showPeriod
+                ? `${periodBets.toLocaleString("sv-SE")} avgjorda · ${PERIODS.find((p) => p.key === period)?.label}`
+                : `${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda · hela perioden`}
+            </span>
+          </div>
+          <div className="ap-terminal-periods">
+            {PERIODS.map((p) => (
+              <button key={p.key} className={period === p.key ? "is-active" : ""} onClick={() => setPeriod(p.key)}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="ap-terminal-chart">
+          {loading && !data ? (
+            <Skeleton h={176} />
+          ) : (
+            <InteractiveLineChart
+              points={pts}
+              w={940}
+              h={176}
+              stroke={cc.acc}
+              fill={cc.fill}
+              grid={cc.grid}
+              formatValue={(v) => krFmt(v)}
+            />
+          )}
+        </div>
+      </section>
+
+      {/* Open risk is the primary actionable section. */}
+      {data && risk && <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} />}
+
+      <div className="ap-section-rule">
+        <span>02</span>
+        <strong>Resultatfördelning</strong>
+        <em>Utveckling per månad och sport</em>
       </div>
 
-      {/* Monthly bars + form */}
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 310px", marginBottom: 12 }}>
+      {/* Monthly bars + sport mix */}
+      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px", marginBottom: 12 }}>
         <Card>
           <span className="ap-label">P/L per månad (units)</span>
           <div style={{ marginTop: 14 }}>
@@ -234,14 +188,38 @@ export default function OverviewPage() {
           </div>
         </Card>
         <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span className="ap-label">Form &amp; rekord</span>
-            <Link href="/insights" className="ap-link">Mer →</Link>
+          <span className="ap-label">Fördelning per sport</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 14 }}>
+            <Donut data={sportsWithPct} size={112} thickness={17} colors={cc.palette} track={cc.grid} centerLabel={String(m?.totalBets ?? 0)} centerSub="BETS" centerColor={cc.txt} centerSubColor={cc.dim} />
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 9 }}>
+              {sportsWithPct.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data än</span>}
+              {sportsWithPct.slice(0, 5).map((s, i) => (
+                <div key={s.key} className="ap-leg">
+                  <span className="ap-dot" style={{ background: cc.palette[i % cc.palette.length] }} />
+                  <span className="ap-ell" style={{ flex: 1, color: "var(--dim)" }}>{s.key}</span>
+                  <span className="ap-num" style={{ fontWeight: 600 }}>{s.pct}%</span>
+                </div>
+              ))}
+            </div>
           </div>
+        </Card>
+      </div>
+
+      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
+        <Card>
+          <span className="ap-label">Form &amp; rekord</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>
             <FormRow label="Nuvarande svit" value={streakText(ins?.streaks)} tone={streakTone(ins?.streaks)} />
             <FormRow label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin} i rad` : "—"} tone="pos" />
             <FormRow label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss} i rad` : "—"} tone="neg" />
+          </div>
+        </Card>
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span className="ap-label">Extremer &amp; insats</span>
+            <Link href="/insights" className="ap-link">Mer →</Link>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>
             <FormRow label="Bästa dag" value={ins?.best ? `${krShort(ins.best.profitUnits * unit, true)} · ${dateShort(ins.best.date)}` : "—"} tone="pos" />
             <FormRow label="Sämsta dag" value={ins?.worst ? `${krShort(ins.worst.profitUnits * unit, true)} · ${dateShort(ins.worst.date)}` : "—"} tone="neg" />
             <FormRow label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U · ${krFmt(ins.avgStakeUnits * unit)}` : "—"} />
@@ -249,8 +227,10 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      {/* Öppna spel — absorbs the old "Öppen risk" card */}
-      {data && risk && <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} />}
+      {/* Goals & pace */}
+      {!loading && data && (
+        <GoalCard monthProfitUnits={monthProfitU} yearProfitUnits={yearProfitU} unit={unit} />
+      )}
 
       {/* Recent bets */}
       <Card style={{ padding: 0 }}>

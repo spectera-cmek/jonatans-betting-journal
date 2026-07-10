@@ -48,7 +48,7 @@ export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: 
 
       {risk.bets === 0 ? (
         <Empty
-          icon={<I p={IC.list} />}
+          icon={<I p={IC.ticket} />}
           title="Inga öppna spel"
           hint="Allt är avgjort. Logga nästa spel med knappen uppe till höger."
         />

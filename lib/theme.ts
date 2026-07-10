@@ -10,10 +10,10 @@ export interface Accent {
 }
 
 export const ACCENTS: Accent[] = [
+  { key: "blå", label: "Editorial blue", hex: "#5b8cff", soft: "rgba(91,140,255,0.14)", text: "#ffffff" },
   { key: "silver", label: "Silver", hex: "#e6e8f0", soft: "rgba(230,232,240,0.1)", text: "#0a0b0f" },
   { key: "violett", label: "Violett", hex: "#8f74ff", soft: "rgba(143,116,255,0.16)", text: "#16102a" },
   { key: "emerald", label: "Smaragd", hex: "#2fd98a", soft: "rgba(47,217,138,0.16)", text: "#06210f" },
-  { key: "blå", label: "Blå", hex: "#4f8bff", soft: "rgba(79,139,255,0.16)", text: "#ffffff" },
   { key: "bärnsten", label: "Bärnsten", hex: "#f5a524", soft: "rgba(245,165,36,0.16)", text: "#2a1c02" },
 ];
 

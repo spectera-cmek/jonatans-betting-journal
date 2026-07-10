@@ -45,6 +45,7 @@ export default function BetsPage() {
   const [month, setMonth] = useState("Alla månader");
   const [shown, setShown] = useState(PAGE);
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Mirror filters in the URL query so a filtered view is shareable and survives
   // reload. Read once on mount; the first write is skipped so it can't clobber.
@@ -192,6 +193,25 @@ export default function BetsPage() {
 
   const visible = useMemo(() => sorted.slice(0, shown), [sorted, shown]);
   const remaining = sorted.length - visible.length;
+  const advancedCount = [
+    sport !== "Alla sporter",
+    book !== "Alla bookmakers",
+    !!market,
+    !!scope,
+    !!day,
+    year !== "Alla år",
+    month !== "Alla månader",
+  ].filter(Boolean).length;
+
+  const clearAdvanced = () => {
+    setSport("Alla sporter");
+    setBook("Alla bookmakers");
+    setMarket("");
+    setScope("");
+    setDay("");
+    setYear("Alla år");
+    setMonth("Alla månader");
+  };
 
   const metrics = useMemo(() => {
     const likes: BetLike[] = filtered.map((b) => ({
@@ -240,28 +260,45 @@ export default function BetsPage() {
     <>
       {b.outcome === "pending" && (
         <>
-          <button className="ap-iconbtn w" title="Vunnen" onClick={() => settle(b.id, "win")}>W</button>
-          <button className="ap-iconbtn l" title="Förlorad" onClick={() => settle(b.id, "loss")}>L</button>
-          <button className="ap-iconbtn" title="Push (insats tillbaka)" onClick={() => settle(b.id, "push")}>P</button>
+          <button className="ap-iconbtn w" title="Markera som vunnen" aria-label="Markera som vunnen" onClick={() => settle(b.id, "win")}>
+            <I p={IC.check} size={14} />
+          </button>
+          <button className="ap-iconbtn l" title="Markera som förlorad" aria-label="Markera som förlorad" onClick={() => settle(b.id, "loss")}>
+            <I p={IC.closeCircle} size={14} />
+          </button>
+          <button className="ap-iconbtn" title="Markera som push" aria-label="Markera som push" onClick={() => settle(b.id, "push")}>
+            <I p={IC.minus} size={14} />
+          </button>
         </>
       )}
       <button
         className="ap-iconbtn"
         title={(b.league ?? "").trim() === "VM 2026" ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
+        aria-label={(b.league ?? "").trim() === "VM 2026" ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
         style={{ opacity: (b.league ?? "").trim() === "VM 2026" ? 1 : 0.38 }}
         onClick={() => toggleVM(b)}
-      >🏆</button>
-      <button className="ap-iconbtn" title="Redigera" onClick={() => openEdit(b)}>✎</button>
-      <button className="ap-iconbtn x" title="Ta bort" onClick={() => del(b)}>✕</button>
+      >
+        <I p={IC.trophy} size={14} />
+      </button>
+      <button className="ap-iconbtn" title="Redigera" aria-label="Redigera" onClick={() => openEdit(b)}>
+        <I p={IC.edit} size={14} />
+      </button>
+      <button className="ap-iconbtn x" title="Ta bort" aria-label="Ta bort" onClick={() => del(b)}>
+        <I p={IC.trash} size={14} />
+      </button>
     </>
   );
 
   return (
-    <div>
+    <div className="ap-ledger">
+      <div className="ap-page-kicker">
+        <span>Ledger / Bet history</span>
+        <em>{rangeLabel || new Date().getFullYear()}</em>
+      </div>
       <Topbar
         title="Alla bets"
         sub={`${bets.length} bets loggade${rangeLabel ? ` · ${rangeLabel}` : ""}`}
-        icon={<I p={IC.list} />}
+        icon={<I p={IC.ticket} />}
         actions={
           <>
             <a className="ap-btn ghost" href="/api/bets/export"><I p={IC.download} size={15} /><span className="ap-hide-sm">CSV</span></a>
@@ -279,64 +316,80 @@ export default function BetsPage() {
       </div>
 
       {/* filters */}
-      <div className="ap-filters">
+      <div className="ap-filterbar">
         <div className="ap-search">
           <I p={IC.search} size={16} />
           <input placeholder="Sök match, liga, spel eller bookmaker…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        {sel(sport, setSport, ["Alla sporter", ...sports])}
-        {sel(book, setBook, ["Alla bookmakers", ...books])}
+        <button className={"ap-btn ghost ap-filter-toggle" + (advancedOpen ? " is-active" : "")} onClick={() => setAdvancedOpen((open) => !open)}>
+          <I p={IC.menu} size={15} />
+          Filter{advancedCount > 0 ? ` (${advancedCount})` : ""}
+        </button>
         <div className="ap-select">
-          <select value={market} onChange={(e) => setMarket(e.target.value)}>
-            <option value="">Alla marknader</option>
-            {markets.map((m) => <option key={m} value={m}>{m}</option>)}
+          <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "desc" | "asc")}>
+            <option value="desc">Nyast först</option>
+            <option value="asc">Äldst först</option>
           </select>
         </div>
-        {scopes.length > 0 && (
-          <div className="ap-select">
-            <select value={scope} onChange={(e) => setScope(e.target.value)}>
-              <option value="">Spelare / lag / match</option>
-              {scopes.map((sc) => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
-            </select>
-          </div>
-        )}
       </div>
-      <div className="ap-filters">
-        <div className="ap-select">
-          <input
-            type="date"
-            value={day}
-            onChange={(e) => setDay(e.target.value)}
-            style={{ background: "transparent", border: "none", color: "var(--txt)", font: "inherit", outline: "none" }}
-          />
+
+      <div className="ap-filter-summary">
+        <div className="ap-filters" style={{ marginBottom: 0 }}>
+          {RES_CHIPS.map(([v, l]) => (
+            <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} onClick={() => setRes(v)}>{l}</button>
+          ))}
         </div>
-        {sel(year, setYear, ["Alla år", ...years])}
-        <div className="ap-select">
-          <select value={month} onChange={(e) => setMonth(e.target.value)} disabled={!!day}>
-            <option value="Alla månader">Alla månader</option>
-            {MONTHS_SV.map((label, i) => <option key={label} value={String(i + 1)}>{label}</option>)}
-          </select>
-        </div>
-        {(day || year !== "Alla år" || month !== "Alla månader") && (
-          <button className="ap-chip" onClick={() => { setDay(""); setYear("Alla år"); setMonth("Alla månader"); }}>Rensa datum</button>
-        )}
-      </div>
-      <div className="ap-filters">
-        {RES_CHIPS.map(([v, l]) => (
-          <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} onClick={() => setRes(v)}>{l}</button>
-        ))}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
-          <div className="ap-select">
-            <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "desc" | "asc")}>
-              <option value="desc">Datum: Nyast först</option>
-              <option value="asc">Datum: Äldst först</option>
-            </select>
-          </div>
-          <div className="ap-hide-sm" style={{ fontSize: 12.5, color: "var(--dim)" }}>
-            Visar <strong style={{ color: "var(--txt)" }}>{Math.min(visible.length, filtered.length)}</strong> av {filtered.length} träffar
-          </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {advancedCount > 0 && <button className="ap-link" onClick={clearAdvanced}>Rensa {advancedCount} filter</button>}
+          <span style={{ fontSize: 12.5, color: "var(--dim)" }}>
+            <strong style={{ color: "var(--txt)" }}>{Math.min(visible.length, filtered.length)}</strong> av {filtered.length}
+          </span>
         </div>
       </div>
+
+      {advancedOpen && (
+        <div className="ap-filter-panel">
+          <div className="ap-filter-panel-head">
+            <div>
+              <div className="ap-card-title">Fler filter</div>
+              <div className="ap-sub">Avgränsa sport, marknad, bookmaker eller datum.</div>
+            </div>
+            {advancedCount > 0 && <button className="ap-link" onClick={clearAdvanced}>Rensa alla</button>}
+          </div>
+          <div className="ap-filter-grid">
+            {sel(sport, setSport, ["Alla sporter", ...sports])}
+            {sel(book, setBook, ["Alla bookmakers", ...books])}
+            <div className="ap-select">
+              <select value={market} onChange={(e) => setMarket(e.target.value)}>
+                <option value="">Alla marknader</option>
+                {markets.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            {scopes.length > 0 && (
+              <div className="ap-select">
+                <select value={scope} onChange={(e) => setScope(e.target.value)}>
+                  <option value="">Spelare / lag / match</option>
+                  {scopes.map((sc) => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="ap-select ap-date-filter">
+              <input
+                type="date"
+                value={day}
+                onChange={(e) => setDay(e.target.value)}
+              />
+            </div>
+            {sel(year, setYear, ["Alla år", ...years])}
+            <div className="ap-select">
+              <select value={month} onChange={(e) => setMonth(e.target.value)} disabled={!!day}>
+                <option value="Alla månader">Alla månader</option>
+                {MONTHS_SV.map((label, i) => <option key={label} value={String(i + 1)}>{label}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* table (desktop / tablet) */}
       <div className="ap-table-wrap">
@@ -354,7 +407,7 @@ export default function BetsPage() {
               />
             )}
             {visible.map((b) => (
-              <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: GRID }}>
+              <div key={b.id} className={`ap-trow ap-bet-row ${betTone(b.outcome)}`} style={{ gridTemplateColumns: GRID }}>
                 <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
                 <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
@@ -391,7 +444,7 @@ export default function BetsPage() {
           />
         )}
         {!loading && visible.map((b) => (
-          <div key={b.id} className="ap-betcard">
+          <div key={b.id} className={`ap-betcard ${betTone(b.outcome)}`}>
             <div className="ap-betcard-top">
               <span className="ap-betcard-date">
                 {dateShort(b.eventAt ?? b.placedAt)} <span className="ap-tag">{sportTag(b.sport)}</span>
@@ -445,4 +498,11 @@ export default function BetsPage() {
       />
     </div>
   );
+}
+
+function betTone(outcome: string) {
+  if (outcome === "win" || outcome === "half_win") return "is-win";
+  if (outcome === "loss" || outcome === "half_loss") return "is-loss";
+  if (outcome === "pending") return "is-open";
+  return "is-neutral";
 }
