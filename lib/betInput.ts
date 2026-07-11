@@ -3,6 +3,16 @@
 
 import { profitUnits, type Outcome } from "./betting";
 import { categorizeDetail, type LegLike } from "./categorize";
+import {
+  EVENT_KINDS,
+  MARKET_SCOPES,
+  TOURNAMENT_STAGES,
+  inferEventKind,
+  normalizeGradingMarket,
+  normalizeLeague,
+  normalizeMarketCategory,
+  normalizeTournamentStage,
+} from "./betTaxonomy";
 
 const OUTCOMES: Outcome[] = [
   "pending",
@@ -13,9 +23,8 @@ const OUTCOMES: Outcome[] = [
   "half_loss",
   "void",
 ];
-const MARKETS = ["h2h", "totals", "spreads", "other"];
 const SIDES = ["home", "away", "draw", "over", "under"];
-const SCOPES = ["player", "team", "match"];
+const SCOPES = [...MARKET_SCOPES];
 
 export interface BetInput {
   eventAt?: string | null;
@@ -28,6 +37,10 @@ export interface BetInput {
   market?: string;
   marketCategory?: string | null;
   marketScope?: string | null;
+  eventKind?: string | null;
+  tournamentStage?: string | null;
+  resultProvider?: string | null;
+  resultEventRef?: string | null;
   selection?: string;
   selectionSide?: string | null;
   line?: number | string | null;
@@ -90,9 +103,10 @@ export function buildBetData(
   }
 
   if (!partial || input.market !== undefined) {
-    const market = (str(input.market) || "h2h").toLowerCase();
-    if (!MARKETS.includes(market))
-      throw new ValidationError(`market must be one of ${MARKETS.join(", ")}`);
+    const rawMarket = str(input.market);
+    const market = rawMarket
+      ? normalizeGradingMarket(rawMarket, input.marketCategory, input.selectionSide)
+      : "h2h";
     data.market = market;
   }
 
@@ -108,13 +122,15 @@ export function buildBetData(
   }
 
   // Detaljerad marknad: marketCategory är fritext (curated i UI), marketScope
-  // är en av player|team|match. Båda valfria.
+  // är en av player|team|match. Okända kategorier samlas under Övrigt så
+  // filtrering och analys förblir konsekvent.
   if (input.marketCategory !== undefined) {
-    data.marketCategory = str(input.marketCategory);
+    const category = str(input.marketCategory);
+    data.marketCategory = category ? normalizeMarketCategory(category) : null;
   }
   if (input.marketScope !== undefined) {
     const scope = str(input.marketScope)?.toLowerCase() ?? null;
-    if (scope && !SCOPES.includes(scope))
+    if (scope && !SCOPES.includes(scope as (typeof SCOPES)[number]))
       throw new ValidationError(`marketScope must be one of ${SCOPES.join(", ")}`);
     data.marketScope = scope;
   }
@@ -141,16 +157,32 @@ export function buildBetData(
   if (input.closingOdds !== undefined) data.closingOdds = num(input.closingOdds);
   if (input.sportKey !== undefined) data.sportKey = str(input.sportKey);
   if (input.sport !== undefined) data.sport = str(input.sport);
-  if (input.league !== undefined) data.league = str(input.league);
+  if (input.league !== undefined) data.league = normalizeLeague(str(input.league));
   if (input.homeTeam !== undefined) data.homeTeam = str(input.homeTeam);
   if (input.awayTeam !== undefined) data.awayTeam = str(input.awayTeam);
   if (input.betType !== undefined) data.betType = str(input.betType) || "single";
   if (input.externalRef !== undefined) data.externalRef = str(input.externalRef);
+  if (input.resultProvider !== undefined) data.resultProvider = str(input.resultProvider)?.toLowerCase() ?? null;
+  if (input.resultEventRef !== undefined) data.resultEventRef = str(input.resultEventRef);
   if (input.bookmaker !== undefined) data.bookmaker = str(input.bookmaker);
   if (input.tipster !== undefined) data.tipster = str(input.tipster);
   if (input.notes !== undefined) data.notes = str(input.notes);
   if (input.legs !== undefined)
     data.legs = input.legs ? JSON.stringify(input.legs) : null;
+
+  if (input.eventKind !== undefined) {
+    const eventKind = str(input.eventKind)?.toLowerCase() ?? null;
+    if (eventKind && !EVENT_KINDS.includes(eventKind as (typeof EVENT_KINDS)[number]))
+      throw new ValidationError(`eventKind must be one of ${EVENT_KINDS.join(", ")}`);
+    data.eventKind = eventKind;
+  }
+  if (input.tournamentStage !== undefined) {
+    const rawStage = str(input.tournamentStage);
+    const stage = normalizeTournamentStage(rawStage);
+    if (rawStage && !stage)
+      throw new ValidationError(`tournamentStage must be one of ${TOURNAMENT_STAGES.join(", ")}`);
+    data.tournamentStage = stage;
+  }
 
   // On create, auto-derive the detailed market/scope from the selection text
   // (and any imported legs) when the caller didn't supply them — so quick entry
@@ -171,6 +203,14 @@ export function buildBetData(
       if (needCat && det.marketCategory && det.marketCategory !== "Övrigt")
         data.marketCategory = det.marketCategory;
       if (needScope && det.marketScope) data.marketScope = det.marketScope;
+
+    if (data.eventKind === undefined) {
+      data.eventKind = inferEventKind(
+        data.event as string | undefined,
+        data.selection as string | undefined,
+        input.eventKind
+      );
+    }
     }
   }
 

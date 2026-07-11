@@ -43,6 +43,7 @@ async function main() {
       return {
         id: b.id,
         user: b.user.username,
+        placedAt: b.placedAt,
         eventAt: b.eventAt,
         sport: b.sport,
         league: b.league,
@@ -52,6 +53,8 @@ async function main() {
         market: b.market,
         marketCategory: b.marketCategory,
         marketScope: b.marketScope,
+        eventKind: b.eventKind,
+        tournamentStage: b.tournamentStage,
         selection: b.selection,
         selectionSide: b.selectionSide,
         line: b.line,
@@ -60,6 +63,10 @@ async function main() {
         odds: b.odds,
         stakeUnits: b.stakeUnits,
         bookmaker: b.bookmaker,
+        importRef: b.importRef,
+        externalRef: b.externalRef,
+        resultProvider: b.resultProvider,
+        resultEventRef: b.resultEventRef,
         notes: b.notes,
       };
     });

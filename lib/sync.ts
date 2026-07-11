@@ -2,9 +2,9 @@
 // Grades finished bets and captures closing odds for CLV.
 
 import { prisma } from "./db";
-import { profitUnits, type Outcome } from "./betting";
 import { gradeBet } from "./grading";
 import { espnPath, fetchFinalScore } from "./scores";
+import { settleBet } from "./settlement";
 import {
   getScores,
   getOdds,
@@ -37,7 +37,13 @@ export async function runGrade(): Promise<SyncResult> {
 
   // Only bets we can actually look up: pending + linked to an external event.
   const pending = await prisma.bet.findMany({
-    where: { outcome: "pending", externalRef: { not: null }, sportKey: { not: null } },
+    where: {
+      outcome: "pending",
+      externalRef: { not: null },
+      sportKey: { not: null },
+      betType: "single",
+      eventKind: "match",
+    },
   });
 
   if (pending.length === 0) {
@@ -78,13 +84,18 @@ export async function runGrade(): Promise<SyncResult> {
         continue;
       }
 
-      const p = profitUnits(outcome as Outcome, bet.odds, bet.stakeUnits);
-      await prisma.bet.update({
-        where: { id: bet.id },
-        data: { outcome, profitUnits: p, gradedAt: new Date() },
-      });
-      graded += 1;
-      details.push(`${bet.event}: ${parsed.homeScore}-${parsed.awayScore} -> ${outcome}`);
+      try {
+        const result = await settleBet(prisma, {
+          betId: bet.id,
+          outcome,
+          source: "odds_api",
+          reason: `${parsed.homeScore}-${parsed.awayScore} via The Odds API`,
+        });
+        if (result.changed) graded += 1;
+        details.push(`${bet.event}: ${parsed.homeScore}-${parsed.awayScore} -> ${outcome}`);
+      } catch (error) {
+        details.push(`${bet.event}: ${(error as Error).message}`);
+      }
     }
   }
 
@@ -115,6 +126,9 @@ export async function runGradeByScores(): Promise<SyncResult> {
       outcome: "pending",
       market: { in: ["h2h", "totals", "spreads"] },
       eventAt: { not: null },
+      betType: "single",
+      eventKind: "match",
+      NOT: { marketScope: "player" },
     },
   });
 
@@ -136,13 +150,23 @@ export async function runGradeByScores(): Promise<SyncResult> {
 
     let score;
     try {
-      score = await fetchFinalScore(path, new Date(bet.eventAt!), bet.homeTeam, bet.awayTeam);
+      score = await fetchFinalScore(
+        path,
+        new Date(bet.eventAt!),
+        bet.homeTeam,
+        bet.awayTeam,
+        bet.resultProvider === "espn" ? bet.resultEventRef : null
+      );
     } catch (e) {
       details.push(`${bet.event}: ${(e as Error).message}`);
       continue;
     }
     if (!score) {
       details.push(`${bet.event}: inget färdigspelat resultat hittat ännu`);
+      continue;
+    }
+    if (score.wentToExtraTime) {
+      details.push(`${bet.event}: förlängning/straffar — kräver manuell kontroll av 90-minutersmarknaden`);
       continue;
     }
 
@@ -155,13 +179,18 @@ export async function runGradeByScores(): Promise<SyncResult> {
       continue;
     }
 
-    const p = profitUnits(outcome as Outcome, bet.odds, bet.stakeUnits);
-    await prisma.bet.update({
-      where: { id: bet.id },
-      data: { outcome, profitUnits: p, gradedAt: new Date() },
-    });
-    graded += 1;
-    details.push(`${bet.event}: ${score.homeScore}-${score.awayScore} -> ${outcome}`);
+    try {
+      const result = await settleBet(prisma, {
+        betId: bet.id,
+        outcome,
+        source: "espn",
+        reason: `${score.homeScore}-${score.awayScore} via ESPN`,
+      });
+      if (result.changed) graded += 1;
+      details.push(`${bet.event}: ${score.homeScore}-${score.awayScore} -> ${outcome}`);
+    } catch (error) {
+      details.push(`${bet.event}: ${(error as Error).message}`);
+    }
   }
 
   await prisma.syncLog.create({

@@ -7,6 +7,7 @@ import type { Insights } from "./insights";
 import type { TiltStatus } from "./tilt";
 import type { WeeklyReport, MonthlyReport } from "./weekly";
 import type { BetListDTO, SettingsDTO } from "./types";
+import type { WorldCupData } from "./worldCup";
 
 export interface MonthRow {
   month: string;
@@ -23,6 +24,10 @@ export interface LeaderboardEntry {
   selection: string;
   sport: string | null;
   league: string | null;
+  marketCategory: string | null;
+  marketScope: string | null;
+  eventKind: string;
+  tournamentStage: string | null;
   bookmaker: string | null;
   eventAt: string;
   odds: number;
@@ -91,6 +96,7 @@ export function revalidateAll() {
 function useCachedGet<T>(url: string) {
   const [data, setData] = useState<T | null>(() => (cache.get(url) as T) ?? null);
   const [loading, setLoading] = useState(!cache.has(url));
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!cache.has(url)) setLoading(true);
@@ -98,6 +104,9 @@ function useCachedGet<T>(url: string) {
       const d = await api.get<T>(url);
       cache.set(url, d);
       setData(d);
+      setError(null);
+    } catch (cause) {
+      setError((cause as Error).message);
     } finally {
       setLoading(false);
     }
@@ -111,7 +120,7 @@ function useCachedGet<T>(url: string) {
     };
   }, [load]);
 
-  return { data, loading, reload: load };
+  return { data, loading, error, reload: load };
 }
 
 export function useMetrics() {
@@ -121,15 +130,32 @@ export function useMetrics() {
     m.reload();
     s.reload();
   }, [m.reload, s.reload]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { data: m.data, settings: s.data, loading: m.loading || s.loading, reload };
+  return { data: m.data, settings: s.data, loading: m.loading || s.loading, error: m.error || s.error, reload };
 }
 
-export function useBets() {
-  const b = useCachedGet<BetListDTO[]>("/api/bets?fields=list");
+export interface UseBetsOptions {
+  league?: string;
+  marketCategory?: string;
+  marketScope?: string;
+  eventKind?: string;
+  tournamentStage?: string;
+  outcome?: string;
+}
+
+export function useBets(options: UseBetsOptions = {}) {
+  const params = new URLSearchParams({ fields: "list" });
+  for (const [key, value] of Object.entries(options)) {
+    if (value) params.set(key, value);
+  }
+  const b = useCachedGet<BetListDTO[]>(`/api/bets?${params.toString()}`);
   const s = useCachedGet<SettingsDTO>("/api/settings");
   const reload = useCallback(() => {
     b.reload();
     s.reload();
   }, [b.reload, s.reload]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { bets: b.data ?? [], settings: s.data, loading: b.loading || s.loading, reload };
+  return { bets: b.data ?? [], settings: s.data, loading: b.loading || s.loading, error: b.error || s.error, reload };
+}
+
+export function useWorldCup() {
+  return useCachedGet<WorldCupData>("/api/vm2026");
 }

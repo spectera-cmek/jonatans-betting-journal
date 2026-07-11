@@ -33,6 +33,23 @@ export async function PATCH(
       return NextResponse.json({ error: "Bet not found" }, { status: 404 });
     }
     const body = await req.json();
+    if (body.outcome !== undefined && body.outcome !== existing.outcome) {
+      return NextResponse.json(
+        { error: "Ändra resultat via rättningsknappen så historiken sparas." },
+        { status: 400 }
+      );
+    }
+    if (
+      existing.outcome !== "pending" &&
+      ((body.odds !== undefined && Number(body.odds) !== existing.odds) ||
+        (body.stakeUnits !== undefined && Number(body.stakeUnits) !== existing.stakeUnits))
+    ) {
+      return NextResponse.json(
+        { error: "Ångra rättningen innan odds eller insats ändras på ett avgjort bet." },
+        { status: 409 }
+      );
+    }
+    delete body.outcome;
     const data = buildBetData(body, {
       partial: true,
       existing: {

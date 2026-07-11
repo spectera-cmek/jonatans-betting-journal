@@ -2,9 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/fetcher";
-import { SPORTS, MARKETS, SIDES, BOOKMAKERS, MARKET_CATEGORIES_BY_SPORT, GENERIC_MARKET_CATEGORIES, SCOPES } from "@/lib/constants";
+import {
+  SPORTS,
+  MARKETS,
+  SIDES,
+  BOOKMAKERS,
+  MARKET_CATEGORIES_BY_SPORT,
+  GENERIC_MARKET_CATEGORIES,
+  SCOPES,
+  EVENT_KINDS,
+  TOURNAMENT_STAGES,
+  VM_2026_LEAGUE,
+} from "@/lib/constants";
 import { inferSelection } from "@/lib/grading";
 import { categorizeDetail } from "@/lib/categorize";
+import { inferEventKind } from "@/lib/betTaxonomy";
 import { evaluateBet } from "@/lib/discipline";
 import { accaOdds } from "@/lib/betting";
 import { I, IC } from "./icons";
@@ -66,6 +78,8 @@ const empty = {
   market: "h2h",
   marketCategory: "",
   marketScope: "",
+  eventKind: "match",
+  tournamentStage: "",
   selection: "",
   selectionSide: "home",
   line: "",
@@ -75,6 +89,8 @@ const empty = {
   bookmaker: "Unibet",
   tipster: "",
   externalRef: "",
+  resultProvider: "",
+  resultEventRef: "",
   notes: "",
 };
 type Form = typeof empty;
@@ -91,6 +107,8 @@ function formFromBet(b: BetDTO): Form {
     market: b.market,
     marketCategory: b.marketCategory ?? "",
     marketScope: b.marketScope ?? "",
+    eventKind: b.eventKind ?? "match",
+    tournamentStage: b.tournamentStage ?? "",
     selection: b.selection,
     selectionSide: b.selectionSide ?? "home",
     line: b.line != null ? String(b.line) : "",
@@ -100,6 +118,8 @@ function formFromBet(b: BetDTO): Form {
     bookmaker: b.bookmaker ?? "Unibet",
     tipster: b.tipster ?? "",
     externalRef: b.externalRef ?? "",
+    resultProvider: b.resultProvider ?? "",
+    resultEventRef: b.resultEventRef ?? "",
     notes: b.notes ?? "",
   };
 }
@@ -120,14 +140,6 @@ const RESULT_SEG: [string, string][] = [
   ["win", "Vunnen"],
   ["loss", "Förlorad"],
   ["push", "Push"],
-];
-
-// Edit mode exposes the full outcome set (half wins from cashouts etc.).
-const RESULT_SEG_FULL: [string, string][] = [
-  ...RESULT_SEG,
-  ["half_win", "½ Vunnen"],
-  ["half_loss", "½ Förlorad"],
-  ["void", "Void"],
 ];
 
 export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefill }: Props) {
@@ -219,6 +231,8 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
     const det = categorizeDetail(form.selection, form.event, [], form.homeTeam, form.awayTeam);
     if (!form.marketCategory && det.marketCategory && det.marketCategory !== "Övrigt") set("marketCategory", det.marketCategory);
     if (!form.marketScope && det.marketScope) set("marketScope", det.marketScope);
+    const kind = inferEventKind(form.event, form.selection);
+    if (kind === "outright" && form.eventKind !== kind) set("eventKind", kind);
   };
 
   const runSearch = async () => {
@@ -260,6 +274,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
         // intact unless outcome/odds/stake actually moved.
         const payload: Record<string, unknown> = {};
         for (const k of Object.keys(form) as (keyof Form)[]) {
+          if (k === "outcome") continue; // settlement has its own audited endpoint
           if (form[k] !== initial.current[k]) payload[k] = form[k] === "" ? null : form[k];
         }
         if (Object.keys(payload).length > 0) {
@@ -294,7 +309,6 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
     ? MARKETS
     : [{ value: form.market, label: form.market }, ...MARKETS];
   const bookOpts = BOOKMAKERS.includes(form.bookmaker) ? BOOKMAKERS : [form.bookmaker, ...BOOKMAKERS];
-  const resultSeg = editing ? RESULT_SEG_FULL : RESULT_SEG;
   // Detalj-marknad: curated lista per sport (fallback generisk); behåll ett
   // importerat/avvikande värde valbart.
   const catBase = MARKET_CATEGORIES_BY_SPORT[form.sport] ?? GENERIC_MARKET_CATEGORIES;
@@ -368,15 +382,31 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 <span>Liga</span>
                 <button
                   type="button"
-                  onClick={() => set("league", form.league.trim() === "VM 2026" ? "" : "VM 2026")}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, padding: 0, color: form.league.trim() === "VM 2026" ? "var(--pos)" : "var(--dim2)" }}
-                >🏆 VM 2026</button>
+                  onClick={() => set("league", form.league.trim() === VM_2026_LEAGUE ? "" : VM_2026_LEAGUE)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, padding: 0, color: form.league.trim() === VM_2026_LEAGUE ? "var(--pos)" : "var(--dim2)" }}
+                >VM 2026</button>
               </label>
               <input className="ap-input" placeholder="t.ex. Premier League" value={form.league} onChange={(e) => set("league", e.target.value)} />
             </div>
             <div className="ap-field">
               <label>Match</label>
               <input className="ap-input" placeholder="t.ex. Arsenal – Chelsea" value={form.event} onChange={(e) => set("event", e.target.value)} />
+            </div>
+          </div>
+
+          <div className="ap-x2">
+            <div className="ap-field">
+              <label>Eventtyp</label>
+              <select className="ap-input" value={form.eventKind} onChange={(e) => set("eventKind", e.target.value)}>
+                {EVENT_KINDS.map((kind) => <option key={kind.value} value={kind.value}>{kind.label}</option>)}
+              </select>
+            </div>
+            <div className="ap-field">
+              <label>Turneringsfas</label>
+              <select className="ap-input" value={form.tournamentStage} onChange={(e) => set("tournamentStage", e.target.value)}>
+                <option value="">— ej angiven —</option>
+                {TOURNAMENT_STAGES.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
+              </select>
             </div>
           </div>
 
@@ -494,14 +524,16 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
             </div>
           </div>
 
-          <div className="ap-field">
-            <label>Resultat</label>
-            <div className="ap-seg2">
-              {resultSeg.map(([v, l]) => (
-                <button key={v} className={form.outcome === v ? "is-active" : ""} onClick={() => set("outcome", v)}>{l}</button>
-              ))}
+          {!editing && (
+            <div className="ap-field">
+              <label>Resultat</label>
+              <div className="ap-seg2">
+                {RESULT_SEG.map(([v, l]) => (
+                  <button key={v} className={form.outcome === v ? "is-active" : ""} onClick={() => set("outcome", v)}>{l}</button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="ap-field">
             <label>Anteckningar (valfritt)</label>
@@ -569,6 +601,11 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           {form.externalRef && !editing && (
             <div style={{ fontSize: 12, color: "var(--pos)" }}>
               ✓ Länkad till event {form.externalRef.slice(0, 8)}… — kan auto-rättas vid synk.
+            </div>
+          )}
+          {form.resultEventRef && (
+            <div style={{ fontSize: 12, color: "var(--pos)" }}>
+              Länkad till {form.resultProvider || "resultatkälla"}-match {form.resultEventRef}.
             </div>
           )}
           {error && <div style={{ fontSize: 13, color: "var(--red)" }}>{error}</div>}

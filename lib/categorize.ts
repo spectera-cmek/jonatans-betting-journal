@@ -4,6 +4,17 @@
 //
 // Pure & dependency-free so it is reusable from scripts and trivially unit-testable.
 
+import {
+  isWorldCup2026Text,
+  normalizeGradingMarket,
+  normalizeMarketCategory,
+  VM_2026_LEAGUE,
+  type GradingMarket,
+  type MarketScope,
+} from "./betTaxonomy";
+
+export type { MarketScope };
+
 export interface LegLike {
   selection?: string;
   event?: string;
@@ -14,38 +25,11 @@ export interface LegLike {
 
 /* ----------------------------- Market categories ---------------------------- */
 
-// Map the ~600 raw market strings to a small set of clean categories. Ordered:
-// most specific first (a player-points line must beat the generic "Totalt" rule).
+// Backwards-compatible public name used throughout the app and existing tests.
+// The canonical implementation lives in betTaxonomy so forms, imports and
+// backfills cannot drift apart.
 export function normalizeMarket(raw: string | null | undefined): string {
-  if (!raw) return "Övrigt";
-  const t = raw.toLowerCase();
-  const has = (re: RegExp) => re.test(t);
-
-  if (has(/vinstmetod|method of victory/)) return "Vinstmetod";
-  if (has(/trepoäng|trepoangare|3-?poäng|gjorda treor|\btreor\b|three[- ]point/)) return "Trepoängare";
-  if (has(/frikast|free ?throws?/)) return "Frikast";
-  if (has(/assist/)) return "Assists";
-  if (has(/returer|rebound/)) return "Returer";
-  if (has(/poäng|points/)) return "Spelarpoäng";
-  // "Skott på mål" is a stricter market than plain "Skott" — match it first.
-  if (has(/skott på mål|skott pa mal|on target|shots on goal|\bsog\b/)) return "Skott på mål";
-  if (has(/skott|shots?\b/)) return "Skott";
-  if (has(/räddning|\bsaves?\b/)) return "Räddningar";
-  if (has(/hörn|corner/)) return "Hörnor";
-  if (has(/kort|foul|varnad|tackling|utvisning|booking|card/)) return "Kort & fouls";
-  if (has(/\bess\b|\baces?\b/)) return "Ess";
-  if (has(/båda lagen|gör båda|btts|both teams/)) return "BTTS";
-  if (has(/dubbelchans|double chance/)) return "Dubbelchans";
-  if (has(/handikapp|handicap|spread|run ?line/)) return "Handikapp";
-  if (has(/halvlek|first half|second half|halftime|paus|1:a halvlek|2:a halvlek/)) return "Halvlek";
-  if (
-    has(
-      /matchvinnare|fulltidsresultat|resultat efter fulltid|matchodds|att vinna match|to win|vinnare|moneyline|1x2|matchresultat|outright|att kvalificera|att lyfta|trofé|head-to-head|match result/
-    )
-  )
-    return "Matchvinnare";
-  if (has(/totalt|över\/under|ö\/u|over\/under|antal mål|total|mål i match|first to|milestones/)) return "Totalt";
-  return "Övrigt";
+  return normalizeMarketCategory(raw);
 }
 
 /* -------------------------------- Sport teams ------------------------------- */
@@ -151,6 +135,9 @@ export function inferSport(
   const teams = splitTeams(ev);
   const mkts = legs.map((l) => l.market || "").join(" | ").toLowerCase();
 
+  if (isWorldCup2026Text(`${ev} ${mkts}`))
+    return { sport: "Football", league: VM_2026_LEAGUE };
+
   // 1) Esports — strong signal regardless of separator.
   if (teams.some((t) => ESPORTS.has(t.toLowerCase()))) return { sport: "Esports", league: null };
 
@@ -187,24 +174,36 @@ export function inferSport(
 export function categorizeBet(
   event: string | null | undefined,
   legs: LegLike[] = []
-): { sport: string; league: string | null; market: string } {
+): {
+  sport: string;
+  league: string | null;
+  market: GradingMarket;
+  marketCategory: string;
+  marketScope: MarketScope | null;
+} {
   const { sport, league } = inferSport(event, legs);
-  const market = normalizeMarket(legs[0]?.market ?? null);
-  return { sport, league, market };
+  const selection = legs[0]?.selection ?? "";
+  const { marketCategory, marketScope } = categorizeDetail(selection, event, legs);
+  const market = normalizeGradingMarket(null, marketCategory);
+  return { sport, league, market, marketCategory, marketScope };
 }
 
 /* ------------------------------ Market scope ------------------------------- */
 
-export type MarketScope = "player" | "team" | "match";
-
 // Categories that are per-player by definition.
-const PLAYER_PROP = new Set(["Spelarpoäng", "Returer", "Assists", "Trepoängare", "Frikast"]);
+const PLAYER_PROP = new Set([
+  "Spelarpoäng", "Returer", "Assists", "Trepoängare", "Frikast", "Steals",
+  "Blocks", "PRA", "Dubbelfel",
+]);
 // Categories that describe the match outcome as a whole.
 const MATCH_CATEGORY = new Set([
   "Matchvinnare", "Dubbelchans", "BTTS", "Handikapp", "Halvlek", "Vinstmetod", "Totalt",
 ]);
 // Stat categories that can be player, team or match — disambiguated from the text.
-const AMBIG_STAT = new Set(["Skott", "Skott på mål", "Hörnor", "Kort & fouls", "Räddningar", "Ess"]);
+const AMBIG_STAT = new Set([
+  "Skott", "Skott på mål", "Mål", "Hörnor", "Kort & fouls", "Räddningar",
+  "Ess", "Frisparkar", "Offside", "Utvisningar",
+]);
 
 /**
  * Best-effort scope of a bet — Spelare / Lag / Match (totalt). Heuristic by

@@ -19,6 +19,7 @@ config();
 
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { PrismaClient } from "@prisma/client";
+import { settleBet } from "../../lib/settlement";
 import { profitUnits, type Outcome } from "../../lib/betting";
 
 const SETTLE_OUTCOMES = new Set(["win", "loss", "push", "void", "half_win", "half_loss"]);
@@ -69,7 +70,6 @@ async function main() {
     }
 
     const byId = new Map(before.map((b) => [b.id, b]));
-    const dateLabel = new Date().toISOString().slice(0, 10);
     let netProfit = 0;
     let settled = 0;
 
@@ -84,17 +84,18 @@ async function main() {
         continue;
       }
 
-      const p = +profitUnits(r.outcome as Outcome, bet.odds, bet.stakeUnits).toFixed(4);
+      let p = +profitUnits(r.outcome as Outcome, bet.odds, bet.stakeUnits).toFixed(4);
+      if (!dryRun) {
+        const result = await settleBet(prisma, {
+          betId: r.id,
+          outcome: r.outcome as Outcome,
+          source: "agent",
+          reason: r.reason,
+        });
+        p = result.bet.profitUnits ?? 0;
+      }
       netProfit += p;
       settled += 1;
-
-      const note = `${bet.notes ?? ""} · RÄTTAD ${dateLabel}: ${r.reason}`.trim();
-      if (!dryRun) {
-        await prisma.bet.update({
-          where: { id: r.id },
-          data: { outcome: r.outcome, profitUnits: p, gradedAt: new Date(), notes: note },
-        });
-      }
       console.log(
         `${r.outcome.toUpperCase().padEnd(9)} ${p >= 0 ? "+" : ""}${p}u  ${bet.event} — ${bet.selection}`
       );

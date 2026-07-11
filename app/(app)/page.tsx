@@ -8,6 +8,7 @@ import { ResultBadge } from "@/components/ResultBadge";
 import { TiltBanner } from "@/components/TiltBanner";
 import { GoalCard } from "@/components/GoalCard";
 import { OpenBetsPanel } from "@/components/OpenBetsPanel";
+import { BetTags } from "@/components/BetTags";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
@@ -248,7 +249,10 @@ export default function OverviewPage() {
                 <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
                 <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
-                <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
+                <span className="ap-hide-sm" style={{ color: "var(--dim)", minWidth: 0 }}>
+                  <span className="ap-ell" style={{ display: "block" }}>{b.selection || "—"}</span>
+                  <BetTags bet={b} compact hideSport />
+                </span>
                 <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
                 <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
                 <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>

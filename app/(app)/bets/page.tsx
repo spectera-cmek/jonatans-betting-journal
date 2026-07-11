@@ -6,6 +6,8 @@ import { Card, Empty } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
 import { AddBetModal, type BetPrefill } from "@/components/AddBetModal";
 import { ScreenshotImportButton } from "@/components/ScreenshotImportButton";
+import { BetTags } from "@/components/BetTags";
+import { SettlementDialog } from "@/components/SettlementDialog";
 import type { ParsedBetWithDupe } from "@/lib/betslipExtract";
 import { StatTile } from "@/components/stats";
 import { useBets } from "@/lib/useData";
@@ -13,7 +15,13 @@ import { api } from "@/lib/fetcher";
 import { uFmt, pctFmt, krShort, sportTag, dateShort } from "@/lib/format";
 import { computeMetrics, type BetLike, type Outcome } from "@/lib/betting";
 import { I, IC } from "@/components/icons";
-import { SCOPES, SCOPE_LABELS } from "@/lib/constants";
+import {
+  SCOPES,
+  SCOPE_LABELS,
+  EVENT_KINDS,
+  TOURNAMENT_STAGES,
+  VM_2026_LEAGUE,
+} from "@/lib/constants";
 import type { BetDTO, BetListDTO } from "@/lib/types";
 
 const GRID = "62px 46px 1.5fr 1.1fr 92px 64px 52px 70px 80px 116px";
@@ -31,14 +39,18 @@ export default function BetsPage() {
   const { bets, settings, loading, reload } = useBets();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<BetDTO | null>(null);
+  const [settling, setSettling] = useState<BetListDTO | null>(null);
   // Kö av kvitto-tolkade bets som gås igenom en och en i modalen.
   const [queue, setQueue] = useState<ParsedBetWithDupe[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
   const [q, setQ] = useState("");
   const [sport, setSport] = useState("Alla sporter");
+  const [league, setLeague] = useState("");
   const [book, setBook] = useState("Alla bookmakers");
   const [market, setMarket] = useState(""); // detaljerad marknad (marketCategory)
   const [scope, setScope] = useState(""); // player | team | match
+  const [eventKind, setEventKind] = useState("");
+  const [stage, setStage] = useState("");
   const [res, setRes] = useState("alla");
   const [day, setDay] = useState(""); // YYYY-MM-DD, specific day
   const [year, setYear] = useState("Alla år");
@@ -54,9 +66,12 @@ export default function BetsPage() {
     const sp = new URLSearchParams(window.location.search);
     if (sp.has("q")) setQ(sp.get("q") || "");
     if (sp.has("sport")) setSport(sp.get("sport") || "Alla sporter");
+    if (sp.has("league")) setLeague(sp.get("league") || "");
     if (sp.has("book")) setBook(sp.get("book") || "Alla bookmakers");
     if (sp.has("market")) setMarket(sp.get("market") || "");
     if (sp.has("scope")) setScope(sp.get("scope") || "");
+    if (sp.has("eventKind")) setEventKind(sp.get("eventKind") || "");
+    if (sp.has("stage")) setStage(sp.get("stage") || "");
     if (sp.has("res")) setRes(sp.get("res") || "alla");
     if (sp.has("day")) setDay(sp.get("day") || "");
     if (sp.has("year")) setYear(sp.get("year") || "Alla år");
@@ -71,9 +86,12 @@ export default function BetsPage() {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
     if (sport !== "Alla sporter") sp.set("sport", sport);
+    if (league) sp.set("league", league);
     if (book !== "Alla bookmakers") sp.set("book", book);
     if (market) sp.set("market", market);
     if (scope) sp.set("scope", scope);
+    if (eventKind) sp.set("eventKind", eventKind);
+    if (stage) sp.set("stage", stage);
     if (res !== "alla") sp.set("res", res);
     if (day) sp.set("day", day);
     if (year !== "Alla år") sp.set("year", year);
@@ -81,7 +99,7 @@ export default function BetsPage() {
     if (sortOrder !== "desc") sp.set("sort", sortOrder);
     const qs = sp.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [q, sport, book, market, scope, res, day, year, month, sortOrder]);
+  }, [q, sport, league, book, market, scope, eventKind, stage, res, day, year, month, sortOrder]);
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
@@ -132,6 +150,10 @@ export default function BetsPage() {
   };
 
   const sports = useMemo(() => Array.from(new Set(bets.map((b) => b.sport).filter(Boolean))) as string[], [bets]);
+  const leagues = useMemo(
+    () => (Array.from(new Set(bets.map((b) => b.league).filter(Boolean))) as string[]).sort((a, b) => a.localeCompare(b, "sv")),
+    [bets]
+  );
   const books = useMemo(() => Array.from(new Set(bets.map((b) => b.bookmaker).filter(Boolean))) as string[], [bets]);
   const markets = useMemo(
     () =>
@@ -153,9 +175,12 @@ export default function BetsPage() {
   const filtered = useMemo(() => {
     return bets.filter((b) => {
       if (sport !== "Alla sporter" && b.sport !== sport) return false;
+      if (league && b.league !== league) return false;
       if (book !== "Alla bookmakers" && b.bookmaker !== book) return false;
       if (market && b.marketCategory !== market) return false;
       if (scope && b.marketScope !== scope) return false;
+      if (eventKind && b.eventKind !== eventKind) return false;
+      if (stage && b.tournamentStage !== stage) return false;
       if (res === "win" && !(b.outcome === "win" || b.outcome === "half_win")) return false;
       if (res === "loss" && !(b.outcome === "loss" || b.outcome === "half_loss")) return false;
       if (res === "pending" && b.outcome !== "pending") return false;
@@ -169,17 +194,17 @@ export default function BetsPage() {
         if (month !== "Alla månader" && String(d.getMonth() + 1) !== month) return false;
       }
       if (q) {
-        const s = `${b.event} ${b.league ?? ""} ${b.selection} ${b.bookmaker ?? ""} ${b.marketCategory ?? ""} ${b.marketScope ? SCOPE_LABELS[b.marketScope] ?? "" : ""}`.toLowerCase();
+        const s = `${b.event} ${b.league ?? ""} ${b.selection} ${b.bookmaker ?? ""} ${b.marketCategory ?? ""} ${b.marketScope ? SCOPE_LABELS[b.marketScope] ?? "" : ""} ${b.eventKind} ${b.tournamentStage ?? ""}`.toLowerCase();
         if (!s.includes(q.toLowerCase())) return false;
       }
       return true;
     });
-  }, [bets, sport, book, market, scope, res, q, day, year, month]);
+  }, [bets, sport, league, book, market, scope, eventKind, stage, res, q, day, year, month]);
 
   // Render at most `shown` rows; reset when any filter or sort order changes.
   useEffect(() => {
     setShown(PAGE);
-  }, [sport, book, market, scope, res, q, day, year, month, sortOrder]);
+  }, [sport, league, book, market, scope, eventKind, stage, res, q, day, year, month, sortOrder]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -195,9 +220,12 @@ export default function BetsPage() {
   const remaining = sorted.length - visible.length;
   const advancedCount = [
     sport !== "Alla sporter",
+    !!league,
     book !== "Alla bookmakers",
     !!market,
     !!scope,
+    !!eventKind,
+    !!stage,
     !!day,
     year !== "Alla år",
     month !== "Alla månader",
@@ -205,9 +233,12 @@ export default function BetsPage() {
 
   const clearAdvanced = () => {
     setSport("Alla sporter");
+    setLeague("");
     setBook("Alla bookmakers");
     setMarket("");
     setScope("");
+    setEventKind("");
+    setStage("");
     setDay("");
     setYear("Alla år");
     setMonth("Alla månader");
@@ -233,8 +264,15 @@ export default function BetsPage() {
   );
 
   const settle = async (id: string, outcome: string) => {
-    await api.post(`/api/bets/${id}/settle`, { outcome });
-    reload();
+    try {
+      await api.post(`/api/bets/${id}/settle`, {
+        outcome,
+        reason: "Snabbrättning i betlistan",
+      });
+      reload();
+    } catch (error) {
+      alert((error as Error).message);
+    }
   };
   const del = async (b: BetListDTO) => {
     if (!confirm(`Ta bort betet "${b.event}"?`)) return;
@@ -243,8 +281,8 @@ export default function BetsPage() {
   };
   // One-click VM 2026 tag toggle (stored in the league field; drives the VM 2026 page).
   const toggleVM = async (b: BetListDTO) => {
-    const isVM = (b.league ?? "").trim() === "VM 2026";
-    await api.patch(`/api/bets/${b.id}`, { league: isVM ? null : "VM 2026" });
+    const isVM = (b.league ?? "").trim() === VM_2026_LEAGUE;
+    await api.patch(`/api/bets/${b.id}`, { league: isVM ? null : VM_2026_LEAGUE });
     reload();
   };
   const openEdit = async (b: BetListDTO) => {
@@ -266,16 +304,21 @@ export default function BetsPage() {
           <button className="ap-iconbtn l" title="Markera som förlorad" aria-label="Markera som förlorad" onClick={() => settle(b.id, "loss")}>
             <I p={IC.closeCircle} size={14} />
           </button>
-          <button className="ap-iconbtn" title="Markera som push" aria-label="Markera som push" onClick={() => settle(b.id, "push")}>
-            <I p={IC.minus} size={14} />
-          </button>
         </>
       )}
       <button
         className="ap-iconbtn"
-        title={(b.league ?? "").trim() === "VM 2026" ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
-        aria-label={(b.league ?? "").trim() === "VM 2026" ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
-        style={{ opacity: (b.league ?? "").trim() === "VM 2026" ? 1 : 0.38 }}
+        title={b.outcome === "pending" ? "Fler rättningsalternativ" : "Historik, ångra eller korrigera"}
+        aria-label={b.outcome === "pending" ? "Fler rättningsalternativ" : "Historik, ångra eller korrigera"}
+        onClick={() => setSettling(b)}
+      >
+        <I p={IC.menu} size={14} />
+      </button>
+      <button
+        className="ap-iconbtn"
+        title={(b.league ?? "").trim() === VM_2026_LEAGUE ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
+        aria-label={(b.league ?? "").trim() === VM_2026_LEAGUE ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
+        style={{ opacity: (b.league ?? "").trim() === VM_2026_LEAGUE ? 1 : 0.38 }}
         onClick={() => toggleVM(b)}
       >
         <I p={IC.trophy} size={14} />
@@ -358,6 +401,12 @@ export default function BetsPage() {
           </div>
           <div className="ap-filter-grid">
             {sel(sport, setSport, ["Alla sporter", ...sports])}
+            <div className="ap-select">
+              <select value={league} onChange={(e) => setLeague(e.target.value)}>
+                <option value="">Alla ligor/turneringar</option>
+                {leagues.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </div>
             {sel(book, setBook, ["Alla bookmakers", ...books])}
             <div className="ap-select">
               <select value={market} onChange={(e) => setMarket(e.target.value)}>
@@ -373,6 +422,18 @@ export default function BetsPage() {
                 </select>
               </div>
             )}
+            <div className="ap-select">
+              <select value={eventKind} onChange={(e) => setEventKind(e.target.value)}>
+                <option value="">Match + turneringsspel</option>
+                {EVENT_KINDS.map((kind) => <option key={kind.value} value={kind.value}>{kind.label}</option>)}
+              </select>
+            </div>
+            <div className="ap-select">
+              <select value={stage} onChange={(e) => setStage(e.target.value)}>
+                <option value="">Alla turneringsfaser</option>
+                {TOURNAMENT_STAGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+            </div>
             <div className="ap-select ap-date-filter">
               <input
                 type="date"
@@ -410,14 +471,10 @@ export default function BetsPage() {
               <div key={b.id} className={`ap-trow ap-bet-row ${betTone(b.outcome)}`} style={{ gridTemplateColumns: GRID }}>
                 <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
-                <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
+                <span className="ap-ell">{b.event}</span>
                 <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)", display: "flex", flexDirection: "column", gap: 2, justifyContent: "center" }}>
                   <span className="ap-ell">{b.selection || "—"}</span>
-                  {b.marketCategory && (
-                    <span className="ap-ell" style={{ fontSize: 11, color: "var(--dim2)" }}>
-                      {b.marketCategory}{b.marketScope ? ` · ${SCOPE_LABELS[b.marketScope] ?? b.marketScope}` : ""}
-                    </span>
-                  )}
+                  <BetTags bet={b} compact hideSport />
                 </span>
                 <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
                 <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
@@ -452,16 +509,12 @@ export default function BetsPage() {
               <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
             </div>
             <div className="ap-betcard-event">
-              {b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}
+              {b.event}
             </div>
             <div className="ap-betcard-sel">
               {b.selection || "—"}{b.bookmaker ? ` · ${b.bookmaker}` : ""}
             </div>
-            {b.marketCategory && (
-              <div className="ap-betcard-sel" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: -2 }}>
-                {b.marketCategory}{b.marketScope ? ` · ${SCOPE_LABELS[b.marketScope] ?? b.marketScope}` : ""}
-              </div>
-            )}
+            <BetTags bet={b} compact />
             <div className="ap-betcard-stats">
               <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
               <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
@@ -495,6 +548,11 @@ export default function BetsPage() {
         onClose={closeModal}
         onSaved={reload}
         hasOddsApiKey={hasKey}
+      />
+      <SettlementDialog
+        bet={settling}
+        onClose={() => setSettling(null)}
+        onChanged={reload}
       />
     </div>
   );

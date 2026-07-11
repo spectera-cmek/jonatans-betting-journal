@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Card, Empty } from "./ui";
 import { MiniStat } from "./stats";
 import { I, IC } from "./icons";
+import { BetTags } from "./BetTags";
 import { krFmt, krShort, uFmt, dateShort, sportTag } from "@/lib/format";
 import { dayIso, addDays } from "@/lib/time";
 import type { OpenBetRow } from "@/lib/useData";
@@ -90,16 +91,10 @@ export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: 
                     </span>
                     <span style={{ minWidth: 0 }}>
                       <span className="ap-ell" style={{ display: "block" }}>{b.event}</span>
-                      <span className="ap-ell" style={{ display: "block", fontSize: 11.5, color: "var(--dim2)", marginTop: 2 }}>
-                        {sportTag(b.sport)}
-                        {b.league ? ` · ${b.league}` : ""}
-                      </span>
+                      <BetTags bet={b} compact />
                     </span>
                     <span style={{ minWidth: 0 }}>
                       <span className="ap-ell" style={{ display: "block" }}>{b.selection || "—"}</span>
-                      {b.betType === "accumulator" && (
-                        <span className="ap-tag" style={{ marginTop: 3, display: "inline-block" }}>ack</span>
-                      )}
                     </span>
                     <span className="ap-ell" style={{ color: "var(--dim)" }}>{b.bookmaker ?? "—"}</span>
                     <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
@@ -128,8 +123,8 @@ export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: 
                   <div className="ap-betcard-event">{b.event}</div>
                   <div className="ap-betcard-sel">
                     {b.selection || "—"}
-                    {b.betType === "accumulator" ? " · ack" : ""}
                   </div>
+                  <BetTags bet={b} compact />
                   <div className="ap-betcard-stats">
                     <div>
                       <span>Odds</span>

@@ -22,6 +22,7 @@ const LEAGUE_PATHS: Record<string, string> = {
   "football|ligue 1": "soccer/fra.1",
   "football|champions league": "soccer/uefa.champions",
   "football|allsvenskan": "soccer/swe.1",
+  "football|vm 2026": "soccer/fifa.world",
 };
 
 /** Resolve a bet's sport+league to an ESPN scoreboard path, or null if unknown. */
@@ -48,11 +49,20 @@ interface EspnTeam {
 interface EspnCompetitor {
   homeAway: "home" | "away";
   score?: string;
+  shootoutScore?: string;
   team?: EspnTeam;
 }
 interface EspnEvent {
+  id?: string;
   date?: string;
-  status?: { type?: { completed?: boolean } };
+  status?: {
+    type?: {
+      completed?: boolean;
+      name?: string;
+      detail?: string;
+      shortDetail?: string;
+    };
+  };
   competitions?: { competitors?: EspnCompetitor[] }[];
 }
 
@@ -91,6 +101,7 @@ function ymd(d: Date): string {
 export interface FinalScore {
   homeScore: number;
   awayScore: number;
+  wentToExtraTime?: boolean;
 }
 
 /**
@@ -102,7 +113,8 @@ export async function fetchFinalScore(
   path: string,
   eventAt: Date,
   homeTeam: string,
-  awayTeam: string
+  awayTeam: string,
+  eventRef?: string | null
 ): Promise<FinalScore | null> {
   const days = [eventAt, new Date(eventAt.getTime() + 24 * 3600 * 1000), new Date(eventAt.getTime() - 24 * 3600 * 1000)];
   for (const day of days) {
@@ -117,6 +129,7 @@ export async function fetchFinalScore(
     }
 
     for (const ev of events) {
+      if (eventRef && ev.id !== eventRef) continue;
       const comp = ev.competitions?.[0];
       const competitors = comp?.competitors ?? [];
       const home = competitors.find((c) => c.homeAway === "home");
@@ -132,7 +145,14 @@ export async function fetchFinalScore(
       const hs = Number(home.score);
       const as = Number(away.score);
       if (Number.isNaN(hs) || Number.isNaN(as)) return null;
-      return direct ? { homeScore: hs, awayScore: as } : { homeScore: as, awayScore: hs };
+      const statusText = `${ev.status.type.name ?? ""} ${ev.status.type.detail ?? ""} ${ev.status.type.shortDetail ?? ""}`;
+      const wentToExtraTime =
+        /after extra time|\baet\b|penalt|\bft-pens?\b/i.test(statusText) ||
+        home.shootoutScore !== undefined ||
+        away.shootoutScore !== undefined;
+      return direct
+        ? { homeScore: hs, awayScore: as, wentToExtraTime }
+        : { homeScore: as, awayScore: hs, wentToExtraTime };
     }
   }
   return null;

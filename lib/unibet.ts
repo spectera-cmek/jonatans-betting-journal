@@ -17,6 +17,7 @@
 // and event/market/sport (not present at all). importRef = coupon id → idempotent.
 
 import type { PrismaClient } from "@prisma/client";
+import { settleBet } from "./settlement";
 
 export const UNIT_KR = 100; // 1 unit = 100 kr (matches Setting.unitValue)
 const LOSS_PLACEHOLDER_ODDS = 1.01; // odds unknown for losing coupons (no return row)
@@ -224,20 +225,47 @@ export async function importCoupons(
   for (const r of records) {
     const ex = byRef.get(r.ref);
     if (!ex) {
-      await prisma.bet.create({ data: { ...r.data, userId } as never });
+      const createData = {
+        ...r.data,
+        userId,
+        outcome: "pending",
+        profitUnits: null,
+        gradedAt: null,
+      };
+      const created = await prisma.bet.create({ data: createData as never });
+      if (r.outcome !== "pending") {
+        await settleBet(prisma, {
+          betId: created.id,
+          userId,
+          outcome: r.outcome,
+          source: "unibet",
+          reason: `Unibet transaktionshistorik, kupong ${r.ref}`,
+          explicitProfitUnits: r.profitUnits,
+          gradedAt: r.data.gradedAt as Date,
+        });
+      }
       added += 1;
     } else if (ex.outcome !== r.outcome || !approxEq(ex.profitUnits, r.profitUnits)) {
-      await prisma.bet.update({
-        where: { id: ex.id },
-        data: {
+      if (r.outcome !== "pending") {
+        await prisma.bet.update({
+          where: { id: ex.id },
+          data: {
+            odds: r.data.odds as number,
+            stakeUnits: r.data.stakeUnits as number,
+          },
+        });
+        const result = await settleBet(prisma, {
+          betId: ex.id,
+          userId,
           outcome: r.outcome,
-          profitUnits: r.profitUnits,
-          odds: r.data.odds as number,
-          stakeUnits: r.data.stakeUnits as number,
+          source: "unibet",
+          reason: `Unibet transaktionshistorik, kupong ${r.ref}`,
+          explicitProfitUnits: r.profitUnits,
           gradedAt: r.data.gradedAt as Date,
-        },
-      });
-      updated += 1;
+          allowCorrection: ex.outcome !== "pending",
+        });
+        if (result.changed) updated += 1;
+      }
     } else {
       unchanged += 1;
     }

@@ -1,17 +1,9 @@
 /**
- * DEPRECATED — legacy tool from the one-time SQLite → Neon migration (June 2026).
- * Predates multi-user accounts: the export has no User table or userId column.
+ * Full JSON safety export for the current Postgres database.
  *
- * One-time data export — run this while the Prisma provider is still `sqlite`.
- *
- * Dumps every Bet / Setting / SyncLog row from the local SQLite database to
- * prisma/data-export.json, so it can be re-imported into Postgres (Neon) with
- * scripts/importData.ts after the cloud database has been provisioned.
- *
- *   npm run db:export
- *
- * The output file holds your real betting history — it is git-ignored and must
- * never be committed.
+ * Raw SELECTs deliberately avoid coupling the export to the generated Prisma
+ * shape, so it can run immediately before an additive schema push. The output
+ * contains account and betting data, is git-ignored and must never be committed.
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
@@ -21,25 +13,42 @@ import { join } from "node:path";
 const prisma = new PrismaClient();
 
 async function main() {
-  const [bets, settings, syncLogs] = await Promise.all([
-    prisma.bet.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.setting.findMany(),
-    prisma.syncLog.findMany({ orderBy: { ranAt: "asc" } }),
+  const [users, bets, settings, syncLogs] = await Promise.all([
+    prisma.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM "User" ORDER BY "createdAt" ASC`,
+    prisma.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM "Bet" ORDER BY "createdAt" ASC`,
+    prisma.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM "Setting" ORDER BY "id" ASC`,
+    prisma.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM "SyncLog" ORDER BY "ranAt" ASC`,
   ]);
+  let settlements: Array<Record<string, unknown>> = [];
+  try {
+    settlements = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+      SELECT * FROM "BetSettlement" ORDER BY "createdAt" ASC
+    `;
+  } catch {
+    // The table is absent on the first export before this feature is deployed.
+  }
 
   const payload = {
     exportedAt: new Date().toISOString(),
-    counts: { bets: bets.length, settings: settings.length, syncLogs: syncLogs.length },
+    counts: {
+      users: users.length,
+      bets: bets.length,
+      settings: settings.length,
+      syncLogs: syncLogs.length,
+      settlements: settlements.length,
+    },
+    users,
     bets,
     settings,
     syncLogs,
+    settlements,
   };
 
   const outPath = join(process.cwd(), "prisma", "data-export.json");
   writeFileSync(outPath, JSON.stringify(payload, null, 2));
 
   console.log(
-    `Exporterade ${bets.length} bets, ${settings.length} settings, ${syncLogs.length} sync-loggar`
+    `Exporterade ${users.length} användare, ${bets.length} bets, ${settings.length} settings, ${syncLogs.length} sync-loggar och ${settlements.length} rättningshändelser`
   );
   console.log(`→ ${outPath}`);
 }

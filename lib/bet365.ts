@@ -11,7 +11,9 @@
 // DB-side importSlips() is needed.
 
 import type { PrismaClient } from "@prisma/client";
-import { categorizeBet } from "./categorize";
+import { categorizeBet, splitTeams } from "./categorize";
+import { inferEventKind } from "./betTaxonomy";
+import { settleBet } from "./settlement";
 
 export const UNIT_KR = 100; // 1 unit = 100 kr (matches Setting.unitValue)
 const MAX_ODDS = 1000; // cap stored odds so a few giant same-game accas don't wreck avgOdds
@@ -250,6 +252,12 @@ export function slipToRecord(s: Slip): SlipRecord {
   const settled = outcome !== "pending";
   const cleanEvent = s.legs[0]?.event?.replace(/\s*\(.*$/s, "").trim() || s.ref;
   const cat = categorizeBet(cleanEvent, s.legs);
+  const teams = splitTeams(cleanEvent);
+  const isAt = cleanEvent.includes(" @ ");
+  const homeTeam = teams.length === 2 ? (isAt ? teams[1] : teams[0]) : null;
+  const awayTeam = teams.length === 2 ? (isAt ? teams[0] : teams[1]) : null;
+  const selection = s.legs.map((l) => l.selection).join(" + ").slice(0, 500);
+  const eventKind = inferEventKind(cleanEvent, selection);
   const profitUnits = settled ? Number(((s.payoutKr - s.stakeKr) / UNIT_KR).toFixed(4)) : null;
   return {
     ref: s.ref,
@@ -261,8 +269,14 @@ export function slipToRecord(s: Slip): SlipRecord {
       event: cleanEvent,
       sport: cat.sport,
       league: cat.league,
-      market: cat.market,
-      selection: s.legs.map((l) => l.selection).join(" + ").slice(0, 500),
+      homeTeam,
+      awayTeam,
+      // An accumulator is never safe to grade as one simple h2h/total/spread.
+      market: s.type === "Singlar" ? cat.market : "other",
+      marketCategory: cat.marketCategory,
+      marketScope: cat.marketScope,
+      eventKind,
+      selection,
       betType: s.type === "Singlar" ? "single" : "accumulator",
       odds,
       stakeUnits,
@@ -360,23 +374,42 @@ export async function importSlips(
   for (const r of records) {
     const ex = r.ref ? byRef.get(r.ref) : undefined;
     if (!ex) {
-      await prisma.bet.create({ data: { ...r.data, userId } as never });
+      const createData: Record<string, unknown> = { ...r.data, userId };
+      if (r.outcome !== "pending") {
+        createData.outcome = "pending";
+        createData.profitUnits = null;
+        createData.gradedAt = null;
+      }
+      const created = await prisma.bet.create({ data: createData as never });
+      if (r.outcome !== "pending") {
+        await settleBet(prisma, {
+          betId: created.id,
+          userId,
+          outcome: r.outcome,
+          source: "bet365",
+          reason: `Importerad slutstatus för spelkvitto ${r.ref}`,
+          explicitProfitUnits: r.profitUnits,
+          gradedAt: (r.data.gradedAt as Date | null) ?? undefined,
+        });
+      }
       added += 1;
     } else {
       const outcomeChanged = ex.outcome !== r.outcome;
       const profitChanged = !approxEq(ex.profitUnits, r.profitUnits);
-      if (outcomeChanged || profitChanged) {
-        await prisma.bet.update({
-          where: { id: ex.id },
-          data: {
-            outcome: r.outcome,
-            profitUnits: r.profitUnits,
-            gradedAt: (r.data.gradedAt as Date | null) ?? null,
-            importRef: r.ref,
-          },
+      if ((outcomeChanged || profitChanged) && r.outcome !== "pending") {
+        const result = await settleBet(prisma, {
+          betId: ex.id,
+          userId,
+          outcome: r.outcome,
+          source: "bet365",
+          reason: `Bet365-utbetalning för spelkvitto ${r.ref}`,
+          explicitProfitUnits: r.profitUnits,
+          gradedAt: (r.data.gradedAt as Date | null) ?? undefined,
+          allowCorrection: ex.outcome !== "pending",
         });
-        updated += 1;
-        if (ex.outcome === "pending" && r.outcome !== "pending") settled += 1;
+        await prisma.bet.update({ where: { id: ex.id }, data: { importRef: r.ref } });
+        if (result.changed) updated += 1;
+        if (ex.outcome === "pending") settled += 1;
       } else if (ex.importRef !== r.ref) {
         await prisma.bet.update({ where: { id: ex.id }, data: { importRef: r.ref } });
         refBackfilled += 1;

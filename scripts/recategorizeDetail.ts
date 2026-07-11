@@ -1,8 +1,8 @@
 // Backfill the detailed market taxonomy — marketCategory ("vad", e.g. "Skott på
 // mål") and marketScope (player|team|match) — for every existing bet. Derived
 // from the free-text selection, the imported legs JSON and the event. Pure
-// best-effort: scope is left null ("Okänd") when nothing is conclusive. Does NOT
-// touch sport/league/market (see recategorize.ts for those).
+// best-effort: scope is left null ("Okänd") when nothing is conclusive. Existing
+// non-empty manual category/scope values are preserved.
 //
 //   npm run recategorize:detail              # dry-run: print resulting distributions
 //   npm run recategorize:detail -- --confirm # write marketCategory/marketScope to the DB
@@ -34,7 +34,16 @@ async function main() {
   const prisma = new PrismaClient();
   try {
     const bets = await prisma.bet.findMany({
-      select: { id: true, event: true, selection: true, legs: true, homeTeam: true, awayTeam: true },
+      select: {
+        id: true,
+        event: true,
+        selection: true,
+        legs: true,
+        homeTeam: true,
+        awayTeam: true,
+        marketCategory: true,
+        marketScope: true,
+      },
     });
     console.log(`Loaded ${bets.length} bets.`);
 
@@ -50,16 +59,19 @@ async function main() {
       } catch {
         /* ignore */
       }
-      const { marketCategory, marketScope } = categorizeDetail(
+      const inferred = categorizeDetail(
         b.selection,
         b.event,
         legs,
         b.homeTeam,
         b.awayTeam
       );
+      const marketCategory = b.marketCategory ?? inferred.marketCategory;
+      const marketScope = b.marketScope ?? inferred.marketScope;
       byCategory.set(marketCategory, (byCategory.get(marketCategory) || 0) + 1);
       byScope.set(scopeLabel(marketScope), (byScope.get(scopeLabel(marketScope)) || 0) + 1);
-      updates.push({ id: b.id, marketCategory, marketScope });
+      if (b.marketCategory === null || b.marketScope === null)
+        updates.push({ id: b.id, marketCategory, marketScope });
       if (samples.length < sampleN)
         samples.push(`  ${marketCategory.padEnd(16)} ${scopeLabel(marketScope).padEnd(8)} | ${b.selection || b.event}`);
     }

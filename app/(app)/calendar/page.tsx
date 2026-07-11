@@ -9,6 +9,8 @@ import { useBets } from "@/lib/useData";
 import { hexA, type ChartColors } from "@/lib/theme";
 import { krShort, krFmt, uFmt, sportTag, dateShort } from "@/lib/format";
 import { I, IC } from "@/components/icons";
+import { BetTags } from "@/components/BetTags";
+import { settledProfit } from "@/lib/betting";
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 const MONTHS_SV = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
@@ -32,7 +34,7 @@ export default function CalendarPage() {
       const a = map.get(iso) ?? { profit: 0, count: 0, pending: 0, settled: 0 };
       a.count += 1;
       if (b.outcome === "pending") a.pending += 1;
-      else { a.settled += 1; a.profit += b.profitUnits ?? 0; }
+      else { a.settled += 1; a.profit += settledProfit(b); }
       map.set(iso, a);
     }
     return map;
@@ -180,8 +182,11 @@ export default function CalendarPage() {
               {dayBets.map((b) => (
                 <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: "46px 1.4fr 1.1fr 70px 64px 96px" }}>
                   <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
-                  <span className="ap-ell">{b.event}{b.market ? <span style={{ color: "var(--dim2)" }}> · {b.market}</span> : null}</span>
-                  <span className="ap-ell" style={{ color: "var(--dim)" }}>{b.selection || "—"}</span>
+                  <span className="ap-ell">{b.event}{b.league ? <span style={{ color: "var(--dim2)" }}> · {b.league}</span> : null}</span>
+                  <span style={{ color: "var(--dim)", minWidth: 0 }}>
+                    <span className="ap-ell" style={{ display: "block" }}>{b.selection || "—"}</span>
+                    <BetTags bet={b} compact hideSport />
+                  </span>
                   <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
                   <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
                   <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
@@ -198,9 +203,10 @@ export default function CalendarPage() {
                   <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
                 </div>
                 <div className="ap-betcard-event">
-                  {b.event}{b.market ? <span style={{ color: "var(--dim2)" }}> · {b.market}</span> : null}
+                  {b.event}{b.league ? <span style={{ color: "var(--dim2)" }}> · {b.league}</span> : null}
                 </div>
                 <div className="ap-betcard-sel">{b.selection || "—"}</div>
+                <BetTags bet={b} compact />
                 <div className="ap-betcard-stats">
                   <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
                   <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>

@@ -1,5 +1,14 @@
 // Shared option lists for forms & dropdowns.
 
+import {
+  GENERIC_MARKET_CATEGORIES as TAXONOMY_MARKET_CATEGORIES,
+  MARKET_CATEGORIES_BY_SPORT as TAXONOMY_CATEGORIES_BY_SPORT,
+  TOURNAMENT_STAGE_LABELS,
+  VM_2026_LEAGUE,
+} from "./betTaxonomy";
+
+export { TOURNAMENT_STAGE_LABELS, VM_2026_LEAGUE };
+
 export const SPORTS = [
   "Football",
   "Tennis",
@@ -44,32 +53,15 @@ export const SIDES: Record<string, { value: string; label: string }[]> = {
 // från MARKETS ovan (som bara är avräkningstyp för auto-rättning). Värdena
 // matchar normalizeMarket() i lib/categorize.ts så backfill och dropdown rimmar.
 // Sportnycklarna är de engelska SPORTS-värdena. Övriga sporter får GENERIC + fritext.
-export const GENERIC_MARKET_CATEGORIES = [
-  "Matchvinnare", "Dubbelchans", "Totalt", "Handikapp", "BTTS", "Halvlek",
-  "Hörnor", "Kort & fouls", "Skott", "Skott på mål", "Räddningar",
-  "Spelarpoäng", "Returer", "Assists", "Trepoängare", "Frikast", "Ess",
-  "Vinstmetod", "Övrigt",
-];
+export const GENERIC_MARKET_CATEGORIES: string[] = [...TAXONOMY_MARKET_CATEGORIES];
 
-export const MARKET_CATEGORIES_BY_SPORT: Record<string, string[]> = {
-  Football: [
-    "Matchvinnare", "Dubbelchans", "Totalt", "BTTS", "Handikapp", "Hörnor",
-    "Kort & fouls", "Skott", "Skott på mål", "Frisparkar", "Offside",
-    "Räddningar", "Halvlek", "Övrigt",
-  ],
-  Basketball: [
-    "Matchvinnare", "Handikapp", "Totalt", "Spelarpoäng", "Returer", "Assists",
-    "Trepoängare", "Frikast", "Steals", "Blocks", "PRA", "Halvlek", "Övrigt",
-  ],
-  "Ice Hockey": [
-    "Matchvinnare", "Totalt", "Handikapp", "Skott", "Skott på mål", "Mål",
-    "Assists", "Spelarpoäng", "Räddningar", "Utvisningar", "Period", "Övrigt",
-  ],
-  Tennis: [
-    "Matchvinnare", "Set-vinnare", "Totalt", "Handikapp", "Tiebreak", "Ess",
-    "Dubbelfel", "Övrigt",
-  ],
-};
+export const MARKET_CATEGORIES_BY_SPORT: Record<string, string[]> =
+  Object.fromEntries(
+    Object.entries(TAXONOMY_CATEGORIES_BY_SPORT).map(([sport, categories]) => [
+      sport,
+      [...categories],
+    ])
+  );
 
 // Vem/vad spelet avser. Lagras lowercase (likt selectionSide).
 export const SCOPES: { value: string; label: string }[] = [
@@ -83,6 +75,14 @@ export const SCOPE_LABELS: Record<string, string> = {
   team: "Lag",
   match: "Match (totalt)",
 };
+
+export const EVENT_KINDS: { value: string; label: string }[] = [
+  { value: "match", label: "Match" },
+  { value: "outright", label: "Turneringsspel / futures" },
+];
+
+export const TOURNAMENT_STAGES: { value: string; label: string }[] =
+  Object.entries(TOURNAMENT_STAGE_LABELS).map(([value, label]) => ({ value, label }));
 
 export const BOOKMAKERS = [
   "Unibet",

@@ -21,53 +21,78 @@ model User {
 }
 
 model Bet {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  placedAt      DateTime  @default(now())
-  eventAt       DateTime?
-  sportKey      String? // The Odds API key, e.g. "soccer_epl"
-  sport         String? // display name
-  league        String?
-  event         String // "Team A vs Team B"
-  homeTeam      String?
-  awayTeam      String?
-  market        String    @default("h2h") // h2h | totals | spreads | other (avräkningstyp -> grading)
-  marketCategory String? // semantisk marknad, t.ex. "Skott på mål", "Returer", "Hörnor"
-  marketScope   String? // player | team | match (vem/vad spelet avser)
-  selection     String // label, e.g. "Team A", "Over 2.5"
-  selectionSide String? // home | away | draw | over | under (structured -> grading)
-  line          Float? // for totals/spreads
-  betType       String    @default("single") // single | accumulator
-  odds          Float // decimal odds you took
-  closingOdds   Float? // for CLV
-  stakeUnits    Float // e.g. 1.0, 2.5
-  outcome       String    @default("pending") // pending|win|loss|push|half_win|half_loss|void
-  profitUnits   Float? // computed at settlement
-  externalRef   String? // The Odds API event id (for auto-grading)
-  importRef     String? // Bet365 betslip reference — stable key for incremental re-import
-  legs          String? // JSON-encoded accumulator legs
-  bookmaker     String?
-  tipster       String?
-  notes         String?
-  gradedAt      DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placedAt        DateTime        @default(now())
+  eventAt         DateTime?
+  sportKey        String? // The Odds API key, e.g. "soccer_epl"
+  sport           String? // display name
+  league          String?
+  event           String // "Team A vs Team B"
+  homeTeam        String?
+  awayTeam        String?
+  market          String          @default("h2h") // h2h | totals | spreads | other (avräkningstyp -> grading)
+  marketCategory  String? // semantisk marknad, t.ex. "Skott på mål", "Returer", "Hörnor"
+  marketScope     String? // player | team | match (vem/vad spelet avser)
+  eventKind       String          @default("match") // match | outright
+  tournamentStage String? // group | round_of_32 | round_of_16 | quarterfinal | semifinal | third_place | final
+  selection       String // label, e.g. "Team A", "Over 2.5"
+  selectionSide   String? // home | away | draw | over | under (structured -> grading)
+  line            Float? // for totals/spreads
+  betType         String          @default("single") // single | accumulator
+  odds            Float // decimal odds you took
+  closingOdds     Float? // for CLV
+  stakeUnits      Float // e.g. 1.0, 2.5
+  outcome         String          @default("pending") // pending|win|loss|push|half_win|half_loss|void
+  profitUnits     Float? // computed at settlement
+  externalRef     String? // The Odds API event id (for auto-grading)
+  resultProvider  String? // score provider, e.g. "espn"
+  resultEventRef  String? // provider event id, separate from The Odds API externalRef
+  importRef       String? // Bet365 betslip reference — stable key for incremental re-import
+  legs            String? // JSON-encoded accumulator legs
+  bookmaker       String?
+  tipster         String?
+  notes           String?
+  gradedAt        DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  settlements     BetSettlement[]
 
   @@index([userId, outcome])
   @@index([userId, eventAt])
+  @@index([userId, league])
+  @@index([resultProvider, resultEventRef])
   // Index (not unique): historical imports may hold duplicate refs per user.
   @@index([userId, importRef])
 }
 
+model BetSettlement {
+  id              String    @id @default(cuid())
+  betId           String
+  bet             Bet       @relation(fields: [betId], references: [id], onDelete: Cascade)
+  fromOutcome     String
+  toOutcome       String
+  fromProfitUnits Float?
+  toProfitUnits   Float?
+  fromGradedAt    DateTime?
+  toGradedAt      DateTime?
+  source          String // manual | agent | espn | odds_api | bet365 | unibet
+  reason          String?
+  createdAt       DateTime  @default(now())
+  revertedAt      DateTime?
+
+  @@index([betId, createdAt])
+}
+
 model Setting {
-  id                    Int     @id @default(autoincrement())
+  id                     Int    @id @default(autoincrement())
   // One settings row per user.
-  userId                String  @unique
-  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  unitValue             Float   @default(100) // currency per unit
-  currency              String  @default("kr")
-  startingBankrollUnits Float   @default(100)
+  userId                 String @unique
+  user                   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitValue              Float  @default(100) // currency per unit
+  currency               String @default("kr")
+  startingBankrollUnits  Float  @default(100)
   // Tilt-guard stake budgets in units. Null/0 = budget off.
   dailyStakeBudgetUnits  Float?
   weeklyStakeBudgetUnits Float?

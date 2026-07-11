@@ -3,6 +3,9 @@ import { prisma } from "@/lib/db";
 import { serializeBet, serializeBetList } from "@/lib/types";
 import { buildBetData, ValidationError } from "@/lib/betInput";
 import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
+import { settleBet } from "@/lib/settlement";
+import type { Outcome } from "@/lib/betting";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +17,24 @@ const LIST_SELECT = {
   sport: true,
   league: true,
   event: true,
+  homeTeam: true,
+  awayTeam: true,
   market: true,
   marketCategory: true,
   marketScope: true,
+  eventKind: true,
+  tournamentStage: true,
   selection: true,
+  selectionSide: true,
+  line: true,
   betType: true,
   odds: true,
   stakeUnits: true,
   outcome: true,
   profitUnits: true,
   bookmaker: true,
+  resultProvider: true,
+  resultEventRef: true,
 } as const;
 
 // GET /api/bets — list the current user's bets, newest event first.
@@ -35,7 +46,19 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const rawLimit = parseInt(searchParams.get("limit") ?? "", 10);
   const take = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
-  const where = { userId };
+  const where: Prisma.BetWhereInput = { userId };
+  const exactFilters = [
+    ["league", "league"],
+    ["marketCategory", "marketCategory"],
+    ["marketScope", "marketScope"],
+    ["eventKind", "eventKind"],
+    ["tournamentStage", "tournamentStage"],
+    ["outcome", "outcome"],
+  ] as const;
+  for (const [query, field] of exactFilters) {
+    const value = searchParams.get(query)?.trim();
+    if (value) (where as Record<string, unknown>)[field] = value;
+  }
   const orderBy = [{ eventAt: "desc" }, { createdAt: "desc" }] as never;
 
   if (searchParams.get("fields") === "list") {
@@ -61,7 +84,23 @@ export async function POST(req: Request) {
     if (typeof body.placedAt === "string" && !Number.isNaN(new Date(body.placedAt).getTime())) {
       data.placedAt = new Date(body.placedAt);
     }
-    const bet = await prisma.bet.create({ data: { ...(data as object), userId } as never });
+    const requestedOutcome = (data.outcome ?? "pending") as Outcome;
+    if (requestedOutcome !== "pending") {
+      data.outcome = "pending";
+      data.profitUnits = null;
+      data.gradedAt = null;
+    }
+    let bet = await prisma.bet.create({ data: { ...(data as object), userId } as never });
+    if (requestedOutcome !== "pending") {
+      const result = await settleBet(prisma, {
+        betId: bet.id,
+        userId,
+        outcome: requestedOutcome,
+        source: "manual",
+        reason: "Betet skapades med ett avgjort resultat",
+      });
+      bet = result.bet;
+    }
     return NextResponse.json(serializeBet(bet), { status: 201 });
   } catch (e) {
     if (e instanceof ValidationError) {
