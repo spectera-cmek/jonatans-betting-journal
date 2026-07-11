@@ -304,6 +304,48 @@ export async function fetchWorldCupData(): Promise<WorldCupData> {
   }
 }
 
+/** Swedish / bookmaker labels → tokens that match ESPN display names. */
+const TEAM_ALIASES: Record<string, string> = {
+  norge: "norway",
+  schweiz: "switzerland",
+  frankrike: "france",
+  spanien: "spain",
+  belgien: "belgium",
+  tyskland: "germany",
+  brasilien: "brazil",
+  nederlanderna: "netherlands",
+  holland: "netherlands",
+  kroatien: "croatia",
+  danmark: "denmark",
+  mexiko: "mexico",
+  sydkorea: "south korea",
+  "forenta staterna": "united states",
+  usa: "united states",
+  uruguay: "uruguay",
+  colombia: "colombia",
+  ecuador: "ecuador",
+  kanada: "canada",
+  japan: "japan",
+  australien: "australia",
+  marocko: "morocco",
+  senegal: "senegal",
+  ghana: "ghana",
+  kamerun: "cameroon",
+  nigeria: "nigeria",
+  egypten: "egypt",
+  iran: "iran",
+  qatar: "qatar",
+  "saudi arabien": "saudi arabia",
+  polen: "poland",
+  serbien: "serbia",
+  ungern: "hungary",
+  osterrike: "austria",
+  skottland: "scotland",
+  wales: "wales",
+  tjeckien: "czechia",
+  "tjeckiska republiken": "czechia",
+};
+
 function normalizedName(value: string): string {
   return value
     .toLocaleLowerCase("en")
@@ -313,11 +355,21 @@ function normalizedName(value: string): string {
     .trim();
 }
 
+function canonicalTeamToken(value: string): string {
+  const normalized = normalizedName(value);
+  return TEAM_ALIASES[normalized] ?? normalized;
+}
+
+function teamTokens(team: WorldCupTeam): string[] {
+  return [team.name, team.abbreviation]
+    .map((value) => canonicalTeamToken(value))
+    .filter(Boolean);
+}
+
 function sameTeam(value: string | null | undefined, team: WorldCupTeam): boolean {
   if (!value) return false;
-  const input = normalizedName(value);
-  const candidates = [team.name, team.abbreviation].map(normalizedName);
-  return candidates.some(
+  const input = canonicalTeamToken(value);
+  return teamTokens(team).some(
     (candidate) =>
       candidate === input ||
       (candidate.length >= 4 && input.includes(candidate)) ||
@@ -325,28 +377,121 @@ function sameTeam(value: string | null | undefined, team: WorldCupTeam): boolean
   );
 }
 
+const FIXTURE_SPLIT = /\s*(?:\+|&|\band\b)\s*|\s*,\s*(?=[^,]+(?:vs?|–|—|-))/i;
+const TEAM_SPLIT = /\s*(?:vs?\.?|–|—|-|@)\s*/i;
+
+function parseFixtureTeams(text: string): [string, string] | null {
+  const parts = text
+    .trim()
+    .split(TEAM_SPLIT)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  return [parts[0], parts[1]];
+}
+
+function parseEventFixtures(event: string): [string, string][] {
+  return event
+    .split(FIXTURE_SPLIT)
+    .map((chunk) => parseFixtureTeams(chunk))
+    .filter((pair): pair is [string, string] => pair !== null);
+}
+
+function fixtureMatchesMatch(
+  homeName: string | null | undefined,
+  awayName: string | null | undefined,
+  match: WorldCupMatch
+): boolean {
+  if (!homeName || !awayName) return false;
+  const direct = sameTeam(homeName, match.home) && sameTeam(awayName, match.away);
+  const swapped = sameTeam(homeName, match.away) && sameTeam(awayName, match.home);
+  return direct || swapped;
+}
+
+function mentionTextMatchesTeam(text: string, team: WorldCupTeam): boolean {
+  const hay = normalizedName(text);
+  if (teamTokens(team).some((token) => token.length >= 3 && hay.includes(token))) {
+    return true;
+  }
+  for (const [alias, canonical] of Object.entries(TEAM_ALIASES)) {
+    if (!hay.includes(alias)) continue;
+    if (teamTokens(team).some((token) => token === canonical || token.includes(canonical))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function mentionsBothTeams(text: string, match: WorldCupMatch): boolean {
+  return mentionTextMatchesTeam(text, match.home) && mentionTextMatchesTeam(text, match.away);
+}
+
+export interface WorldCupBetLinkInput {
+  eventAt?: string | Date | null;
+  homeTeam?: string | null;
+  awayTeam?: string | null;
+  event: string;
+  selection?: string | null;
+  eventKind?: string | null;
+  resultProvider?: string | null;
+  resultEventRef?: string | null;
+}
+
+/** Link a bet to zero or more ESPN fixtures (supports combos and Swedish team names). */
+export function findWorldCupMatchesForBet(
+  bet: WorldCupBetLinkInput,
+  matches: WorldCupMatch[]
+): WorldCupMatch[] {
+  if (bet.eventKind === "outright") return [];
+
+  if (bet.resultProvider === "espn" && bet.resultEventRef) {
+    const linked = matches.find((match) => match.id === bet.resultEventRef);
+    return linked ? [linked] : [];
+  }
+
+  const linked = new Map<string, WorldCupMatch>();
+  const add = (match: WorldCupMatch | null | undefined) => {
+    if (match) linked.set(match.id, match);
+  };
+
+  if (bet.homeTeam && bet.awayTeam) {
+    for (const match of matches) {
+      if (fixtureMatchesMatch(bet.homeTeam, bet.awayTeam, match)) add(match);
+    }
+  }
+
+  for (const [homeName, awayName] of parseEventFixtures(bet.event)) {
+    for (const match of matches) {
+      if (fixtureMatchesMatch(homeName, awayName, match)) add(match);
+    }
+  }
+
+  const mentionText = `${bet.event} ${bet.selection ?? ""} ${bet.homeTeam ?? ""} ${bet.awayTeam ?? ""}`;
+  const eventTime = bet.eventAt ? new Date(bet.eventAt).getTime() : null;
+
+  if (eventTime !== null) {
+    const near = matches.filter(
+      (match) => Math.abs(Date.parse(match.startsAt) - eventTime) <= 36 * 3600_000
+    );
+    for (const match of near) {
+      if (mentionsBothTeams(mentionText, match)) add(match);
+    }
+    if (linked.size === 0 && near.length === 1 && mentionTextMatchesTeam(mentionText, near[0].home)) {
+      add(near[0]);
+    }
+    if (linked.size === 0 && near.length === 1 && mentionTextMatchesTeam(mentionText, near[0].away)) {
+      add(near[0]);
+    }
+  }
+
+  return [...linked.values()];
+}
+
 /** Match a legacy bet by structured teams/date when no ESPN event id exists. */
 export function findWorldCupMatchForBet(
-  bet: {
-    eventAt?: string | Date | null;
-    homeTeam?: string | null;
-    awayTeam?: string | null;
-    event: string;
-  },
+  bet: WorldCupBetLinkInput,
   matches: WorldCupMatch[]
 ): WorldCupMatch | null {
-  const eventTime = bet.eventAt ? new Date(bet.eventAt).getTime() : null;
-  const eventParts = bet.event.split(/\s+(?:vs?\.?|–|-|@)\s+/i);
-  const homeName = bet.homeTeam ?? eventParts[0] ?? null;
-  const awayName = bet.awayTeam ?? eventParts[1] ?? null;
-
-  const candidates = matches.filter((match) => {
-    if (eventTime !== null && Math.abs(Date.parse(match.startsAt) - eventTime) > 36 * 3600_000) {
-      return false;
-    }
-    const direct = sameTeam(homeName, match.home) && sameTeam(awayName, match.away);
-    const swapped = sameTeam(homeName, match.away) && sameTeam(awayName, match.home);
-    return direct || swapped;
-  });
-  return candidates.length === 1 ? candidates[0] : null;
+  const linked = findWorldCupMatchesForBet(bet, matches);
+  return linked.length === 1 ? linked[0] : null;
 }

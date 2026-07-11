@@ -27,7 +27,7 @@ import {
   uFmt,
 } from "@/lib/format";
 import {
-  findWorldCupMatchForBet,
+  findWorldCupMatchesForBet,
   type WorldCupGroup,
   type WorldCupMatch,
 } from "@/lib/worldCup";
@@ -336,15 +336,11 @@ export function WorldCupCenter() {
   const byMatch = useMemo(() => {
     const map = new Map<string, BetListDTO[]>();
     for (const bet of bets) {
-      let match =
-        bet.resultProvider === "espn" && bet.resultEventRef
-          ? matches.find((candidate) => candidate.id === bet.resultEventRef) ?? null
-          : null;
-      if (!match) match = findWorldCupMatchForBet(bet, matches);
-      if (!match) continue;
-      const group = map.get(match.id) ?? [];
-      group.push(bet);
-      map.set(match.id, group);
+      for (const match of findWorldCupMatchesForBet(bet, matches)) {
+        const group = map.get(match.id) ?? [];
+        group.push(bet);
+        map.set(match.id, group);
+      }
     }
     return map;
   }, [bets, matches]);
