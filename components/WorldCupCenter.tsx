@@ -95,36 +95,39 @@ function MatchCard({
       {match.wentToExtraTime && (
         <div className="ap-wc-warning">Förlängning/straffar — 90-minutersspel granskas manuellt.</div>
       )}
-      {!compact && (
-        <>
-          {bets.length > 0 && (
-            <div className="ap-wc-linked-bets">
-              {bets.map((bet) => (
-                <div key={bet.id}>
-                  <span>
-                    <b>{bet.selection}</b>
-                    <small>{bet.bookmaker ?? "Bookmaker saknas"} · {bet.odds.toFixed(2)}</small>
-                  </span>
-                  <span>
-                    <ResultBadgeKr
-                      outcome={bet.outcome}
-                      profitKr={(bet.profitUnits ?? 0) * unit}
-                    />
-                    {bet.outcome === "pending" && (
-                      <button className="ap-link" onClick={() => onSettle(bet)}>Rätta</button>
-                    )}
-                  </span>
-                </div>
-              ))}
+      {bets.length > 0 && (
+        <div className="ap-wc-linked-bets">
+          {bets.map((bet) => (
+            <div key={bet.id}>
+              <span>
+                <b>{bet.selection}</b>
+                <small>{bet.bookmaker ?? "Bookmaker saknas"} · {bet.odds.toFixed(2)}</small>
+              </span>
+              <span>
+                <ResultBadgeKr
+                  outcome={bet.outcome}
+                  profitKr={(bet.profitUnits ?? 0) * unit}
+                />
+                {bet.outcome === "pending" && (
+                  <button className="ap-link" onClick={() => onSettle(bet)}>Rätta</button>
+                )}
+              </span>
             </div>
-          )}
-          <div className="ap-wc-match-actions">
-            <span>{bets.length ? `${bets.length} kopplade bets` : "Inga kopplade bets"}</span>
-            <button className="ap-btn ghost" onClick={() => onAdd(match)}>
-              <I p={IC.plus} size={14} /> Logga bet
-            </button>
-          </div>
-        </>
+          ))}
+        </div>
+      )}
+      {!compact && (
+        <div className="ap-wc-match-actions">
+          <span>{bets.length ? `${bets.length} kopplade bets` : "Inga kopplade bets"}</span>
+          <button className="ap-btn ghost" onClick={() => onAdd(match)}>
+            <I p={IC.plus} size={14} /> Logga bet
+          </button>
+        </div>
+      )}
+      {compact && (
+        <div className="ap-wc-match-actions is-compact">
+          <span>{bets.length ? `${bets.length} kopplade bets` : "Inga kopplade bets"}</span>
+        </div>
       )}
     </div>
   );

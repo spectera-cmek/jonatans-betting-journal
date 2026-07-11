@@ -56,7 +56,24 @@ const franceSpain: WorldCupMatch = {
   wentToExtraTime: false,
 };
 
-const matches = [norwayEngland, argentinaSwitzerland, franceSpain];
+const mexicoSouthAfrica: WorldCupMatch = {
+  id: "700001",
+  startsAt: "2026-06-11T19:00:00.000Z",
+  stage: "group",
+  stageLabel: "Gruppspel",
+  group: "Grupp A",
+  status: "final",
+  statusText: "FT",
+  completed: true,
+  home: { id: "7", name: "Mexico", abbreviation: "MEX", logo: null },
+  away: { id: "8", name: "South Africa", abbreviation: "RSA", logo: null },
+  homeScore: 2,
+  awayScore: 0,
+  venue: "Estadio Banorte",
+  wentToExtraTime: false,
+};
+
+const matches = [norwayEngland, argentinaSwitzerland, franceSpain, mexicoSouthAfrica];
 
 describe("findWorldCupMatchesForBet", () => {
   it("links Swedish team names from event text", () => {
@@ -85,6 +102,41 @@ describe("findWorldCupMatchesForBet", () => {
       matches
     );
     expect(linked.map((match) => match.id)).toEqual(["760513"]);
+  });
+
+  it("links historical group-stage bets (Mexiko v Sydafrika)", () => {
+    const linked = findWorldCupMatchesForBet(
+      {
+        event: "Mexiko v Sydafrika",
+        selection: "Mexiko Över 0.5 mål",
+        eventAt: "2026-06-11T12:00:00.000Z",
+        eventKind: "match",
+      },
+      matches
+    );
+    expect(linked.map((match) => match.id)).toEqual(["700001"]);
+  });
+
+  it("links slash-separated combo fixtures", () => {
+    const linked = findWorldCupMatchesForBet(
+      {
+        event: "Brasilien v Marocko / Australien v Turkiet",
+        selection: "Över 5.5 mål tillsammans",
+        eventAt: "2026-06-16T18:00:00.000Z",
+        eventKind: "match",
+      },
+      [
+        ...matches,
+        {
+          ...mexicoSouthAfrica,
+          id: "700002",
+          startsAt: "2026-06-16T18:00:00.000Z",
+          home: { id: "9", name: "Brazil", abbreviation: "BRA", logo: null },
+          away: { id: "10", name: "Morocco", abbreviation: "MAR", logo: null },
+        },
+      ]
+    );
+    expect(linked.some((match) => match.home.name === "Brazil")).toBe(true);
   });
 
   it("links Frankrike vs Spanien", () => {

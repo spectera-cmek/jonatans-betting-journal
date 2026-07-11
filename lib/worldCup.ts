@@ -336,15 +336,75 @@ const TEAM_ALIASES: Record<string, string> = {
   iran: "iran",
   qatar: "qatar",
   "saudi arabien": "saudi arabia",
+  saudiarabien: "saudi arabia",
   polen: "poland",
   serbien: "serbia",
   ungern: "hungary",
   osterrike: "austria",
+  osterike: "austria",
   skottland: "scotland",
   wales: "wales",
   tjeckien: "czechia",
   "tjeckiska republiken": "czechia",
+  sverige: "sweden",
+  tunisien: "tunisia",
+  sydafrika: "south africa",
+  elfenbenskusten: "ivory coast",
+  "elfenbens kusten": "ivory coast",
+  "kap verde": "cape verde",
+  kapverde: "cape verde",
+  "nya zeeland": "new zealand",
+  "dr kongo": "congo dr",
+  "demokratiska republiken kongo": "congo dr",
+  kongo: "congo dr",
+  turkiet: "turkiye",
+  turkiye: "turkiye",
+  "bosnien och hercegovina": "bosnia herzegovina",
+  "bosnien hercegovina": "bosnia herzegovina",
+  "bosnien-hercegovina": "bosnia herzegovina",
+  irak: "iraq",
+  algeriet: "algeria",
+  jordanien: "jordan",
+  panama: "panama",
+  haiti: "haiti",
+  uzbekistan: "uzbekistan",
+  curacao: "curacao",
+  jordan: "jordan",
+  portugal: "portugal",
+  argentina: "argentina",
+  england: "england",
+  france: "france",
+  spain: "spain",
+  germany: "germany",
+  italy: "italy",
+  italien: "italy",
+  paraguay: "paraguay",
+  chile: "chile",
+  peru: "peru",
+  "costa rica": "costa rica",
 };
+
+const FIXTURE_SPLIT = /\s*(?:\+|&|\band\b|\/)\s*|\s*,\s*(?=[^,]+(?:vs?|–|—|-))/i;
+const TEAM_SPLIT = /\s*(?:vs?\.?|–|—|-|@)\s*/i;
+const EVENT_PREFIX = /^(?:vm\s*2026|fifa[\s-]*vm(?:\s*2026)?)\s*[-–:]\s*/i;
+
+function sanitizeEventForParsing(event: string): string {
+  return event
+    .replace(EVENT_PREFIX, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sameUtcDate(left: Date, right: Date): boolean {
+  return left.toISOString().slice(0, 10) === right.toISOString().slice(0, 10);
+}
+
+function eventTimeMatchesMatch(eventTime: number, match: WorldCupMatch): boolean {
+  const matchTime = Date.parse(match.startsAt);
+  if (Math.abs(matchTime - eventTime) <= 36 * 3600_000) return true;
+  return sameUtcDate(new Date(eventTime), new Date(matchTime));
+}
 
 function normalizedName(value: string): string {
   return value
@@ -377,9 +437,6 @@ function sameTeam(value: string | null | undefined, team: WorldCupTeam): boolean
   );
 }
 
-const FIXTURE_SPLIT = /\s*(?:\+|&|\band\b)\s*|\s*,\s*(?=[^,]+(?:vs?|–|—|-))/i;
-const TEAM_SPLIT = /\s*(?:vs?\.?|–|—|-|@)\s*/i;
-
 function parseFixtureTeams(text: string): [string, string] | null {
   const parts = text
     .trim()
@@ -391,10 +448,27 @@ function parseFixtureTeams(text: string): [string, string] | null {
 }
 
 function parseEventFixtures(event: string): [string, string][] {
-  return event
+  const cleaned = sanitizeEventForParsing(event);
+  return cleaned
     .split(FIXTURE_SPLIT)
     .map((chunk) => parseFixtureTeams(chunk))
     .filter((pair): pair is [string, string] => pair !== null);
+}
+
+function addFixtureMatches(
+  linked: Map<string, WorldCupMatch>,
+  homeName: string,
+  awayName: string,
+  matches: WorldCupMatch[],
+  eventTime: number | null
+) {
+  let candidates = matches.filter((match) => fixtureMatchesMatch(homeName, awayName, match));
+  if (!candidates.length) return;
+  if (eventTime !== null) {
+    const timed = candidates.filter((match) => eventTimeMatchesMatch(eventTime, match));
+    if (timed.length) candidates = timed;
+  }
+  for (const match of candidates) linked.set(match.id, match);
 }
 
 function fixtureMatchesMatch(
@@ -442,7 +516,10 @@ export function findWorldCupMatchesForBet(
   bet: WorldCupBetLinkInput,
   matches: WorldCupMatch[]
 ): WorldCupMatch[] {
-  if (bet.eventKind === "outright") return [];
+  const parsedFixtures = parseEventFixtures(bet.event);
+  const hasFixtureTeams =
+    parsedFixtures.length > 0 || Boolean(bet.homeTeam && bet.awayTeam);
+  if (bet.eventKind === "outright" && !hasFixtureTeams) return [];
 
   if (bet.resultProvider === "espn" && bet.resultEventRef) {
     const linked = matches.find((match) => match.id === bet.resultEventRef);
@@ -450,37 +527,35 @@ export function findWorldCupMatchesForBet(
   }
 
   const linked = new Map<string, WorldCupMatch>();
-  const add = (match: WorldCupMatch | null | undefined) => {
-    if (match) linked.set(match.id, match);
-  };
+  const eventTime = bet.eventAt ? new Date(bet.eventAt).getTime() : null;
+  const parsedEvent = sanitizeEventForParsing(bet.event);
 
   if (bet.homeTeam && bet.awayTeam) {
-    for (const match of matches) {
-      if (fixtureMatchesMatch(bet.homeTeam, bet.awayTeam, match)) add(match);
-    }
+    addFixtureMatches(linked, bet.homeTeam, bet.awayTeam, matches, eventTime);
   }
 
   for (const [homeName, awayName] of parseEventFixtures(bet.event)) {
-    for (const match of matches) {
-      if (fixtureMatchesMatch(homeName, awayName, match)) add(match);
-    }
+    addFixtureMatches(linked, homeName, awayName, matches, eventTime);
+  }
+
+  // Some imports only store teams inside the event label without separators we parse.
+  if (linked.size === 0 && parsedEvent.includes(" v ")) {
+    const fallback = parseFixtureTeams(parsedEvent);
+    if (fallback) addFixtureMatches(linked, fallback[0], fallback[1], matches, eventTime);
   }
 
   const mentionText = `${bet.event} ${bet.selection ?? ""} ${bet.homeTeam ?? ""} ${bet.awayTeam ?? ""}`;
-  const eventTime = bet.eventAt ? new Date(bet.eventAt).getTime() : null;
 
   if (eventTime !== null) {
-    const near = matches.filter(
-      (match) => Math.abs(Date.parse(match.startsAt) - eventTime) <= 36 * 3600_000
-    );
+    const near = matches.filter((match) => eventTimeMatchesMatch(eventTime, match));
     for (const match of near) {
-      if (mentionsBothTeams(mentionText, match)) add(match);
+      if (mentionsBothTeams(mentionText, match)) linked.set(match.id, match);
     }
     if (linked.size === 0 && near.length === 1 && mentionTextMatchesTeam(mentionText, near[0].home)) {
-      add(near[0]);
+      linked.set(near[0].id, near[0]);
     }
     if (linked.size === 0 && near.length === 1 && mentionTextMatchesTeam(mentionText, near[0].away)) {
-      add(near[0]);
+      linked.set(near[0].id, near[0]);
     }
   }
 

@@ -47,7 +47,8 @@
     "import:unibet": "tsx scripts/importUnibet.ts",
     "recategorize": "tsx scripts/recategorize.ts",
     "recategorize:detail": "tsx scripts/recategorizeDetail.ts",
-    "backfill:tags": "tsx scripts/backfillBetTags.ts"
+    "backfill:tags": "tsx scripts/backfillBetTags.ts",
+    "backfill:vm-refs": "tsx scripts/backfillWorldCupRefs.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
