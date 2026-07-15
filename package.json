@@ -48,7 +48,8 @@
     "recategorize": "tsx scripts/recategorize.ts",
     "recategorize:detail": "tsx scripts/recategorizeDetail.ts",
     "backfill:tags": "tsx scripts/backfillBetTags.ts",
-    "backfill:vm-refs": "tsx scripts/backfillWorldCupRefs.ts"
+    "backfill:vm-refs": "tsx scripts/backfillWorldCupRefs.ts",
+    "backfill:clv": "tsx scripts/backfillClv.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

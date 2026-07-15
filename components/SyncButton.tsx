@@ -7,6 +7,7 @@ import { I, IC } from "./icons";
 interface SyncResult {
   ok: boolean;
   message: string;
+  linked: number;
   graded: number;
   closingUpdated: number;
   details: string[];
@@ -18,7 +19,7 @@ export function SyncButton({
   onDone,
   showResult = false,
 }: {
-  kind?: "all" | "grade" | "closing" | "scores";
+  kind?: "all" | "grade" | "closing" | "scores" | "link";
   label?: string;
   onDone?: () => void;
   showResult?: boolean;
@@ -34,7 +35,7 @@ export function SyncButton({
       setResult(res);
       onDone?.();
     } catch (e) {
-      setResult({ ok: false, message: (e as Error).message, graded: 0, closingUpdated: 0, details: [] });
+      setResult({ ok: false, message: (e as Error).message, linked: 0, graded: 0, closingUpdated: 0, details: [] });
     } finally {
       setBusy(false);
     }

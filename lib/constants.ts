@@ -84,17 +84,50 @@ export const EVENT_KINDS: { value: string; label: string }[] = [
 export const TOURNAMENT_STAGES: { value: string; label: string }[] =
   Object.entries(TOURNAMENT_STAGE_LABELS).map(([value, label]) => ({ value, label }));
 
+// Sorterat efter användning i databasen (mest frekvent först), sedan övriga.
 export const BOOKMAKERS = [
-  "Unibet",
   "Bet365",
-  "Pinnacle",
+  "Unibet",
+  "Expekt",
+  "Coolbet",
+  "1X2",
   "Betsson",
-  "LeoVegas",
   "Svenska Spel",
+  "Betinia",
+  "Campobet",
+  "Mr Green",
+  "Interwetten",
+  "BetMGM",
+  "Happy",
+  "ComeOn",
   "ATG",
+  "DBET",
+  "LuckyCasino",
+  "LeoVegas",
+  "Onerush",
+  "Snabbare",
+  "GoGoCasino",
+  "Betsafe",
+  "888sport",
+  "x3000",
+  "HappyCasino",
+  "Flax",
+  "Lodur",
+  "FrankFred",
+  "Lucky",
+  "Pinnacle",
   "Betfair",
   "Other",
 ];
+
+/** Canonical bookmaker name (e.g. bet365 → Bet365). */
+export function normalizeBookmaker(raw: string | null | undefined): string | null {
+  const s = raw?.trim();
+  if (!s) return null;
+  if (s.toLowerCase() === "bet365") return "Bet365";
+  const known = BOOKMAKERS.find((b) => b.toLowerCase() === s.toLowerCase());
+  return known ?? s;
+}
 
 export const OUTCOMES: { value: string; label: string }[] = [
   { value: "pending", label: "Pending" },

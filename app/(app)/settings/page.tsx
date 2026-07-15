@@ -165,33 +165,43 @@ export default function SettingsPage() {
         <div style={{ height: 12 }} />
 
         <Card>
-          <span className="ap-label">Resultat-API (valfritt)</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginTop: 14 }}>
-            <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: settings?.hasOddsApiKey ? "var(--pos)" : "var(--red)" }} />
-            <span>The Odds API: {settings?.hasOddsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}</span>
+          <span className="ap-label">CLV &amp; synk (API-nycklar)</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13, marginTop: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: settings?.hasTheStatsApiKey ? "var(--pos)" : "var(--red)" }} />
+              <span>TheStatsAPI: {settings?.hasTheStatsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: settings?.hasOddsApiKey ? "var(--pos)" : "var(--red)" }} />
+              <span>The Odds API: {settings?.hasOddsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}</span>
+            </div>
           </div>
 
-          {settings?.hasOddsApiKey ? (
+          {settings?.hasTheStatsApiKey || settings?.hasOddsApiKey ? (
             <div style={{ marginTop: 14 }}>
               <p style={{ fontSize: 13, color: "var(--dim)", marginBottom: 12 }}>
-                Synka för att auto-rätta färdigspelade bets och fånga stängningsodds (CLV). Bets måste vara länkade via &quot;Sök event&quot;.
+                {settings?.hasTheStatsApiKey
+                  ? "TheStatsAPI hämtar historiska stängningsodds (CLV) för fotboll — även retroaktivt efter avslutade matcher. "
+                  : ""}
+                {settings?.hasOddsApiKey
+                  ? "The Odds API länkar icke-fotboll och ger live-closing som fallback. "
+                  : ""}
+                ESPN-resultat rättar singlar utan API-länk.
               </p>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <SyncButton kind="grade" label="Rätta resultat" />
                 <SyncButton kind="closing" label="Hämta closing-odds" />
                 <SyncButton kind="all" label="Full synk" />
+                {settings?.hasOddsApiKey && <SyncButton kind="grade" label="Rätta via Odds API" />}
               </div>
             </div>
           ) : (
             <div style={{ marginTop: 14, fontSize: 13, color: "var(--dim)" }}>
-              <p style={{ marginBottom: 8 }}>Lägg till en gratis nyckel för auto-rättning + CLV:</p>
-              <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4, color: "var(--dim2)" }}>
-                <li>Skapa gratis nyckel på <span style={{ color: "var(--acc)" }}>the-odds-api.com</span> (~500 anrop/mån).</li>
-                <li>Skapa <code style={{ color: "var(--pos)" }}>.env.local</code> i projektmappen.</li>
-                <li>Lägg in <code style={{ color: "var(--pos)" }}>ODDS_API_KEY=din_nyckel</code>.</li>
-                <li>Starta om servern.</li>
-              </ol>
-              <p style={{ marginTop: 8, color: "var(--dim2)" }}>Tills dess fungerar allt manuellt — rätta bets med W/L-knapparna.</p>
+              <p style={{ marginBottom: 8 }}>Lägg till minst en API-nyckel i <code style={{ color: "var(--pos)" }}>.env.local</code>:</p>
+              <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6, color: "var(--dim2)" }}>
+                <li><strong style={{ color: "var(--txt)" }}>THESTATSAPI_KEY</strong> — historisk CLV för fotboll (rekommenderas). thestatsapi.com</li>
+                <li><strong style={{ color: "var(--txt)" }}>ODDS_API_KEY</strong> — gratis tier för MLB/NBA/NHL m.fl. the-odds-api.com</li>
+              </ul>
+              <p style={{ marginTop: 8, color: "var(--dim2)" }}>Utan nycklar fungerar gratis ESPN-rättning ovan — CLV kräver TheStatsAPI eller Odds API.</p>
             </div>
           )}
         </Card>

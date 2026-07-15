@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma, getSettings } from "@/lib/db";
 import { hasOddsApiKey } from "@/lib/oddsApi";
+import { hasTheStatsApiKey } from "@/lib/theStatsApi";
 import { getSessionUser, getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export async function GET() {
     dailyStakeBudgetUnits: s.dailyStakeBudgetUnits,
     weeklyStakeBudgetUnits: s.weeklyStakeBudgetUnits,
     hasOddsApiKey: hasOddsApiKey(),
+    hasTheStatsApiKey: hasTheStatsApiKey(),
   });
 }
 
@@ -70,6 +72,7 @@ export async function PUT(req: Request) {
       dailyStakeBudgetUnits: s.dailyStakeBudgetUnits,
       weeklyStakeBudgetUnits: s.weeklyStakeBudgetUnits,
       hasOddsApiKey: hasOddsApiKey(),
+      hasTheStatsApiKey: hasTheStatsApiKey(),
     });
   } catch (e) {
     console.error(e);

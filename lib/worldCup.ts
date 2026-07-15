@@ -415,9 +415,23 @@ function normalizedName(value: string): string {
     .trim();
 }
 
-function canonicalTeamToken(value: string): string {
+export function canonicalTeamToken(value: string): string {
   const normalized = normalizedName(value);
   return TEAM_ALIASES[normalized] ?? normalized;
+}
+
+/** Match bet/API team labels using Swedish aliases and substring rules. */
+export function teamNamesMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const ca = canonicalTeamToken(a);
+  const cb = canonicalTeamToken(b);
+  if (!ca || !cb) return false;
+  if (ca === cb) return true;
+  if (ca.length >= 4 && cb.includes(ca)) return true;
+  if (cb.length >= 4 && ca.includes(cb)) return true;
+  const caLast = ca.split(" ").pop()!;
+  const cbLast = cb.split(" ").pop()!;
+  return caLast.length >= 3 && caLast === cbLast;
 }
 
 function teamTokens(team: WorldCupTeam): string[] {

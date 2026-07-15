@@ -18,6 +18,7 @@ config();
 import { readFileSync } from "fs";
 import { PrismaClient } from "@prisma/client";
 import { buildBetData, ValidationError, type BetInput } from "../../lib/betInput";
+import { linkBetToOddsEvent } from "../../lib/eventLink";
 
 interface AgentBetInput extends BetInput {
   stakeKr?: number;
@@ -77,10 +78,16 @@ async function main() {
     const bet = await prisma.bet.create({
       data: { ...(data as object), userId: user.id } as never,
     });
-    console.log(`OK: loggade bet ${bet.id} för ${username}`);
+    if (!bet.externalRef) {
+      await linkBetToOddsEvent(prisma, bet).catch(() => {});
+    }
+    const linked = await prisma.bet.findUnique({ where: { id: bet.id } });
+    const out = linked ?? bet;
+    console.log(`OK: loggade bet ${out.id} för ${username}`);
     console.log(
-      `  ${bet.event} — ${bet.selection} @ ${bet.odds} | ${bet.stakeUnits}u | ${bet.bookmaker ?? "okänd bookmaker"}`
+      `  ${out.event} — ${out.selection} @ ${out.odds} | ${out.stakeUnits}u | ${out.bookmaker ?? "okänd bookmaker"}`
     );
+    if (out.externalRef) console.log(`  Odds API: ${out.sportKey} / ${out.externalRef}`);
   } finally {
     await prisma.$disconnect();
   }

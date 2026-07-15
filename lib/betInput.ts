@@ -13,6 +13,8 @@ import {
   normalizeMarketCategory,
   normalizeTournamentStage,
 } from "./betTaxonomy";
+import { normalizeBookmaker } from "./constants";
+import { inferSportKey, parseHomeAway } from "./eventLink";
 
 const OUTCOMES: Outcome[] = [
   "pending",
@@ -164,7 +166,7 @@ export function buildBetData(
   if (input.externalRef !== undefined) data.externalRef = str(input.externalRef);
   if (input.resultProvider !== undefined) data.resultProvider = str(input.resultProvider)?.toLowerCase() ?? null;
   if (input.resultEventRef !== undefined) data.resultEventRef = str(input.resultEventRef);
-  if (input.bookmaker !== undefined) data.bookmaker = str(input.bookmaker);
+  if (input.bookmaker !== undefined) data.bookmaker = normalizeBookmaker(str(input.bookmaker));
   if (input.tipster !== undefined) data.tipster = str(input.tipster);
   if (input.notes !== undefined) data.notes = str(input.notes);
   if (input.legs !== undefined)
@@ -203,6 +205,23 @@ export function buildBetData(
       if (needCat && det.marketCategory && det.marketCategory !== "Övrigt")
         data.marketCategory = det.marketCategory;
       if (needScope && det.marketScope) data.marketScope = det.marketScope;
+    }
+
+    if (!data.homeTeam && !data.awayTeam && data.event) {
+      const teams = parseHomeAway(data.event as string);
+      if (teams) {
+        data.homeTeam = teams.home;
+        data.awayTeam = teams.away;
+      }
+    }
+
+    if (!data.sportKey) {
+      const key = inferSportKey(
+        (data.sport as string | undefined) ?? input.sport,
+        (data.league as string | undefined) ?? input.league
+      );
+      if (key) data.sportKey = key;
+    }
 
     if (data.eventKind === undefined) {
       data.eventKind = inferEventKind(
@@ -210,7 +229,6 @@ export function buildBetData(
         data.selection as string | undefined,
         input.eventKind
       );
-    }
     }
   }
 

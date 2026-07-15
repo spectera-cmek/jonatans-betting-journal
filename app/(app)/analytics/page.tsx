@@ -136,7 +136,7 @@ export default function AnalyticsPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <span className="ap-label">Closing line value (CLV)</span>
           <span style={{ color: "var(--dim2)", fontSize: 11 }}>
-            {m && m.clvSampleSize > 0 ? `${m.clvSampleSize} bets med stängningsodds` : "kräver Odds API-nyckel"}
+            {m && m.clvSampleSize > 0 ? `${m.clvSampleSize} bets med stängningsodds` : "kräver TheStatsAPI eller Odds API"}
           </span>
         </div>
         {m && m.clvSampleSize > 0 ? (
@@ -159,8 +159,8 @@ export default function AnalyticsPage() {
         ) : (
           <div style={{ color: "var(--dim2)", fontSize: 13, lineHeight: 1.5, maxWidth: 560 }}>
             Inga stängningsodds insamlade än. CLV mäter om du tog bättre odds än marknadens
-            stängningsodds — den starkaste enskilda indikatorn på edge. Lägg till en The Odds
-            API-nyckel under Inställningar så hämtas closing-odds automatiskt.
+            stängningsodds — den starkaste enskilda indikatorn på edge. Lägg till en TheStatsAPI-
+            eller Odds API-nyckel under Inställningar och kör synk så hämtas closing-odds automatiskt.
           </div>
         )}
       </Card>

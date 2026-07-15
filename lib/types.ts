@@ -206,4 +206,5 @@ export interface SettingsDTO {
   dailyStakeBudgetUnits: number | null;
   weeklyStakeBudgetUnits: number | null;
   hasOddsApiKey: boolean;
+  hasTheStatsApiKey: boolean;
 }

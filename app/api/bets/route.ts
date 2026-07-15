@@ -5,6 +5,7 @@ import { buildBetData, ValidationError } from "@/lib/betInput";
 import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import { settleBet } from "@/lib/settlement";
+import { linkBetToOddsEvent } from "@/lib/eventLink";
 import type { Outcome } from "@/lib/betting";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +92,10 @@ export async function POST(req: Request) {
       data.gradedAt = null;
     }
     let bet = await prisma.bet.create({ data: { ...(data as object), userId } as never });
+    if (!bet.externalRef) {
+      await linkBetToOddsEvent(prisma, bet).catch(() => {});
+      bet = (await prisma.bet.findUnique({ where: { id: bet.id } })) ?? bet;
+    }
     if (requestedOutcome !== "pending") {
       const result = await settleBet(prisma, {
         betId: bet.id,
