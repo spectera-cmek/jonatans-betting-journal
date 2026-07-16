@@ -4,6 +4,7 @@ import {
   closingOddsFromPlayerProps,
   extractClosingOdds,
   isAfterKickoff,
+  isFootballBet,
   matchStatsEvent,
   type ClvBet,
 } from "../lib/clvCapture";
@@ -20,6 +21,22 @@ const baseBet: ClvBet = {
   odds: 2.1,
   bookmaker: "Bet365",
 };
+
+describe("isFootballBet", () => {
+  it("accepts football sport", () => {
+    expect(isFootballBet({ sport: "Football", league: null })).toBe(true);
+  });
+  it("rejects tennis", () => {
+    expect(isFootballBet({ sport: "Tennis", league: null })).toBe(false);
+  });
+  it("rejects empty league when sport is missing (bug: '' matched every key)", () => {
+    expect(isFootballBet({ sport: null, league: null })).toBe(false);
+    expect(isFootballBet({ sport: "", league: "" })).toBe(false);
+  });
+  it("accepts known football league without sport", () => {
+    expect(isFootballBet({ sport: null, league: "Premier League" })).toBe(true);
+  });
+});
 
 describe("isAfterKickoff", () => {
   it("is false before kickoff", () => {

@@ -79,12 +79,32 @@ export interface ClvCaptureResult {
   details: string[];
 }
 
-function isFootballBet(bet: { sport?: string | null; league?: string | null }): boolean {
-  const sport = (bet.sport || "").toLowerCase();
+const NON_FOOTBALL_SPORTS = new Set([
+  "tennis",
+  "basketball",
+  "ice hockey",
+  "baseball",
+  "american football",
+  "mma",
+  "boxing",
+  "esports",
+  "golf",
+  "cricket",
+  "horse racing",
+  "other",
+]);
+
+/** True for football/soccer bets that TheStatsAPI can cover. */
+export function isFootballBet(bet: { sport?: string | null; league?: string | null }): boolean {
+  const sport = (bet.sport || "").toLowerCase().trim();
+  if (sport && NON_FOOTBALL_SPORTS.has(sport)) return false;
   if (sport === "football" || sport === "soccer" || sport === "fotboll") return true;
-  // Imported bets sometimes miss sport but have a football league label.
-  const league = (bet.league || "").toLowerCase();
-  return Object.keys(LEAGUE_SEARCH).some((k) => league.includes(k) || k.includes(league));
+
+  const league = (bet.league || "").toLowerCase().trim();
+  if (!league) return false; // empty league must NOT match ("" is a substring of every key)
+  return Object.keys(LEAGUE_SEARCH).some(
+    (k) => league === k || league.includes(k) || (k.length >= 4 && k.includes(league))
+  );
 }
 
 function formatDate(d: Date): string {
@@ -391,13 +411,16 @@ async function fetchMatchesForBet(
   _windowDays: number
 ): Promise<StatsMatch[]> {
   const competitionId = await competitionIdForLeague(bet.league);
+  // Never list "all matches" without a competition — that pulls hundreds of
+  // unrelated fixtures and times out (504) when tennis/other bleed through.
+  if (!competitionId) return [];
+
   const center = bet.eventAt ? new Date(bet.eventAt) : new Date();
   const dateFrom = formatDate(addDays(center, -2));
   const dateTo = formatDate(addDays(center, 2));
 
-  // Single page only — a ±2 day window rarely needs pagination and keeps sync fast.
   const res = await listMatches({
-    competitionId: competitionId ?? undefined,
+    competitionId,
     dateFrom,
     dateTo,
     perPage: 50,
@@ -419,8 +442,10 @@ export async function linkBetsToStatsMatches(
     options.sinceDate ??
     addDays(new Date(), -(options.sinceDays ?? DEFAULT_WINDOW_DAYS));
 
-  // Football singles missing closingOdds. Re-link Odds API refs to mt_* so
-  // historical CLV can run (ESPN still grades football without Odds API).
+  const limit = options.limit ?? 12;
+  const footballSports = ["Football", "football", "Soccer", "soccer", "Fotboll", "fotboll"];
+
+  // Prefer real football rows in SQL so tennis/other never burn API quota.
   const candidates = await db.bet.findMany({
     where: {
       eventKind: "match",
@@ -437,6 +462,13 @@ export async function linkBetsToStatsMatches(
             { NOT: { externalRef: { startsWith: "mt_" } } },
           ],
         },
+        {
+          OR: [
+            { sport: { in: footballSports } },
+            // Sport missing but league set — isFootballBet decides
+            { AND: [{ OR: [{ sport: null }, { sport: "" }] }, { league: { not: null } }] },
+          ],
+        },
       ],
     },
     select: {
@@ -450,19 +482,20 @@ export async function linkBetsToStatsMatches(
       externalRef: true,
       sportKey: true,
     },
-    take: options.limit ?? 12,
+    take: Math.max(limit * 5, 40),
     orderBy: [{ eventAt: "desc" }, { placedAt: "desc" }],
   });
 
-  const footballCandidates = candidates.filter(isFootballBet);
+  const footballCandidates = candidates.filter(isFootballBet).slice(0, limit);
   if (footballCandidates.length === 0) {
     details.push("Inga fotbollsbets utan closingOdds i fönstret att länka.");
     return { linked: 0, closingUpdated: 0, details };
   }
-  details.push(`${footballCandidates.length} kandidater att länka`);
+  details.push(`${footballCandidates.length} fotbollskandidater att länka`);
 
   const matchCache = new Map<string, StatsMatch[]>();
   let linked = 0;
+  let skippedNoComp = 0;
 
   for (const bet of footballCandidates) {
     const cacheKey = `${bet.league}|${bet.eventAt?.toISOString().slice(0, 10) ?? "nodate"}`;
@@ -477,9 +510,15 @@ export async function linkBetsToStatsMatches(
       }
     }
 
+    if (matches.length === 0) {
+      skippedNoComp += 1;
+      details.push(`${bet.event}: ingen TheStatsAPI-liga för "${bet.league ?? "—"}"`);
+      continue;
+    }
+
     const match = matchStatsEvent(bet, matches);
     if (!match) {
-      details.push(`${bet.event}: ingen match i API (${matches.length} matcher i fönstret)`);
+      details.push(`${bet.event}: ingen match i API (${matches.length} i ${bet.league})`);
       continue;
     }
 
