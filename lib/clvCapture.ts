@@ -11,7 +11,7 @@ import {
   hasTheStatsApiKey,
   isStatsApiMatchRef,
   isStatsApiSportKey,
-  listAllMatches,
+  listMatches,
   parseOddsValue,
   pickBookmakerOdds,
   searchCompetitions,
@@ -395,17 +395,14 @@ async function fetchMatchesForBet(
   const dateFrom = formatDate(addDays(center, -2));
   const dateTo = formatDate(addDays(center, 2));
 
-  if (competitionId) {
-    return listAllMatches({
-      competitionId,
-      dateFrom,
-      dateTo,
-      perPage: 100,
-    });
-  }
-
-  // Fallback: date window without competition filter (narrow)
-  return listAllMatches({ dateFrom, dateTo, perPage: 100 });
+  // Single page only — a ±2 day window rarely needs pagination and keeps sync fast.
+  const res = await listMatches({
+    competitionId: competitionId ?? undefined,
+    dateFrom,
+    dateTo,
+    perPage: 50,
+  });
+  return res.data;
 }
 
 /** Link unlinked football bets to TheStatsAPI matches. */
@@ -453,7 +450,7 @@ export async function linkBetsToStatsMatches(
       externalRef: true,
       sportKey: true,
     },
-    take: options.limit ?? 200,
+    take: options.limit ?? 12,
     orderBy: [{ eventAt: "desc" }, { placedAt: "desc" }],
   });
 
@@ -537,7 +534,7 @@ export async function captureClosingOdds(
         { eventAt: null },
       ],
     },
-    take: options.limit ?? 200,
+    take: options.limit ?? 10,
     orderBy: { eventAt: "desc" },
   });
 

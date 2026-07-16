@@ -181,7 +181,7 @@ export default function SettingsPage() {
             <div style={{ marginTop: 14 }}>
               <p style={{ fontSize: 13, color: "var(--dim)", marginBottom: 12 }}>
                 {settings?.hasTheStatsApiKey
-                  ? "TheStatsAPI hämtar historiska stängningsodds (CLV) för fotboll — även retroaktivt efter avslutade matcher. "
+                  ? "TheStatsAPI hämtar historiska stängningsodds (CLV) för fotboll — även retroaktivt. Synken kör i små batchar (undviker 504); kör igen för fler bets. "
                   : ""}
                 {settings?.hasOddsApiKey
                   ? "The Odds API länkar icke-fotboll och ger live-closing som fallback. "

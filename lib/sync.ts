@@ -8,7 +8,6 @@ import { settleBet } from "./settlement";
 import {
   getScores,
   getOdds,
-  bestPriceFor,
   parseScores,
   hasOddsApiKey,
   type ScoreEvent,
@@ -31,9 +30,16 @@ export interface SyncResult {
 }
 
 const CLV_WINDOW_DAYS = 90;
+/** Keep each serverless sync under Vercel’s timeout (504). */
+const SYNC_LINK_LIMIT = 12;
+const SYNC_CLOSING_LIMIT = 10;
+const SYNC_GRADE_LIMIT = 25;
+const SYNC_DEADLINE_MS = 45_000;
 
 /** Auto-link unlinked football bets to TheStatsAPI matches (historical closing odds). */
-export async function runLinkStatsApiEvents(): Promise<SyncResult> {
+export async function runLinkStatsApiEvents(
+  opts: { limit?: number } = {}
+): Promise<SyncResult> {
   const details: string[] = [];
   if (!hasTheStatsApiKey()) {
     return {
@@ -46,7 +52,10 @@ export async function runLinkStatsApiEvents(): Promise<SyncResult> {
     };
   }
 
-  const result = await linkBetsToStatsMatches({ sinceDays: CLV_WINDOW_DAYS });
+  const result = await linkBetsToStatsMatches({
+    sinceDays: CLV_WINDOW_DAYS,
+    limit: opts.limit ?? SYNC_LINK_LIMIT,
+  });
   if (result.linked > 0) {
     await prisma.syncLog.create({
       data: { kind: "link", summary: `Linked ${result.linked} bet(s) to TheStatsAPI matches.` },
@@ -234,8 +243,12 @@ export async function runGrade(): Promise<SyncResult> {
  * without any API key. Imported rich-market accumulators won't qualify (their
  * market isn't h2h/totals/spreads) and are left for the PDF import / manual W/L.
  */
-export async function runGradeByScores(): Promise<SyncResult> {
+export async function runGradeByScores(
+  opts: { limit?: number; deadlineMs?: number } = {}
+): Promise<SyncResult> {
   const details: string[] = [];
+  const limit = opts.limit ?? SYNC_GRADE_LIMIT;
+  const deadline = opts.deadlineMs ?? Date.now() + SYNC_DEADLINE_MS;
 
   const pending = await prisma.bet.findMany({
     where: {
@@ -246,6 +259,8 @@ export async function runGradeByScores(): Promise<SyncResult> {
       eventKind: "match",
       OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
     },
+    orderBy: { eventAt: "asc" },
+    take: limit,
   });
 
   if (pending.length === 0) {
@@ -254,6 +269,10 @@ export async function runGradeByScores(): Promise<SyncResult> {
 
   let graded = 0;
   for (const bet of pending) {
+    if (Date.now() > deadline) {
+      details.push("Timeout-skydd: avbryter ESPN-rättning — kör synk igen.");
+      break;
+    }
     const path = espnPath(bet.sport, bet.league);
     if (!path) {
       details.push(`${bet.event}: okänd liga för resultat-uppslag`);
@@ -309,9 +328,11 @@ export async function runGradeByScores(): Promise<SyncResult> {
     }
   }
 
-  await prisma.syncLog.create({
-    data: { kind: "grade", summary: `Score-graded ${graded} bet(s).` },
-  });
+  if (graded > 0) {
+    await prisma.syncLog.create({
+      data: { kind: "grade", summary: `Score-graded ${graded} bet(s).` },
+    });
+  }
 
   return {
     ok: true,
@@ -327,7 +348,9 @@ export async function runGradeByScores(): Promise<SyncResult> {
  * Capture closing odds via TheStatsAPI (historical last_seen after kickoff).
  * Primary CLV path for football — works retroactively on settled matches.
  */
-export async function runClosingFromStatsApi(): Promise<SyncResult> {
+export async function runClosingFromStatsApi(
+  opts: { limit?: number } = {}
+): Promise<SyncResult> {
   const details: string[] = [];
   if (!hasTheStatsApiKey()) {
     return {
@@ -340,7 +363,10 @@ export async function runClosingFromStatsApi(): Promise<SyncResult> {
     };
   }
 
-  const result = await captureClosingOdds({ sinceDays: CLV_WINDOW_DAYS });
+  const result = await captureClosingOdds({
+    sinceDays: CLV_WINDOW_DAYS,
+    limit: opts.limit ?? SYNC_CLOSING_LIMIT,
+  });
   if (result.closingUpdated > 0) {
     await prisma.syncLog.create({
       data: {
@@ -361,112 +387,27 @@ export async function runClosingFromStatsApi(): Promise<SyncResult> {
 }
 
 /**
- * Capture closing odds for bets whose event is near/at kickoff and that don't
- * yet have a closingOdds value. On the free tier we can only read *current*
- * odds, so we snapshot whatever is live closest to commence time.
+ * Link football bets then capture historical closing odds (batched for serverless).
  */
 export async function runClosing(): Promise<SyncResult> {
-  // Link first — capture only sees bets already tagged with mt_* refs.
   const link = hasTheStatsApiKey()
-    ? await runLinkStatsApiEvents()
+    ? await runLinkStatsApiEvents({ limit: SYNC_LINK_LIMIT })
     : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
-  const stats = await runClosingFromStatsApi();
+  const stats = await runClosingFromStatsApi({ limit: SYNC_CLOSING_LIMIT });
 
   const details = [...link.details, ...stats.details];
-  let updated = stats.closingUpdated;
-
-  if (!hasOddsApiKey()) {
-    return {
-      ok: stats.ok || link.ok || updated > 0,
-      message:
-        updated > 0 || link.linked > 0
-          ? `Länkade ${link.linked}, closing ${updated} via TheStatsAPI.`
-          : stats.message || link.message || "Ingen closing att uppdatera.",
-      linked: link.linked,
-      graded: 0,
-      closingUpdated: updated,
-      details,
-    };
-  }
-
-  // Odds API fallback for non-TheStatsAPI-linked bets still missing closing.
-  const now = Date.now();
-  const TWO_HOURS = 2 * 60 * 60 * 1000;
-  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-  const candidates = await prisma.bet.findMany({
-    where: {
-      externalRef: { not: null },
-      sportKey: { not: null },
-      closingOdds: null,
-      selection: { not: "" },
-      NOT: { externalRef: { startsWith: "mt_" } },
-    },
-  });
-
-  const relevant = candidates.filter((b) => {
-    if (isStatsApiMatchRef(b.externalRef)) return false;
-    if (!b.eventAt) return true;
-    const t = new Date(b.eventAt).getTime();
-    return t >= now - TWO_HOURS && t <= now + SEVEN_DAYS;
-  });
-
-  if (relevant.length === 0) {
-    return {
-      ok: stats.ok || updated > 0,
-      message:
-        updated > 0
-          ? `Updated closing odds for ${updated} bet(s).`
-          : "No bets need closing odds right now.",
-      linked: 0,
-      graded: 0,
-      closingUpdated: updated,
-      details,
-    };
-  }
-
-  const bySport = new Map<string, typeof relevant>();
-  for (const b of relevant) {
-    const arr = bySport.get(b.sportKey!);
-    if (arr) arr.push(b);
-    else bySport.set(b.sportKey!, [b]);
-  }
-
-  let oddsUpdated = 0;
-  for (const [sportKey, bets] of bySport) {
-    if (sportKey.startsWith("tsa:")) continue;
-    const markets = Array.from(new Set(bets.map((b) => b.market || "h2h"))).join(",");
-    let events;
-    try {
-      events = await getOdds(sportKey, { markets });
-    } catch (e) {
-      details.push(`odds ${sportKey}: ${(e as Error).message}`);
-      continue;
-    }
-    const byId = new Map(events.map((e) => [e.id, e]));
-
-    for (const bet of bets) {
-      const ev = byId.get(bet.externalRef!);
-      if (!ev) continue;
-      const outcomeName = selectionOutcomeName(bet, ev.home_team, ev.away_team);
-      if (!outcomeName) continue;
-      const price = bestPriceFor(ev, bet.market || "h2h", outcomeName, bet.line ?? undefined);
-      if (!price) continue;
-      await prisma.bet.update({ where: { id: bet.id }, data: { closingOdds: price } });
-      oddsUpdated += 1;
-      details.push(`${bet.event}: closing ${price.toFixed(2)} (you took ${bet.odds.toFixed(2)})`);
-    }
-  }
-
-  updated += oddsUpdated;
-  if (oddsUpdated > 0) {
-    await prisma.syncLog.create({
-      data: { kind: "closing", summary: `Odds API closing for ${oddsUpdated} bet(s).` },
-    });
-  }
+  const updated = stats.closingUpdated;
+  const moreHint =
+    link.linked >= SYNC_LINK_LIMIT || updated >= SYNC_CLOSING_LIMIT
+      ? " Kör synk igen för nästa batch."
+      : "";
 
   return {
-    ok: true,
-    message: `Länkade ${link.linked}, closing ${updated} bet(s).`,
+    ok: stats.ok || link.ok || updated > 0,
+    message:
+      `Länkade ${link.linked}, closing ${updated}.${moreHint}`.trim() ||
+      stats.message ||
+      "Ingen closing att uppdatera.",
     linked: link.linked,
     graded: 0,
     closingUpdated: updated,
@@ -474,63 +415,45 @@ export async function runClosing(): Promise<SyncResult> {
   };
 }
 
-/** Map a bet's selection to the outcome name used by The Odds API. */
-function selectionOutcomeName(
-  bet: { selectionSide?: string | null; market: string; homeTeam?: string | null; awayTeam?: string | null; selection: string },
-  home: string,
-  away: string
-): string | null {
-  const side = (bet.selectionSide || "").toLowerCase();
-  if (bet.market === "h2h") {
-    if (side === "home") return home;
-    if (side === "away") return away;
-    if (side === "draw") return "Draw";
-  }
-  if (bet.market === "totals") {
-    if (side === "over") return "Over";
-    if (side === "under") return "Under";
-  }
-  if (bet.market === "spreads") {
-    if (side === "home") return home;
-    if (side === "away") return away;
-  }
-  // Fallback: use the raw selection label.
-  return bet.selection || null;
-}
-
 export async function runFullSync(): Promise<SyncResult> {
-  const linkStats = await runLinkStatsApiEvents();
-  const link = await runLinkEvents();
-  const closing = await runClosing();
-  const grade = hasOddsApiKey()
-    ? await runGrade()
-    : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
-  const scores = await runGradeByScores();
-  const details = [
-    ...linkStats.details,
-    ...link.details,
-    ...closing.details,
-    ...grade.details,
-    ...scores.details,
-  ];
-  const ok = linkStats.ok || link.ok || closing.ok || grade.ok || scores.ok;
+  const deadline = Date.now() + SYNC_DEADLINE_MS;
+
+  // Lean serverless path: TheStatsAPI CLV batch + ESPN grading only.
+  // Odds API link/grade is opt-in via kind=grade / kind=link (too slow for "all").
+  const linkStats = await runLinkStatsApiEvents({ limit: SYNC_LINK_LIMIT });
+  const closing = await runClosingFromStatsApi({ limit: SYNC_CLOSING_LIMIT });
+  const scores =
+    Date.now() < deadline
+      ? await runGradeByScores({ limit: SYNC_GRADE_LIMIT, deadlineMs: deadline })
+      : {
+          ok: true,
+          message: "",
+          linked: 0,
+          graded: 0,
+          closingUpdated: 0,
+          details: ["Timeout-skydd: hoppade ESPN-rättning — kör synk igen."] as string[],
+        };
+
+  const details = [...linkStats.details, ...closing.details, ...scores.details];
+  const ok = linkStats.ok || closing.ok || scores.ok;
   const parts = [
-    linkStats.linked || link.linked
-      ? `${linkStats.linked + link.linked} länkade`
-      : null,
+    linkStats.linked ? `${linkStats.linked} länkade` : null,
     closing.closingUpdated ? `${closing.closingUpdated} closing` : null,
-    grade.graded || scores.graded
-      ? `${grade.graded + scores.graded} rättade`
-      : null,
+    scores.graded ? `${scores.graded} rättade` : null,
   ].filter(Boolean);
 
-  // Always surface CLV/link diagnostics so Synka isn't a silent no-op.
+  const batched =
+    linkStats.linked >= SYNC_LINK_LIMIT ||
+    closing.closingUpdated >= SYNC_CLOSING_LIMIT ||
+    scores.graded >= SYNC_GRADE_LIMIT;
+  const suffix = batched ? " Kör synk igen för nästa batch." : "";
+
   if (!parts.length && details.length) {
     return {
       ok,
       message: `Synk klar — ingen CLV ännu. ${details.slice(0, 3).join(" · ")}`,
-      linked: linkStats.linked + link.linked,
-      graded: grade.graded + scores.graded,
+      linked: linkStats.linked,
+      graded: scores.graded,
       closingUpdated: closing.closingUpdated,
       details,
     };
@@ -538,9 +461,11 @@ export async function runFullSync(): Promise<SyncResult> {
 
   return {
     ok,
-    message: parts.length ? `Synk klar: ${parts.join(", ")}.` : "Synk klar — inget att uppdatera.",
-    linked: linkStats.linked + link.linked,
-    graded: grade.graded + scores.graded,
+    message: parts.length
+      ? `Synk klar: ${parts.join(", ")}.${suffix}`
+      : "Synk klar — inget att uppdatera.",
+    linked: linkStats.linked,
+    graded: scores.graded,
     closingUpdated: closing.closingUpdated,
     details,
   };
