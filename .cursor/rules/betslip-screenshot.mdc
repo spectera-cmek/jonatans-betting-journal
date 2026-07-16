@@ -1,5 +1,5 @@
 ---
-description: Logga bet i trackern när användaren klistrar in en spelkvitto-screenshot
+description: Logga bet i trackern när användaren klistrar in en spelkvitto-screenshot (inkl. CLV-metadata)
 alwaysApply: true
 ---
 
@@ -7,31 +7,74 @@ alwaysApply: true
 
 När användaren klistrar in en screenshot av ett spelkvitto (Betsson/Unibet/bet365 m.fl.)
 ska betet loggas i databasen — fråga inte om lov, gör det direkt och visa en kort
-sammanfattning efteråt.
+sammanfattning efteråt. Gäller **i varje chat** i det här projektet.
 
 ## Flöde
 
-1. Läs bilden och extrahera: event, lag (home/away), selection, marknad, linje,
-   odds (decimal), insats i kr, bookmaker, betslip-referens (t.ex. "Ref XP…"),
-   samt eventuell matchtid.
-2. Skriv en JSON-fil (t.ex. `.claude/tmp/bet.json`) med fälten i
+1. Läs bilden och extrahera **alla** fält nedan (särskilt CLV-fälten för fotboll).
+2. Skriv en JSON-fil (t.ex. `.claude/tmp/bet.json` eller `_tmp_bet.json`) med fälten i
    `lib/betInput.ts` (`BetInput`) plus `stakeKr`, `importRef`, `placedAt`.
 3. Kör: `npx tsx scripts/agent/logBet.ts --file <bet.json> --user jonatan`
-   - Skriptet konverterar `stakeKr` → units via användarens `unitValue` (100 kr/unit)
-     och hoppar över dubbletter på `importRef`.
-4. Rapportera: event, selection, odds, insats (kr + units) och bet-id.
+   - Skriptet konverterar `stakeKr` → units via användarens `unitValue` (100 kr/unit),
+     hoppar över dubbletter på `importRef`, och **länkar fotboll till TheStatsAPI**
+     (`mt_…`) för closing-odds/CLV när `THESTATSAPI_KEY` finns.
+4. Rapportera: event, selection, odds, insats (kr + units), bet-id, och om CLV-länk
+   lyckades (`TheStatsAPI/CLV`) eller vad som saknas.
+
+## Obligatoriskt för fotbolls-CLV
+
+Utan dessa kan synken **inte** hämta closing-odds. Fyll i dem alltid när det går:
+
+| Fält | Krav |
+|------|------|
+| `sport` | `"Football"` (inte null) |
+| `league` | T.ex. `"Premier League"`, `"Allsvenskan"`, `"Serie A"`, `"La Liga"`, `"Bundesliga"`, `"Ligue 1"`, `"Champions League"`, `"Europa League"`, `"VM 2026"` |
+| `homeTeam` / `awayTeam` | Alltid för matcher |
+| `eventAt` | Matchstart ISO om den syns/kan härledas |
+| `market` | `h2h` \| `totals` \| `spreads` \| `other` |
+| `selectionSide` | `home`/`away`/`draw` (1X2) eller `over`/`under` (totals) |
+| `selection` | Tydlig text (t.ex. lagnamn eller "Over 2.5") |
+| `betType` | `"single"` för singlar (kombo = `"accumulator"` + `legs`) |
+
+Tennis/NBA/NHL/MLB m.m. får **ingen** TheStatsAPI-CLV — logga dem ändå med rätt `sport`/`league`.
 
 ## Mappning
 
 - `market`: bara `h2h` | `totals` | `spreads` | `other`. Spelarprops (baser, skott,
-  poäng etc.) = `other` — sätt `marketScope: "player"` och lämna en beskrivande
-  `selection` (t.ex. "JJ Bleday Över 1.5 totala baser").
+  poäng, målskytt etc.) = `other` — sätt `marketScope: "player"`, beskrivande
+  `selection` (t.ex. "Salah Över 1.5 skott"), och `marketCategory` (t.ex. "Skott").
 - "PHI Phillies @ CIN Reds" betyder PHI borta, CIN hemma → `event: "CIN Reds vs PHI Phillies"`,
   `homeTeam: "CIN Reds"`, `awayTeam: "PHI Phillies"`.
-- `selectionSide`: over/under för Ö/U-spel, home/away/draw för matchvinnare.
-- Sätt `sport`/`league` när det går att härleda (MLB, NHL, NBA, Allsvenskan …).
-- `eventAt`: matchstart om den syns/kan härledas, annars utelämna.
+- Fotboll "Arsenal vs Chelsea" / "Arsenal – Chelsea" → home = Arsenal, away = Chelsea.
+- `selectionSide`: over/under för Ö/U, home/away/draw för matchvinnare — **lämna aldrig tom**
+  om marknaden är h2h/totals/spreads.
+- Sätt `sport`/`league` aggressivt från lag/liga-text på kvittot (Allsvenskan, EPL, La Liga …).
+- `eventAt`: matchstart om den syns/kan härledas (Europe/Stockholm om ingen zon syns).
 - `bookmaker`: härleds från kvittots utseende (grönt Betsson-kvitto = "Betsson").
+- `importRef`: alltid när Ref/ID syns på kvittot (dedupe).
+
+## Exempel JSON (fotboll 1X2)
+
+```json
+{
+  "event": "Arsenal vs Chelsea",
+  "homeTeam": "Arsenal",
+  "awayTeam": "Chelsea",
+  "sport": "Football",
+  "league": "Premier League",
+  "market": "h2h",
+  "selection": "Arsenal",
+  "selectionSide": "home",
+  "odds": 1.95,
+  "stakeKr": 100,
+  "bookmaker": "Betsson",
+  "eventAt": "2026-07-20T15:00:00+02:00",
+  "importRef": "Ref XP123",
+  "placedAt": "2026-07-16T12:00:00+02:00",
+  "betType": "single",
+  "eventKind": "match"
+}
+```
 
 ## Rättning av öppna bets
 
