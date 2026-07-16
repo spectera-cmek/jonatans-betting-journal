@@ -3,6 +3,8 @@ import { runGrade, runClosing, runFullSync, runGradeByScores, runLinkEvents } fr
 import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+// Linking + odds fetch can take a while on larger journals.
+export const maxDuration = 60;
 
 // POST /api/sync?kind=grade|closing|all|scores|link
 // "scores" uses the free, keyless ESPN scoreboard lookup (no Odds API needed).

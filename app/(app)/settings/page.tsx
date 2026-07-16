@@ -188,10 +188,12 @@ export default function SettingsPage() {
                   : ""}
                 ESPN-resultat rättar singlar utan API-länk.
               </p>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <SyncButton kind="closing" label="Hämta closing-odds" />
-                <SyncButton kind="all" label="Full synk" />
-                {settings?.hasOddsApiKey && <SyncButton kind="grade" label="Rätta via Odds API" />}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <SyncButton kind="closing" label="Hämta closing-odds" showResult />
+                  <SyncButton kind="all" label="Full synk" showResult />
+                  {settings?.hasOddsApiKey && <SyncButton kind="grade" label="Rätta via Odds API" showResult />}
+                </div>
               </div>
             </div>
           ) : (

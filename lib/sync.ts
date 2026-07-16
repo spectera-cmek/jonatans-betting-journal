@@ -366,19 +366,23 @@ export async function runClosingFromStatsApi(): Promise<SyncResult> {
  * odds, so we snapshot whatever is live closest to commence time.
  */
 export async function runClosing(): Promise<SyncResult> {
+  // Link first — capture only sees bets already tagged with mt_* refs.
+  const link = hasTheStatsApiKey()
+    ? await runLinkStatsApiEvents()
+    : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
   const stats = await runClosingFromStatsApi();
 
-  const details = [...stats.details];
+  const details = [...link.details, ...stats.details];
   let updated = stats.closingUpdated;
 
   if (!hasOddsApiKey()) {
     return {
-      ok: stats.ok || updated > 0,
+      ok: stats.ok || link.ok || updated > 0,
       message:
-        updated > 0
-          ? `Updated closing odds for ${updated} bet(s) via TheStatsAPI.`
-          : stats.message,
-      linked: 0,
+        updated > 0 || link.linked > 0
+          ? `Länkade ${link.linked}, closing ${updated} via TheStatsAPI.`
+          : stats.message || link.message || "Ingen closing att uppdatera.",
+      linked: link.linked,
       graded: 0,
       closingUpdated: updated,
       details,
@@ -462,8 +466,8 @@ export async function runClosing(): Promise<SyncResult> {
 
   return {
     ok: true,
-    message: `Updated closing odds for ${updated} bet(s).`,
-    linked: 0,
+    message: `Länkade ${link.linked}, closing ${updated} bet(s).`,
+    linked: link.linked,
     graded: 0,
     closingUpdated: updated,
     details,

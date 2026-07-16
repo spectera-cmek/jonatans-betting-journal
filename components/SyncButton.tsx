@@ -35,44 +35,77 @@ export function SyncButton({
       setResult(res);
       onDone?.();
     } catch (e) {
-      setResult({ ok: false, message: (e as Error).message, linked: 0, graded: 0, closingUpdated: 0, details: [] });
+      setResult({
+        ok: false,
+        message: (e as Error).message,
+        linked: 0,
+        graded: 0,
+        closingUpdated: 0,
+        details: [],
+      });
     } finally {
       setBusy(false);
     }
   };
 
+  const status = result ? (
+    <div style={{ fontSize: 12.5, color: result.ok ? "var(--dim)" : "var(--red)", marginTop: showResult ? 10 : 0 }}>
+      <div>{result.message}</div>
+      {showResult && result.details?.length > 0 && (
+        <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--dim2)", lineHeight: 1.45 }}>
+          {result.details.slice(0, 8).map((d) => (
+            <li key={d}>{d}</li>
+          ))}
+          {result.details.length > 8 && <li>… +{result.details.length - 8} till</li>}
+        </ul>
+      )}
+    </div>
+  ) : null;
+
   if (!showResult) {
     return (
-      <button className="ap-btn ghost" onClick={run} disabled={busy} title={result?.message || "Synka rättning + CLV"}>
-        <span style={busy ? { animation: "spin 1s linear infinite", display: "inline-flex" } : { display: "inline-flex" }}>
-          <I p={IC.refresh} size={15} />
-        </span>
-        <span className="ap-hide-sm">{busy ? "Synkar…" : label}</span>
-      </button>
+      <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+        <button
+          className="ap-btn ghost"
+          onClick={run}
+          disabled={busy}
+          title={result?.message || "Synka rättning + CLV"}
+        >
+          <span
+            style={
+              busy
+                ? { animation: "spin 1s linear infinite", display: "inline-flex" }
+                : { display: "inline-flex" }
+            }
+          >
+            <I p={IC.refresh} size={15} />
+          </span>
+          <span className="ap-hide-sm">{busy ? "Synkar…" : label}</span>
+        </button>
+        {result && !busy && (
+          <span style={{ fontSize: 11, color: result.ok ? "var(--dim)" : "var(--red)", maxWidth: 220 }}>
+            {result.message}
+          </span>
+        )}
+      </div>
     );
   }
 
   return (
     <div>
       <button className="ap-btn ghost" onClick={run} disabled={busy}>
-        <span style={busy ? { animation: "spin 1s linear infinite", display: "inline-flex" } : { display: "inline-flex" }}>
+        <span
+          style={
+            busy
+              ? { animation: "spin 1s linear infinite", display: "inline-flex" }
+              : { display: "inline-flex" }
+          }
+        >
           <I p={IC.refresh} size={15} />
         </span>
-        {busy ? "Rättar…" : label}
+        {busy ? "Synkar…" : label}
       </button>
-      {result && (
-        <div style={{ fontSize: 12.5, color: result.ok ? "var(--dim)" : "var(--red)", marginTop: 10 }}>
-          <div>{result.message}</div>
-          {result.details?.length > 0 && (
-            <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--dim2)", lineHeight: 1.45 }}>
-              {result.details.slice(0, 8).map((d) => (
-                <li key={d}>{d}</li>
-              ))}
-              {result.details.length > 8 && <li>… +{result.details.length - 8} till</li>}
-            </ul>
-          )}
-        </div>
-      )}
+      {status}
     </div>
   );
 }
