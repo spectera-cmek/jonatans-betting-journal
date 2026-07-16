@@ -27,7 +27,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_WINDOW_DAYS = 90;
 
 /** league label (lowercase) → TheStatsAPI competition search term */
-const LEAGUE_SEARCH: Record<string, string> = {
+export const LEAGUE_SEARCH: Record<string, string> = {
   "premier league": "Premier League",
   epl: "Premier League",
   "la liga": "La Liga",
@@ -35,11 +35,27 @@ const LEAGUE_SEARCH: Record<string, string> = {
   bundesliga: "Bundesliga",
   "ligue 1": "Ligue 1",
   "champions league": "UEFA Champions League",
+  "europa league": "UEFA Europa League",
+  "conference league": "UEFA Conference League",
   allsvenskan: "Allsvenskan",
+  superettan: "Superettan",
   "vm 2026": "FIFA World Cup",
   "world cup": "FIFA World Cup",
   mls: "Major League Soccer",
   championship: "Championship",
+  "fa cup": "FA Cup",
+  "efl cup": "EFL Cup",
+  "league cup": "EFL Cup",
+  "copa del rey": "Copa del Rey",
+  "dfb pokal": "DFB Pokal",
+  "eredivisie": "Eredivisie",
+  "primeira liga": "Primeira Liga",
+  "liga portugal": "Primeira Liga",
+  "scottish premiership": "Scottish Premiership",
+  "belgian pro league": "Belgian Pro League",
+  "süper lig": "Süper Lig",
+  "super lig": "Süper Lig",
+  "saudi pro league": "Saudi Pro League",
 };
 
 export interface ClvBet {
@@ -546,6 +562,46 @@ export async function linkBetsToStatsMatches(
   }
 
   return { linked, closingUpdated: 0, details };
+}
+
+/** Best-effort link of one newly logged football bet for CLV. */
+export async function tryLinkSingleFootballBet(
+  betId: string,
+  db: PrismaClient = defaultPrisma
+): Promise<{ linked: boolean; detail?: string }> {
+  if (!hasTheStatsApiKey()) return { linked: false };
+  const bet = await db.bet.findUnique({ where: { id: betId } });
+  if (!bet) return { linked: false };
+  if (!isFootballBet(bet)) return { linked: false, detail: "not football" };
+  if (bet.externalRef && isStatsApiMatchRef(bet.externalRef)) {
+    return { linked: false, detail: "already linked" };
+  }
+  if (!bet.league) return { linked: false, detail: "missing league" };
+
+  let matches: StatsMatch[];
+  try {
+    matches = await fetchMatchesForBet(bet, DEFAULT_WINDOW_DAYS);
+  } catch (e) {
+    return { linked: false, detail: (e as Error).message };
+  }
+  if (!matches.length) return { linked: false, detail: `no competition for ${bet.league}` };
+
+  const match = matchStatsEvent(bet, matches);
+  if (!match) return { linked: false, detail: "no match found" };
+
+  const parsed = parseHomeAway(bet.event);
+  await db.bet.update({
+    where: { id: bet.id },
+    data: {
+      externalRef: match.id,
+      sportKey: statsApiSportKey(match.competition_id),
+      homeTeam: bet.homeTeam || parsed?.home || match.home_team.name,
+      awayTeam: bet.awayTeam || parsed?.away || match.away_team.name,
+      eventAt: bet.eventAt ?? new Date(match.utc_date),
+      sport: bet.sport || "Football",
+    },
+  });
+  return { linked: true, detail: match.id };
 }
 
 /** Capture closing odds for linked bets (after kickoff, within window). */

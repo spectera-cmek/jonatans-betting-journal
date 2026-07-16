@@ -19,6 +19,8 @@ import { readFileSync } from "fs";
 import { PrismaClient } from "@prisma/client";
 import { buildBetData, ValidationError, type BetInput } from "../../lib/betInput";
 import { linkBetToOddsEvent } from "../../lib/eventLink";
+import { tryLinkSingleFootballBet, isFootballBet } from "../../lib/clvCapture";
+import { hasTheStatsApiKey, isStatsApiMatchRef } from "../../lib/theStatsApi";
 
 interface AgentBetInput extends BetInput {
   stakeKr?: number;
@@ -78,8 +80,12 @@ async function main() {
     const bet = await prisma.bet.create({
       data: { ...(data as object), userId: user.id } as never,
     });
-    if (!bet.externalRef) {
-      await linkBetToOddsEvent(prisma, bet).catch(() => {});
+    if (!isStatsApiMatchRef(bet.externalRef)) {
+      if (isFootballBet(bet) && hasTheStatsApiKey()) {
+        await tryLinkSingleFootballBet(bet.id, prisma).catch(() => {});
+      } else if (!bet.externalRef) {
+        await linkBetToOddsEvent(prisma, bet).catch(() => {});
+      }
     }
     const linked = await prisma.bet.findUnique({ where: { id: bet.id } });
     const out = linked ?? bet;
@@ -87,7 +93,13 @@ async function main() {
     console.log(
       `  ${out.event} — ${out.selection} @ ${out.odds} | ${out.stakeUnits}u | ${out.bookmaker ?? "okänd bookmaker"}`
     );
-    if (out.externalRef) console.log(`  Odds API: ${out.sportKey} / ${out.externalRef}`);
+    if (out.externalRef) {
+      console.log(
+        `  Länk: ${out.sportKey} / ${out.externalRef}${isStatsApiMatchRef(out.externalRef) ? " (TheStatsAPI/CLV)" : ""}`
+      );
+    } else if (isFootballBet(out)) {
+      console.log("  CLV: ej länkad — sätt league (t.ex. Premier League) + home/away + eventAt");
+    }
   } finally {
     await prisma.$disconnect();
   }

@@ -2,7 +2,7 @@
 // Shared by POST (create) and PATCH (update).
 
 import { profitUnits, type Outcome } from "./betting";
-import { categorizeDetail, type LegLike } from "./categorize";
+import { categorizeDetail, inferSport, type LegLike } from "./categorize";
 import {
   EVENT_KINDS,
   MARKET_SCOPES,
@@ -15,6 +15,8 @@ import {
 } from "./betTaxonomy";
 import { normalizeBookmaker } from "./constants";
 import { inferSportKey, parseHomeAway } from "./eventLink";
+import { LEAGUE_SEARCH } from "./clvCapture";
+import { inferSelection } from "./grading";
 
 const OUTCOMES: Outcome[] = [
   "pending",
@@ -213,6 +215,33 @@ export function buildBetData(
         data.homeTeam = teams.home;
         data.awayTeam = teams.away;
       }
+    }
+
+    // Infer sport/league for CLV: TheStatsAPI needs Football + known league.
+    if (!data.sport || data.sport === "Other") {
+      const league = ((data.league as string | undefined) ?? input.league ?? "").toLowerCase().trim();
+      if (league && Object.keys(LEAGUE_SEARCH).some((k) => league === k || league.includes(k))) {
+        data.sport = "Football";
+      } else if (data.event) {
+        const inferred = inferSport(
+          data.event as string,
+          Array.isArray(input.legs) ? (input.legs as LegLike[]) : []
+        );
+        if (inferred.sport !== "Other") data.sport = inferred.sport;
+        if (!data.league && inferred.league) data.league = inferred.league;
+      }
+    }
+
+    // Fill selectionSide from selection text when missing (needed for 1X2/O-U CLV).
+    if (!data.selectionSide && data.selection) {
+      const inferred = inferSelection(
+        data.selection as string,
+        (data.homeTeam as string | undefined) ?? null,
+        (data.awayTeam as string | undefined) ?? null
+      );
+      if (inferred.side) data.selectionSide = inferred.side;
+      if (inferred.market && (!data.market || data.market === "h2h")) data.market = inferred.market;
+      if (inferred.line != null && data.line == null) data.line = inferred.line;
     }
 
     if (!data.sportKey) {

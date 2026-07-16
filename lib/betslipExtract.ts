@@ -108,9 +108,11 @@ const EXTRACTION_PROMPT = `Du läser skärmdumpar av spelkvitton från svenska b
 - FLERA SEPARATA singlar (var och en med EGEN insats och EGET odds) i samma skärmdump → flera element i "bets", varje med betType: "single" och legs: null.
 
 ## Sport, liga och tider
-- "sport": helst ett av: ${SPORTS.join(", ")}. Härled från lag/liga (Phillies/Reds → Baseball). Osäker → null.
-- "league": t.ex. "MLB", "NHL", "Allsvenskan", "Premier League". Landslagsmatch/slutspel som tillhör fotbolls-VM 2026 → exakt "VM 2026". Osäker → null.
-- "eventAt": matchstart som ISO 8601 om den syns på kvittot, annars null. "placedAt": tidpunkt när spelet lades om den syns, annars null. Tider utan tidszon avser Europe/Stockholm (sommartid UTC+2). Gissa aldrig datum som inte syns.`;
+- "sport": helst ett av: ${SPORTS.join(", ")}. Härled från lag/liga (Phillies/Reds → Baseball, Arsenal/Serie A → Football). Osäker → null.
+- "league": t.ex. "MLB", "NHL", "Allsvenskan", "Premier League", "La Liga", "Serie A", "Bundesliga", "Champions League". Krävs för fotbolls-CLV. Landslagsmatch/slutspel som tillhör fotbolls-VM 2026 → exakt "VM 2026". Osäker → null.
+- "homeTeam"/"awayTeam": alltid när det är en match (krävs för auto-CLV/rättning).
+- "eventAt": matchstart som ISO 8601 om den syns på kvittot, annars null. "placedAt": tidpunkt när spelet lades om den syns, annars null. Tider utan tidszon avser Europe/Stockholm (sommartid UTC+2). Gissa aldrig datum som inte syns.
+- "selectionSide": home|away|draw för 1X2, over|under för totals — fyll i när det går.`;
 
 const client = new Anthropic({ timeout: 50_000, maxRetries: 1 });
 
