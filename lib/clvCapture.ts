@@ -24,7 +24,7 @@ import {
 } from "./theStatsApi";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_WINDOW_DAYS = 14;
+const DEFAULT_WINDOW_DAYS = 90;
 
 /** league label (lowercase) → TheStatsAPI competition search term */
 const LEAGUE_SEARCH: Record<string, string> = {
@@ -79,9 +79,12 @@ export interface ClvCaptureResult {
   details: string[];
 }
 
-function isFootballBet(bet: { sport?: string | null }): boolean {
+function isFootballBet(bet: { sport?: string | null; league?: string | null }): boolean {
   const sport = (bet.sport || "").toLowerCase();
-  return sport === "football" || sport === "soccer" || sport === "fotboll";
+  if (sport === "football" || sport === "soccer" || sport === "fotboll") return true;
+  // Imported bets sometimes miss sport but have a football league label.
+  const league = (bet.league || "").toLowerCase();
+  return Object.keys(LEAGUE_SEARCH).some((k) => league.includes(k) || k.includes(league));
 }
 
 function formatDate(d: Date): string {
@@ -99,8 +102,17 @@ async function resolveCompetitionId(league: string | null | undefined): Promise<
   try {
     const comps = await searchCompetitions(search);
     if (comps.length === 0) return null;
-    const exact = comps.find((c) => c.name.toLowerCase() === search.toLowerCase());
-    return (exact ?? comps[0]).id;
+    const needle = search.toLowerCase();
+    const exact = comps.find((c) => c.name.toLowerCase() === needle);
+    if (exact) return exact.id;
+    // Prefer names that equal/start with the search term over "2. Bundesliga" etc.
+    const preferred = comps.find(
+      (c) =>
+        c.name.toLowerCase() === needle ||
+        c.name.toLowerCase().startsWith(needle + " ") ||
+        c.name.toLowerCase().endsWith(" " + needle)
+    );
+    return (preferred ?? comps[0]).id;
   } catch {
     return null;
   }
@@ -333,7 +345,7 @@ function extractLineFromSelection(selection: string): number | null {
 
 /** True when kickoff has passed — closing last_seen is meaningful. */
 export function isAfterKickoff(eventAt: Date | null | undefined, graceMinutes = 5): boolean {
-  if (!eventAt) return false;
+  if (!eventAt) return true; // unknown kickoff but linked → try historical closing
   return Date.now() >= new Date(eventAt).getTime() + graceMinutes * 60 * 1000;
 }
 
@@ -410,13 +422,25 @@ export async function linkBetsToStatsMatches(
     options.sinceDate ??
     addDays(new Date(), -(options.sinceDays ?? DEFAULT_WINDOW_DAYS));
 
+  // Football singles missing closingOdds. Re-link Odds API refs to mt_* so
+  // historical CLV can run (ESPN still grades football without Odds API).
   const candidates = await db.bet.findMany({
     where: {
       eventKind: "match",
       betType: "single",
-      sport: { in: ["Football", "football", "Soccer", "soccer"] },
-      externalRef: null,
-      eventAt: { gte: since },
+      closingOdds: null,
+      OR: [
+        { eventAt: { gte: since } },
+        { eventAt: null, placedAt: { gte: since } },
+      ],
+      AND: [
+        {
+          OR: [
+            { externalRef: null },
+            { NOT: { externalRef: { startsWith: "mt_" } } },
+          ],
+        },
+      ],
     },
     select: {
       id: true,
@@ -429,16 +453,22 @@ export async function linkBetsToStatsMatches(
       externalRef: true,
       sportKey: true,
     },
-    take: options.limit,
-    orderBy: { eventAt: "desc" },
+    take: options.limit ?? 200,
+    orderBy: [{ eventAt: "desc" }, { placedAt: "desc" }],
   });
+
+  const footballCandidates = candidates.filter(isFootballBet);
+  if (footballCandidates.length === 0) {
+    details.push("Inga fotbollsbets utan closingOdds i fönstret att länka.");
+    return { linked: 0, closingUpdated: 0, details };
+  }
+  details.push(`${footballCandidates.length} kandidater att länka`);
 
   const matchCache = new Map<string, StatsMatch[]>();
   let linked = 0;
 
-  for (const bet of candidates) {
-    if (!isFootballBet(bet)) continue;
-    const cacheKey = `${bet.league}|${bet.eventAt?.toISOString().slice(0, 10)}`;
+  for (const bet of footballCandidates) {
+    const cacheKey = `${bet.league}|${bet.eventAt?.toISOString().slice(0, 10) ?? "nodate"}`;
     let matches = matchCache.get(cacheKey);
     if (!matches) {
       try {
@@ -471,6 +501,7 @@ export async function linkBetsToStatsMatches(
           homeTeam,
           awayTeam,
           eventAt,
+          sport: bet.sport || "Football",
         },
       });
     }
@@ -500,11 +531,21 @@ export async function captureClosingOdds(
       externalRef: { startsWith: "mt_" },
       closingOdds: null,
       selection: { not: "" },
-      eventAt: { gte: since, lte: new Date() },
+      OR: [
+        { eventAt: { gte: since, lte: new Date() } },
+        // Linked but kickoff unknown — still try after we have mt_ ref
+        { eventAt: null },
+      ],
     },
-    take: options.limit,
+    take: options.limit ?? 200,
     orderBy: { eventAt: "desc" },
   });
+
+  if (candidates.length === 0) {
+    details.push("Inga länkade bets (mt_*) saknar closingOdds i fönstret.");
+  } else {
+    details.push(`${candidates.length} länkade bets att hämta closing för`);
+  }
 
   let closingUpdated = 0;
   const matchCache = new Map<string, StatsMatch>();

@@ -30,7 +30,7 @@ export interface SyncResult {
   details: string[];
 }
 
-const CLV_WINDOW_DAYS = 14;
+const CLV_WINDOW_DAYS = 90;
 
 /** Auto-link unlinked football bets to TheStatsAPI matches (historical closing odds). */
 export async function runLinkStatsApiEvents(): Promise<SyncResult> {
@@ -519,6 +519,19 @@ export async function runFullSync(): Promise<SyncResult> {
       ? `${grade.graded + scores.graded} rättade`
       : null,
   ].filter(Boolean);
+
+  // Always surface CLV/link diagnostics so Synka isn't a silent no-op.
+  if (!parts.length && details.length) {
+    return {
+      ok,
+      message: `Synk klar — ingen CLV ännu. ${details.slice(0, 3).join(" · ")}`,
+      linked: linkStats.linked + link.linked,
+      graded: grade.graded + scores.graded,
+      closingUpdated: closing.closingUpdated,
+      details,
+    };
+  }
+
   return {
     ok,
     message: parts.length ? `Synk klar: ${parts.join(", ")}.` : "Synk klar — inget att uppdatera.",

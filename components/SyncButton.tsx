@@ -43,7 +43,7 @@ export function SyncButton({
 
   if (!showResult) {
     return (
-      <button className="ap-btn ghost" onClick={run} disabled={busy} title={result?.message || ""}>
+      <button className="ap-btn ghost" onClick={run} disabled={busy} title={result?.message || "Synka rättning + CLV"}>
         <span style={busy ? { animation: "spin 1s linear infinite", display: "inline-flex" } : { display: "inline-flex" }}>
           <I p={IC.refresh} size={15} />
         </span>
@@ -61,7 +61,17 @@ export function SyncButton({
         {busy ? "Rättar…" : label}
       </button>
       {result && (
-        <div style={{ fontSize: 12.5, color: result.ok ? "var(--dim)" : "var(--red)", marginTop: 10 }}>{result.message}</div>
+        <div style={{ fontSize: 12.5, color: result.ok ? "var(--dim)" : "var(--red)", marginTop: 10 }}>
+          <div>{result.message}</div>
+          {result.details?.length > 0 && (
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--dim2)", lineHeight: 1.45 }}>
+              {result.details.slice(0, 8).map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+              {result.details.length > 8 && <li>… +{result.details.length - 8} till</li>}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );
