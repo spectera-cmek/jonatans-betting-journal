@@ -249,7 +249,7 @@ export default function BetsPage() {
       odds: b.odds,
       stakeUnits: b.stakeUnits,
       outcome: b.outcome as Outcome,
-      closingOdds: null,
+      closingOdds: b.closingOdds,
       profitUnits: b.profitUnits,
     }));
     return computeMetrics(likes);
@@ -477,7 +477,14 @@ export default function BetsPage() {
                   <BetTags bet={b} compact hideSport />
                 </span>
                 <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
-                <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
+                <span className="ap-r ap-num" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, justifyContent: "center" }}>
+                  <span>{b.odds.toFixed(2)}</span>
+                  {b.clvPct != null && (
+                    <span style={{ fontSize: 10.5, fontWeight: 600, color: b.clvPct >= 0 ? "var(--pos)" : "var(--red)" }}>
+                      {b.clvPct >= 0 ? "+" : ""}{b.clvPct.toFixed(1)}%
+                    </span>
+                  )}
+                </span>
                 <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
                 <span className={"ap-r ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>{b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}</span>
                 <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
@@ -516,7 +523,15 @@ export default function BetsPage() {
             </div>
             <BetTags bet={b} compact />
             <div className="ap-betcard-stats">
-              <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
+              <div>
+                <span>Odds</span>
+                <b className="ap-num">{b.odds.toFixed(2)}</b>
+                {b.clvPct != null && (
+                  <span style={{ display: "block", fontSize: 11, fontWeight: 600, marginTop: 2, color: b.clvPct >= 0 ? "var(--pos)" : "var(--red)" }}>
+                    CLV {b.clvPct >= 0 ? "+" : ""}{b.clvPct.toFixed(1)}%
+                  </span>
+                )}
+              </div>
               <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
               <div>
                 <span>P/L</span>

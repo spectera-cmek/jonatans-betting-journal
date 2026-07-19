@@ -84,6 +84,7 @@ const empty = {
   selectionSide: "home",
   line: "",
   odds: "1.95",
+  closingOdds: "",
   stakeUnits: "1",
   outcome: "pending",
   bookmaker: "Unibet",
@@ -113,6 +114,7 @@ function formFromBet(b: BetDTO): Form {
     selectionSide: b.selectionSide ?? "home",
     line: b.line != null ? String(b.line) : "",
     odds: String(b.odds),
+    closingOdds: b.closingOdds != null ? String(b.closingOdds) : "",
     stakeUnits: String(b.stakeUnits),
     outcome: b.outcome,
     bookmaker: b.bookmaker ?? "Unibet",
@@ -218,9 +220,11 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
   const set = (k: keyof Form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const o = parseFloat(form.odds) || 0;
+  const close = parseFloat(form.closingOdds) || 0;
   const s = parseFloat(form.stakeUnits) || 0;
   const potential = s * o;
   const profit = s * (o - 1);
+  const liveClvPct = o > 1 && close > 1 ? (o / close - 1) * 100 : null;
 
   const onSelectionBlur = () => {
     const inferred = inferSelection(form.selection, form.homeTeam, form.awayTeam);
@@ -284,6 +288,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
         await api.post("/api/bets", {
           ...form,
           line: form.line === "" ? null : form.line,
+          closingOdds: form.closingOdds === "" ? null : form.closingOdds,
           externalRef: form.externalRef || null,
           // Kvitto-metadata från tolkningen (dedupe-referens, speltid, kombo-ben).
           ...(prefill?.importRef ? { importRef: prefill.importRef } : {}),
@@ -521,6 +526,35 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
             <div className="ap-field">
               <label>Insats (U)</label>
               <input className="ap-input ap-num" type="number" step="0.25" min="0" value={form.stakeUnits} onChange={(e) => set("stakeUnits", e.target.value)} />
+            </div>
+          </div>
+
+          <div className="ap-x2">
+            <div className="ap-field">
+              <label>Closing odds (valfritt)</label>
+              <input
+                className="ap-input ap-num"
+                type="number"
+                step="0.01"
+                min="1.01"
+                placeholder="t.ex. Pinnacle close"
+                value={form.closingOdds}
+                onChange={(e) => set("closingOdds", e.target.value)}
+              />
+            </div>
+            <div className="ap-field">
+              <label>CLV</label>
+              <div
+                className="ap-input ap-num"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  color: liveClvPct == null ? "var(--dim2)" : liveClvPct >= 0 ? "var(--pos)" : "var(--red)",
+                  fontWeight: 600,
+                }}
+              >
+                {liveClvPct == null ? "—" : `${liveClvPct >= 0 ? "+" : ""}${liveClvPct.toFixed(1)}%`}
+              </div>
             </div>
           </div>
 

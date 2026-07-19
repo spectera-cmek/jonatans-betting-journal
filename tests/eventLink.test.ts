@@ -16,8 +16,13 @@ describe("inferSportKey", () => {
   it("falls back to sport-only keys", () => {
     expect(inferSportKey("Basketball", null)).toBe("basketball_nba");
   });
+  it("maps MMA and tennis", () => {
+    expect(inferSportKey("MMA", "UFC")).toBe("mma_mixed_martial_arts");
+    expect(inferSportKey("Tennis", "ATP")).toBe("tennis_atp");
+    expect(inferSportKey("Tennis", "WTA")).toBe("tennis_wta");
+  });
   it("returns null for unknown sports", () => {
-    expect(inferSportKey("MMA", null)).toBeNull();
+    expect(inferSportKey("Darts", null)).toBeNull();
   });
 });
 

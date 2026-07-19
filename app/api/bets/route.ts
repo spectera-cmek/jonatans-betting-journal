@@ -36,6 +36,7 @@ const LIST_SELECT = {
   line: true,
   betType: true,
   odds: true,
+  closingOdds: true,
   stakeUnits: true,
   outcome: true,
   profitUnits: true,

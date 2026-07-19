@@ -17,19 +17,66 @@ const LEAGUE_KEYS: Record<string, string> = {
   "football|champions league": "soccer_uefa_champs_league",
   "football|allsvenskan": "soccer_sweden_allsvenskan",
   "football|vm 2026": "soccer_fifa_world_cup",
+  "fotboll|premier league": "soccer_epl",
+  "fotboll|allsvenskan": "soccer_sweden_allsvenskan",
+  "fotboll|vm 2026": "soccer_fifa_world_cup",
   "basketball|nba": "basketball_nba",
+  "basket|nba": "basketball_nba",
+  "basketball|wnba": "basketball_wnba",
+  "basket|wnba": "basketball_wnba",
   "ice hockey|nhl": "icehockey_nhl",
+  "ishockey|nhl": "icehockey_nhl",
   "baseball|mlb": "baseball_mlb",
   "american football|nfl": "americanfootball_nfl",
+  "tennis|atp": "tennis_atp",
+  "tennis|wta": "tennis_wta",
+  "mma|ufc": "mma_mixed_martial_arts",
 };
 
 /** Single-league sports when league is omitted. */
 const SPORT_ONLY_KEYS: Record<string, string> = {
   basketball: "basketball_nba",
+  basket: "basketball_nba",
   "ice hockey": "icehockey_nhl",
+  ishockey: "icehockey_nhl",
   baseball: "baseball_mlb",
   "american football": "americanfootball_nfl",
+  tennis: "tennis_atp",
+  mma: "mma_mixed_martial_arts",
+  ufc: "mma_mixed_martial_arts",
 };
+
+function normalizeSportLabel(sport: string): string {
+  const s = sport.toLowerCase().trim();
+  if (s === "fotboll" || s === "soccer") return "football";
+  if (s === "ishockey") return "ice hockey";
+  if (s === "basket") return "basketball";
+  if (s === "amerikansk fotboll") return "american football";
+  return s;
+}
+
+/** Infer The Odds API sport_key from stored sport + league. */
+export function inferSportKey(
+  sport: string | null | undefined,
+  league: string | null | undefined
+): string | null {
+  if (!sport) return null;
+  const sportNorm = normalizeSportLabel(sport);
+  const leagueNorm = (league || "").toLowerCase();
+  const key = `${sportNorm}|${leagueNorm}`;
+  if (LEAGUE_KEYS[key]) return LEAGUE_KEYS[key];
+  // Also try raw sport label for Swedish keys already in LEAGUE_KEYS.
+  const rawKey = `${sport.toLowerCase()}|${leagueNorm}`;
+  if (LEAGUE_KEYS[rawKey]) return LEAGUE_KEYS[rawKey];
+  if (leagueNorm === VM_2026_LEAGUE.toLowerCase()) return "soccer_fifa_world_cup";
+  if (leagueNorm.includes("wnba")) return "basketball_wnba";
+  if (leagueNorm.includes("ufc") || sportNorm === "mma") return "mma_mixed_martial_arts";
+  if (sportNorm === "tennis") {
+    if (leagueNorm.includes("wta")) return "tennis_wta";
+    return "tennis_atp";
+  }
+  return SPORT_ONLY_KEYS[sportNorm] ?? SPORT_ONLY_KEYS[sport.toLowerCase()] ?? null;
+}
 
 function norm(s: string): string {
   return s
@@ -49,18 +96,6 @@ export function teamNameMatches(betName: string, apiName: string): boolean {
   const bLast = b.split(" ").pop()!;
   const aLast = a.split(" ").pop()!;
   return bLast.length >= 3 && aLast === bLast;
-}
-
-/** Infer The Odds API sport_key from stored sport + league. */
-export function inferSportKey(
-  sport: string | null | undefined,
-  league: string | null | undefined
-): string | null {
-  if (!sport) return null;
-  const key = `${sport.toLowerCase()}|${(league || "").toLowerCase()}`;
-  if (LEAGUE_KEYS[key]) return LEAGUE_KEYS[key];
-  if (league?.toLowerCase() === VM_2026_LEAGUE.toLowerCase()) return "soccer_fifa_world_cup";
-  return SPORT_ONLY_KEYS[sport.toLowerCase()] ?? null;
 }
 
 /** Parse home/away from an event string. "@" = away @ home; "vs" = home vs away. */

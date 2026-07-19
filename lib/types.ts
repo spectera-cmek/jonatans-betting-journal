@@ -138,19 +138,21 @@ export interface BetListDTO {
   line: number | null;
   betType: string;
   odds: number;
+  closingOdds: number | null;
   stakeUnits: number;
   outcome: Outcome;
   profitUnits: number | null;
   bookmaker: string | null;
   resultProvider: string | null;
   resultEventRef: string | null;
+  clvPct: number | null;
 }
 
 export type BetListRow = Pick<
   BetRow,
   | "id" | "placedAt" | "eventAt" | "sport" | "league" | "event" | "homeTeam" | "awayTeam" | "market"
   | "marketCategory" | "marketScope" | "eventKind" | "tournamentStage"
-  | "selection" | "selectionSide" | "line" | "betType" | "odds" | "stakeUnits"
+  | "selection" | "selectionSide" | "line" | "betType" | "odds" | "closingOdds" | "stakeUnits"
   | "outcome" | "profitUnits" | "bookmaker" | "resultProvider" | "resultEventRef"
 >;
 
@@ -174,12 +176,17 @@ export function serializeBetList(b: BetListRow): BetListDTO {
     line: b.line,
     betType: b.betType,
     odds: b.odds,
+    closingOdds: b.closingOdds,
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     profitUnits: b.profitUnits,
     bookmaker: b.bookmaker,
     resultProvider: b.resultProvider,
     resultEventRef: b.resultEventRef,
+    clvPct:
+      b.closingOdds && b.closingOdds > 1
+        ? (b.odds / b.closingOdds - 1) * 100
+        : null,
   };
 }
 
