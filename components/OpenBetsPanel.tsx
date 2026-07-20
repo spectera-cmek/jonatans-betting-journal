@@ -4,11 +4,13 @@
 // return, soonest event first. Absorbs the old "Öppen risk" card — the totals
 // come from the same openRisk aggregate.
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, Empty } from "./ui";
 import { MiniStat } from "./stats";
 import { I, IC } from "./icons";
 import { BetTags } from "./BetTags";
+import { ClvCell, type ClvSaved } from "./ClvCell";
 import { krFmt, krShort, uFmt, dateShort, sportTag } from "@/lib/format";
 import { dayIso, addDays } from "@/lib/time";
 import type { OpenBetRow } from "@/lib/useData";
@@ -36,8 +38,30 @@ function Chip({ chip }: { chip: { text: string; hot?: boolean } | null }) {
   );
 }
 
-export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: OpenRisk; unit: number }) {
-  const cols = "96px minmax(170px, 1.3fr) minmax(150px, 1fr) 100px 60px 84px 100px";
+export function OpenBetsPanel({
+  open,
+  risk,
+  unit,
+  onClvSaved,
+}: {
+  open: OpenBetRow[];
+  risk: OpenRisk;
+  unit: number;
+  onClvSaved?: (id: string, next: ClvSaved) => void;
+}) {
+  const [rows, setRows] = useState(open);
+  useEffect(() => {
+    setRows(open);
+  }, [open]);
+
+  const handleClv = (id: string, next: ClvSaved) => {
+    setRows((list) =>
+      list.map((b) => (b.id === id ? { ...b, closingOdds: next.closingOdds, clvPct: next.clvPct } : b))
+    );
+    onClvSaved?.(id, next);
+  };
+
+  const cols = "96px minmax(170px, 1.3fr) minmax(150px, 1fr) 100px 60px 64px 84px 100px";
   return (
     <Card style={{ padding: 0, marginBottom: 12 }}>
       <div className="ap-card-head">
@@ -76,10 +100,11 @@ export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: 
                 <span>Spel</span>
                 <span>Bookmaker</span>
                 <span className="ap-r">Odds</span>
+                <span className="ap-r">CLV</span>
                 <span className="ap-r">Insats</span>
                 <span className="ap-r">Möjlig retur</span>
               </div>
-              {open.map((b) => {
+              {rows.map((b) => {
                 const chip = timeChip(b.eventAt);
                 return (
                   <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: cols }}>
@@ -98,6 +123,15 @@ export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: 
                     </span>
                     <span className="ap-ell" style={{ color: "var(--dim)" }}>{b.bookmaker ?? "—"}</span>
                     <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
+                    <span className="ap-r">
+                      <ClvCell
+                        betId={b.id}
+                        odds={b.odds}
+                        closingOdds={b.closingOdds}
+                        clvPctValue={b.clvPct}
+                        onSaved={(next) => handleClv(b.id, next)}
+                      />
+                    </span>
                     <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{krShort(b.stakeUnits * unit)}</span>
                     <span className="ap-r ap-num pos" style={{ fontWeight: 600 }}>
                       {krShort(b.stakeUnits * b.odds * unit)}
@@ -110,7 +144,7 @@ export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: 
 
           {/* Mobile: stacked cards instead of the wide grid table. */}
           <div className="ap-betcards" style={{ padding: "12px 14px 4px" }}>
-            {open.map((b) => {
+            {rows.map((b) => {
               const chip = timeChip(b.eventAt);
               return (
                 <div key={b.id} className="ap-betcard">
@@ -131,6 +165,18 @@ export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: 
                       <b className="ap-num">{b.odds.toFixed(2)}</b>
                     </div>
                     <div>
+                      <span>CLV</span>
+                      <b className="ap-num" style={{ display: "block" }}>
+                        <ClvCell
+                          betId={b.id}
+                          odds={b.odds}
+                          closingOdds={b.closingOdds}
+                          clvPctValue={b.clvPct}
+                          onSaved={(next) => handleClv(b.id, next)}
+                        />
+                      </b>
+                    </div>
+                    <div>
                       <span>Insats</span>
                       <b className="ap-num">{uFmt(b.stakeUnits)}</b>
                     </div>
@@ -146,7 +192,7 @@ export function OpenBetsPanel({ open, risk, unit }: { open: OpenBetRow[]; risk: 
 
           <div style={{ padding: "10px 20px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>
-              {risk.bets > open.length ? `Visar de ${open.length} närmaste av ${risk.bets}` : ""}
+              {risk.bets > rows.length ? `Visar de ${rows.length} närmaste av ${risk.bets}` : ""}
             </span>
             <Link className="ap-link" href="/bets?res=pending">
               Visa alla öppna →

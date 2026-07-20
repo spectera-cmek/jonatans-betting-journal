@@ -9,6 +9,7 @@ import { TiltBanner } from "@/components/TiltBanner";
 import { GoalCard } from "@/components/GoalCard";
 import { OpenBetsPanel } from "@/components/OpenBetsPanel";
 import { BetTags } from "@/components/BetTags";
+import { ClvCell, type ClvSaved } from "@/components/ClvCell";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
@@ -16,6 +17,8 @@ import { krFmt, krShort, uFmt, pctFmt, sportTag, dateShort } from "@/lib/format"
 import type { BetListDTO } from "@/lib/types";
 import type { StreakInfo } from "@/lib/insights";
 import { useEffect } from "react";
+
+const RECENT_GRID = "66px 50px 1.7fr 1.2fr 100px 58px 64px 76px 84px";
 
 const PERIODS = [
   { key: "all", label: "Allt", days: null },
@@ -28,7 +31,7 @@ type PeriodKey = (typeof PERIODS)[number]["key"];
 
 export default function OverviewPage() {
   const { cc, glow } = useTheme();
-  const { data, loading } = useMetrics();
+  const { data, loading, reload } = useMetrics();
   const [recent, setRecent] = useState<BetListDTO[]>([]);
   const [period, setPeriod] = useState<PeriodKey>("all");
 
@@ -37,6 +40,13 @@ export default function OverviewPage() {
   useEffect(() => {
     api.get<BetListDTO[]>("/api/bets?limit=7&fields=list").then(setRecent);
   }, [data]);
+
+  const onClvSaved = (id: string, next: ClvSaved) => {
+    setRecent((rows) =>
+      rows.map((b) => (b.id === id ? { ...b, closingOdds: next.closingOdds, clvPct: next.clvPct } : b))
+    );
+    reload();
+  };
 
   const m = data?.metrics;
   const unit = data?.settings.unitValue ?? 100;
@@ -172,7 +182,9 @@ export default function OverviewPage() {
       </section>
 
       {/* Open risk is the primary actionable section. */}
-      {data && risk && <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} />}
+      {data && risk && (
+        <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} onClvSaved={onClvSaved} />
+      )}
 
       <div className="ap-section-rule">
         <span>02</span>
@@ -241,11 +253,11 @@ export default function OverviewPage() {
         </div>
         <div className="ap-table-wrap">
           <div className="ap-table">
-            <div className="ap-thead" style={{ gridTemplateColumns: "66px 50px 1.7fr 1.2fr 100px 58px 76px 84px" }}>
-              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
+            <div className="ap-thead" style={{ gridTemplateColumns: RECENT_GRID }}>
+              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">CLV</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
             </div>
             {recent.map((b) => (
-              <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: "66px 50px 1.7fr 1.2fr 100px 58px 76px 84px" }}>
+              <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: RECENT_GRID }}>
                 <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
                 <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
@@ -255,6 +267,15 @@ export default function OverviewPage() {
                 </span>
                 <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
                 <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
+                <span className="ap-r">
+                  <ClvCell
+                    betId={b.id}
+                    odds={b.odds}
+                    closingOdds={b.closingOdds}
+                    clvPctValue={b.clvPct}
+                    onSaved={(next) => onClvSaved(b.id, next)}
+                  />
+                </span>
                 <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
                 <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
               </div>
@@ -277,6 +298,18 @@ export default function OverviewPage() {
               <div className="ap-betcard-sel">{b.selection || "—"}</div>
               <div className="ap-betcard-stats">
                 <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
+                <div>
+                  <span>CLV</span>
+                  <b className="ap-num" style={{ display: "block" }}>
+                    <ClvCell
+                      betId={b.id}
+                      odds={b.odds}
+                      closingOdds={b.closingOdds}
+                      clvPctValue={b.clvPct}
+                      onSaved={(next) => onClvSaved(b.id, next)}
+                    />
+                  </b>
+                </div>
                 <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
                 <div>
                   <span>P/L</span>

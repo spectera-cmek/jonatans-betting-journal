@@ -169,6 +169,11 @@ export async function GET() {
       betType: b.betType,
       odds: b.odds,
       stakeUnits: b.stakeUnits,
+      closingOdds: b.closingOdds,
+      clvPct:
+        b.closingOdds && b.closingOdds > 1
+          ? (b.odds / b.closingOdds - 1) * 100
+          : null,
       eventAt: b.eventAt ? b.eventAt.toISOString() : null,
       placedAt: b.placedAt.toISOString(),
     }));

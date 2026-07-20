@@ -8,6 +8,7 @@ import { AddBetModal, type BetPrefill } from "@/components/AddBetModal";
 import { ScreenshotImportButton } from "@/components/ScreenshotImportButton";
 import { BetTags } from "@/components/BetTags";
 import { SettlementDialog } from "@/components/SettlementDialog";
+import { ClvCell, type ClvSaved } from "@/components/ClvCell";
 import type { ParsedBetWithDupe } from "@/lib/betslipExtract";
 import { StatTile } from "@/components/stats";
 import { useBets } from "@/lib/useData";
@@ -24,7 +25,7 @@ import {
 } from "@/lib/constants";
 import type { BetDTO, BetListDTO } from "@/lib/types";
 
-const GRID = "62px 46px 1.5fr 1.1fr 92px 64px 52px 70px 80px 116px";
+const GRID = "62px 46px 1.5fr 1.1fr 92px 64px 64px 52px 70px 80px 116px";
 const PAGE = 100;
 const RES_CHIPS: [string, string][] = [
   ["alla", "Alla"],
@@ -58,6 +59,17 @@ export default function BetsPage() {
   const [shown, setShown] = useState(PAGE);
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Local CLV overrides so the list/metrics update without waiting for a full reload.
+  const [clvById, setClvById] = useState<Record<string, ClvSaved>>({});
+
+  const applyClv = (b: BetListDTO): BetListDTO => {
+    const o = clvById[b.id];
+    return o ? { ...b, closingOdds: o.closingOdds, clvPct: o.clvPct } : b;
+  };
+
+  const onClvSaved = (id: string, next: ClvSaved) => {
+    setClvById((prev) => ({ ...prev, [id]: next }));
+  };
 
   // Mirror filters in the URL query so a filtered view is shareable and survives
   // reload. Read once on mount; the first write is skipped so it can't clobber.
@@ -173,7 +185,7 @@ export default function BetsPage() {
   const rangeLabel = years.length ? (years[0] === years[years.length - 1] ? years[0] : `${years[years.length - 1]}–${years[0]}`) : "";
 
   const filtered = useMemo(() => {
-    return bets.filter((b) => {
+    return bets.map(applyClv).filter((b) => {
       if (sport !== "Alla sporter" && b.sport !== sport) return false;
       if (league && b.league !== league) return false;
       if (book !== "Alla bookmakers" && b.bookmaker !== book) return false;
@@ -199,7 +211,7 @@ export default function BetsPage() {
       }
       return true;
     });
-  }, [bets, sport, league, book, market, scope, eventKind, stage, res, q, day, year, month]);
+  }, [bets, clvById, sport, league, book, market, scope, eventKind, stage, res, q, day, year, month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Render at most `shown` rows; reset when any filter or sort order changes.
   useEffect(() => {
@@ -457,7 +469,7 @@ export default function BetsPage() {
         <Card style={{ padding: 0 }}>
           <div className="ap-table">
             <div className="ap-thead" style={{ gridTemplateColumns: GRID }}>
-              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">P/L</span><span className="ap-r">Resultat</span><span className="ap-c">·</span>
+              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">CLV</span><span className="ap-r">Insats</span><span className="ap-r">P/L</span><span className="ap-r">Resultat</span><span className="ap-c">·</span>
             </div>
             {loading && <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>}
             {!loading && filtered.length === 0 && (
@@ -477,13 +489,15 @@ export default function BetsPage() {
                   <BetTags bet={b} compact hideSport />
                 </span>
                 <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
-                <span className="ap-r ap-num" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, justifyContent: "center" }}>
-                  <span>{b.odds.toFixed(2)}</span>
-                  {b.clvPct != null && (
-                    <span style={{ fontSize: 10.5, fontWeight: 600, color: b.clvPct >= 0 ? "var(--pos)" : "var(--red)" }}>
-                      {b.clvPct >= 0 ? "+" : ""}{b.clvPct.toFixed(1)}%
-                    </span>
-                  )}
+                <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
+                <span className="ap-r">
+                  <ClvCell
+                    betId={b.id}
+                    odds={b.odds}
+                    closingOdds={b.closingOdds}
+                    clvPctValue={b.clvPct}
+                    onSaved={(next) => onClvSaved(b.id, next)}
+                  />
                 </span>
                 <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
                 <span className={"ap-r ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>{b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}</span>
@@ -526,11 +540,18 @@ export default function BetsPage() {
               <div>
                 <span>Odds</span>
                 <b className="ap-num">{b.odds.toFixed(2)}</b>
-                {b.clvPct != null && (
-                  <span style={{ display: "block", fontSize: 11, fontWeight: 600, marginTop: 2, color: b.clvPct >= 0 ? "var(--pos)" : "var(--red)" }}>
-                    CLV {b.clvPct >= 0 ? "+" : ""}{b.clvPct.toFixed(1)}%
-                  </span>
-                )}
+              </div>
+              <div>
+                <span>CLV</span>
+                <b className="ap-num" style={{ display: "block" }}>
+                  <ClvCell
+                    betId={b.id}
+                    odds={b.odds}
+                    closingOdds={b.closingOdds}
+                    clvPctValue={b.clvPct}
+                    onSaved={(next) => onClvSaved(b.id, next)}
+                  />
+                </b>
               </div>
               <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
               <div>

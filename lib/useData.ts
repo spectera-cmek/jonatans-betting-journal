@@ -43,10 +43,16 @@ export interface OpenBetRow {
   selection: string;
   sport: string | null;
   league: string | null;
+  marketCategory?: string | null;
+  marketScope?: string | null;
+  eventKind?: string | null;
+  tournamentStage?: string | null;
   bookmaker: string | null;
   betType: string;
   odds: number;
   stakeUnits: number;
+  closingOdds: number | null;
+  clvPct: number | null;
   eventAt: string | null;
   placedAt: string;
 }
