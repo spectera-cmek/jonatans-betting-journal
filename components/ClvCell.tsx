@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/fetcher";
 import { clvPct } from "@/lib/betting";
 import type { BetDTO } from "@/lib/types";
+import { I, IC } from "@/components/icons";
 
 export type ClvSaved = { closingOdds: number | null; clvPct: number | null };
 
@@ -15,6 +16,14 @@ type Props = {
   onSaved?: (next: ClvSaved) => void;
 };
 
+type ClvFetchResponse = {
+  closingOdds: number | null;
+  clvPct: number | null;
+  detail?: string;
+  provisional?: boolean;
+  error?: string;
+};
+
 function computeClv(odds: number, closing: number | null): number | null {
   if (closing == null || !(closing > 1) || !(odds > 1)) return null;
   return clvPct(odds, closing);
@@ -24,6 +33,8 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [fetchDetail, setFetchDetail] = useState<string | null>(null);
   const [localClosing, setLocalClosing] = useState(closingOdds);
   const [localClv, setLocalClv] = useState(clvPctValue);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,7 +53,7 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
   }, [editing]);
 
   const startEdit = () => {
-    if (saving) return;
+    if (saving || fetching) return;
     setDraft(localClosing != null ? String(localClosing) : "");
     setEditing(true);
   };
@@ -51,6 +62,12 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
     skipBlur.current = true;
     setEditing(false);
     setDraft("");
+  };
+
+  const applySaved = (saved: ClvSaved) => {
+    setLocalClosing(saved.closingOdds);
+    setLocalClv(saved.clvPct ?? computeClv(odds, saved.closingOdds));
+    onSaved?.(saved);
   };
 
   const save = async () => {
@@ -81,14 +98,12 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
       const updated = await api.patch<BetDTO>(`/api/bets/${betId}`, {
         closingOdds: nextClosing,
       });
-      const saved: ClvSaved = {
+      applySaved({
         closingOdds: updated.closingOdds,
         clvPct: updated.clvPct,
-      };
-      setLocalClosing(saved.closingOdds);
-      setLocalClv(saved.clvPct ?? computeClv(odds, saved.closingOdds));
+      });
       setEditing(false);
-      onSaved?.(saved);
+      setFetchDetail(null);
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -96,46 +111,90 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
     }
   };
 
+  const fetchClv = async () => {
+    if (fetching || saving || editing) return;
+    setFetching(true);
+    setFetchDetail(null);
+    try {
+      const res = await api.post<ClvFetchResponse>(`/api/bets/${betId}/clv`);
+      applySaved({
+        closingOdds: res.closingOdds,
+        clvPct: res.clvPct,
+      });
+      setFetchDetail(res.detail || (res.provisional ? "Live-odds (ej slutgiltig closing)" : "CLV hämtad"));
+    } catch (e) {
+      const msg = (e as Error).message || "Kunde inte hämta CLV";
+      setFetchDetail(msg);
+      alert(msg);
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  const fetchBtn = (
+    <button
+      type="button"
+      className="ap-iconbtn"
+      title={fetchDetail || "Hämta CLV från OddsPortal"}
+      aria-label="Hämta CLV från OddsPortal"
+      disabled={fetching || saving || editing}
+      onClick={(e) => {
+        e.stopPropagation();
+        void fetchClv();
+      }}
+      style={{
+        width: 26,
+        height: 26,
+        flexShrink: 0,
+        opacity: fetching ? 0.55 : 1,
+      }}
+    >
+      <I p={IC.refresh} size={12} />
+    </button>
+  );
+
   if (editing) {
     return (
-      <input
-        ref={inputRef}
-        className="ap-input ap-num"
-        type="number"
-        step="0.01"
-        min="1.01"
-        inputMode="decimal"
-        placeholder="Close"
-        value={draft}
-        disabled={saving}
-        aria-label="Closing odds"
-        title="Closing odds"
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
+      <div style={{ display: "flex", alignItems: "center", gap: 4, width: "100%" }}>
+        <input
+          ref={inputRef}
+          className="ap-input ap-num"
+          type="number"
+          step="0.01"
+          min="1.01"
+          inputMode="decimal"
+          placeholder="Close"
+          value={draft}
+          disabled={saving}
+          aria-label="Closing odds"
+          title="Closing odds"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void save();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              cancel();
+            }
+          }}
+          onBlur={() => {
+            if (skipBlur.current) {
+              skipBlur.current = false;
+              return;
+            }
             void save();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            cancel();
-          }
-        }}
-        onBlur={() => {
-          if (skipBlur.current) {
-            skipBlur.current = false;
-            return;
-          }
-          void save();
-        }}
-        style={{
-          padding: "4px 6px",
-          fontSize: 12.5,
-          borderRadius: 8,
-          width: "100%",
-          minWidth: 52,
-          textAlign: "right",
-        }}
-      />
+          }}
+          style={{
+            padding: "4px 6px",
+            fontSize: 12.5,
+            borderRadius: 8,
+            width: "100%",
+            minWidth: 52,
+            textAlign: "right",
+          }}
+        />
+      </div>
     );
   }
 
@@ -143,10 +202,43 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
 
   if (pct != null) {
     return (
+      <div style={{ display: "flex", alignItems: "center", gap: 4, width: "100%", justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          className="ap-clv-btn"
+          title={
+            localClosing != null
+              ? `Closing ${localClosing.toFixed(2)} — klicka för att ändra${fetchDetail ? ` · ${fetchDetail}` : ""}`
+              : "Ändra closing-odds"
+          }
+          onClick={startEdit}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+            font: "inherit",
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: pct >= 0 ? "var(--pos)" : "var(--red)",
+            textAlign: "inherit",
+            minWidth: 0,
+          }}
+        >
+          {pct >= 0 ? "+" : ""}
+          {pct.toFixed(1)}%
+        </button>
+        {fetchBtn}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, width: "100%", justifyContent: "flex-end" }}>
       <button
         type="button"
         className="ap-clv-btn"
-        title={localClosing != null ? `Closing ${localClosing.toFixed(2)} — klicka för att ändra` : "Ändra closing-odds"}
+        title={fetchDetail || "Sätt closing-odds"}
         onClick={startEdit}
         style={{
           background: "none",
@@ -155,38 +247,15 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
           cursor: "pointer",
           font: "inherit",
           fontSize: 12.5,
-          fontWeight: 600,
-          color: pct >= 0 ? "var(--pos)" : "var(--red)",
+          fontWeight: 500,
+          color: "var(--dim2)",
           textAlign: "inherit",
-          width: "100%",
+          minWidth: 0,
         }}
       >
-        {pct >= 0 ? "+" : ""}
-        {pct.toFixed(1)}%
+        {fetching ? "…" : "—"}
       </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className="ap-clv-btn"
-      title="Sätt closing-odds"
-      onClick={startEdit}
-      style={{
-        background: "none",
-        border: "none",
-        padding: 0,
-        cursor: "pointer",
-        font: "inherit",
-        fontSize: 12.5,
-        fontWeight: 500,
-        color: "var(--dim2)",
-        textAlign: "inherit",
-        width: "100%",
-      }}
-    >
-      —
-    </button>
+      {fetchBtn}
+    </div>
   );
 }

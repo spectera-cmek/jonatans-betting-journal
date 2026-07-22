@@ -1,0 +1,30 @@
+export {
+  bookmakerMatchScore,
+  bookmakerPriority,
+  buildSearchQuery,
+  dateWithinWindow,
+  matchTitleLooksLike,
+  normalizeSearchToken,
+  oddsPortalSportSlug,
+  pickBookmakerOdds,
+  resolveMarketTarget,
+  resolveSelectionColumn,
+  stripCountrySuffix,
+  stripTeamPrefix,
+  type MarketTarget,
+  type OddsPortalSportSlug,
+  type ScrapeErrorCode,
+  type SelectionColumn,
+} from "./mapping";
+
+export {
+  fetchClosingFromMatch,
+  isMatchHref,
+  parseOuSummaryText,
+  scrapeClosingForBet,
+  searchMatch,
+  withScrapeLock,
+  type ScrapeBetInput,
+  type ScrapeClosingResult,
+  type SearchMatchResult,
+} from "./scrape";

@@ -120,6 +120,20 @@ are git-ignored — they never leave your machine.
 3. Restart the dev server. Then **Synka** (or `npm run sync`) settles finished H2H /
    totals / spreads bets and stores closing odds for CLV.
 
+### Per-bet CLV via OddsPortal (local scrape)
+
+When API keys are missing or failing, use the refresh button next to each bet’s CLV
+cell. It scrapes [OddsPortal](https://www.oddsportal.com/) with Playwright (prefers the
+bet’s own bookmaker, then Pinnacle → bet365).
+
+```bash
+npm i playwright
+npx playwright install chromium
+```
+
+Requires local Node (`next dev` / `next start`) — not suited for serverless. Scraping
+is best-effort; props/niche markets may need manual closing odds.
+
 | Market | Auto-settled? |
 |--------|---------------|
 | H2H / Moneyline (incl. draw) | ✅ |
@@ -219,6 +233,19 @@ köra om. Kontoutdrag är git-ignorerade och lämnar aldrig din dator.
 2. Kopiera `.env.local.example` → `.env.local` och sätt `ODDS_API_KEY=din_nyckel`.
 3. Starta om. **Synka** (eller `npm run sync`) rättar färdigspelade bets och hämtar
    stängningsodds.
+
+### Per-bet CLV via OddsPortal (lokal scrape)
+
+Om API-nycklar saknas/failar: använd refresh-knappen bredvid CLV-cellen. Scrapar
+OddsPortal med Playwright (betets bookmaker först, sedan Pinnacle → bet365).
+
+```bash
+npm i playwright
+npx playwright install chromium
+```
+
+Fungerar lokalt (`next dev`) — inte på serverless. Props/udda marknader kan kräva
+manuell closing.
 
 ### ⚠️ Friskrivning
 

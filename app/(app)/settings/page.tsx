@@ -203,7 +203,11 @@ export default function SettingsPage() {
                 <li><strong style={{ color: "var(--txt)" }}>THESTATSAPI_KEY</strong> — historisk CLV för fotboll (rekommenderas). thestatsapi.com</li>
                 <li><strong style={{ color: "var(--txt)" }}>ODDS_API_KEY</strong> — gratis tier för MLB/NBA/NHL m.fl. the-odds-api.com</li>
               </ul>
-              <p style={{ marginTop: 8, color: "var(--dim2)" }}>Utan nycklar fungerar gratis ESPN-rättning ovan — CLV kräver TheStatsAPI eller Odds API.</p>
+              <p style={{ marginTop: 8, color: "var(--dim2)" }}>
+                Utan nycklar fungerar gratis ESPN-rättning ovan. CLV: använd refresh-knappen
+                bredvid varje bets CLV-cell (OddsPortal-scrape, kräver Playwright lokalt) eller
+                TheStatsAPI/Odds API.
+              </p>
             </div>
           )}
         </Card>
