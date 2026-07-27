@@ -9,12 +9,14 @@ export interface Accent {
   text: string;
 }
 
+/** Emerald leads — it is the brand accent of the terminal design. Outcome green
+ *  (--pos) is a lighter shade so a win still reads apart from ordinary chrome. */
 export const ACCENTS: Accent[] = [
-  { key: "blå", label: "Editorial blue", hex: "#5b8cff", soft: "rgba(91,140,255,0.14)", text: "#ffffff" },
-  { key: "silver", label: "Silver", hex: "#e6e8f0", soft: "rgba(230,232,240,0.1)", text: "#0a0b0f" },
-  { key: "violett", label: "Violett", hex: "#8f74ff", soft: "rgba(143,116,255,0.16)", text: "#16102a" },
-  { key: "emerald", label: "Smaragd", hex: "#2fd98a", soft: "rgba(47,217,138,0.16)", text: "#06210f" },
-  { key: "bärnsten", label: "Bärnsten", hex: "#f5a524", soft: "rgba(245,165,36,0.16)", text: "#2a1c02" },
+  { key: "emerald", label: "Smaragd", hex: "#10b981", soft: "rgba(16,185,129,0.14)", text: "#04140d" },
+  { key: "blå", label: "Sky", hex: "#0ea5e9", soft: "rgba(14,165,233,0.14)", text: "#04121c" },
+  { key: "violett", label: "Violett", hex: "#a855f7", soft: "rgba(168,85,247,0.16)", text: "#180a26" },
+  { key: "bärnsten", label: "Bärnsten", hex: "#f59e0b", soft: "rgba(245,158,11,0.16)", text: "#1f1302" },
+  { key: "silver", label: "Silver", hex: "#e2e8f0", soft: "rgba(226,232,240,0.1)", text: "#020617" },
 ];
 
 /** Relative luminance of a #rrggbb colour (0 = black, 1 = white). */
@@ -40,27 +42,91 @@ export interface ChartColors {
   palette: string[];
 }
 
+/** The categorical ramp used by donuts, breakdowns and stacked bars. Mirrors the
+ *  per-metric accent family in globals.css so a chart slice and the KPI chip for
+ *  the same thing land on the same hue. */
+export const CHART_PALETTE = [
+  "#10b981", // emerald
+  "#0ea5e9", // sky
+  "#f59e0b", // amber
+  "#a855f7", // purple
+  "#14b8a6", // teal
+  "#ec4899", // pink
+  "#f97316", // orange
+  "#3b82f6", // blue
+  "#06b6d4", // cyan
+];
+
+/** Stable colour per sport, so the same sport keeps its hue across the donut,
+ *  the breakdown bars and the coloured dot in the bet tables. Keys are matched
+ *  case-insensitively against a normalised sport name. */
+export const SPORT_COLORS: Record<string, string> = {
+  // canonical names (lib/constants.ts)
+  football: "#10b981",
+  tennis: "#14b8a6",
+  basketball: "#f97316",
+  "ice hockey": "#06b6d4",
+  "american football": "#3b82f6",
+  baseball: "#ef4444",
+  mma: "#ec4899",
+  boxing: "#f43f5e",
+  esports: "#a855f7",
+  "horse racing": "#f59e0b",
+  golf: "#84cc16",
+  cricket: "#8b5cf6",
+  other: "#64748b",
+  // Swedish aliases seen in imported rows
+  fotboll: "#10b981",
+  basket: "#f97316",
+  ishockey: "#06b6d4",
+  hockey: "#06b6d4",
+  baseboll: "#ef4444",
+  handboll: "#8b5cf6",
+  boxning: "#f43f5e",
+  esport: "#a855f7",
+  trav: "#f59e0b",
+  travsport: "#f59e0b",
+  bordtennis: "#fb7185",
+  padel: "#2dd4bf",
+  övrigt: "#64748b",
+};
+
+/** Colour for a sport label; falls back to a stable hash into CHART_PALETTE so
+ *  unknown sports still get a consistent (never grey-on-grey) colour. Longest
+ *  key first so "American Football" doesn't match "football". */
+const SPORT_COLOR_KEYS = Object.keys(SPORT_COLORS).sort((a, b) => b.length - a.length);
+
+export function sportColor(sport?: string | null): string {
+  if (!sport) return SPORT_COLORS.other;
+  const key = sport.trim().toLowerCase();
+  for (const k of SPORT_COLOR_KEYS) {
+    if (key === k || key.startsWith(k)) return SPORT_COLORS[k];
+  }
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return CHART_PALETTE[h % CHART_PALETTE.length];
+}
+
 export function chartColors(accentHex: string, mode: "dark" | "light"): ChartColors {
   const dark = mode === "dark";
-  // A near-white/silver accent (the default "Mörk premium" look) reads as a
-  // monochrome system — categorical series use a grayscale ramp instead of a
-  // rainbow so the sport donut / breakdowns stay restrained. Coloured accents
-  // keep the vivid palette.
+  // A near-white/silver accent reads as a monochrome system — categorical series
+  // use a grayscale ramp instead of a rainbow so the sport donut / breakdowns
+  // stay restrained. Coloured accents keep the vivid palette.
   const mono = luminance(accentHex) > 0.75;
   const palette = mono
     ? dark
-      ? ["#e6e8f0", "#9aa0b4", "#666c80", "#3d4254", "#262a38"]
-      : ["#2e3140", "#5a6075", "#8b90a3", "#b4b9c8", "#d2d6e0"]
-    : [accentHex, "#35d492", "#5ea8ff", "#ffb454", "#ff5c74"];
+      ? ["#e2e8f0", "#94a3b8", "#64748b", "#475569", "#334155"]
+      : ["#1e293b", "#475569", "#64748b", "#94a3b8", "#cbd5e1"]
+    : [accentHex, ...CHART_PALETTE.filter((c) => c.toLowerCase() !== accentHex.toLowerCase())];
   return {
     acc: accentHex,
-    fill: hexA(accentHex, dark ? (mono ? 0.09 : 0.18) : 0.12),
-    grid: dark ? "rgba(255,255,255,0.05)" : "rgba(20,22,34,0.06)",
-    pos: dark ? "#35d492" : "#10a06b",
-    red: dark ? "#ff5c74" : "#e23b52",
-    txt: dark ? "#f2f3f7" : "#14161c",
-    dim: dark ? "#6b7080" : "#8b90a3",
-    line: dark ? "rgba(255,255,255,0.06)" : "rgba(20,22,34,0.09)",
+    fill: hexA(accentHex, dark ? (mono ? 0.09 : 0.35) : 0.18),
+    grid: dark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)",
+    pos: dark ? "#34d399" : "#059669",
+    red: dark ? "#f43f5e" : "#e11d48",
+    txt: dark ? "#f1f5f9" : "#0f172a",
+    dim: dark ? "#94a3b8" : "#64748b",
+    line: dark ? "rgba(148,163,184,0.16)" : "rgba(15,23,42,0.1)",
     palette,
   };
 }

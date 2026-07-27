@@ -10,6 +10,7 @@ import {
   openRisk,
   maxDrawdown,
   hasRealOdds,
+  betTypeLabel,
   type BetLike,
 } from "@/lib/betting";
 import type { Outcome } from "@/lib/betting";
@@ -97,9 +98,7 @@ export async function GET() {
   const byYear = breakdownBy(keyed, (b) => yearOf(b.eventAt ?? b.placedAt)).sort((a, b) =>
     a.key.localeCompare(b.key)
   );
-  const byBetType = breakdownBy(keyed, (b) =>
-    (b as KeyedBet).betType === "accumulator" ? "Ackumulator" : "Singel"
-  );
+  const byBetType = breakdownBy(keyed, (b) => betTypeLabel((b as KeyedBet).betType));
 
   // Monthly: all months (ascending) + last 12 for the overview chart.
   const byMonth = monthlyAll(bets);

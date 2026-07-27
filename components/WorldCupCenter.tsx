@@ -393,7 +393,7 @@ export function WorldCupCenter() {
       <Topbar
         title="VM 2026"
         sub={`${matches.length || 104} matcher · ${bets.length} bets · ${data?.currentStage ? TOURNAMENT_STAGE_LABELS[data.currentStage] : "Fotbolls-VM"}`}
-        icon={<I p={IC.trophy} />}
+        icon={IC.trophy}
         actions={
           <>
             <button className="ap-btn ghost" onClick={() => { reloadCup(); loadSuggestions(); }}>

@@ -37,7 +37,7 @@ const ParsedBetSchema = z.object({
   selection: z.string(),
   selectionSide: z.enum(["home", "away", "draw", "over", "under"]).nullable(),
   line: z.number().nullable(),
-  betType: z.enum(["single", "accumulator"]),
+  betType: z.enum(["single", "accumulator", "betbuilder"]),
   legs: z.array(ParsedLeg).nullable(),
   odds: z.number().nullable(),
   stakeKr: z.number().nullable(),
@@ -102,7 +102,7 @@ const EXTRACTION_PROMPT = `Du läser skärmdumpar av spelkvitton från svenska b
 - Osäker → null. Gissa inte.
 
 ## Singlar, kombinationer och Bet Builder
-- **Bet Builder / "Bygg bet" / samma-match-kombo** (rubrik som "BET BUILDER", eller flera val listade under EN gemensam insats och ETT kombinerat totalodds, oftast INOM SAMMA match): detta är ETT enda bet, ALDRIG flera. Sätt betType: "accumulator" och lägg VARJE listad rad som ett eget ben i "legs" — missa aldrig ett ben, plocka ALDRIG bara en av raderna. event = matchen (t.ex. "Frankrike vs Marocko"). selection = kort sammanfattning av alla ben (t.ex. "Bet Builder: Under 3 mål + Hakimi 1+ skott på mål + Marocko Ö1.5 skott på mål"). market = "other" (avräknas manuellt), marketScope = "match". odds = det kombinerade totaloddset (INTE ett enskilt bens odds). stakeKr = den gemensamma insatsen.
+- **Bet Builder / "Bygg bet" / samma-match-kombo** (rubrik som "BET BUILDER", eller flera val listade under EN gemensam insats och ETT kombinerat totalodds, oftast INOM SAMMA match): detta är ETT enda bet, ALDRIG flera. Sätt betType: "betbuilder" och lägg VARJE listad rad som ett eget ben i "legs" — missa aldrig ett ben, plocka ALDRIG bara en av raderna. event = matchen (t.ex. "Frankrike vs Marocko"). selection = kort sammanfattning av alla ben (t.ex. "Bet Builder: Under 3 mål + Hakimi 1+ skott på mål + Marocko Ö1.5 skott på mål"). market = "other" (avräknas manuellt), marketScope = "match". odds = det kombinerade totaloddset (INTE ett enskilt bens odds). stakeKr = den gemensamma insatsen.
 - Vanlig kombination över FLERA matcher (dubbel/trippel/system, en insats + ett totalodds) → samma princip: betType: "accumulator", ett ben per match i "legs", event = kort sammanfattning ("Trippel: Arsenal / Real / Bayern"), odds = totaloddset.
 - I varje ben (legs): selection alltid ifylld; event = benets match eller tom sträng; odds = benets odds eller 0 om det inte syns.
 - FLERA SEPARATA singlar (var och en med EGEN insats och EGET odds) i samma skärmdump → flera element i "bets", varje med betType: "single" och legs: null.

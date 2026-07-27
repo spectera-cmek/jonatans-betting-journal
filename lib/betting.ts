@@ -357,6 +357,21 @@ export function maxDrawdown(points: BankrollPoint[]): DrawdownInfo {
   return { maxUnits: round2(maxDd), pctOfPeak: pct };
 }
 
+/** True for any multi-leg bet — accumulators, parlays and same-match bet
+ *  builders alike. Legacy rows also carry "double"/"parlay". */
+export function isMultiBet(betType?: string | null): boolean {
+  const t = (betType ?? "").toLowerCase();
+  return t === "accumulator" || t === "betbuilder" || t === "parlay" || t === "double";
+}
+
+/** Swedish label for a bet type, for breakdowns and tables. */
+export function betTypeLabel(betType?: string | null): string {
+  const t = (betType ?? "").toLowerCase();
+  if (t === "betbuilder") return "Bet Builder";
+  if (isMultiBet(t)) return "Kombination";
+  return "Singel";
+}
+
 /** Combined decimal odds for an accumulator: product of leg odds. */
 export function accaOdds(legOdds: number[]): number {
   return legOdds.reduce((acc, o) => acc * o, 1);

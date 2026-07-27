@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Card, Skeleton, CountUp } from "@/components/ui";
+import { Card, Skeleton, SkeletonCard, CountUp, Kpi, PanelHead, SportMark } from "@/components/ui";
+import { I, IC } from "@/components/icons";
 import { InteractiveLineChart, PLBars, Donut, type TimePoint } from "@/components/charts";
 import { ResultBadge } from "@/components/ResultBadge";
 import { TiltBanner } from "@/components/TiltBanner";
@@ -13,7 +14,7 @@ import { ClvCell, type ClvSaved } from "@/components/ClvCell";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
-import { krFmt, krShort, uFmt, pctFmt, sportTag, dateShort } from "@/lib/format";
+import { krFmt, krShort, uFmt, pctFmt, dateShort } from "@/lib/format";
 import type { BetListDTO } from "@/lib/types";
 import type { StreakInfo } from "@/lib/insights";
 import { useEffect } from "react";
@@ -79,6 +80,16 @@ export default function OverviewPage() {
     return maxDd;
   }, [pts]);
 
+  // ~40 evenly spaced samples of the visible curve for the KPI sparkline.
+  const sparkPts = useMemo(() => {
+    if (pts.length < 2) return undefined;
+    const step = Math.max(1, Math.floor(pts.length / 40));
+    const out: number[] = [];
+    for (let i = 0; i < pts.length; i += step) out.push(pts[i].v);
+    if (out.length && out[out.length - 1] !== pts[pts.length - 1].v) out.push(pts[pts.length - 1].v);
+    return out.length > 1 ? out : undefined;
+  }, [pts]);
+
   // Period P/L: last point vs the period's entry level. The headline follows
   // the selected period; "Allt" shows the all-time total.
   const periodDiff = pts.length >= 2 ? pts[pts.length - 1].v - pts[0].v : null;
@@ -127,63 +138,116 @@ export default function OverviewPage() {
       {/* Tilt guard — only visible when budgets/chasing trip */}
       {data?.tilt && <TiltBanner tilt={data.tilt} unit={unit} />}
 
-      {/* Compact terminal overview */}
-      <section className="ap-terminal-overview">
-        <div className="ap-terminal-strip">
-          <div className="ap-terminal-primary">
-            <span>Nettoresultat</span>
-            {loading && !data ? (
-              <Skeleton w={150} h={30} style={{ marginTop: 8 }} />
-            ) : (
-              <strong className={headlineKr >= 0 ? "pos" : "neg"}>
-                <CountUp value={headlineKr} format={(n) => krFmt(n, true)} />
-              </strong>
-            )}
-          </div>
-          <div><span>ROI</span><strong className={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(m?.roiPct ?? null, true)}</strong></div>
-          <div><span>Units</span><strong className={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"}>{uFmt(m?.profitUnits ?? 0, true)}</strong></div>
-          <div><span>Win rate</span><strong>{pctFmt(m?.winRatePct ?? null)}</strong></div>
-          <div><span>Avgjorda</span><strong>{(m?.settledBets ?? 0).toLocaleString("sv-SE")}</strong></div>
-          <div><span>Max DD</span><strong className="neg">{visDdKr > 0 ? krShort(-visDdKr, false) : "—"}</strong></div>
-        </div>
-
-        <div className="ap-terminal-chart-head">
-          <div>
-            <strong>Resultatutveckling</strong>
-            <span>
-              {showPeriod
-                ? `${periodBets.toLocaleString("sv-SE")} avgjorda · ${PERIODS.find((p) => p.key === period)?.label}`
-                : `${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda · hela perioden`}
-            </span>
-          </div>
-          <div className="ap-terminal-periods">
-            {PERIODS.map((p) => (
-              <button key={p.key} className={period === p.key ? "is-active" : ""} onClick={() => setPeriod(p.key)}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="ap-terminal-chart">
-          {loading && !data ? (
-            <Skeleton h={176} />
-          ) : (
-            <InteractiveLineChart
-              points={pts}
-              w={940}
-              h={176}
-              stroke={cc.acc}
-              fill={cc.fill}
-              grid={cc.grid}
-              formatValue={(v) => krFmt(v)}
-            />
+      {/* Six KPI cards: one saturated hue each, sparkline where a trend exists */}
+      <section className="ap-kpi-grid">
+        {loading && !data
+          ? Array.from({ length: 6 }, (_, i) => <SkeletonCard key={i} />)
+          : (
+            <>
+              <Kpi
+                label="Nettoresultat"
+                accent={headlineKr >= 0 ? "emerald" : "red"}
+                icon={IC.coins}
+                value={<CountUp value={headlineKr} format={(n) => krFmt(n, true)} />}
+                spark={sparkPts}
+                trend={showPeriod ? PERIODS.find((p) => p.key === period)?.label : "Hela historiken"}
+                trendTone={headlineKr >= 0 ? "pos" : "neg"}
+                meta={`${uFmt(m?.profitUnits ?? 0, true)}`}
+              />
+              <Kpi
+                label="ROI"
+                accent={(m?.roiPct ?? 0) >= 0 ? "sky" : "red"}
+                icon={IC.percent}
+                hint="Avkastning på insatt kapital: nettoresultat delat med totalt insatt belopp på avgjorda spel."
+                value={pctFmt(m?.roiPct ?? null, true)}
+                trend={`${krShort((m?.stakedUnits ?? 0) * unit, false)} insatt`}
+                trendTone="flat"
+              />
+              <Kpi
+                label="Träffprocent"
+                accent="amber"
+                icon={IC.flame}
+                value={pctFmt(m?.winRatePct ?? null)}
+                trend={streakText(ins?.streaks)}
+                trendTone={streakTone(ins?.streaks) ?? "flat"}
+                meta={`${m?.wins ?? 0}V · ${m?.losses ?? 0}F`}
+              />
+              <Kpi
+                label="CLV"
+                accent="teal"
+                icon={IC.target}
+                hint="Closing line value: hur mycket bättre ditt odds var än stängningsoddset. Att slå stängningen över tid är den bästa indikatorn på edge."
+                value={pctFmt(m?.clvPct ?? null, true)}
+                trend={
+                  m?.clvSampleSize
+                    ? `${Math.round(((m.clvBeatCount ?? 0) / m.clvSampleSize) * 100)} % slår stängning`
+                    : "Ingen stängningsdata"
+                }
+                trendTone={(m?.clvPct ?? 0) > 0 ? "pos" : "flat"}
+                meta={m?.clvSampleSize ? `${m.clvSampleSize} spel` : undefined}
+              />
+              <Kpi
+                label="Snittodds"
+                accent="pink"
+                icon={IC.scale}
+                hint="Genomsnittligt odds på avgjorda spel. Spel med placeholder-odds 1,01 räknas inte."
+                value={m?.avgOdds != null ? m.avgOdds.toFixed(2) : "—"}
+                trend={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U snittinsats` : "—"}
+                trendTone="flat"
+              />
+              <Kpi
+                label="Max drawdown"
+                accent="purple"
+                icon={IC.trendDown}
+                hint="Största fall från en topp till efterföljande botten inom vald period."
+                value={visDdKr > 0 ? krShort(-visDdKr, false) : "—"}
+                trend={showPeriod ? PERIODS.find((p) => p.key === period)?.label : "Hela historiken"}
+                trendTone="flat"
+                meta={`${(m?.totalBets ?? 0).toLocaleString("sv-SE")} spel`}
+              />
+            </>
           )}
-        </div>
       </section>
+
+      {/* Cumulative performance */}
+      <Card className="ap-chartcard">
+        <PanelHead
+          icon={IC.chart}
+          accent="emerald"
+          title="Resultatutveckling"
+          sub={
+            showPeriod
+              ? `${periodBets.toLocaleString("sv-SE")} avgjorda · ${PERIODS.find((p) => p.key === period)?.label}`
+              : `${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda · hela perioden`
+          }
+          actions={
+            <div className="ap-seg">
+              {PERIODS.map((p) => (
+                <button key={p.key} className={period === p.key ? "is-active" : ""} onClick={() => setPeriod(p.key)}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          }
+        />
+        {loading && !data ? (
+          <Skeleton h={220} />
+        ) : (
+          <InteractiveLineChart
+            points={pts}
+            w={1180}
+            h={220}
+            stroke={cc.acc}
+            fill={cc.fill}
+            grid={cc.grid}
+            formatValue={(v) => krFmt(v)}
+          />
+        )}
+      </Card>
 
       {/* Open risk is the primary actionable section. */}
       {data && risk && (
-        <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} onClvSaved={onClvSaved} />
+        <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} onClvSaved={onClvSaved} onSettled={reload} />
       )}
 
       <div className="ap-section-rule">
@@ -193,24 +257,22 @@ export default function OverviewPage() {
       </div>
 
       {/* Monthly bars + sport mix */}
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 330px", marginBottom: 12 }}>
+      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 360px", marginBottom: 16 }}>
         <Card>
-          <span className="ap-label">P/L per månad (units)</span>
-          <div style={{ marginTop: 14 }}>
-            <PLBars data={months} w={400} h={150} pos={cc.pos} neg={cc.red} labelColor={cc.dim} track={cc.line} />
-          </div>
+          <PanelHead icon={IC.bars} accent="sky" title="P/L per månad" sub="Resultat i units, senaste månaderna" />
+          <PLBars data={months} w={400} h={150} pos={cc.pos} neg={cc.red} labelColor={cc.dim} track={cc.line} />
         </Card>
         <Card>
-          <span className="ap-label">Fördelning per sport</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 14 }}>
-            <Donut data={sportsWithPct} size={112} thickness={17} colors={cc.palette} track={cc.grid} centerLabel={String(m?.totalBets ?? 0)} centerSub="BETS" centerColor={cc.txt} centerSubColor={cc.dim} />
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 9 }}>
+          <PanelHead icon={IC.pie} accent="purple" title="Fördelning per sport" sub="Andel av alla spel" />
+          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+            <Donut data={sportsWithPct} size={116} thickness={19} colors={cc.palette} track={cc.grid} centerLabel={String(m?.totalBets ?? 0)} centerSub="SPEL" centerColor={cc.txt} centerSubColor={cc.dim} />
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
               {sportsWithPct.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data än</span>}
               {sportsWithPct.slice(0, 5).map((s, i) => (
-                <div key={s.key} className="ap-leg">
+                <div key={s.key} className="ap-legrow">
                   <span className="ap-dot" style={{ background: cc.palette[i % cc.palette.length] }} />
                   <span className="ap-ell" style={{ flex: 1, color: "var(--dim)" }}>{s.key}</span>
-                  <span className="ap-num" style={{ fontWeight: 600 }}>{s.pct}%</span>
+                  <span className="ap-num" style={{ fontWeight: 700 }}>{s.pct}%</span>
                 </div>
               ))}
             </div>
@@ -218,21 +280,24 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
+      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 16 }}>
         <Card>
-          <span className="ap-label">Form &amp; rekord</span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>
+          <PanelHead icon={IC.flame} accent="amber" title="Form &amp; rekord" sub="Sviter över hela historiken" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <FormRow label="Nuvarande svit" value={streakText(ins?.streaks)} tone={streakTone(ins?.streaks)} />
             <FormRow label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin} i rad` : "—"} tone="pos" />
             <FormRow label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss} i rad` : "—"} tone="neg" />
           </div>
         </Card>
         <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span className="ap-label">Extremer &amp; insats</span>
-            <Link href="/insights" className="ap-link">Mer →</Link>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>
+          <PanelHead
+            icon={IC.award}
+            accent="teal"
+            title="Extremer &amp; insats"
+            sub="Bästa och sämsta dagarna"
+            actions={<Link href="/insights" className="ap-link">Mer →</Link>}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <FormRow label="Bästa dag" value={ins?.best ? `${krShort(ins.best.profitUnits * unit, true)} · ${dateShort(ins.best.date)}` : "—"} tone="pos" />
             <FormRow label="Sämsta dag" value={ins?.worst ? `${krShort(ins.worst.profitUnits * unit, true)} · ${dateShort(ins.worst.date)}` : "—"} tone="neg" />
             <FormRow label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U · ${krFmt(ins.avgStakeUnits * unit)}` : "—"} />
@@ -246,9 +311,12 @@ export default function OverviewPage() {
       )}
 
       {/* Recent bets */}
-      <Card style={{ padding: 0 }}>
+      <Card style={{ padding: 0, overflow: "hidden" }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Senaste bets</span>
+          <span className="ap-card-title">
+            <span className="ap-chip-icon is-sm is-emerald" aria-hidden="true"><I p={IC.ticket} size={13} /></span>
+            Senaste bets
+          </span>
           <Link href="/bets" className="ap-link">Visa alla →</Link>
         </div>
         <div className="ap-table-wrap">
@@ -258,8 +326,8 @@ export default function OverviewPage() {
             </div>
             {recent.map((b) => (
               <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: RECENT_GRID }}>
-                <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
-                <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
+                <span style={{ color: "var(--dim)" }} className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span>
+                <span style={{ minWidth: 0 }}><SportMark sport={b.sport} /></span>
                 <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
                 <span className="ap-hide-sm" style={{ color: "var(--dim)", minWidth: 0 }}>
                   <span className="ap-ell" style={{ display: "block" }}>{b.selection || "—"}</span>
@@ -291,7 +359,7 @@ export default function OverviewPage() {
           {recent.map((b) => (
             <div key={b.id} className="ap-betcard">
               <div className="ap-betcard-top">
-                <span className="ap-betcard-date"><span className="ap-tag">{sportTag(b.sport)}</span> {dateShort(b.eventAt ?? b.placedAt)}</span>
+                <span className="ap-betcard-date"><SportMark sport={b.sport} /> <span className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span></span>
                 <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
               </div>
               <div className="ap-betcard-event">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</div>
@@ -336,9 +404,9 @@ function monthLabel(ym: string): string {
 // One label/value line in the "Form & rekord" card.
 function FormRow({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
   return (
-    <div className="ap-leg">
+    <div className="ap-legrow">
       <span style={{ flex: 1, color: "var(--dim)" }}>{label}</span>
-      <span className="ap-num" style={{ fontWeight: 600 }}>
+      <span className="ap-num" style={{ fontWeight: 700 }}>
         <em className={tone ?? ""} style={{ fontStyle: "normal" }}>{value}</em>
       </span>
     </div>

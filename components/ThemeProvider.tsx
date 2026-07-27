@@ -22,21 +22,22 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Defaults = the editorial sportsbook look: blue accent, dark, no glow. The
-  // storage keys are namespaced "bj.*" (new) so the redesign shows for everyone
-  // regardless of accent/glow they'd saved under the old "vigg.*" keys.
-  const [accentHex, setAccentHex] = useState("#5b8cff");
+  // Defaults = the terminal look: emerald accent, dark, no glow. Storage keys
+  // stay namespaced "bj.*".
+  const [accentHex, setAccentHex] = useState(ACCENTS[0].hex);
   const [mode, setModeState] = useState<"dark" | "light">("dark");
   const [glow, setGlowState] = useState(false);
   const [ready, setReady] = useState(false);
 
-  // Load persisted prefs on mount.
+  // Load persisted prefs on mount. A stored accent from the previous palette no
+  // longer matches any swatch — ignore it so those users land on the new default
+  // rather than on an accent the Settings page can't show as selected.
   useEffect(() => {
     try {
       const a = localStorage.getItem("bj.accent");
       const m = localStorage.getItem("bj.mode");
       const g = localStorage.getItem("bj.glow");
-      if (a) setAccentHex(a);
+      if (a && ACCENTS.some((x) => x.hex === a)) setAccentHex(a);
       if (m === "light" || m === "dark") setModeState(m);
       if (g != null) setGlowState(g === "1");
     } catch {}

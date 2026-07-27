@@ -14,11 +14,15 @@ import { I, IC } from "./icons";
 export function GlobalActions() {
   const [adding, setAdding] = useState(false);
   const [hasKey, setHasKey] = useState(false);
+  const [unit, setUnit] = useState(100);
 
   useEffect(() => {
     api
       .get<SettingsDTO>("/api/settings")
-      .then((s) => setHasKey(s.hasOddsApiKey ?? false))
+      .then((s) => {
+        setHasKey(s.hasOddsApiKey ?? false);
+        if (s.unitValue) setUnit(s.unitValue);
+      })
       .catch(() => {});
   }, []);
 
@@ -28,7 +32,7 @@ export function GlobalActions() {
       <button className="ap-btn" onClick={() => setAdding(true)}>
         <I p={IC.plus} size={15} /> <span className="ap-hide-sm">Logga bet</span>
       </button>
-      <AddBetModal open={adding} onClose={() => setAdding(false)} onSaved={revalidateAll} hasOddsApiKey={hasKey} />
+      <AddBetModal open={adding} onClose={() => setAdding(false)} onSaved={revalidateAll} hasOddsApiKey={hasKey} unit={unit} />
     </>
   );
 }

@@ -9,9 +9,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // Mirror --sans in globals.css so Tailwind's font-sans never diverges.
-        sans: ["Hanken Grotesk", "system-ui", "sans-serif"],
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+        // Mirror --sans / --mono in globals.css so Tailwind never diverges.
+        sans: ["Manrope", "system-ui", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
     },
   },

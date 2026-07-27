@@ -24,12 +24,16 @@ const SOURCE_LABELS: Record<string, string> = {
   unibet: "Unibet",
 };
 
+/** The dialog only reads these four fields, so anything bet-shaped can be
+ *  settled — including the lighter OpenBetRow used by the dashboard ticker. */
+export type SettleTarget = Pick<BetListDTO, "id" | "event" | "selection" | "outcome">;
+
 export function SettlementDialog({
   bet,
   onClose,
   onChanged,
 }: {
-  bet: BetListDTO | null;
+  bet: SettleTarget | null;
   onClose: () => void;
   onChanged: () => void;
 }) {

@@ -76,6 +76,15 @@ export const SCOPE_LABELS: Record<string, string> = {
   match: "Match (totalt)",
 };
 
+/** How the bet is put together. "betbuilder" is a same-match multi (bet365
+ *  Bet Builder, Unibet Bygg bet); "accumulator" spans several matches. Both are
+ *  multis — use isMultiBet() rather than comparing to "accumulator". */
+export const BET_TYPES: { value: string; label: string }[] = [
+  { value: "single", label: "Singel" },
+  { value: "accumulator", label: "Kombination" },
+  { value: "betbuilder", label: "Bet Builder" },
+];
+
 export const EVENT_KINDS: { value: string; label: string }[] = [
   { value: "match", label: "Match" },
   { value: "outright", label: "Turneringsspel / futures" },

@@ -77,7 +77,7 @@ export default function AnalyticsPage() {
   if (loading && !data) {
     return (
       <div>
-        <Topbar title="Analys" sub="Laddar…" icon={<I p={IC.chart} />} />
+        <Topbar title="Analys" sub="Laddar…" icon={IC.chart} />
         <div className="ap-kpi-row">
           <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
         </div>
@@ -94,13 +94,13 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <Topbar title="Analys" sub={`${m?.totalBets ?? 0} bets · ${rangeLabel}`} icon={<I p={IC.chart} />} />
+      <Topbar title="Analys" sub={`${m?.totalBets ?? 0} bets · ${rangeLabel}`} icon={IC.chart} />
 
       <div className="ap-kpi-row">
-        <StatTile label="Total P/L" value={uFmt(m?.profitUnits ?? null, true)} sub={`ROI ${pctFmt(m?.roiPct ?? null, true)}`} tone={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} />
-        <StatTile label="Win rate" value={pctFmt(m?.winRatePct ?? null)} sub={`${m?.wins ?? 0}V · ${m?.losses ?? 0}F`} />
-        <StatTile label="Snittodds" value={(m?.avgOdds ?? 0).toFixed(2)} sub={`${m?.settledBets ?? 0} avgjorda`} />
-        <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : "ingen data"} />
+        <StatTile label="Total P/L" value={uFmt(m?.profitUnits ?? null, true)} sub={`ROI ${pctFmt(m?.roiPct ?? null, true)}`} tone={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} icon={IC.coins} accent={(m?.profitUnits ?? 0) >= 0 ? "emerald" : "red"} />
+        <StatTile label="Träffprocent" value={pctFmt(m?.winRatePct ?? null)} sub={`${m?.wins ?? 0}V · ${m?.losses ?? 0}F`} icon={IC.target} accent="amber" />
+        <StatTile label="Snittodds" value={(m?.avgOdds ?? 0).toFixed(2)} sub={`${m?.settledBets ?? 0} avgjorda`} icon={IC.scale} accent="pink" />
+        <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : "ingen data"} icon={IC.layers} accent="purple" />
       </div>
 
       <div className="ap-kpi-row">
@@ -109,27 +109,32 @@ export default function AnalyticsPage() {
           value={dd ? `−${krShort(dd.maxUnits * unit)}` : "—"}
           sub={dd ? `största tapp från toppen · ${uFmt(-dd.maxUnits, true)}` : "största tapp från toppen"}
           tone="neg"
+          icon={IC.trendDown}
         />
         <StatTile
           label="Omsatt"
           value={m ? krShort(m.stakedUnits * unit) : "—"}
           sub={m ? `${uFmt(m.stakedUnits)} över ${m.settledBets} avgjorda` : "ingen data"}
+          icon={IC.bars}
+          accent="sky"
         />
         <StatTile
           label="Bästa månad"
           value={bestMonth ? krShort(bestMonth.profitUnits * unit, true) : "—"}
           sub={bestMonth ? `${monthLabel(bestMonth.month)} ${bestMonth.month.slice(0, 4)} · ${bestMonth.bets} bets` : "ingen data"}
           tone="pos"
+          icon={IC.award}
         />
         <StatTile
           label="Sämsta månad"
           value={worstMonth ? krShort(worstMonth.profitUnits * unit, true) : "—"}
           sub={worstMonth ? `${monthLabel(worstMonth.month)} ${worstMonth.month.slice(0, 4)} · ${worstMonth.bets} bets` : "ingen data"}
           tone="neg"
+          icon={IC.alert}
         />
       </div>
 
-      <SectionHead icon={<I p={IC.chart} />} title="Utveckling" sub="CLV, år och trend" />
+      <SectionHead icon={IC.chart} title="Utveckling" sub="CLV, år och trend" />
 
       {/* CLV — closing line value */}
       <Card style={{ marginBottom: 12 }}>
@@ -221,7 +226,7 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      <SectionHead icon={<I p={IC.grid} />} title="Fördelningar" sub="var pengarna kommer ifrån" />
+      <SectionHead icon={IC.grid} title="Fördelningar" sub="var pengarna kommer ifrån" />
 
       <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
         <BreakdownCard title="P/L per sport" rows={data?.bySport ?? []} unit={unit} />
@@ -235,11 +240,11 @@ export default function AnalyticsPage() {
         <BreakdownCard title="P/L per liga" rows={data?.byLeague ?? []} unit={unit} />
       </div>
 
-      <SectionHead icon={<I p={IC.book} />} title="Bookmakers" sub="P/L, ROI och volym per bolag" />
+      <SectionHead icon={IC.book} title="Bookmakers" sub="P/L, ROI och volym per bolag" />
 
       <BookmakerTable rows={data?.byBookmaker ?? []} unit={unit} />
 
-      <SectionHead icon={<I p={IC.calendar} />} title="Historik" sub="månad för månad" />
+      <SectionHead icon={IC.calendar} title="Historik" sub="månad för månad" />
 
       {/* Per månad med år-väljare */}
       <Card style={{ padding: 0 }}>
@@ -273,7 +278,7 @@ export default function AnalyticsPage() {
         )}
       </Card>
 
-      <SectionHead icon={<I p={IC.trophy} />} title="Rekord" sub="största vinster och förluster" />
+      <SectionHead icon={IC.trophy} title="Rekord" sub="största vinster och förluster" />
 
       {/* Hall of Fame & Biggest L */}
       <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr" }}>

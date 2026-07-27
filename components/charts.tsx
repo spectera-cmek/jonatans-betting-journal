@@ -32,9 +32,9 @@ export function InteractiveLineChart({
   stroke = "#22c55e",
   fill = "rgba(34,197,94,0.14)",
   grid = "rgba(255,255,255,0.06)",
-  redSoft = "rgba(255,96,121,0.07)",
+  redSoft = "rgba(244,63,94,0.07)",
   pad = 6,
-  strokeW = 2.2,
+  strokeW = 3,
   formatValue = (v: number) => String(Math.round(v)),
   formatDate = (t: number) =>
     new Date(t).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" }),
@@ -126,7 +126,7 @@ export function InteractiveLineChart({
           </linearGradient>
         </defs>
         {gridLines.map((gy, i) => (
-          <line key={i} x1={pad} y1={gy} x2={w - pad} y2={gy} stroke={grid} strokeWidth="1" />
+          <line key={i} x1={pad} y1={gy} x2={w - pad} y2={gy} stroke={grid} strokeWidth="1" strokeDasharray="3 3" />
         ))}
         {dd && dd.to > dd.from && (
           <rect
@@ -144,11 +144,15 @@ export function InteractiveLineChart({
         {hover != null && (
           <line x1={x(hover)} y1={pad} x2={x(hover)} y2={h - pad} stroke={stroke} strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
         )}
+        {/* White-filled dot ringed in the series colour — the reference's
+            active-point treatment; reads clearly over both fill and grid. */}
         <circle
           cx={x(hover ?? n - 1)}
           cy={y(pts[hover ?? n - 1].v)}
-          r="3.5"
-          fill={stroke}
+          r="4"
+          fill="var(--card)"
+          stroke={stroke}
+          strokeWidth="2.5"
         />
       </svg>
       {hv && (
@@ -158,9 +162,9 @@ export function InteractiveLineChart({
             top: 6,
             left: `${frac * 100}%`,
             transform: `translateX(${frac > 0.72 ? "-100%" : frac < 0.28 ? "0%" : "-50%"})`,
-            background: "var(--card2)",
+            background: "var(--bg)",
             border: "1px solid var(--line)",
-            borderRadius: 10,
+            borderRadius: "var(--r-ctl)",
             padding: "8px 11px",
             pointerEvents: "none",
             whiteSpace: "nowrap",
@@ -391,9 +395,10 @@ export function Donut({
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
       <circle cx={c} cy={c} r={r} fill="none" stroke={track} strokeWidth={thickness} />
       {data.map((d, i) => {
+        // ~3° of separation between segments, matching the reference's
+        // paddingAngle (skipped for slivers so they stay visible).
         const len = (d.pct / 100) * circ;
-        // 1.5px gap between segments (skipped for slivers so they stay visible)
-        const g = len > 3 ? 1.5 : 0;
+        const g = len > 6 ? (3 / 360) * circ : 0;
         const el = (
           <circle
             key={i}
@@ -413,12 +418,30 @@ export function Donut({
         return el;
       })}
       {centerLabel && (
-        <text x={c} y={c - 2} textAnchor="middle" fontSize={size * 0.2} fontWeight="700" fill={centerColor} fontFamily="inherit">
+        <text
+          x={c}
+          y={c - 2}
+          textAnchor="middle"
+          fontSize={size * 0.19}
+          fontWeight="800"
+          fill={centerColor}
+          fontFamily="var(--mono)"
+          letterSpacing="-0.02em"
+        >
           {centerLabel}
         </text>
       )}
       {centerSub && (
-        <text x={c} y={c + size * 0.13} textAnchor="middle" fontSize={size * 0.085} fill={centerSubColor} fontFamily="inherit" letterSpacing="0.04em">
+        <text
+          x={c}
+          y={c + size * 0.14}
+          textAnchor="middle"
+          fontSize={size * 0.085}
+          fontWeight="700"
+          fill={centerSubColor}
+          fontFamily="inherit"
+          letterSpacing="0.07em"
+        >
           {centerSub}
         </text>
       )}
@@ -474,7 +497,24 @@ export function Ring({
   );
 }
 
-export function Spark({ data, w = 150, h = 26, stroke = "#22c55e", strokeW = 1.6 }: { data: number[]; w?: number; h?: number; stroke?: string; strokeW?: number }) {
+/** Inline trend line for KPI cards. Fills a faint wash under the stroke so it
+ *  reads as a mini area chart rather than a stray squiggle. */
+export function Spark({
+  data,
+  w = 150,
+  h = 26,
+  stroke = "var(--pos)",
+  strokeW = 1.8,
+  fill = true,
+}: {
+  data: number[];
+  w?: number;
+  h?: number;
+  stroke?: string;
+  strokeW?: number;
+  fill?: boolean;
+}) {
+  const gid = useId().replace(/:/g, "");
   if (!data || data.length < 2) return <svg width={w} height={h} />;
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -482,14 +522,24 @@ export function Spark({ data, w = 150, h = 26, stroke = "#22c55e", strokeW = 1.6
   const x = (i: number) => (i / (data.length - 1)) * w;
   const y = (v: number) => 2 + (1 - (v - min) / range) * (h - 4);
   const line = data.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${line} L${w},${h} L0,${h} Z`;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+      {fill && (
+        <defs>
+          <linearGradient id={`sp${gid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      )}
+      {fill && <path d={area} fill={`url(#sp${gid})`} />}
       <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );
 }
 
-export function HBar({ pct, color, track = "rgba(255,255,255,0.07)", h = 6, radius = 3 }: { pct: number; color: string; track?: string; h?: number; radius?: number }) {
+export function HBar({ pct, color, track = "var(--hover)", h = 6, radius = 999 }: { pct: number; color: string; track?: string; h?: number; radius?: number }) {
   return (
     <div style={{ height: h, background: track, borderRadius: radius, overflow: "hidden", width: "100%" }}>
       <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: radius }} />

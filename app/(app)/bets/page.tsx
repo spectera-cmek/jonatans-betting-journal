@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card, Empty } from "@/components/ui";
+import { Card, Empty, SportMark } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
 import { AddBetModal, type BetPrefill } from "@/components/AddBetModal";
 import { ScreenshotImportButton } from "@/components/ScreenshotImportButton";
@@ -13,7 +13,7 @@ import type { ParsedBetWithDupe } from "@/lib/betslipExtract";
 import { StatTile } from "@/components/stats";
 import { useBets } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
-import { uFmt, pctFmt, krShort, sportTag, dateShort } from "@/lib/format";
+import { uFmt, pctFmt, krShort, dateShort } from "@/lib/format";
 import { computeMetrics, type BetLike, type Outcome } from "@/lib/betting";
 import { I, IC } from "@/components/icons";
 import {
@@ -353,7 +353,7 @@ export default function BetsPage() {
       <Topbar
         title="Alla bets"
         sub={`${bets.length} bets loggade${rangeLabel ? ` · ${rangeLabel}` : ""}`}
-        icon={<I p={IC.ticket} />}
+        icon={IC.ticket}
         actions={
           <>
             <a className="ap-btn ghost" href="/api/bets/export"><I p={IC.download} size={15} /><span className="ap-hide-sm">CSV</span></a>
@@ -364,10 +364,10 @@ export default function BetsPage() {
 
       {/* summary strip */}
       <div className="ap-grid ap-kpi-row">
-        <StatTile label="Filtrerad P/L" value={uFmt(metrics.profitUnits, true)} tone={metrics.profitUnits >= 0 ? "pos" : "neg"} />
-        <StatTile label="ROI" value={pctFmt(metrics.roiPct, true)} tone={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
-        <StatTile label="Win rate" value={pctFmt(metrics.winRatePct)} />
-        <StatTile label="Antal bets" value={String(filtered.length)} />
+        <StatTile label="Filtrerad P/L" value={uFmt(metrics.profitUnits, true)} tone={metrics.profitUnits >= 0 ? "pos" : "neg"} icon={IC.coins} accent={metrics.profitUnits >= 0 ? "emerald" : "red"} />
+        <StatTile label="ROI" value={pctFmt(metrics.roiPct, true)} tone={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"} icon={IC.percent} accent={(metrics.roiPct ?? 0) >= 0 ? "sky" : "red"} />
+        <StatTile label="Träffprocent" value={pctFmt(metrics.winRatePct)} icon={IC.target} accent="amber" />
+        <StatTile label="Antal bets" value={String(filtered.length)} icon={IC.ticket} accent="purple" sub={`av ${bets.length} totalt`} />
       </div>
 
       {/* filters */}
@@ -474,15 +474,15 @@ export default function BetsPage() {
             {loading && <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>}
             {!loading && filtered.length === 0 && (
               <Empty
-                icon={<I p={IC.search} />}
+                icon={IC.search}
                 title="Inga bets matchar filtren"
                 hint="Justera sökningen eller rensa filtren för att se fler."
               />
             )}
             {visible.map((b) => (
               <div key={b.id} className={`ap-trow ap-bet-row ${betTone(b.outcome)}`} style={{ gridTemplateColumns: GRID }}>
-                <span style={{ color: "var(--dim)" }}>{dateShort(b.eventAt ?? b.placedAt)}</span>
-                <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
+                <span style={{ color: "var(--dim)" }} className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span>
+                <span style={{ minWidth: 0 }}><SportMark sport={b.sport} /></span>
                 <span className="ap-ell">{b.event}</span>
                 <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)", display: "flex", flexDirection: "column", gap: 2, justifyContent: "center" }}>
                   <span className="ap-ell">{b.selection || "—"}</span>
@@ -516,7 +516,7 @@ export default function BetsPage() {
         {loading && <div className="ap-betcard-empty">Laddar…</div>}
         {!loading && filtered.length === 0 && (
           <Empty
-            icon={<I p={IC.search} />}
+            icon={IC.search}
             title="Inga bets matchar filtren"
             hint="Justera sökningen eller rensa filtren för att se fler."
           />
@@ -525,7 +525,7 @@ export default function BetsPage() {
           <div key={b.id} className={`ap-betcard ${betTone(b.outcome)}`}>
             <div className="ap-betcard-top">
               <span className="ap-betcard-date">
-                {dateShort(b.eventAt ?? b.placedAt)} <span className="ap-tag">{sportTag(b.sport)}</span>
+                <span className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span> <SportMark sport={b.sport} />
               </span>
               <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
             </div>
@@ -584,6 +584,7 @@ export default function BetsPage() {
         onClose={closeModal}
         onSaved={reload}
         hasOddsApiKey={hasKey}
+        unit={unit}
       />
       <SettlementDialog
         bet={settling}

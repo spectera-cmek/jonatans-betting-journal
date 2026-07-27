@@ -4,7 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { I, IC } from "./icons";
+import type { LucideIcon } from "lucide-react";
 import { GlobalActions } from "./GlobalActions";
+import { useMetrics } from "@/lib/useData";
+import { krShort } from "@/lib/format";
 
 const PRIMARY_NAV = [
   { href: "/", label: "Översikt", icon: IC.dashboard },
@@ -25,14 +28,70 @@ function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
-/** Sticky global header: brand + horizontal nav pills + global actions + avatar. */
+/**
+ * Bankroll strip: realised P/L, staked-and-open exposure and the count of open
+ * bets. Reads the same metrics payload the dashboard uses, so it costs no extra
+ * request once that cache is warm. Hidden under 1180px (see globals.css).
+ */
+function BankrollStrip() {
+  const { data } = useMetrics();
+  if (!data) return null;
+  const unit = data.settings.unitValue ?? 100;
+  const profitKr = (data.metrics?.profitUnits ?? 0) * unit;
+  const risk = data.openRisk;
+  const openKr = risk ? risk.stakeUnits * unit : 0;
+  const openCount = data.openBets?.length ?? 0;
+
+  return (
+    <div className="ap-bankroll" title="Realiserat resultat, insats i öppna spel och antal öppna spel">
+      <div>
+        <span style={{ color: "var(--dim2)" }}>
+          <I p={IC.wallet} size={15} />
+        </span>
+        <div>
+          <span>Netto</span>
+          <strong className={profitKr >= 0 ? "pos" : "neg"}>{krShort(profitKr, true)}</strong>
+        </div>
+      </div>
+      <div>
+        <span style={{ color: "var(--dim2)" }}>
+          <I p={IC.coins} size={15} />
+        </span>
+        <div>
+          <span>Exponerat</span>
+          <strong>{krShort(openKr, false)}</strong>
+        </div>
+      </div>
+      <div>
+        <span style={{ color: "var(--dim2)" }}>
+          <I p={IC.clock} size={15} />
+        </span>
+        <div>
+          <span>Öppna</span>
+          <strong style={{ color: openCount > 0 ? "var(--a-amber)" : "var(--dim)" }}>{openCount}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Sticky global header: brand + horizontal nav pills + bankroll + actions. */
 export function TopNav({ username }: { username?: string }) {
   const pathname = usePathname();
   return (
     <header className="ap-topnav">
       <div className="ap-topnav-inner">
         <Link href="/" className="ap-brand" aria-label="Översikt">
-          <span className="name">Betting Journal</span>
+          <span className="mark" aria-hidden="true">
+            <I p={IC.dashboard} size={19} />
+            <span className="pulse">
+              <i />
+              <b />
+            </span>
+          </span>
+          <span className="name">
+            Betting<em>Journal</em>
+          </span>
         </Link>
         <nav className="ap-nav">
           {PRIMARY_NAV.map((n) => (
@@ -58,6 +117,7 @@ export function TopNav({ username }: { username?: string }) {
           </details>
         </nav>
         <div className="ap-topnav-actions">
+          <BankrollStrip />
           <GlobalActions />
           <Link href="/settings" className="ap-avatar" title={username ? username[0].toUpperCase() + username.slice(1) : "Konto"}>
             <I p={IC.user} size={15} />
@@ -129,19 +189,28 @@ export function Topbar({
   title,
   sub,
   actions,
+  icon,
+  accent = "emerald",
 }: {
   title: string;
   sub?: React.ReactNode;
   actions?: React.ReactNode;
-  /** Accepted for backwards-compat with pages that still pass one; the redesign
-   *  renders a clean bordered header with no icon chip. */
-  icon?: React.ReactNode;
+  /** Line icon shown in a tinted chip beside the page title. */
+  icon?: LucideIcon;
+  accent?: "emerald" | "sky" | "amber" | "purple" | "teal" | "pink";
 }) {
   return (
     <div className="ap-top">
-      <div style={{ minWidth: 0 }}>
-        <div className="ap-h1">{title}</div>
-        {sub && <div className="ap-sub">{sub}</div>}
+      <div className="ap-top-main">
+        {icon && (
+          <span className={"ap-chip-icon is-" + accent} aria-hidden="true">
+            <I p={icon} size={17} />
+          </span>
+        )}
+        <div style={{ minWidth: 0 }}>
+          <div className="ap-h1">{title}</div>
+          {sub && <div className="ap-sub">{sub}</div>}
+        </div>
       </div>
       {actions && <div className="ap-top-actions">{actions}</div>}
     </div>

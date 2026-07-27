@@ -13,7 +13,7 @@ export default function ToolsPage() {
       <Topbar
         title="Verktyg"
         sub="Kalkylatorer för vardagsbesluten — cashout, hedge, handicap och bonusar"
-        icon={<I p={IC.wrench} />}
+        icon={IC.wrench}
       />
       <CashoutCard />
       <HedgeCard />

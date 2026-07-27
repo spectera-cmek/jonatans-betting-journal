@@ -3,7 +3,9 @@
 // Shared stat/breakdown building blocks used by Analys, VM 2026 and Insikter.
 // Extracted from the pages so the tournament view can't drift from the main one.
 
-import { Card } from "./ui";
+import { Card, type Accent } from "./ui";
+import { I, IC } from "./icons";
+import type { LucideIcon } from "lucide-react";
 import { HBar } from "./charts";
 import { useTheme } from "./ThemeProvider";
 import { uFmt, pctFmt, krShort, krFmt, sportTag, dateShort } from "@/lib/format";
@@ -15,20 +17,43 @@ export function StatTile({
   value,
   sub,
   tone,
+  accent,
+  icon,
+  hint,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone?: string;
+  /** Per-metric hue for the icon chip and the number. */
+  accent?: Accent;
+  /** Line icon (from IC) shown in a tinted chip on the right. */
+  icon?: LucideIcon;
+  hint?: React.ReactNode;
 }) {
   const hairline = tone === "pos" ? " is-pos" : tone === "neg" ? " is-neg" : "";
+  // An explicit win/loss tone wins over the decorative accent.
+  const valueTone = tone === "pos" ? "pos" : tone === "neg" ? "red" : accent;
   return (
-    <div className={"ap-card ap-lift ap-kpi" + hairline}>
-      <span className="ap-label">{label}</span>
-      <div className="ap-num ap-kpi-val">
-        <span className={tone || ""}>{value}</span>
+    <div className={"ap-card ap-kpi" + hairline}>
+      <div className="ap-kpi-head">
+        <span className="ap-label">
+          {label}
+          {hint && (
+            <span className="ap-tip" tabIndex={0} role="note">
+              <I p={IC.helpCircle} size={12} />
+              <span className="ap-tip-body">{hint}</span>
+            </span>
+          )}
+        </span>
+        {icon && (
+          <span className={"ap-chip-icon" + (accent ? ` is-${accent}` : "")} aria-hidden="true">
+            <I p={icon} size={16} />
+          </span>
+        )}
       </div>
-      {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 6 }}>{sub}</div>}
+      <div className={"ap-num ap-kpi-val " + (valueTone ? `t-${valueTone}` : "")}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 8 }}>{sub}</div>}
     </div>
   );
 }

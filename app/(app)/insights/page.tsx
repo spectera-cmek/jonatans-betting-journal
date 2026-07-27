@@ -53,7 +53,7 @@ export default function InsightsPage() {
 
   return (
     <div>
-      <Topbar title="Insikter" sub="Din form, dina rekord och dina mönster" icon={<I p={IC.spark} />} />
+      <Topbar title="Insikter" sub="Din form, dina rekord och dina mönster" icon={IC.spark} />
 
       {loading && !data && (
         <>
@@ -105,10 +105,10 @@ export default function InsightsPage() {
           {!betsLoading && bets.length > 0 && <EdgePanel bets={bets} unit={unit} />}
 
           <div className="ap-kpi-row">
-            <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} />
-            <StatTile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" />
-            <StatTile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" />
-            <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : undefined} />
+            <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} icon={IC.flame} accent="amber" />
+            <StatTile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" icon={IC.trendUp} />
+            <StatTile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" icon={IC.trendDown} />
+            <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : undefined} icon={IC.layers} accent="purple" />
           </div>
 
           <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
@@ -175,7 +175,7 @@ export default function InsightsPage() {
             </div>
           </Card>
 
-          <SectionHead icon={<I p={IC.gear} />} title="Verktyg" sub="Kelly, tur-index och simulatorn" />
+          <SectionHead icon={IC.gear} title="Verktyg" sub="Kelly, tur-index och simulatorn" />
 
           <KellyCard defaultBankrollUnits={bankrollU} unit={unit} />
 

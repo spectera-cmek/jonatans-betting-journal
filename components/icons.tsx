@@ -1,194 +1,265 @@
-// Aurora line icons.
+// Icon set. UI icons come from lucide-react (the same library the reference
+// design uses); the sport glyphs are hand-drawn in the same 24×24 / stroke-1.8
+// language because lucide has no ball sports.
 
-export function I({ p, size = 17 }: { p: React.ReactNode; size?: number }) {
-  return (
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Award,
+  BookOpen,
+  Calendar,
+  ChartColumn,
+  ChartLine,
+  ChartPie,
+  Check,
+  CircleCheck,
+  CircleDot,
+  CircleHelp,
+  CircleMinus,
+  CircleX,
+  Clock,
+  Coins,
+  Download,
+  Ellipsis,
+  Eye,
+  Filter,
+  Flag,
+  Flame,
+  Gamepad2,
+  HandFist,
+  Layers,
+  LayoutDashboard,
+  LayoutGrid,
+  List,
+  Menu,
+  Minus,
+  Pencil,
+  Percent,
+  Plus,
+  RefreshCw,
+  Scale,
+  Search,
+  Settings,
+  Sparkles,
+  Target,
+  Ticket,
+  TrendingDown,
+  TrendingUp,
+  TriangleAlert,
+  Trash2,
+  Trophy,
+  Upload,
+  User,
+  Wallet,
+  Wrench,
+  X,
+  Zap,
+} from "lucide-react";
+
+/**
+ * Renders an icon at a given pixel size. Every call site passes an entry from
+ * IC (or SPORT_IC) as `p`, so swapping the underlying icon set only ever
+ * touches this file.
+ */
+export function I({ p: Icon, size = 17 }: { p: LucideIcon; size?: number }) {
+  return <Icon size={size} strokeWidth={1.8} absoluteStrokeWidth />;
+}
+
+export const IC = {
+  // navigation
+  dashboard: LayoutDashboard,
+  ticket: Ticket,
+  grid: LayoutGrid,
+  list: List,
+  chart: ChartLine,
+  book: BookOpen,
+  gear: Settings,
+  calendar: Calendar,
+  trophy: Trophy,
+  spark: Sparkles,
+  percent: Percent,
+  wrench: Wrench,
+  menu: Ellipsis,
+  activity: Activity,
+
+  // actions
+  plus: Plus,
+  search: Search,
+  x: X,
+  check: Check,
+  minus: Minus,
+  edit: Pencil,
+  trash: Trash2,
+  refresh: RefreshCw,
+  download: Download,
+  upload: Upload,
+  filter: Filter,
+  eye: Eye,
+  user: User,
+
+  // metrics & status
+  trendUp: TrendingUp,
+  trendDown: TrendingDown,
+  coins: Coins,
+  target: Target,
+  bars: ChartColumn,
+  pie: ChartPie,
+  zap: Zap,
+  flame: Flame,
+  scale: Scale,
+  layers: Layers,
+  wallet: Wallet,
+  award: Award,
+  clock: Clock,
+  alert: TriangleAlert,
+  helpCircle: CircleHelp,
+  checkCircle: CircleCheck,
+  closeCircle: CircleX,
+  minusCircle: CircleMinus,
+  arrowUpDown: ArrowUpDown,
+  arrowUp: ArrowUp,
+  arrowDown: ArrowDown,
+} satisfies Record<string, LucideIcon>;
+
+/**
+ * Wraps hand-drawn SVG children in a lucide-compatible component.
+ *
+ * Reproduces lucide's `absoluteStrokeWidth`: the viewBox is a fixed 24 units, so
+ * a raw stroke-width of 1.8 renders at only 1.05px once the icon is scaled down
+ * to 14px. Scaling it by 24/size keeps the line weight visually identical to the
+ * lucide icons these sit next to.
+ */
+function glyph(children: React.ReactNode): LucideIcon {
+  const Glyph = ({ size = 24, strokeWidth = 1.8, absoluteStrokeWidth, ...rest }: any) => (
     <svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth={absoluteStrokeWidth === false ? strokeWidth : (Number(strokeWidth) * 24) / Number(size)}
       strokeLinecap="round"
       strokeLinejoin="round"
+      {...rest}
     >
-      {p}
+      {children}
     </svg>
   );
+  return Glyph as unknown as LucideIcon;
 }
 
-export const IC = {
-  dashboard: (
-    <>
-      <path d="M4 13a8 8 0 1 1 16 0" />
-      <path d="M12 13l4-4" />
-      <path d="M5 19h14" />
-    </>
-  ),
-  ticket: (
-    <>
-      <path d="M4 5h16v4a3 3 0 0 0 0 6v4H4v-4a3 3 0 0 0 0-6V5z" />
-      <path d="M9 8v8" strokeDasharray="2 2" />
-    </>
-  ),
-  grid: (
-    <>
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
-    </>
-  ),
-  list: (
-    <>
-      <line x1="8" y1="6" x2="21" y2="6" />
-      <line x1="8" y1="12" x2="21" y2="12" />
-      <line x1="8" y1="18" x2="21" y2="18" />
-      <circle cx="3.5" cy="6" r="1.2" />
-      <circle cx="3.5" cy="12" r="1.2" />
-      <circle cx="3.5" cy="18" r="1.2" />
-    </>
-  ),
-  chart: (
-    <>
-      <path d="M4 19V5" />
-      <path d="M4 14l5-4 4 3 7-7" />
-    </>
-  ),
-  book: (
-    <>
-      <path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2V4z" />
-      <path d="M4 16h15" />
-    </>
-  ),
-  gear: (
-    <>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </>
-  ),
-  plus: (
-    <>
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </>
-  ),
-  search: (
-    <>
-      <circle cx="11" cy="11" r="7" />
-      <line x1="21" y1="21" x2="16.5" y2="16.5" />
-    </>
-  ),
-  x: (
-    <>
-      <line x1="6" y1="6" x2="18" y2="18" />
-      <line x1="18" y1="6" x2="6" y2="18" />
-    </>
-  ),
-  check: (
-    <>
-      <path d="M5 12.5l4.2 4.2L19 7" />
-    </>
-  ),
-  closeCircle: (
-    <>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M9 9l6 6M15 9l-6 6" />
-    </>
-  ),
-  minus: (
-    <>
-      <path d="M6 12h12" />
-    </>
-  ),
-  edit: (
-    <>
-      <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-4-4L4 16v4z" />
-      <path d="M13.5 6.5l4 4" />
-    </>
-  ),
-  trash: (
-    <>
-      <path d="M4 7h16" />
-      <path d="M9 7V4h6v3" />
-      <path d="M7 7l1 13h8l1-13" />
-      <path d="M10 11v5M14 11v5" />
-    </>
-  ),
-  alert: (
-    <>
-      <path d="M12 4L3.5 19h17L12 4z" />
-      <path d="M12 9v4" />
-      <circle cx="12" cy="16.5" r=".6" fill="currentColor" stroke="none" />
-    </>
-  ),
-  user: (
-    <>
-      <circle cx="12" cy="8" r="3.5" />
-      <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
-    </>
-  ),
-  menu: (
-    <>
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </>
-  ),
-  refresh: (
-    <>
-      <path d="M21 2v6h-6" />
-      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-      <path d="M3 22v-6h6" />
-      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-    </>
-  ),
-  download: (
-    <>
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </>
-  ),
-  calendar: (
-    <>
-      <rect x="3" y="4" width="18" height="17" rx="2" />
-      <line x1="3" y1="9" x2="21" y2="9" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-    </>
-  ),
-  spark: (
-    <>
-      <path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13l0-8z" />
-    </>
-  ),
-  upload: (
-    <>
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 9 12 4 17 9" />
-      <line x1="12" y1="4" x2="12" y2="16" />
-    </>
-  ),
-  trophy: (
-    <>
-      <path d="M8 21h8" />
-      <path d="M12 17v4" />
-      <path d="M7 4h10v5a5 5 0 0 1-10 0V4z" />
-      <path d="M7 6H4v2a3 3 0 0 0 3 3" />
-      <path d="M17 6h3v2a3 3 0 0 1-3 3" />
-    </>
-  ),
-  percent: (
-    <>
-      <line x1="19" y1="5" x2="5" y2="19" />
-      <circle cx="6.5" cy="6.5" r="2.5" />
-      <circle cx="17.5" cy="17.5" r="2.5" />
-    </>
-  ),
-  wrench: (
-    <>
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </>
-  ),
+/**
+ * Sport glyphs, keyed by the canonical sport names in lib/constants.ts (English)
+ * with the Swedish aliases that also occur in imported rows. Ball sports are
+ * drawn by hand — lucide has none — the rest reuse a lucide icon that reads
+ * unambiguously.
+ */
+const FOOTBALL = glyph(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7.4l3.9 2.85-1.49 4.6H9.59l-1.49-4.6L12 7.4z" />
+    <path d="M12 3v4.4M3.4 9.6l4.7.65M20.6 9.6l-4.7.65M6.5 19.4l3.09-4.55M17.5 19.4l-3.09-4.55" />
+  </>
+);
+const BASKETBALL = glyph(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 3v18M3 12h18" />
+    <path d="M5.6 5.6c2.6 2.1 4.1 4.6 4.1 6.4s-1.5 4.3-4.1 6.4M18.4 5.6c-2.6 2.1-4.1 4.6-4.1 6.4s1.5 4.3 4.1 6.4" />
+  </>
+);
+const TENNIS = glyph(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M5.2 5.8c3.3 2.4 4.8 6.1 3.6 10.4M18.8 5.8c-3.3 2.4-4.8 6.1-3.6 10.4" />
+  </>
+);
+const HOCKEY = glyph(
+  <>
+    <path d="M4.5 3.5v9.5a3 3 0 0 0 3 3h7" />
+    <path d="M14.5 13.6l5 2.4-5 2.4z" />
+    <ellipse cx="8" cy="20" rx="3.4" ry="1.5" />
+  </>
+);
+const BASEBALL = glyph(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M6.4 5.6c1.9 1.8 2.9 4 2.9 6.4s-1 4.6-2.9 6.4M17.6 5.6c-1.9 1.8-2.9 4-2.9 6.4s1 4.6 2.9 6.4" />
+    <path d="M8.1 8.4l1.5.5M8.1 15.6l1.5-.5M15.9 8.4l-1.5.5M15.9 15.6l-1.5-.5" />
+  </>
+);
+const AM_FOOTBALL = glyph(
+  <>
+    <path d="M4.4 19.6c-1.8-4.6-.6-10.8 2.9-14.3S16 1.6 19.6 4.4c1.8 4.6.6 10.8-2.9 14.3S8 22.4 4.4 19.6z" />
+    <path d="M9.2 14.8l5.6-5.6M10.6 12.4l1.5 1.5M12.4 10.6l1.5 1.5" />
+  </>
+);
+const HANDBALL = glyph(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 3c-2 2.6-3 5.6-3 9s1 6.4 3 9M12 3c2 2.6 3 5.6 3 9s-1 6.4-3 9" />
+    <path d="M3.4 9.5c2.7 1 5.6 1.5 8.6 1.5s5.9-.5 8.6-1.5" />
+  </>
+);
+const HORSE = glyph(
+  <>
+    <path d="M5 20.5v-5.2a6.5 6.5 0 0 1 6.5-6.5h1.2l3.4-4 2.9 1.2-1.2 3.9 2.2 2.8-2.9 2.9v4.9" />
+    <path d="M9.4 20.5v-4.3" />
+    <circle cx="17.1" cy="6.4" r=".8" fill="currentColor" stroke="none" />
+  </>
+);
+const CRICKET = glyph(
+  <>
+    <path d="M14.8 3.6l5.6 5.6-8.4 8.4-5.6-5.6z" />
+    <path d="M6.4 12l-2.8 2.8a2 2 0 0 0 0 2.8l2.8 2.8a2 2 0 0 0 2.8 0L12 17.6" />
+    <circle cx="19" cy="18.5" r="2.2" />
+  </>
+);
+
+export const SPORT_IC: Record<string, LucideIcon> = {
+  // canonical (lib/constants.ts)
+  football: FOOTBALL,
+  "american football": AM_FOOTBALL,
+  tennis: TENNIS,
+  basketball: BASKETBALL,
+  "ice hockey": HOCKEY,
+  baseball: BASEBALL,
+  mma: HandFist,
+  boxing: HandFist,
+  esports: Gamepad2,
+  "horse racing": HORSE,
+  golf: Flag,
+  cricket: CRICKET,
+  other: CircleDot,
+  // Swedish aliases seen in imported rows
+  fotboll: FOOTBALL,
+  basket: BASKETBALL,
+  ishockey: HOCKEY,
+  hockey: HOCKEY,
+  baseboll: BASEBALL,
+  handboll: HANDBALL,
+  boxning: HandFist,
+  esport: Gamepad2,
+  trav: HORSE,
+  travsport: HORSE,
+  bordtennis: TENNIS,
+  padel: TENNIS,
+  övrigt: CircleDot,
 };
+
+/** Pick a sport glyph by (loose) name; falls back to a neutral marker. */
+const SPORT_KEYS = Object.keys(SPORT_IC).sort((a, b) => b.length - a.length);
+
+export function sportIcon(sport?: string | null): LucideIcon {
+  if (!sport) return SPORT_IC.other;
+  const key = sport.trim().toLowerCase();
+  for (const k of SPORT_KEYS) {
+    if (key === k || key.startsWith(k)) return SPORT_IC[k];
+  }
+  if (/^(cs|dota|lol|league of legends|valorant|rocket)/.test(key)) return SPORT_IC.esports;
+  if (key.startsWith("ufc")) return SPORT_IC.mma;
+  return SPORT_IC.other;
+}

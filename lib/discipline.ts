@@ -6,6 +6,7 @@
 // Pure & dependency-free (besides the market normalizer) so it is trivially
 // unit-testable and reusable from both the add-bet modal and scripts.
 
+import { isMultiBet } from "./betting";
 import { normalizeMarket } from "./categorize";
 
 export interface DisciplineInput {
@@ -60,7 +61,7 @@ export function evaluateBet(input: DisciplineInput): DisciplineVerdict {
   const isEdgeCategory = category in EDGE_CATEGORIES;
 
   // --- Leaks ---
-  if ((input.betType ?? "").toLowerCase() === "accumulator") {
+  if (isMultiBet(input.betType)) {
     notes.push({ tone: "neg", text: "Ackumulatorer: −14 860 kr historiskt (−8,4 % ROI, 28 % träff)" });
   }
   if (odds != null && odds >= 5) {
