@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { BrandMark } from "@/components/icons";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -38,9 +39,11 @@ export default function LoginPage() {
     <div className="ap-login">
       <form className="ap-login-card" onSubmit={submit}>
         <div className="ap-login-logo">
-          <div className="mark">J</div>
+          <div className="mark">
+            <BrandMark size={26} />
+          </div>
         </div>
-        <h1 className="ap-login-title">Betting Journal</h1>
+        <h1 className="ap-login-title">Betting Översikt</h1>
         <p className="ap-login-sub">Logga in för att fortsätta</p>
 
         <input

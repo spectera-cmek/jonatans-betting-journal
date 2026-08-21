@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { I, IC } from "./icons";
+import { I, IC, BrandMark } from "./icons";
 import type { LucideIcon } from "lucide-react";
 import { GlobalActions } from "./GlobalActions";
 import { useMetrics } from "@/lib/useData";
@@ -40,7 +40,9 @@ function BankrollStrip() {
   const profitKr = (data.metrics?.profitUnits ?? 0) * unit;
   const risk = data.openRisk;
   const openKr = risk ? risk.stakeUnits * unit : 0;
-  const openCount = data.openBets?.length ?? 0;
+  // The count comes from openRisk, not openBets.length: /api/metrics caps that
+  // list at the 25 soonest bets for the dashboard ticker.
+  const openCount = risk?.bets ?? 0;
 
   return (
     <div className="ap-bankroll" title="Realiserat resultat, insats i öppna spel och antal öppna spel">
@@ -81,16 +83,16 @@ export function TopNav({ username }: { username?: string }) {
   return (
     <header className="ap-topnav">
       <div className="ap-topnav-inner">
-        <Link href="/" className="ap-brand" aria-label="Översikt">
+        <Link href="/" className="ap-brand" aria-label="Betting Översikt">
           <span className="mark" aria-hidden="true">
-            <I p={IC.dashboard} size={19} />
+            <BrandMark />
             <span className="pulse">
               <i />
               <b />
             </span>
           </span>
           <span className="name">
-            Betting<em>Journal</em>
+            Betting <em>Översikt</em>
           </span>
         </Link>
         <nav className="ap-nav">
@@ -142,7 +144,7 @@ export function MobileNav() {
           <div className="ap-more-sheet" role="dialog" aria-modal="true" aria-label="Fler sidor" onClick={(e) => e.stopPropagation()}>
             <div className="ap-more-sheet-head">
               <div>
-                <span className="ap-label">Betting Journal</span>
+                <span className="ap-label">Betting Översikt</span>
                 <div className="ap-card-title" style={{ marginTop: 4 }}>Fler sidor</div>
               </div>
               <button className="ap-close" onClick={() => setMoreOpen(false)} aria-label="Stäng meny">

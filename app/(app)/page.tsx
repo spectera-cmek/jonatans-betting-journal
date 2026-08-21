@@ -115,11 +115,11 @@ export default function OverviewPage() {
   const monthProfitU = (data?.byMonth ?? []).find((mo) => mo.month === curYM)?.profitUnits ?? 0;
   const yearProfitU = (data?.byYear ?? []).find((y) => y.key === String(now.getFullYear()))?.profitUnits ?? 0;
 
-  // Per-user header: "Jonatans Betting Journal" for jonatan, etc.
+  // Per-user header: "Jonatans Betting Översikt" for jonatan, etc.
   const username = data?.username;
   const title = username
-    ? `${username[0].toUpperCase() + username.slice(1)}s Betting Journal`
-    : "Betting Journal";
+    ? `${username[0].toUpperCase() + username.slice(1)}s Betting Översikt`
+    : "Betting Översikt";
 
   return (
     <div className="ap-dashboard">
