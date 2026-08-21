@@ -8,6 +8,8 @@ import { settleBet } from "@/lib/settlement";
 import { linkBetToOddsEvent } from "@/lib/eventLink";
 import { tryLinkSingleFootballBet, isFootballBet } from "@/lib/clvCapture";
 import { hasTheStatsApiKey, isStatsApiMatchRef } from "@/lib/theStatsApi";
+import { maybeCaptureKickoffClvForBet } from "@/lib/clvOddsApi";
+import { hasOddsApiKey } from "@/lib/oddsApi";
 import type { Outcome } from "@/lib/betting";
 
 function isStatsLinked(ref: string | null | undefined): boolean {
@@ -106,6 +108,11 @@ export async function POST(req: Request) {
       } else if (!bet.externalRef) {
         await linkBetToOddsEvent(prisma, bet).catch(() => {});
       }
+      bet = (await prisma.bet.findUnique({ where: { id: bet.id } })) ?? bet;
+    }
+    // If kickoff is within ~30 min, snapshot closing odds immediately.
+    if (hasOddsApiKey()) {
+      await maybeCaptureKickoffClvForBet(bet.id).catch(() => null);
       bet = (await prisma.bet.findUnique({ where: { id: bet.id } })) ?? bet;
     }
     if (requestedOutcome !== "pending") {

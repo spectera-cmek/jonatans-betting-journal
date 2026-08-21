@@ -45,6 +45,10 @@
     "db:import": "tsx scripts/importData.ts",
     "icons": "tsx scripts/makeIcons.ts",
     "sync": "tsx scripts/sync.ts",
+    "scrape:clv": "tsx scripts/scrapeClv.ts",
+    "capture:kickoff-clv": "tsx scripts/captureKickoffClv.ts",
+    "watch:kickoff-clv": "tsx scripts/watchKickoffClv.ts",
+    "install:kickoff-clv-task": "powershell -ExecutionPolicy Bypass -File scripts/install-kickoff-clv-task.ps1",
     "import:bet365": "tsx scripts/importBet365.ts",
     "import:unibet": "tsx scripts/importUnibet.ts",
     "recategorize": "tsx scripts/recategorize.ts",
@@ -57,7 +61,8 @@
     "shots:backtest": "tsx scripts/shots/backtest.ts",
     "shots:tune": "tsx scripts/shots/tune.ts",
     "odds:probe": "tsx scripts/odds/probeOddsApi.ts",
-    "odds:ingest": "tsx scripts/odds/ingestOddsApi.ts"
+    "odds:ingest": "tsx scripts/odds/ingestOddsApi.ts",
+    "backfill:clv-scrape": "tsx scripts/scrapeClv.ts --confirm --since-days 90"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

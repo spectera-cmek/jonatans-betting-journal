@@ -79,7 +79,12 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run db:push` | Create / sync the SQLite schema |
 | `npm run db:seed` | Insert demo bets |
 | `npm run db:studio` | Browse the database in Prisma Studio |
-| `npm run sync` | Auto-settle finished bets + fetch closing odds (needs API key) |
+| `npm run sync` | Auto-settle finished bets + near-kickoff CLV (Odds API) |
+| `npm run scrape:clv` | Batch OddsPortal CLV for featured markets (local) |
+| `npm run capture:kickoff-clv` | Odds API near-kickoff closing capture |
+| `npm run watch:kickoff-clv` | Daemon: auto-capture CLV T-30…T+5 |
+| `npm run install:kickoff-clv-task` | Install Windows Task (every 10 min) |
+| `npm run backfill:clv-scrape` | 90d OddsPortal CLV backfill (`--confirm`) |
 | `npm run import:bet365` | Import / sync bets from a bet365 statement PDF |
 | `npm run import:unibet` | Import bets from a Unibet transaction-history CSV |
 
@@ -113,26 +118,44 @@ It matches on each slip's reference, so it never wipes manually-added bets and i
 to re-run. Profit comes from the **actual payout column**, after tax. Statement files
 are git-ignored — they never leave your machine.
 
-### From The Odds API (grading + CLV)
+### From The Odds API (grading + near-kickoff CLV)
 
 1. Get a free key (~500 requests/month) at <https://the-odds-api.com/>.
 2. Copy `.env.local.example` → `.env.local` and set `ODDS_API_KEY=your_key`.
 3. Restart the dev server. Then **Synka** (or `npm run sync`) settles finished H2H /
-   totals / spreads bets and stores closing odds for CLV.
+   totals / spreads bets and captures **near-kickoff** closing odds for linked events.
 
-### Per-bet CLV via OddsPortal (local scrape)
+**Automatic pre-kickoff CLV (recommended):** install a Windows task that runs every
+10 minutes and snapshots featured bets in the **T-30 … T+5** window:
 
-When API keys are missing or failing, use the refresh button next to each bet’s CLV
-cell. It scrapes [OddsPortal](https://www.oddsportal.com/) with Playwright (prefers the
-bet’s own bookmaker, then Pinnacle → bet365).
+```bash
+npm run install:kickoff-clv-task
+# or keep a terminal open:
+npm run watch:kickoff-clv
+```
+
+Needs `ODDS_API_KEY`. Logs land in `.claude/logs/kickoff-clv.log`. New bets placed
+inside the window are captured immediately on create.
+
+### Automatic CLV via OddsPortal (local scrape batch)
+
+Primary free CLV path for featured markets after kickoff (replaces TheStatsAPI when
+you do not have that key):
 
 ```bash
 npm i playwright
 npx playwright install chromium
+
+npm run scrape:clv -- --list                         # candidates only
+npm run scrape:clv -- --confirm --limit 30            # post-kickoff batch
+npm run backfill:clv-scrape -- --limit 50             # 90d backfill (writes DB)
 ```
 
-Requires local Node (`next dev` / `next start`) — not suited for serverless. Scraping
-is best-effort; props/niche markets may need manual closing odds.
+Schedule `npm run scrape:clv -- --confirm` hourly via Task Scheduler. Per-bet refresh
+in the UI still works. Prefers the bet’s bookmaker, then Pinnacle → bet365.
+
+Requires local Node — not suited for serverless. Props/niche markets may need manual
+closing odds.
 
 | Market | Auto-settled? |
 |--------|---------------|
@@ -231,18 +254,19 @@ köra om. Kontoutdrag är git-ignorerade och lämnar aldrig din dator.
 
 1. Skaffa en gratis nyckel på <https://the-odds-api.com/> (~500 anrop/mån).
 2. Kopiera `.env.local.example` → `.env.local` och sätt `ODDS_API_KEY=din_nyckel`.
-3. Starta om. **Synka** (eller `npm run sync`) rättar färdigspelade bets och hämtar
-   stängningsodds.
+3. Starta om. **Synka** (eller `npm run sync`) rättar färdigspelade bets och fångar
+   near-kickoff closing (`npm run capture:kickoff-clv -- --confirm`).
 
-### Per-bet CLV via OddsPortal (lokal scrape)
-
-Om API-nycklar saknas/failar: använd refresh-knappen bredvid CLV-cellen. Scrapar
-OddsPortal med Playwright (betets bookmaker först, sedan Pinnacle → bet365).
+### Automatisk CLV via OddsPortal (lokal batch)
 
 ```bash
-npm i playwright
-npx playwright install chromium
+npm run scrape:clv -- --list
+npm run scrape:clv -- --confirm --limit 30
+npm run backfill:clv-scrape -- --limit 50
 ```
+
+Schemalägg `npm run scrape:clv -- --confirm` varje timme (Task Scheduler). Per-bet
+refresh i UI fungerar fortfarande.
 
 Fungerar lokalt (`next dev`) — inte på serverless. Props/udda marknader kan kräva
 manuell closing.

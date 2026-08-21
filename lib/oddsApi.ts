@@ -115,13 +115,33 @@ export function getSports(): Promise<SportDef[]> {
 
 export function getOdds(
   sportKey: string,
-  opts: { regions?: string; markets?: string } = {}
+  opts: { regions?: string; markets?: string; bookmakers?: string } = {}
 ): Promise<OddsEvent[]> {
-  return get<OddsEvent[]>(`/sports/${sportKey}/odds`, {
+  const params: Record<string, string> = {
     regions: opts.regions ?? "eu,uk",
     markets: opts.markets ?? "h2h",
     oddsFormat: "decimal",
-  });
+  };
+  if (opts.bookmakers) params.bookmakers = opts.bookmakers;
+  return get<OddsEvent[]>(`/sports/${sportKey}/odds`, params);
+}
+
+/**
+ * Odds for one event (markets × regions credits). Prefer this when capturing
+ * closing for a handful of linked bets instead of polling whole sport boards.
+ */
+export function getEventOdds(
+  sportKey: string,
+  eventId: string,
+  opts: { regions?: string; markets?: string; bookmakers?: string } = {}
+): Promise<OddsEvent> {
+  const params: Record<string, string> = {
+    regions: opts.regions ?? "eu",
+    markets: opts.markets ?? "h2h,spreads,totals",
+    oddsFormat: "decimal",
+  };
+  if (opts.bookmakers) params.bookmakers = opts.bookmakers;
+  return get<OddsEvent>(`/sports/${sportKey}/events/${eventId}/odds`, params);
 }
 
 /**
@@ -174,6 +194,17 @@ export function getScores(
   });
 }
 
+function outcomeMatches(
+  o: OddsOutcome,
+  outcomeName: string,
+  point?: number
+): boolean {
+  if (o.name !== outcomeName) return false;
+  if (point == null) return true;
+  if (o.point == null) return false;
+  return Math.abs(o.point - point) < 0.001;
+}
+
 /** Best (max) decimal price for a named outcome across all bookmakers in an event. */
 export function bestPriceFor(
   event: OddsEvent,
@@ -186,13 +217,63 @@ export function bestPriceFor(
     for (const m of bk.markets || []) {
       if (m.key !== marketKey) continue;
       for (const o of m.outcomes || []) {
-        if (o.name !== outcomeName) continue;
-        if (point != null && o.point != null && o.point !== point) continue;
+        if (!outcomeMatches(o, outcomeName, point)) continue;
         if (best == null || o.price > best) best = o.price;
       }
     }
   }
   return best;
+}
+
+const DEFAULT_CLV_BOOKS = ["pinnacle", "bet365", "unibet", "williamhill"];
+
+/**
+ * Prefer sharp/common books for CLV; fall back to best available price.
+ * Returns null when the outcome/line is missing.
+ */
+export function preferredPriceFor(
+  event: OddsEvent,
+  marketKey: string,
+  outcomeName: string,
+  point?: number,
+  preferredBookKeys: string[] = DEFAULT_CLV_BOOKS
+): { price: number; bookmaker: string } | null {
+  const want = new Set(preferredBookKeys.map((k) => k.toLowerCase()));
+
+  for (const key of preferredBookKeys) {
+    const bk = (event.bookmakers || []).find(
+      (b) => b.key.toLowerCase() === key.toLowerCase()
+    );
+    if (!bk) continue;
+    for (const m of bk.markets || []) {
+      if (m.key !== marketKey) continue;
+      for (const o of m.outcomes || []) {
+        if (!outcomeMatches(o, outcomeName, point)) continue;
+        if (o.price > 1) return { price: o.price, bookmaker: bk.key };
+      }
+    }
+  }
+
+  // Any remaining bookmaker (not already preferred) — take best price.
+  let best: { price: number; bookmaker: string } | null = null;
+  for (const bk of event.bookmakers || []) {
+    if (want.has(bk.key.toLowerCase())) continue;
+    for (const m of bk.markets || []) {
+      if (m.key !== marketKey) continue;
+      for (const o of m.outcomes || []) {
+        if (!outcomeMatches(o, outcomeName, point)) continue;
+        if (o.price > 1 && (!best || o.price > best.price)) {
+          best = { price: o.price, bookmaker: bk.key };
+        }
+      }
+    }
+  }
+  if (best) return best;
+
+  // Preferred books missing line — fall back to absolute best across all.
+  const fallback = bestPriceFor(event, marketKey, outcomeName, point);
+  if (fallback == null) return null;
+  return { price: fallback, bookmaker: "best" };
 }
 
 /** Parse a ScoreEvent into numeric home/away scores, or null if unavailable. */

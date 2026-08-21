@@ -21,6 +21,8 @@ import { buildBetData, ValidationError, type BetInput } from "../../lib/betInput
 import { linkBetToOddsEvent } from "../../lib/eventLink";
 import { tryLinkSingleFootballBet, isFootballBet } from "../../lib/clvCapture";
 import { hasTheStatsApiKey, isStatsApiMatchRef } from "../../lib/theStatsApi";
+import { maybeCaptureKickoffClvForBet } from "../../lib/clvOddsApi";
+import { hasOddsApiKey } from "../../lib/oddsApi";
 
 interface AgentBetInput extends BetInput {
   stakeKr?: number;
@@ -85,6 +87,12 @@ async function main() {
         await tryLinkSingleFootballBet(bet.id, prisma).catch(() => {});
       } else if (!bet.externalRef) {
         await linkBetToOddsEvent(prisma, bet).catch(() => {});
+      }
+    }
+    if (hasOddsApiKey()) {
+      const kickoff = await maybeCaptureKickoffClvForBet(bet.id, { prisma }).catch(() => null);
+      if (kickoff && kickoff.closingUpdated > 0) {
+        console.log(`  CLV: kickoff-capture (${kickoff.details.find((d) => d.includes("closing")) ?? "ok"})`);
       }
     }
     const linked = await prisma.bet.findUnique({ where: { id: bet.id } });

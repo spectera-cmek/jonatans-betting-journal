@@ -46,3 +46,11 @@ yarn-error.log*
 
 .vercel
 .env*
+
+.claude/logs/
+
+# Scratch-JSON från screenshot-/loggningssessioner
+_tmp_*
+
+# Handgjorda databasbackuper
+*.db.bak-*

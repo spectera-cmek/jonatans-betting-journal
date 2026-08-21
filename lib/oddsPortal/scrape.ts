@@ -720,3 +720,73 @@ export async function scrapeClosingForBet(input: ScrapeBetInput): Promise<Scrape
     }
   });
 }
+
+export interface BatchScrapeItem {
+  id: string;
+  input: ScrapeBetInput;
+}
+
+export interface BatchScrapeResult {
+  id: string;
+  result: ScrapeClosingResult;
+}
+
+/**
+ * Scrape many bets with one Chromium instance (serialized).
+ * Optional pause between bets to reduce OddsPortal rate pressure.
+ */
+export async function scrapeClosingBatch(
+  items: BatchScrapeItem[],
+  opts?: { pauseMs?: number }
+): Promise<BatchScrapeResult[]> {
+  if (items.length === 0) return [];
+  const pauseMs = opts?.pauseMs ?? 1200;
+
+  return withScrapeLock(async () => {
+    const out: BatchScrapeResult[] = [];
+    let browser: Browser | null = null;
+    try {
+      browser = await launchBrowser();
+      const page = await newPage(browser);
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]!;
+        let result: ScrapeClosingResult;
+        try {
+          const found = await searchMatch(page, item.input);
+          if (!found.ok || !found.url) {
+            result = {
+              ok: false,
+              closingOdds: null,
+              bookmakerUsed: null,
+              matchUrl: null,
+              provisional: false,
+              code: found.code || "match_not_found",
+              detail: found.detail,
+            };
+          } else {
+            result = await fetchClosingFromMatch(page, found.url, item.input);
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          result = {
+            ok: false,
+            closingOdds: null,
+            bookmakerUsed: null,
+            matchUrl: null,
+            provisional: false,
+            code: "browser_error",
+            detail: msg,
+          };
+        }
+        out.push({ id: item.id, result });
+        if (i < items.length - 1 && pauseMs > 0) {
+          await page.waitForTimeout(pauseMs);
+        }
+      }
+    } finally {
+      await browser?.close().catch(() => undefined);
+    }
+    return out;
+  });
+}

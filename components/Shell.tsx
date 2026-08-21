@@ -21,6 +21,7 @@ const SECONDARY_NAV = [
   { href: "/insights", label: "Insikter", icon: IC.spark },
   { href: "/ev", label: "Oddsjämförelse", icon: IC.percent },
   { href: "/skott", label: "Skottmodell", icon: IC.bars },
+  { href: "/odds", label: "Värdescanner", icon: IC.search },
   { href: "/fairodds", label: "Fair odds", icon: IC.percent },
   { href: "/verktyg", label: "Verktyg", icon: IC.wrench },
   { href: "/settings", label: "Inställningar", icon: IC.gear },
@@ -186,6 +187,7 @@ function secondaryDescription(href: string) {
   if (href === "/insights") return "Mönster, form och edge";
   if (href === "/ev") return "Böcker över börsen";
   if (href === "/skott") return "Skott och hörnor";
+  if (href === "/odds") return "Värde mot konsensus";
   if (href === "/fairodds") return "Räkna ut rättvist odds";
   if (href === "/verktyg") return "Hedge, cashout och Kelly";
   return "Konto och konfiguration";
