@@ -1,4 +1,4 @@
-# 🎯 Betting Journal
+# 🎯 Betting Översikt
 
 > A local-first sports betting journal. Log bets in **units**, track **ROI** and
 > **bankroll** over time, and **auto-settle** results from a bet365 account statement
@@ -179,7 +179,7 @@ fun, seek help (in Sweden: [Stödlinjen](https://www.stodlinjen.se/), 020-81 91 
 
 <br>
 
-## 🎯 Betting Journal
+## 🎯 Betting Översikt
 
 En **lokal** betting-journal. Logga bets i **units** med decimalodds, följ **ROI** och
 **bankrulle** över tid, och **auto-rätta** resultat från ett bet365-kontoutdrag eller
