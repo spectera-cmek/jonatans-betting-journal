@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { BrandMark } from "@/components/icons";
 
 // Standalone registration screen (outside the (app) layout group, like /login).
 // Registration is gated by an invite code so strangers can't sign up on the
@@ -45,10 +46,12 @@ export default function RegisterPage() {
     <div className="ap-login">
       <form className="ap-login-card" onSubmit={submit}>
         <div className="ap-login-logo">
-          <div className="mark">J</div>
+          <div className="mark">
+            <BrandMark size={26} />
+          </div>
         </div>
         <h1 className="ap-login-title">Skapa konto</h1>
-        <p className="ap-login-sub">Tracka dina egna bets i journalen</p>
+        <p className="ap-login-sub">Tracka dina egna bets i översikten</p>
 
         <input
           className="ap-input"

@@ -2898,6 +2898,118 @@ select.ap-input {
   margin-bottom: 4px;
 }
 
+/* Fine-print body under an .ap-fine summary — pedagogiken, inte siffrorna. */
+.ap-fine-details {
+  max-width: 68ch;
+}
+
+/* ---------- skottmodellen: edge-screen ---------- */
+.ap-shot-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-3);
+  align-items: end;
+}
+.ap-shot-weight {
+  min-width: 170px;
+}
+.ap-shot-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line2);
+}
+.ap-shot-row:hover {
+  background: var(--hover);
+}
+/* Expanded detail sits inside the table flow, indented under its row. */
+.ap-shot-detail {
+  padding: var(--sp-4) 20px;
+  background: var(--card2);
+  border-bottom: 1px solid var(--line2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.ap-shot-detail-stats,
+.ap-shot-detail-ratings,
+.ap-shot-model-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+/* Inmatning av egna odds — flödande fält, inte ett fast rutnät. */
+.ap-shot-manual {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: end;
+}
+
+/* Varning när en linje saknar riktigt marknadsankare. */
+.ap-shot-warn {
+  max-width: 68ch;
+  padding: 9px 12px;
+  border: 1px solid var(--a-amber-line);
+  background: var(--a-amber-soft);
+  color: var(--a-amber);
+  border-radius: var(--r-ctl);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ap-shot-books {
+  max-width: 420px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+}
+.ap-shot-books-head,
+.ap-shot-books-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 80px;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  align-items: center;
+}
+.ap-shot-books-head {
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
+}
+.ap-shot-books-row + .ap-shot-books-row {
+  border-top: 1px solid var(--line2);
+}
+.ap-shot-models {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.ap-shot-model + .ap-shot-model {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line2);
+}
+.ap-shot-model-stats {
+  margin-top: var(--sp-2);
+}
+/* Inside a mobile card the detail block is already on card ground. */
+.ap-betcard .ap-shot-detail {
+  padding: var(--sp-3) 0 0;
+  background: none;
+  border-bottom: none;
+  border-top: 1px solid var(--line2);
+  margin-top: var(--sp-3);
+}
+.ap-betcard .ap-shot-books {
+  max-width: none;
+}
+
 /* World Cup betting hub */
 .ap-wc-banner {
   margin-bottom: 12px;
@@ -3160,5 +3272,222 @@ select.ap-input {
   }
   .ap-settlement-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Bästa spelbara priset i oddsjämförelsen — den cell man faktiskt ska agera på. */
+.ap-ev-best {
+  color: var(--pos);
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------------
+   Oddsjämförelse — matchkort
+   En match åt gången: marknadskort överst för snabb avläsning, hela rutnätet
+   av spelbolag under när man vill se var alla ligger. Siffror, inte prosa.
+   --------------------------------------------------------------------------- */
+
+.ap-ev-match {
+  padding: 14px 16px 4px;
+}
+
+.ap-ev-match-head {
+  display: grid;
+  grid-template-columns: 92px 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.ap-ev-match-when {
+  color: var(--dim);
+  font-size: 13px;
+}
+.ap-ev-match-teams {
+  font-weight: 650;
+  font-size: 15px;
+  min-width: 0;
+}
+.ap-ev-match-edge {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ap-ev-market {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line2);
+}
+.ap-ev-market:last-of-type {
+  border-bottom: 0;
+}
+.ap-ev-market-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ap-ev-market-name {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+/* Marginalen först i blickfånget vid marknadsnamnet — den säger direkt hur
+   hårt prissatt marknaden är, innan man tittar på enskilda odds. */
+.ap-ev-market-or {
+  font-size: 11px;
+  color: var(--dim2);
+  margin-left: auto;
+}
+
+.ap-ev-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ap-ev-card {
+  flex: 0 0 auto;
+  min-width: 92px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card2);
+  text-align: center;
+}
+/* Bara utfall som faktiskt slår fair markeras — annars tappar markeringen
+   sin betydelse och man börjar ignorera den. */
+.ap-ev-card-pos {
+  border-color: var(--pos);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pos) 30%, transparent);
+}
+.ap-ev-card-sel {
+  font-size: 11px;
+  color: var(--dim);
+  margin-bottom: 2px;
+}
+.ap-ev-card-odds {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.ap-ev-card-book {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ap-ev-card-ev {
+  font-size: 12px;
+  font-weight: 650;
+  margin-top: 3px;
+}
+
+.ap-ev-toggle {
+  width: 100%;
+  padding: 10px 0;
+  margin-top: 4px;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  color: var(--dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.ap-ev-toggle:hover {
+  color: var(--txt);
+}
+.ap-ev-chev {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.ap-ev-chev.open {
+  transform: rotate(180deg);
+}
+
+.ap-ev-expand {
+  padding: 4px 0 14px;
+}
+
+/* Rutnätet kan bli bredare än kortet när matchen har många marknader.
+   Det scrollar i sin egen behållare — sidan i stort får aldrig scrolla i sidled. */
+.ap-ev-grid-wrap {
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+.ap-ev-grid {
+  min-width: 100%;
+  width: max-content;
+  font-size: 13px;
+}
+.ap-ev-grid-head,
+.ap-ev-grid-row {
+  display: grid;
+  gap: 0 8px;
+  align-items: center;
+  padding: 5px 2px;
+}
+.ap-ev-grid-head {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--card);
+}
+.ap-ev-grid-row + .ap-ev-grid-row {
+  border-top: 1px solid var(--line2);
+}
+/* Fair-raden är facit — den ska läsas som en rubrik, inte som en bok. */
+.ap-ev-grid-fair {
+  color: var(--dim);
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+.ap-ev-grid-ref {
+  color: var(--dim);
+}
+/* Tunn linje där en ny marknad börjar, så 1X2 inte flyter ihop med över/under. */
+.ap-ev-colsep {
+  box-shadow: inset 1px 0 0 var(--line);
+  padding-left: 8px;
+}
+
+.ap-ev-market-meta {
+  margin-bottom: 12px;
+}
+.ap-ev-market-meta-name {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 6px;
+}
+
+@media (max-width: 860px) {
+  .ap-ev-match {
+    padding: 12px 12px 4px;
+  }
+  .ap-ev-match-head {
+    grid-template-columns: 1fr auto;
+    row-gap: 2px;
+  }
+  /* Tiden får en egen rad på mobil — lagnamnen behöver bredden mer. */
+  .ap-ev-match-when {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+  .ap-ev-card {
+    flex: 1 1 calc(33.333% - 6px);
+    min-width: 0;
   }
 }

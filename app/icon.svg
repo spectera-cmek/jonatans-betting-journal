@@ -7,8 +7,9 @@
   </defs>
   <rect width="512" height="512" rx="112" fill="#0b0d14"/>
   <rect x="56" y="56" width="400" height="400" rx="96" fill="url(#g)"/>
-  <g stroke="#16102a" stroke-width="58" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M 186 156 H 330"/>
-    <path d="M 300 156 V 300 a 90 90 0 0 1 -180 0"/>
+  <g stroke="#16102a" stroke-width="58" stroke-linecap="round" fill="none">
+    <path d="M 176 340 V 292"/>
+    <path d="M 256 340 V 232"/>
+    <path d="M 336 340 V 172"/>
   </g>
 </svg>

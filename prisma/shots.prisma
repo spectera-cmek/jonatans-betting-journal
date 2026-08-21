@@ -1,0 +1,207 @@
+// Skottmodellen — egen databas, skild från bet-loggen.
+//
+// Referensdata (matcher, odds, modellprojektioner) delas av alla användare och
+// har inget med Bet-tabellen att göra. Egen datasource betyder att en full
+// ominläsning aldrig kan röra speljournalen.
+//
+// Generera:  npm run generate:shots
+// Migrera:   npm run db:push:shots
+generator shotsClient {
+  provider = "prisma-client-js"
+  // Egen output — annars skriver den över huvudschemats klient.
+  output   = "../node_modules/.prisma/shots-client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Namnen matchar vad Neon/Vercel-integrationen skapar med prefixet SHOTS,
+  // så inget behöver läggas till för hand i Vercel.
+  url       = env("SHOTS_DATABASE_URL")
+  directUrl = env("SHOTS_DATABASE_URL_UNPOOLED")
+}
+
+// ---------------------------------------------------------------------------
+// Skottmodellen — referensdata, inte användardata. Ingen userId, ingen relation
+// till Bet: samma matchrad gäller alla användare. Källa: TheStatsAPI.
+//
+// De sex marknaderna normaliseras till (metric, side) i stället för API:ets
+// nycklar, så en linje alltid beskrivs likadant genom hela kedjan:
+//   match_shots            -> metric "shots",   side "match"
+//   team_shots             -> metric "shots",   side "home" | "away"
+//   match_shots_on_target  -> metric "sot",     side "match"
+//   team_shots_on_target   -> metric "sot",     side "home" | "away"
+//   match_corners          -> metric "corners", side "match"
+//   team_corners           -> metric "corners", side "home" | "away"
+// ---------------------------------------------------------------------------
+
+/// En match med lagnivåutfall. Raden skapas när fixturen är känd och fylls på
+/// med statistik när matchen är färdigspelad.
+model ShotMatch {
+  id            String   @id // TheStatsAPI match id, "mt_…"
+  /// Appens liganyckel (allsvenskan | premier-league | laliga). Gör att både
+  /// backtest och /api/shots kan filtrera på liga utan att fråga API:et.
+  leagueKey     String
+  competitionId String // "comp_…"
+  seasonId      String?
+  matchday      Int?
+  kickoffAt     DateTime
+  status        String // scheduled | live | finished | postponed | cancelled
+  homeTeamId    String
+  awayTeamId    String
+  homeTeamName  String
+  awayTeamName  String
+
+  // Observerade utfall — null tills matchen spelats och statistiken hämtats.
+  homeShots      Int?
+  awayShots      Int?
+  homeSot        Int?
+  awaySot        Int?
+  homeCorners    Int?
+  awayCorners    Int?
+  homeXg         Float?
+  awayXg         Float?
+  homePossession Float?
+  awayPossession Float?
+
+  /// Sätts när /stats hämtats. Gör inläsningen resumerbar: rader med värde
+  /// hoppas över och färdigspelade matcher hämtas aldrig om.
+  statsFetchedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  odds         ShotOddsSnapshot[]
+  projections  ShotProjection[]
+  marketPrices MarketPrice[]
+  evSnapshots  EvSnapshot[]
+
+  @@index([leagueKey, kickoffAt])
+  @@index([competitionId, kickoffAt])
+  @@index([leagueKey, status, kickoffAt])
+  @@index([statsFetchedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Oddsjämförelse — huvudmarknaderna (1X2, över/under mål, asiatiskt handikapp)
+//
+// Skild från ShotOddsSnapshot: den normaliserar skott- och hörnmarknader till
+// (metric, side) med en över/under-sida per rad. Huvudmarknaderna har i stället
+// n utfall (1X2 har tre) och bär börsens orderbok, vilket kräver en annan form.
+// ---------------------------------------------------------------------------
+
+/// Ett bookmakerpris på ett utfall. Ögonblicksbild — API:et lämnar `opening`
+/// tomt även här, så bara senast sedda pris finns att lagra.
+model MarketPrice {
+  id      Int       @id @default(autoincrement())
+  matchId String
+  match   ShotMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  bookmaker String // bet365 | paddy-power | betmgm-uk | pinnacle | betfair-exchange
+  market    String // 1x2 | totals | ah
+  outcome   String // home | draw | away | over | under
+  /// Linjen som API:et angav den. Null för 1X2. Teckenkonventionen för
+  /// handikapp skiljer sig mellan böcker och normaliseras i lib/marketOdds.ts —
+  /// här lagras rådatan så den förblir spårbar.
+  line      Float?
+  /// Strängnyckel för unikhetsindexet. Postgres räknar NULL som särskiljande,
+  /// så en nullbar `line` skulle tillåta dubbletter på 1X2 och göra upsert
+  /// omöjlig. "-" betyder linjelös marknad.
+  lineKey   String
+
+  /// Bästa spelbara pris. För börsen: bästa back.
+  odds     Float
+  /// Börsen: bästa lay och tillgängligt belopp. Null för fastodds-böcker —
+  /// och det är den signalen som avgör om mittpunkt går att räkna.
+  layOdds  Float?
+  backSize Float?
+  laySize  Float?
+
+  capturedAt DateTime @default(now())
+
+  @@unique([matchId, bookmaker, market, outcome, lineKey])
+  @@index([matchId, market])
+  @@index([capturedAt])
+}
+
+/// Skärmens egen utpekade edge, sparad när den räknades fram. Utan den går det
+/// inte att i efterhand kontrollera om raderna faktiskt höll.
+model EvSnapshot {
+  id      Int       @id @default(autoincrement())
+  matchId String
+  match   ShotMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  market  String
+  outcome String
+  line    Float?
+  lineKey String
+
+  /// Vilken referens som användes och hur mycket den gick att lita på.
+  refSource  String // exchange | pinnacle
+  refMinSize Float? // börsens tunnaste sida; null för Pinnacle
+  refSpread  Float? // största relativa spread i procent
+
+  fairProb Float
+  fairOdds Float
+  bestBook String?
+  bestOdds Float?
+  /// EV per satsad enhet i procent. 3.2 = +3,2 %.
+  edgePct  Float?
+
+  createdAt DateTime @default(now())
+
+  @@unique([matchId, market, outcome, lineKey, createdAt])
+  @@index([createdAt])
+}
+
+/// Ett bookmakerpris för en (metric, side, line) vid en tidpunkt. Både öppning
+/// och stängning sparas — backtestet behöver stängningen som facit.
+model ShotOddsSnapshot {
+  id         Int       @id @default(autoincrement())
+  matchId    String
+  match      ShotMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  bookmaker  String // bet365 | pinnacle | betfair-exchange | paddy-power | betmgm-uk
+  metric     String // shots | sot | corners
+  side       String // home | away | match
+  line       Float
+  overOdds   Float?
+  underOdds  Float?
+  /// false = opening, true = last_seen. Håll båda: CLV mäts mot stängning.
+  isClosing  Boolean
+  capturedAt DateTime  @default(now())
+
+  @@unique([matchId, bookmaker, metric, side, line, isClosing])
+  @@index([matchId, metric])
+}
+
+/// Modellens egen prissättning, sparad när den räknades fram. Utan den går
+/// modellen inte att kalibrera i efterhand — `actual` fylls i efter matchen.
+model ShotProjection {
+  id      Int       @id @default(autoincrement())
+  matchId String
+  match   ShotMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  metric  String // shots | sot | corners
+  side    String // home | away | match
+  line    Float
+
+  lambda     Float // modellens väntevärde
+  dispersion Float // negativ binomial phi
+  pModel     Float // P(över) ur modellen
+  pMarket    Float? // P(över) ur avviggad skarp marknad, null när den saknas
+  pFinal     Float // blend av de två
+  blendW     Float // modellvikten som användes
+
+  fairOverOdds  Float
+  fairUnderOdds Float
+  bestBook      String? // bookmaker med bäst pris på den sida modellen gillar
+  bestSide      String? // over | under
+  bestOdds      Float?
+  edgePct       Float? // priceEdge(bestOdds, pFinal) * 100
+
+  modelVersion String
+  /// Faktiskt utfall, fylls i efter matchen för kalibrering.
+  actual       Int?
+  createdAt    DateTime @default(now())
+
+  @@unique([matchId, metric, side, line, modelVersion])
+  @@index([matchId])
+  @@index([modelVersion, createdAt])
+}

@@ -29,13 +29,15 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "postinstall": "prisma generate",
+    "build": "npm run generate && next build",
+    "postinstall": "npm run generate",
+    "generate": "prisma generate && prisma generate --schema prisma/shots.prisma",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:push": "prisma db push",
+    "db:push:shots": "prisma db push --schema prisma/shots.prisma",
     "db:migrate-users": "tsx scripts/migrateToMultiUser.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
@@ -49,7 +51,13 @@
     "recategorize:detail": "tsx scripts/recategorizeDetail.ts",
     "backfill:tags": "tsx scripts/backfillBetTags.ts",
     "backfill:vm-refs": "tsx scripts/backfillWorldCupRefs.ts",
-    "backfill:clv": "tsx scripts/backfillClv.ts"
+    "backfill:clv": "tsx scripts/backfillClv.ts",
+    "shots:ingest": "tsx scripts/shots/ingestMatches.ts",
+    "shots:odds": "tsx scripts/shots/ingestOdds.ts",
+    "shots:backtest": "tsx scripts/shots/backtest.ts",
+    "shots:tune": "tsx scripts/shots/tune.ts",
+    "odds:probe": "tsx scripts/odds/probeOddsApi.ts",
+    "odds:ingest": "tsx scripts/odds/ingestOddsApi.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

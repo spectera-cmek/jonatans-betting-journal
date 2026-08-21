@@ -62,7 +62,37 @@ export interface ScoreEvent {
   last_update: string | null;
 }
 
-async function get<T>(path: string, params: Record<string, string>): Promise<T> {
+/**
+ * Kvotläget efter ett anrop, ur svarshuvudena.
+ *
+ * The Odds API tar en kredit per region OCH marknad, så ett anrop med tre
+ * marknader i en region kostar tre. Kvoten är liten nog att det märks, och
+ * `last` är enda sättet att se vad ett anrop faktiskt kostade i stället för
+ * vad man trodde att det skulle kosta.
+ */
+export interface OddsApiQuota {
+  remaining: number | null;
+  used: number | null;
+  last: number | null;
+}
+
+function readQuota(res: Response): OddsApiQuota {
+  const num = (name: string) => {
+    const raw = res.headers.get(name);
+    const n = raw == null ? NaN : Number(raw);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    remaining: num("x-requests-remaining"),
+    used: num("x-requests-used"),
+    last: num("x-requests-last"),
+  };
+}
+
+async function getWithQuota<T>(
+  path: string,
+  params: Record<string, string>
+): Promise<{ data: T; quota: OddsApiQuota }> {
   const url = new URL(BASE + path);
   url.searchParams.set("apiKey", key());
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -72,7 +102,11 @@ async function get<T>(path: string, params: Record<string, string>): Promise<T> 
     const body = await res.text().catch(() => "");
     throw new Error(`Odds API ${res.status}: ${body.slice(0, 200)}`);
   }
-  return (await res.json()) as T;
+  return { data: (await res.json()) as T, quota: readQuota(res) };
+}
+
+async function get<T>(path: string, params: Record<string, string>): Promise<T> {
+  return (await getWithQuota<T>(path, params)).data;
 }
 
 export function getSports(): Promise<SportDef[]> {
@@ -86,6 +120,46 @@ export function getOdds(
   return get<OddsEvent[]>(`/sports/${sportKey}/odds`, {
     regions: opts.regions ?? "eu,uk",
     markets: opts.markets ?? "h2h",
+    oddsFormat: "decimal",
+  });
+}
+
+/**
+ * Som `getOdds`, men rapporterar även kvotläget.
+ *
+ * Oddsjämförelsen hämtar en hel liga per anrop och behöver veta vad varje
+ * körning kostade — utan det syns det inte att kvoten tar slut förrän den gör
+ * det mitt i en inläsning.
+ */
+export function getOddsWithQuota(
+  sportKey: string,
+  opts: { regions?: string; markets?: string } = {}
+): Promise<{ data: OddsEvent[]; quota: OddsApiQuota }> {
+  return getWithQuota<OddsEvent[]>(`/sports/${sportKey}/odds`, {
+    regions: opts.regions ?? "eu",
+    markets: opts.markets ?? "h2h",
+    oddsFormat: "decimal",
+  });
+}
+
+/**
+ * Odds för EN match, med marknader som inte finns på bulk-endpointen.
+ *
+ * `alternate_totals` är skälet den behövs: bulk ger varje bok dess EGEN
+ * huvudlinje, och när Pinnacle ligger på 2,75 medan åtta böcker ligger på 2,5
+ * blir de åtta oanvändbara — det finns ingen referens på deras linje. Med
+ * alternativa linjer får referensen ett pris på varje linje i stället.
+ *
+ * Kostar en kredit per unik marknad OCH region, per match.
+ */
+export function getEventOddsWithQuota(
+  sportKey: string,
+  eventId: string,
+  opts: { regions?: string; markets?: string } = {}
+): Promise<{ data: OddsEvent; quota: OddsApiQuota }> {
+  return getWithQuota<OddsEvent>(`/sports/${sportKey}/events/${eventId}/odds`, {
+    regions: opts.regions ?? "eu",
+    markets: opts.markets ?? "alternate_totals",
     oddsFormat: "decimal",
   });
 }
