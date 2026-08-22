@@ -60,8 +60,6 @@
     "shots:odds": "tsx scripts/shots/ingestOdds.ts",
     "shots:backtest": "tsx scripts/shots/backtest.ts",
     "shots:tune": "tsx scripts/shots/tune.ts",
-    "odds:probe": "tsx scripts/odds/probeOddsApi.ts",
-    "odds:ingest": "tsx scripts/odds/ingestOddsApi.ts",
     "backfill:clv-scrape": "tsx scripts/scrapeClv.ts --confirm --since-days 90"
   },
   "prisma": {

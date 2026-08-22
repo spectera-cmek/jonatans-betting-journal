@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   bookmakerSlugFor,
-  extractOddsApiPrices,
   matchFixture,
   MIN_TEAM_SIMILARITY,
   normalizeTeam,
@@ -9,7 +8,6 @@ import {
   teamSimilarity,
   teamTokens,
   type FixtureCandidate,
-  type RawOddsEvent,
 } from "../lib/oddsApiMap";
 
 // Lagnamnen nedan är de som faktiskt ligger i ShotMatch (hämtade 2026-08-18),
@@ -247,176 +245,5 @@ describe("sportKeyFor", () => {
   it("har inte Europa League — den finns inte hos The Odds API", () => {
     expect(sportKeyFor("europa-league")).toBeNull();
     expect(sportKeyFor("allsvenskan")).toBeNull();
-  });
-});
-
-describe("extractOddsApiPrices", () => {
-  const event = (bookmakers: RawOddsEvent["bookmakers"]): RawOddsEvent => ({
-    id: "evt",
-    commence_time: "2026-08-20T17:00:00Z",
-    home_team: "Trabzonspor",
-    away_team: "Ferencvarosi TC",
-    bookmakers,
-  });
-
-  it("översätter 1X2 med lagnamn till home/draw/away", () => {
-    const { rows } = extractOddsApiPrices(
-      event([
-        {
-          key: "betsson",
-          markets: [
-            {
-              key: "h2h",
-              outcomes: [
-                { name: "Trabzonspor", price: 1.95 },
-                { name: "Ferencvarosi TC", price: 4.2 },
-                { name: "Draw", price: 3.6 },
-              ],
-            },
-          ],
-        },
-      ])
-    );
-    expect(rows).toHaveLength(3);
-    expect(rows.find((r) => r.outcome === "home")).toMatchObject({
-      bookmaker: "betsson", market: "1x2", odds: 1.95, line: null,
-    });
-    expect(rows.find((r) => r.outcome === "draw")?.odds).toBe(3.6);
-    expect(rows.find((r) => r.outcome === "away")?.odds).toBe(4.2);
-  });
-
-  it("slår ihop börsens back och lay till en rad, utan djup", () => {
-    const { rows } = extractOddsApiPrices(
-      event([
-        {
-          key: "betfair_ex_eu",
-          markets: [
-            { key: "h2h", outcomes: [{ name: "Trabzonspor", price: 2.0 }] },
-            { key: "h2h_lay", outcomes: [{ name: "Trabzonspor", price: 2.04 }] },
-          ],
-        },
-      ])
-    );
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      bookmaker: "betfair-exchange", outcome: "home", odds: 2.0, layOdds: 2.04,
-      backSize: null, laySize: null,
-    });
-  });
-
-  it("kastar en rad som bara har lay-sida — den går inte att spela", () => {
-    const { rows } = extractOddsApiPrices(
-      event([
-        {
-          key: "betfair_ex_eu",
-          markets: [{ key: "h2h_lay", outcomes: [{ name: "Trabzonspor", price: 2.04 }] }],
-        },
-      ])
-    );
-    expect(rows).toEqual([]);
-  });
-
-  it("behåller handikappets tecken som boken angav det", () => {
-    const { rows } = extractOddsApiPrices(
-      event([
-        {
-          key: "betsson",
-          markets: [
-            {
-              key: "spreads",
-              outcomes: [
-                { name: "Trabzonspor", price: 1.9, point: -0.5 },
-                { name: "Ferencvarosi TC", price: 1.95, point: 0.5 },
-              ],
-            },
-          ],
-        },
-      ])
-    );
-    expect(rows.find((r) => r.outcome === "home")).toMatchObject({ market: "ah", line: -0.5 });
-    expect(rows.find((r) => r.outcome === "away")).toMatchObject({ market: "ah", line: 0.5 });
-  });
-
-  it("läser över/under med linje", () => {
-    const { rows } = extractOddsApiPrices(
-      event([
-        {
-          key: "unibet_se",
-          markets: [
-            {
-              key: "totals",
-              outcomes: [
-                { name: "Over", price: 1.85, point: 2.5 },
-                { name: "Under", price: 1.95, point: 2.5 },
-              ],
-            },
-          ],
-        },
-      ])
-    );
-    expect(rows).toEqual([
-      expect.objectContaining({ bookmaker: "unibet", market: "totals", outcome: "over", line: 2.5, odds: 1.85 }),
-      expect.objectContaining({ market: "totals", outcome: "under", line: 2.5, odds: 1.95 }),
-    ]);
-  });
-
-  // Regression: alternate_totals är en egen API-nyckel men samma marknad.
-  // outcomeFor jämförde mot rånyckeln, så varje alternativ linje föll igenom
-  // till lagnamnsmatchningen och kastades tyst — referensen fick inga linjer.
-  it("läser alternate_totals som över/under, inte som lagnamn", () => {
-    const { rows } = extractOddsApiPrices(
-      event([
-        {
-          key: "pinnacle",
-          markets: [
-            {
-              key: "alternate_totals",
-              outcomes: [
-                { name: "Over", price: 2.1, point: 2.5 },
-                { name: "Under", price: 1.8, point: 2.5 },
-                { name: "Over", price: 2.5, point: 3 },
-                { name: "Under", price: 1.6, point: 3 },
-              ],
-            },
-          ],
-        },
-      ])
-    );
-    expect(rows).toHaveLength(4);
-    expect(rows.every((r) => r.market === "totals")).toBe(true);
-    expect(rows.map((r) => r.line).sort()).toEqual([2.5, 2.5, 3, 3]);
-    expect(rows.filter((r) => r.outcome === "over")).toHaveLength(2);
-  });
-
-  it("rapporterar okända böcker i stället för att tyst släppa dem", () => {
-    const { rows, unknownBookmakers } = extractOddsApiPrices(
-      event([
-        { key: "somenewbook", markets: [{ key: "h2h", outcomes: [{ name: "Trabzonspor", price: 2 }] }] },
-      ])
-    );
-    expect(rows).toEqual([]);
-    expect(unknownBookmakers).toEqual(["somenewbook"]);
-  });
-
-  it("kastar priser som inte är spelbara odds", () => {
-    const { rows } = extractOddsApiPrices(
-      event([
-        {
-          key: "betsson",
-          markets: [
-            {
-              key: "h2h",
-              outcomes: [
-                { name: "Trabzonspor", price: 1 },
-                { name: "Draw", price: 0 },
-                { name: "Ferencvarosi TC", price: 4.2 },
-              ],
-            },
-          ],
-        },
-      ])
-    );
-    expect(rows).toHaveLength(1);
-    expect(rows[0].outcome).toBe("away");
   });
 });
