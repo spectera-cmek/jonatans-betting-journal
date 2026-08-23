@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./db";
 import { clvPct } from "./betting";
 import { parseHomeAway } from "./eventLink";
+import { recordClosingLine } from "./closingLine";
 import { scrapeClosingForBet } from "./oddsPortal";
 
 export interface ClvScrapeResult {
@@ -101,9 +102,11 @@ export async function fetchClvForBet(
     };
   }
 
-  await prisma.bet.update({
-    where: { id: bet.id },
-    data: { closingOdds: scraped.closingOdds },
+  await recordClosingLine(prisma, {
+    betId: bet.id,
+    source: "oddsportal",
+    bookmaker: scraped.bookmakerUsed,
+    rawOdds: scraped.closingOdds,
   });
 
   const pct = clvPct(bet.odds, scraped.closingOdds);

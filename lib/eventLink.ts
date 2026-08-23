@@ -4,7 +4,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { splitTeams } from "./categorize";
 import { VM_2026_LEAGUE } from "./betTaxonomy";
-import { getOdds, hasOddsApiKey, type OddsEvent } from "./oddsApi";
+import { getEvents, hasOddsApiKey, type EventStub } from "./oddsApi";
 
 /** sport|league (lowercase) → The Odds API sport_key */
 const LEAGUE_KEYS: Record<string, string> = {
@@ -118,6 +118,14 @@ export function parseHomeAway(event: string): { home: string; away: string } | n
   return null;
 }
 
+/** The only fields event matching ever reads. */
+export interface MatchableEvent {
+  id: string;
+  commence_time: string;
+  home_team: string;
+  away_team: string;
+}
+
 export interface LinkableBet {
   id: string;
   event: string;
@@ -130,11 +138,16 @@ export interface LinkableBet {
   externalRef?: string | null;
 }
 
-/** Find the single best Odds API event for a bet, or null if ambiguous/unmatched. */
-export function matchOddsEvent(
+/**
+ * Find the single best Odds API event for a bet, or null if ambiguous/unmatched.
+ *
+ * Only ever reads id, team names and kickoff, so it works just as well on the
+ * price-free fixtures from the (free) /events endpoint as on a full odds row.
+ */
+export function matchOddsEvent<T extends MatchableEvent>(
   bet: Pick<LinkableBet, "homeTeam" | "awayTeam" | "eventAt" | "event">,
-  events: OddsEvent[]
-): OddsEvent | null {
+  events: T[]
+): T | null {
   let home = bet.homeTeam?.trim() || "";
   let away = bet.awayTeam?.trim() || "";
   if (!home || !away) {
@@ -189,11 +202,17 @@ export interface LinkResult {
   eventAt?: Date;
 }
 
-/** Try to link one bet to an Odds API event. Updates the row on success. */
+/**
+ * Try to link one bet to an Odds API event. Updates the row on success.
+ *
+ * Uses the /events endpoint, which is FREE. The old path called /odds purely to
+ * get the fixture list and threw every price away — a credit per region per
+ * market, on every unlinked bet, for nothing.
+ */
 export async function linkBetToOddsEvent(
   prisma: PrismaClient,
   bet: LinkableBet,
-  eventsCache?: Map<string, OddsEvent[]>
+  eventsCache?: Map<string, EventStub[]>
 ): Promise<LinkResult> {
   if (!hasOddsApiKey()) return { linked: false };
   if (bet.externalRef && bet.sportKey) return { linked: false };
@@ -204,7 +223,7 @@ export async function linkBetToOddsEvent(
   let events = eventsCache?.get(sportKey);
   if (!events) {
     try {
-      events = await getOdds(sportKey, { markets: "h2h" });
+      events = await getEvents(sportKey);
       eventsCache?.set(sportKey, events);
     } catch {
       return { linked: false };

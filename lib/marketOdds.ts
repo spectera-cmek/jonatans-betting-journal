@@ -180,16 +180,18 @@ export function isLiquid(mid: ExchangeMid, opts: LiquidityOptions = {}): boolean
 // Marknadsreferens
 // ---------------------------------------------------------------------------
 
-export type ReferenceSource = "exchange" | "pinnacle";
+export type ReferenceSource = "exchange" | "pinnacle" | "consensus";
 
 export interface MarketReference {
   source: ReferenceSource;
   /** Fair sannolikhet per utfall. Summerar till 1. */
   probs: Map<OddsOutcome, number>;
-  /** Börsen: sämsta (minsta) djup bland utfallen. Pinnacle: null. */
+  /** Börsen: sämsta (minsta) djup bland utfallen. Pinnacle/konsensus: null. */
   minSize: number | null;
   /** Börsen: största spread bland utfallen. Pinnacle: marknadens overround. */
   spreadPct: number | null;
+  /** Konsensus: antal böcker medianen räknades på. Null för de andra källorna. */
+  bookCount?: number;
   /** Overround före normalisering — hur långt från 1 rådatan låg. */
   overround: number;
   /**
@@ -299,18 +301,130 @@ export function pinnacleReference(book: BookMarket, expected: OddsOutcome[]): Ma
   return { source: "pinnacle", probs, minSize: null, spreadPct: null, overround, disagreement: null };
 }
 
+/** Median av en icke-tom talserie. */
+function median(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
+}
+
 /**
- * Marknadens fair pris: börsen först, Pinnacle som reserv.
+ * Minsta antal böcker en konsensusreferens får bygga på.
+ *
+ * Två böcker har ingen median värd namnet — de ger bara ett medelvärde av två
+ * priser som mycket väl kan komma från samma oddsleverantör. Tre är golvet där
+ * en avvikande bok kan röstas ner i stället för att flytta referensen.
+ */
+export const DEFAULT_MIN_CONSENSUS_BOOKS = 3;
+
+/**
+ * Referens ur mängden böcker: avvigga var och en för sig, ta MEDIANEN per
+ * utfall, normalisera.
+ *
+ * Sista utvägen, för marknader där varken börsen eller Pinnacle noterar ett
+ * pris — mindre ligor och de flesta sporter utanför fotboll. Sämre än en skarp
+ * källa, och märkt som sådan via `source: "consensus"`, men skillnaden mot
+ * alternativet är inte marginell: alternativet är att inte kunna räkna CLV alls.
+ *
+ * Median och inte medelvärde, eftersom en enda inaktuell bok annars drar hela
+ * referensen med sig. Varje bok avviggas FÖRST och vägs samman efteråt — att
+ * medelvärda vigade priser blandar in böckernas olika marginaler i talet.
+ * Samma metod som `scanValuePlays` i lib/valueScanner.ts.
+ */
+export function consensusReference(
+  books: BookMarket[],
+  expected: OddsOutcome[],
+  minBooks: number = DEFAULT_MIN_CONSENSUS_BOOKS
+): MarketReference | null {
+  const perOutcome = new Map<OddsOutcome, number[]>();
+  for (const outcome of expected) perOutcome.set(outcome, []);
+
+  let used = 0;
+  let overroundSum = 0;
+
+  for (const book of books) {
+    // Börser hör inte hemma i en fastodds-konsensus: deras back-pris är ett
+    // orderbokspris utan marginal, så det skulle dras in i medianen på helt
+    // andra villkor än böckernas.
+    if (EXCHANGE_BOOKS.has(book.bookmaker)) continue;
+
+    const odds: number[] = [];
+    for (const outcome of expected) {
+      const price = book.outcomes.find((o) => o.outcome === outcome);
+      if (!price || !validOdds(price.odds)) break;
+      odds.push(price.odds);
+    }
+    // Bara böcker som noterar HELA marknaden — en halv marknad går inte att
+    // avvigga, och att fylla ut den med en annan boks pris vore påhitt.
+    if (odds.length !== expected.length) continue;
+
+    let ok = true;
+    for (let i = 0; i < expected.length; i++) {
+      const d = devigProportional(
+        odds[i],
+        odds.filter((_, j) => j !== i)
+      );
+      if (!d) {
+        ok = false;
+        break;
+      }
+      perOutcome.get(expected[i])!.push(d.p);
+      if (i === 0) overroundSum += d.overround;
+    }
+    if (ok) used += 1;
+  }
+
+  if (used < minBooks) return null;
+
+  const raw = new Map<OddsOutcome, number>();
+  for (const outcome of expected) {
+    const ps = perOutcome.get(outcome)!;
+    if (ps.length !== used) return null;
+    raw.set(outcome, median(ps));
+  }
+
+  const { probs, sum } = normalize(raw);
+  if (probs.size !== expected.length) return null;
+
+  return {
+    source: "consensus",
+    probs,
+    minSize: null,
+    spreadPct: null,
+    // Medianen av avviggade sannolikheter summerar sällan exakt till 1; det som
+    // normaliseras bort rapporteras som overround, precis som för börsen.
+    overround: sum - 1,
+    disagreement: null,
+    bookCount: used,
+  };
+}
+
+/**
+ * Marknadens fair pris: börsen först, Pinnacle som reserv, konsensus sist.
  *
  * Ordningen är inte godtycklig. Börsen är riktiga pengar utan marginal och
  * därmed det skarpaste priset som finns — men bara när den är likvid. Faller
  * likviditetsgrinden är avviggad Pinnacle nästa bästa, och för asiatiskt
- * handikapp i praktiken den enda användbara.
+ * handikapp i praktiken den enda användbara. Saknas båda — vanligt utanför de
+ * stora fotbollsligorna — återstår medianen över böckerna, som är sämre men
+ * ärligt märkt.
  */
 export function marketReference(
   books: BookMarket[],
   expected: OddsOutcome[],
-  opts: LiquidityOptions = {}
+  opts: LiquidityOptions & {
+    /**
+     * Släpp fram medianen över böckerna när ingen skarp källa finns.
+     *
+     * Avstängt som standard, och det är avsiktligt: EV-skärmen bygger på att
+     * referensen ÄR skarp — en konsensus av samma mjuka böcker man shoppar mot
+     * är delvis cirkulär och skulle tyst börja peka ut edges som inte finns.
+     * CLV-mätningen har inte det problemet (den jämför ett redan taget pris mot
+     * marknaden i efterhand) och slår därför på den.
+     */
+    allowConsensus?: boolean;
+    minConsensusBooks?: number;
+  } = {}
 ): MarketReference | null {
   const exchangeBook = books.find((b) => b.bookmaker === EXCHANGE_BOOK);
   const pinnacleBook = books.find((b) => b.bookmaker === PINNACLE_BOOK);
@@ -333,10 +447,23 @@ export function marketReference(
     : null;
   const pinnacle = pinnacleBook ? pinnacleReference(pinnacleBook, expected) : null;
 
-  const chosen = exchange ?? pinnacle;
+  const consensus =
+    exchange || pinnacle || !opts.allowConsensus
+      ? null
+      : consensusReference(books, expected, opts.minConsensusBooks);
+
+  const chosen = exchange ?? pinnacle ?? consensus;
   if (!chosen) return null;
 
-  const other = chosen.source === "exchange" ? pinnacle : exchangeLoose;
+  // Oense-kontrollen jämför alltid mot den andra SKARPA källan. Konsensus är
+  // inte en sådan: den räknas bara fram när ingen av dem finns, och har då
+  // inget att jämföras mot.
+  const other =
+    chosen.source === "exchange"
+      ? pinnacle
+      : chosen.source === "pinnacle"
+        ? exchangeLoose
+        : null;
   const disagreement = other ? maxRelativeDiff(chosen.probs, other.probs) : null;
   return { ...chosen, disagreement };
 }

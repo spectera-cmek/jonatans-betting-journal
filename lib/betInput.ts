@@ -158,7 +158,23 @@ export function buildBetData(
   }
 
   if (input.line !== undefined) data.line = num(input.line);
-  if (input.closingOdds !== undefined) data.closingOdds = num(input.closingOdds);
+  if (input.closingOdds !== undefined) {
+    const closing = num(input.closingOdds);
+    data.closingOdds = closing;
+    // A hand-typed closing price is a decision, not an observation: mark it as
+    // such so the capture jobs neither overwrite it nor keep spending credits
+    // trying to find one. Clearing the field hands the bet back to automation.
+    if (closing == null) {
+      data.closingSource = null;
+      data.closingBookmaker = null;
+      data.closingCapturedAt = null;
+      data.clvFinal = false;
+    } else {
+      data.closingSource = "manual";
+      data.closingCapturedAt = new Date();
+      data.clvFinal = true;
+    }
+  }
   if (input.sportKey !== undefined) data.sportKey = str(input.sportKey);
   if (input.sport !== undefined) data.sport = str(input.sport);
   if (input.league !== undefined) data.league = normalizeLeague(str(input.league));

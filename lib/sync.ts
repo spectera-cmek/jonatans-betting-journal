@@ -7,7 +7,7 @@ import { espnPath, fetchFinalScore } from "./scores";
 import { settleBet } from "./settlement";
 import {
   getScores,
-  getOdds,
+  getEvents,
   parseScores,
   hasOddsApiKey,
   type ScoreEvent,
@@ -20,6 +20,7 @@ import {
   isStatsApiMatchRef,
 } from "./clvCapture";
 import { captureClosingNearKickoff } from "./clvOddsApi";
+import { captureHistoricalClosing } from "./clvHistorical";
 import { captureClosingFromOddsPortal } from "./clvOddsPortalBatch";
 
 export interface SyncResult {
@@ -119,7 +120,7 @@ export async function runLinkEvents(): Promise<SyncResult> {
     };
   }
 
-  const cache = new Map<string, Awaited<ReturnType<typeof getOdds>>>();
+  const cache = new Map<string, Awaited<ReturnType<typeof getEvents>>>();
   let linked = 0;
   for (const bet of candidates) {
     const result = await linkBetToOddsEvent(prisma, bet, cache);
@@ -467,6 +468,56 @@ export async function runClosingFromOddsPortal(
 }
 
 /**
+ * The real closing line from The Odds API's /historical snapshots.
+ *
+ * Paid plans only. This is the source that settles a bet's CLV — everything
+ * else is a stand-in until it runs.
+ */
+export async function runClosingHistorical(
+  opts: { limit?: number; maxCredits?: number; dryRun?: boolean } = {}
+): Promise<SyncResult> {
+  if (!hasOddsApiKey()) {
+    return {
+      ok: false,
+      message: "No ODDS_API_KEY set — cannot fetch historical closing lines.",
+      linked: 0,
+      graded: 0,
+      closingUpdated: 0,
+      details: [],
+    };
+  }
+
+  const result = await captureHistoricalClosing({
+    limit: opts.limit ?? SYNC_CLOSING_LIMIT,
+    sinceDays: CLV_WINDOW_DAYS,
+    maxCredits: opts.maxCredits,
+    dryRun: opts.dryRun,
+  });
+
+  if (result.closingUpdated > 0 && !opts.dryRun) {
+    await prisma.syncLog.create({
+      data: {
+        kind: "closing",
+        summary:
+          `Historical closing for ${result.closingUpdated} bet(s) ` +
+          `across ${result.events} event(s), ${result.creditsSpent} credits.`,
+      },
+    });
+  }
+
+  return {
+    ok: true,
+    message:
+      `Historik: ${result.closingUpdated} stängning på ${result.events} event ` +
+      `(${result.creditsSpent} krediter).` + (result.stoppedEarly ? ` ${result.stoppedEarly}` : ""),
+    linked: 0,
+    graded: 0,
+    closingUpdated: result.closingUpdated,
+    details: result.details,
+  };
+}
+
+/**
  * Link football bets then capture historical closing odds (batched for serverless).
  * Falls back to Odds API near-kickoff capture when TheStatsAPI is unavailable.
  */
@@ -517,14 +568,28 @@ export async function runFullSync(): Promise<SyncResult> {
     ? await runLinkStatsApiEvents({ limit: SYNC_LINK_LIMIT })
     : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
 
-  const closingStats = hasTheStatsApiKey()
-    ? await runClosingFromStatsApi({ limit: SYNC_CLOSING_LIMIT })
-    : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
+  const idle = { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
 
+  // The true close comes first: it is the only source that marks a bet's CLV
+  // final, and every path below is a stand-in for it. Running it first also
+  // means the fallbacks skip whatever it already settled.
+  const closingHistorical =
+    hasOddsApiKey() && Date.now() < deadline
+      ? await runClosingHistorical({ limit: SYNC_CLOSING_LIMIT })
+      : idle;
+
+  const closingStats =
+    hasTheStatsApiKey() && Date.now() < deadline
+      ? await runClosingFromStatsApi({ limit: SYNC_CLOSING_LIMIT })
+      : idle;
+
+  // Near-kickoff prices are line movement now, not the close — worth taking on
+  // every run, since the window is short and missing it loses the movement for
+  // good. The historical pass still sets the real closing line afterwards.
   const closingKickoff =
-    hasOddsApiKey() && Date.now() < deadline && (!hasTheStatsApiKey() || closingStats.closingUpdated === 0)
+    hasOddsApiKey() && Date.now() < deadline
       ? await runClosingNearKickoff({ limit: SYNC_CLOSING_LIMIT })
-      : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
+      : idle;
 
   const scores =
     Date.now() < deadline
@@ -539,14 +604,17 @@ export async function runFullSync(): Promise<SyncResult> {
         };
 
   const linked = linkStats.linked + closingKickoff.linked;
-  const closingUpdated = closingStats.closingUpdated + closingKickoff.closingUpdated;
+  const closingUpdated =
+    closingHistorical.closingUpdated + closingStats.closingUpdated + closingKickoff.closingUpdated;
   const details = [
     ...linkStats.details,
+    ...closingHistorical.details,
     ...closingStats.details,
     ...closingKickoff.details,
     ...scores.details,
   ];
-  const ok = linkStats.ok || closingStats.ok || closingKickoff.ok || scores.ok;
+  const ok =
+    linkStats.ok || closingHistorical.ok || closingStats.ok || closingKickoff.ok || scores.ok;
   const parts = [
     linked ? `${linked} länkade` : null,
     closingUpdated ? `${closingUpdated} closing` : null,
@@ -555,6 +623,7 @@ export async function runFullSync(): Promise<SyncResult> {
 
   const batched =
     linkStats.linked >= SYNC_LINK_LIMIT ||
+    closingHistorical.closingUpdated >= SYNC_CLOSING_LIMIT ||
     closingStats.closingUpdated >= SYNC_CLOSING_LIMIT ||
     closingKickoff.closingUpdated >= SYNC_CLOSING_LIMIT ||
     scores.graded >= SYNC_GRADE_LIMIT;

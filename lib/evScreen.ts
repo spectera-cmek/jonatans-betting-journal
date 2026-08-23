@@ -15,6 +15,7 @@ import {
   type OddsMarket,
   type OddsOutcome,
   type OutcomePrice,
+  type ReferenceSource,
 } from "./marketOdds";
 import { EV_LEAGUE_REGISTRY } from "./oddsApiMap";
 
@@ -58,7 +59,7 @@ export interface EvRow {
   edge: number;
 
   /** Vilken referens som användes och hur mycket den gick att lita på. */
-  refSource: "exchange" | "pinnacle";
+  refSource: ReferenceSource;
   refMinSize: number | null;
   refSpreadPct: number | null;
   refOverround: number;
@@ -115,7 +116,7 @@ export interface EvMatchMarket {
    * fullständig kombination att räkna på.
    */
   bestPayout: number | null;
-  refSource: "exchange" | "pinnacle";
+  refSource: ReferenceSource;
   refMinSize: number | null;
   refSpreadPct: number | null;
   refDisagreement: number | null;

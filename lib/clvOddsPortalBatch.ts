@@ -5,6 +5,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./db";
 import { clvPct } from "./betting";
 import { parseHomeAway } from "./eventLink";
+import { recordClosingLine } from "./closingLine";
 import {
   scrapeClosingBatch,
   type ScrapeBetInput,
@@ -242,9 +243,11 @@ export async function captureClosingFromOddsPortal(
     }
 
     if (!dryRun) {
-      await prisma.bet.update({
-        where: { id: bet.id },
-        data: { closingOdds: row.result.closingOdds },
+      await recordClosingLine(prisma, {
+        betId: bet.id,
+        source: "oddsportal",
+        bookmaker: row.result.bookmakerUsed ?? null,
+        rawOdds: row.result.closingOdds,
       });
     }
     updated += 1;

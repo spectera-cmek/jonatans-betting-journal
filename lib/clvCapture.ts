@@ -4,6 +4,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./db";
 import { parseHomeAway } from "./eventLink";
+import { recordClosingLine } from "./closingLine";
 import { teamNamesMatch } from "./worldCup";
 import {
   getMatchOdds,
@@ -658,9 +659,11 @@ export async function captureClosingOdds(
     if (!closing) continue;
 
     if (!options.dryRun) {
-      await db.bet.update({
-        where: { id: bet.id },
-        data: { closingOdds: closing },
+      await recordClosingLine(db, {
+        betId: bet.id,
+        source: "thestatsapi",
+        bookmaker: bet.bookmaker,
+        rawOdds: closing,
       });
     }
     closingUpdated += 1;

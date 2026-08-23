@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   runGrade,
   runClosing,
+  runClosingHistorical,
   runFullSync,
   runGradeByScores,
   runLinkEvents,
@@ -13,9 +14,10 @@ export const dynamic = "force-dynamic";
 // Linking + odds fetch can take a while on larger journals.
 export const maxDuration = 60;
 
-// POST /api/sync?kind=grade|closing|all|scores|link|odds-closing
+// POST /api/sync?kind=grade|closing|all|scores|link|odds-closing|historical-closing
 // "scores" uses the free, keyless ESPN scoreboard lookup (no Odds API needed).
-// "odds-closing" captures near-kickoff CLV via The Odds API.
+// "odds-closing" captures near-kickoff line movement via The Odds API.
+// "historical-closing" pulls the REAL closing line from /historical (paid plan).
 // OddsPortal scrape is CLI-only (`npm run scrape:clv`) — not available here.
 // Sync is deliberately global: it grades pending bets for ALL users against
 // objective final scores, regardless of who triggers it.
@@ -33,6 +35,8 @@ export async function POST(req: Request) {
           ? await runGrade()
           : kind === "odds-closing"
             ? await runClosingNearKickoff()
+          : kind === "historical-closing"
+            ? await runClosingHistorical()
           : kind === "closing"
             ? await runClosing()
             : await runFullSync();

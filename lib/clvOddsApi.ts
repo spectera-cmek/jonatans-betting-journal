@@ -1,5 +1,17 @@
-// Near-kickoff CLV capture via The Odds API (live odds ≈ closing).
-// Free-tier friendly: fetch per linked event with regions=eu and only needed markets.
+// Near-kickoff price capture via The Odds API.
+//
+// This used to BE the closing line. It no longer is: lib/clvHistorical.ts pulls
+// the real post-kickoff snapshot, and what this file collects is the market on
+// its way there — how the price moved between the bet and the off.
+//
+// Two consequences run through the code below:
+//   - Candidates are picked on `clvFinal`, not on `closingOdds == null`, so a
+//     live price can still be upgraded to the true close afterwards.
+//   - Each capture appends a ClosingLine row (source "odds_api_live") instead of
+//     writing once and locking the bet. `closingOdds` still gets the latest
+//     value so the UI has something to show before the match finishes.
+//
+// Fetches per linked event with regions=eu and only the markets actually needed.
 
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./db";
@@ -12,6 +24,7 @@ import {
 } from "./oddsApi";
 import { linkBetToOddsEvent, parseHomeAway, teamNameMatches } from "./eventLink";
 import { isStatsApiMatchRef } from "./theStatsApi";
+import { recordClosingLine } from "./closingLine";
 
 const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
 
@@ -26,8 +39,19 @@ export interface OddsApiKickoffClvOptions {
   bookmakers?: string;
   /** Only these bet ids (optional). */
   betIds?: string[];
+  /**
+   * Don't re-snapshot a bet that already got one this recently.
+   *
+   * The watcher ticks every ~10 minutes across a 35-minute window, so without
+   * this the same bet is priced on every tick. At 10 minutes the window yields
+   * about three points — enough to see the line move, bounded in credits.
+   */
+  minRecaptureMinutes?: number;
   prisma?: PrismaClient;
 }
+
+/** Source tag for prices taken before the event finished. */
+export const CLOSING_SOURCE_LIVE = "odds_api_live";
 
 export interface OddsApiKickoffClvResult {
   linked: number;
@@ -153,18 +177,28 @@ export async function captureClosingNearKickoff(
   const afterMinutes = opts.afterMinutes ?? 5;
   const limit = opts.limit ?? 40;
   const dryRun = !!opts.dryRun;
+  const minRecaptureMinutes = opts.minRecaptureMinutes ?? 10;
   const now = Date.now();
   const windowStart = new Date(now - afterMinutes * 60 * 1000);
   const windowEnd = new Date(now + beforeMinutes * 60 * 1000);
+  const recaptureCutoff = new Date(now - minRecaptureMinutes * 60 * 1000);
 
   const candidates = await prisma.bet.findMany({
     where: {
       betType: "single",
       eventKind: "match",
       market: { in: [...FEATURED_MARKETS] },
-      closingOdds: null,
+      // Not `closingOdds: null` any more — a live price is provisional, and the
+      // historical pass must still be able to replace it with the real close.
+      clvFinal: false,
       eventAt: { gte: windowStart, lte: windowEnd },
       OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
+      // Skip anything already snapshotted within the recapture interval.
+      NOT: {
+        closingLines: {
+          some: { source: CLOSING_SOURCE_LIVE, capturedAt: { gt: recaptureCutoff } },
+        },
+      },
       ...(opts.betIds?.length ? { id: { in: opts.betIds } } : {}),
     },
     orderBy: { eventAt: "asc" },
@@ -291,9 +325,15 @@ export async function captureClosingNearKickoff(
       );
 
       if (!dryRun) {
-        await prisma.bet.update({
-          where: { id: bet.id },
-          data: { closingOdds: picked.price },
+        // No fair price here on purpose: a de-vigged line is only worth storing
+        // once it IS the close. lib/clvHistorical.ts computes that one.
+        // recordClosingLine leaves clvFinal false for a live price, so the
+        // historical pass can still replace it.
+        await recordClosingLine(prisma, {
+          betId: bet.id,
+          source: CLOSING_SOURCE_LIVE,
+          bookmaker: picked.bookmaker,
+          rawOdds: picked.price,
         });
       }
       closingUpdated += 1;
@@ -334,7 +374,7 @@ export async function nextFeaturedKickoffNeedingClv(
       betType: "single",
       eventKind: "match",
       market: { in: [...FEATURED_MARKETS] },
-      closingOdds: null,
+      clvFinal: false,
       eventAt: { gt: now, lte: horizon },
       OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
     },
@@ -366,12 +406,12 @@ export async function maybeCaptureKickoffClvForBet(
       marketScope: true,
       betType: true,
       eventKind: true,
-      closingOdds: true,
+      clvFinal: true,
       eventAt: true,
     },
   });
   if (!bet) return null;
-  if (bet.closingOdds != null) return null;
+  if (bet.clvFinal) return null;
   if (bet.betType !== "single" || bet.eventKind !== "match") return null;
   if (!FEATURED_MARKETS.includes(bet.market as (typeof FEATURED_MARKETS)[number])) {
     return null;

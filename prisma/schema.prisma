@@ -21,43 +21,63 @@ model User {
 }
 
 model Bet {
-  id              String          @id @default(cuid())
-  userId          String
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  placedAt        DateTime        @default(now())
-  eventAt         DateTime?
-  sportKey        String? // The Odds API key, e.g. "soccer_epl"
-  sport           String? // display name
-  league          String?
-  event           String // "Team A vs Team B"
-  homeTeam        String?
-  awayTeam        String?
-  market          String          @default("h2h") // h2h | totals | spreads | other (avräkningstyp -> grading)
-  marketCategory  String? // semantisk marknad, t.ex. "Skott på mål", "Returer", "Hörnor"
-  marketScope     String? // player | team | match (vem/vad spelet avser)
-  eventKind       String          @default("match") // match | outright
-  tournamentStage String? // group | round_of_32 | round_of_16 | quarterfinal | semifinal | third_place | final
-  selection       String // label, e.g. "Team A", "Over 2.5"
-  selectionSide   String? // home | away | draw | over | under (structured -> grading)
-  line            Float? // for totals/spreads
-  betType         String          @default("single") // single | accumulator
-  odds            Float // decimal odds you took
-  closingOdds     Float? // for CLV
-  stakeUnits      Float // e.g. 1.0, 2.5
-  outcome         String          @default("pending") // pending|win|loss|push|half_win|half_loss|void
-  profitUnits     Float? // computed at settlement
-  externalRef     String? // The Odds API event id (for auto-grading)
-  resultProvider  String? // score provider, e.g. "espn"
-  resultEventRef  String? // provider event id, separate from The Odds API externalRef
-  importRef       String? // Bet365 betslip reference — stable key for incremental re-import
-  legs            String? // JSON-encoded accumulator legs
-  bookmaker       String?
-  tipster         String?
-  notes           String?
-  gradedAt        DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  settlements     BetSettlement[]
+  id                 String          @id @default(cuid())
+  userId             String
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placedAt           DateTime        @default(now())
+  eventAt            DateTime?
+  sportKey           String? // The Odds API key, e.g. "soccer_epl"
+  sport              String? // display name
+  league             String?
+  event              String // "Team A vs Team B"
+  homeTeam           String?
+  awayTeam           String?
+  market             String          @default("h2h") // h2h | totals | spreads | other (avräkningstyp -> grading)
+  marketCategory     String? // semantisk marknad, t.ex. "Skott på mål", "Returer", "Hörnor"
+  marketScope        String? // player | team | match (vem/vad spelet avser)
+  eventKind          String          @default("match") // match | outright
+  tournamentStage    String? // group | round_of_32 | round_of_16 | quarterfinal | semifinal | third_place | final
+  selection          String // label, e.g. "Team A", "Over 2.5"
+  selectionSide      String? // home | away | draw | over | under (structured -> grading)
+  line               Float? // for totals/spreads
+  betType            String          @default("single") // single | accumulator
+  odds               Float // decimal odds you took
+  // --- Closing line / CLV -------------------------------------------------
+  // Denormalised "best known closing" so every existing query, export and test
+  // keeps working. The full provenance lives in ClosingLine below.
+  closingOdds        Float? // raw closing price at closingBookmaker (carries their margin)
+  closingFairOdds    Float? // de-vigged closing: 1 / fair probability — the honest CLV benchmark
+  closingSource      String? // odds_api_historical | odds_api_live | thestatsapi | oddsportal | manual
+  closingBookmaker   String? // slug of the book the raw price came from
+  closingCapturedAt  DateTime?
+  /// True only once the historical (post-kickoff) snapshot has been taken.
+  /// Replaces `closingOdds != null` as the "done" signal, so a T-30 live price
+  /// can still be upgraded to the real closing line afterwards.
+  clvFinal           Boolean         @default(false)
+  stakeUnits         Float // e.g. 1.0, 2.5
+  outcome            String          @default("pending") // pending|win|loss|push|half_win|half_loss|void
+  profitUnits        Float? // computed at settlement
+  externalRef        String? // The Odds API event id (for auto-grading)
+  resultProvider     String? // score provider, e.g. "espn"
+  resultEventRef     String? // provider event id, separate from The Odds API externalRef
+  importRef          String? // Bet365 betslip reference — stable key for incremental re-import
+  legs               String? // JSON-encoded accumulator legs
+  bookmaker          String?
+  tipster            String?
+  notes              String?
+  gradedAt           DateTime?
+  // --- Auto-grading bookkeeping -------------------------------------------
+  /// How many times auto-grading has tried and failed. Drives exponential
+  /// backoff so an ungradable bet stops burning a lookup on every sync.
+  gradeAttempts      Int             @default(0)
+  gradeLastTriedAt   DateTime?
+  /// Why the last attempt could not settle it — surfaced in the UI instead of
+  /// disappearing into a details[] array nobody reads.
+  gradeBlockedReason String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  settlements        BetSettlement[]
+  closingLines       ClosingLine[]
 
   @@index([userId, outcome])
   @@index([userId, eventAt])
@@ -65,6 +85,56 @@ model Bet {
   @@index([resultProvider, resultEventRef])
   // Index (not unique): historical imports may hold duplicate refs per user.
   @@index([userId, importRef])
+  // Candidate scans for CLV capture and for grading retries.
+  @@index([clvFinal, eventAt])
+  @@index([outcome, gradeLastTriedAt])
+}
+
+/// One captured closing-line observation. Several rows per bet are expected and
+/// wanted: a near-kickoff live price and the post-match historical snapshot
+/// together describe how the line moved after the bet was struck.
+model ClosingLine {
+  id    String @id @default(cuid())
+  betId String
+  bet   Bet    @relation(fields: [betId], references: [id], onDelete: Cascade)
+
+  source    String // odds_api_historical | odds_api_live | thestatsapi | oddsportal | manual
+  bookmaker String? // slug the raw price was read from
+
+  /// The book's own closing price — still carries their margin.
+  rawOdds      Float
+  /// De-vigged fair price (1 / fair probability). Null when no sharp reference
+  /// was available for that market.
+  fairOdds     Float?
+  fairSource   String? // exchange | pinnacle | consensus
+  /// Market margin at closing, as a fraction (0.053 = 5.3%).
+  overround    Float?
+  /// Largest relative gap between the two sharp sources, when both existed.
+  /// A data-quality flag: a big number means at least one price was stale.
+  disagreement Float?
+
+  /// The snapshot timestamp the provider actually returned — not when we asked.
+  snapshotAt DateTime?
+  capturedAt DateTime  @default(now())
+
+  // Stops a re-run of the backfill writing the same historical snapshot twice.
+  // Postgres treats NULLs as distinct, so live/manual rows (snapshotAt null)
+  // are deliberately NOT deduped — several of them are the line movement.
+  @@unique([betId, source, snapshotAt])
+  @@index([betId, capturedAt])
+}
+
+/// One Odds API call's credit cost, straight from the response headers.
+/// Without this the monthly quota is invisible until a run dies halfway.
+model OddsApiUsage {
+  id        String   @id @default(cuid())
+  ranAt     DateTime @default(now())
+  endpoint  String // events | odds | event-odds | historical-event-odds | scores | sports
+  sportKey  String?
+  credits   Int // x-requests-last
+  remaining Int? // x-requests-remaining
+
+  @@index([ranAt])
 }
 
 model BetSettlement {

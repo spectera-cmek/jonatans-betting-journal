@@ -4,6 +4,7 @@ import {
   isLiquid,
   exchangeReference,
   pinnacleReference,
+  consensusReference,
   marketReference,
   normalizeHandicap,
   verifyHandicapSigns,
@@ -233,6 +234,103 @@ describe("marketReference", () => {
 
   it("is null when neither sharp book is present", () => {
     expect(marketReference([soft], X2)).toBeNull();
+  });
+
+  // Konsensus är opt-in: EV-skärmen bygger på en SKARP referens och får inte
+  // tyst börja jämföra mjuka böcker mot medianen av sig själva.
+  it("does not use consensus unless asked", () => {
+    const books: BookMarket[] = [
+      { bookmaker: "bet365", outcomes: [fx("home", 2), fx("draw", 3.6), fx("away", 4)] },
+      { bookmaker: "unibet", outcomes: [fx("home", 2.02), fx("draw", 3.55), fx("away", 4.05)] },
+      { bookmaker: "betsson", outcomes: [fx("home", 1.98), fx("draw", 3.65), fx("away", 3.95)] },
+    ];
+    expect(marketReference(books, X2)).toBeNull();
+    expect(marketReference(books, X2, { allowConsensus: true })?.source).toBe("consensus");
+  });
+
+  it("still prefers a sharp source over consensus when one exists", () => {
+    const books: BookMarket[] = [
+      soft,
+      pin,
+      { bookmaker: "unibet", outcomes: [fx("home", 2.02), fx("draw", 3.55), fx("away", 4.05)] },
+      { bookmaker: "betsson", outcomes: [fx("home", 1.98), fx("draw", 3.65), fx("away", 3.95)] },
+    ];
+    expect(marketReference(books, X2, { allowConsensus: true })!.source).toBe("pinnacle");
+  });
+});
+
+describe("consensusReference", () => {
+  const book = (bookmaker: string, h: number, d: number, a: number): BookMarket => ({
+    bookmaker,
+    outcomes: [fx("home", h), fx("draw", d), fx("away", a)],
+  });
+
+  it("needs at least three books", () => {
+    expect(consensusReference([book("bet365", 2, 3.6, 4)], X2)).toBeNull();
+    expect(
+      consensusReference([book("bet365", 2, 3.6, 4), book("unibet", 2.02, 3.55, 4.05)], X2)
+    ).toBeNull();
+    expect(
+      consensusReference(
+        [book("bet365", 2, 3.6, 4), book("unibet", 2.02, 3.55, 4.05), book("betsson", 1.98, 3.65, 3.95)],
+        X2
+      )
+    ).not.toBeNull();
+  });
+
+  it("normalises to probabilities summing to one", () => {
+    const ref = consensusReference(
+      [book("bet365", 2, 3.6, 4), book("unibet", 2.02, 3.55, 4.05), book("betsson", 1.98, 3.65, 3.95)],
+      X2
+    )!;
+    const sum = [...ref.probs.values()].reduce((s, p) => s + p, 0);
+    expect(sum).toBeCloseTo(1, 10);
+    expect(ref.source).toBe("consensus");
+    expect(ref.bookCount).toBe(3);
+  });
+
+  // Medianen är hela poängen: en bok med ett inaktuellt pris ska röstas ner,
+  // inte dra referensen med sig som ett medelvärde hade gjort.
+  it("lets the median outvote one stale book", () => {
+    const tight = [book("bet365", 2, 3.6, 4), book("unibet", 2.02, 3.55, 4.05), book("betsson", 1.98, 3.65, 3.95)];
+    const withStale = [...tight, book("coolbet", 3.4, 3.6, 2.4)];
+    const a = consensusReference(tight, X2)!.probs.get("home")!;
+    const b = consensusReference(withStale, X2)!.probs.get("home")!;
+    expect(Math.abs(a - b)).toBeLessThan(0.03);
+  });
+
+  // En bok som bara noterar halva marknaden går inte att avvigga. Att fylla ut
+  // den med en annan boks pris vore påhitt, så den ska falla bort helt.
+  it("skips books that do not price the whole market", () => {
+    const partial: BookMarket = { bookmaker: "hajper", outcomes: [fx("home", 2.1)] };
+    const ref = consensusReference(
+      [book("bet365", 2, 3.6, 4), book("unibet", 2.02, 3.55, 4.05), book("betsson", 1.98, 3.65, 3.95), partial],
+      X2
+    )!;
+    expect(ref.bookCount).toBe(3);
+  });
+
+  // Börsens back-pris är ett orderbokspris utan marginal — det hör inte hemma
+  // i en median över vigade fastodds.
+  it("excludes exchanges from the consensus", () => {
+    const exch: BookMarket = {
+      bookmaker: EXCHANGE_BOOK,
+      outcomes: [ex("home", 2.1, 2.12), ex("draw", 3.75, 3.8), ex("away", 4.2, 4.3)],
+    };
+    expect(
+      consensusReference([book("bet365", 2, 3.6, 4), book("unibet", 2.02, 3.55, 4.05), exch], X2)
+    ).toBeNull();
+  });
+
+  it("works on a two-way market", () => {
+    const ou = (bookmaker: string, o: number, u: number): BookMarket => ({
+      bookmaker,
+      outcomes: [fx("over", o), fx("under", u)],
+    });
+    const ref = consensusReference([ou("bet365", 1.9, 1.95), ou("unibet", 1.92, 1.93), ou("betsson", 1.88, 1.97)], OU)!;
+    expect(ref.probs.get("over")! + ref.probs.get("under")!).toBeCloseTo(1, 10);
+    // Fair-priset ska ligga längre än varje vigat bokpris.
+    expect(1 / ref.probs.get("over")!).toBeGreaterThan(1.92);
   });
 
   // Regression: den djuplösa börsen (The Odds API) får inte tysta oense-spärren.
