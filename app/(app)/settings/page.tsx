@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card } from "@/components/ui";
 import { SyncButton } from "@/components/SyncButton";
 import { ImportPanel } from "@/components/ImportPanel";
 import { api } from "@/lib/fetcher";
+import { useSettings } from "@/lib/useData";
 import type { SettingsDTO } from "@/lib/types";
 import { I, IC } from "@/components/icons";
 import { useTheme } from "@/components/ThemeProvider";
@@ -21,15 +22,20 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Shares the cached /api/settings entry with the nav instead of fetching its
+  // own copy. Seeded once: a background revalidation must never overwrite edits
+  // the user is in the middle of typing.
+  const { data: fetched, reload: reloadSettings } = useSettings();
+  const seeded = useRef(false);
   useEffect(() => {
-    api.get<SettingsDTO>("/api/settings").then((s) => {
-      setSettings(s);
-      setUnitValue(String(s.unitValue));
-      setCurrency(s.currency);
-      setDailyBudget(s.dailyStakeBudgetUnits != null ? String(s.dailyStakeBudgetUnits) : "");
-      setWeeklyBudget(s.weeklyStakeBudgetUnits != null ? String(s.weeklyStakeBudgetUnits) : "");
-    });
-  }, []);
+    if (!fetched || seeded.current) return;
+    seeded.current = true;
+    setSettings(fetched);
+    setUnitValue(String(fetched.unitValue));
+    setCurrency(fetched.currency);
+    setDailyBudget(fetched.dailyStakeBudgetUnits != null ? String(fetched.dailyStakeBudgetUnits) : "");
+    setWeeklyBudget(fetched.weeklyStakeBudgetUnits != null ? String(fetched.weeklyStakeBudgetUnits) : "");
+  }, [fetched]);
 
   const save = async () => {
     setSaving(true);
@@ -43,6 +49,9 @@ export default function SettingsPage() {
       });
       // PUT doesn't echo username — keep the one from the initial GET.
       setSettings((prev) => ({ ...s, username: prev?.username }));
+      // Refresh the shared cache so the nav (and a later revisit) sees the new
+      // unit value rather than the pre-save copy.
+      reloadSettings();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {

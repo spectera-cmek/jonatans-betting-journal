@@ -1,13 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Topbar } from "@/components/Shell";
 import { Card, Empty, SportMark } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
-import { AddBetModal, type BetPrefill } from "@/components/AddBetModal";
+import type { BetPrefill } from "@/components/AddBetModal";
 import { ScreenshotImportButton } from "@/components/ScreenshotImportButton";
 import { BetTags } from "@/components/BetTags";
-import { SettlementDialog } from "@/components/SettlementDialog";
+// Both dialogs open from a row action, so they are fetched on first use rather
+// than shipped in this route's chunk (AddBetModal alone is ~34 kB). The `*Used`
+// flags keep them mounted afterwards, preserving the previous behaviour where
+// the components stayed alive between opens.
+const AddBetModal = dynamic(() => import("@/components/AddBetModal").then((m) => m.AddBetModal), {
+  ssr: false,
+});
+const SettlementDialog = dynamic(
+  () => import("@/components/SettlementDialog").then((m) => m.SettlementDialog),
+  { ssr: false }
+);
 import { ClvCell, type ClvSaved } from "@/components/ClvCell";
 import type { ParsedBetWithDupe } from "@/lib/betslipExtract";
 import { StatTile } from "@/components/stats";
@@ -41,6 +52,10 @@ export default function BetsPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<BetDTO | null>(null);
   const [settling, setSettling] = useState<BetListDTO | null>(null);
+  // Sticky flags: once a dialog has been opened it stays mounted, so its lazy
+  // chunk is fetched on first use and its state survives close/reopen.
+  const [modalUsed, setModalUsed] = useState(false);
+  const [settleUsed, setSettleUsed] = useState(false);
   // Kö av kvitto-tolkade bets som gås igenom en och en i modalen.
   const [queue, setQueue] = useState<ParsedBetWithDupe[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
@@ -147,6 +162,14 @@ export default function BetsPage() {
       queue: { index: queueIndex, total: queue.length },
     };
   }, [queue, queueIndex, unit]);
+
+  const modalOpen = adding || !!editing || !!prefill;
+  useEffect(() => {
+    if (modalOpen) setModalUsed(true);
+  }, [modalOpen]);
+  useEffect(() => {
+    if (settling) setSettleUsed(true);
+  }, [settling]);
 
   const closeModal = () => {
     setAdding(false);
@@ -577,20 +600,24 @@ export default function BetsPage() {
         </div>
       )}
 
-      <AddBetModal
-        open={adding || !!editing || !!prefill}
-        bet={editing}
-        prefill={editing ? null : prefill}
-        onClose={closeModal}
-        onSaved={reload}
-        hasOddsApiKey={hasKey}
-        unit={unit}
-      />
-      <SettlementDialog
-        bet={settling}
-        onClose={() => setSettling(null)}
-        onChanged={reload}
-      />
+      {(modalOpen || modalUsed) && (
+        <AddBetModal
+          open={modalOpen}
+          bet={editing}
+          prefill={editing ? null : prefill}
+          onClose={closeModal}
+          onSaved={reload}
+          hasOddsApiKey={hasKey}
+          unit={unit}
+        />
+      )}
+      {(settling || settleUsed) && (
+        <SettlementDialog
+          bet={settling}
+          onClose={() => setSettling(null)}
+          onChanged={reload}
+        />
+      )}
     </div>
   );
 }

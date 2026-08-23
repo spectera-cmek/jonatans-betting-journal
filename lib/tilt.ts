@@ -6,7 +6,7 @@
 // unit-testable from both the API route and scripts.
 
 import { countsForWinRate, isWinLike, round2, type BetLike } from "./betting";
-import { dayIso, weekOf } from "./time";
+import { dayIso, weekOf, isoDayToUtcNoon } from "./time";
 
 export interface TiltBudgets {
   dailyBudgetUnits: number | null; // null/0 = budget off
@@ -92,8 +92,16 @@ export function tiltStatus(
   let betsToday = 0;
   let stakedWeek = 0;
   let betsWeek = 0;
+  // Only today and the current week can contribute, so skip the timezone format
+  // for everything clearly outside that window (+/-2 days of slack, see weekly.ts).
+  // A bet with no usable timestamp falls back to now, which is always inside.
+  const loMs = isoDayToUtcNoon(week.start) - 2 * 864e5;
+  const hiMs = isoDayToUtcNoon(week.end) + 2 * 864e5;
+
   for (const b of bets) {
-    const day = dayIso(placedTime(b) || Date.now());
+    const pt = placedTime(b) || Date.now();
+    if (pt < loMs || pt > hiMs) continue;
+    const day = dayIso(pt);
     if (day === today) {
       stakedToday += b.stakeUnits;
       betsToday += 1;

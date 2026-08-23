@@ -12,8 +12,7 @@ import { OpenBetsPanel } from "@/components/OpenBetsPanel";
 import { BetTags } from "@/components/BetTags";
 import { ClvCell, type ClvSaved } from "@/components/ClvCell";
 import { useTheme } from "@/components/ThemeProvider";
-import { useMetrics } from "@/lib/useData";
-import { api } from "@/lib/fetcher";
+import { useMetrics, useRecentBets } from "@/lib/useData";
 import { krFmt, krShort, uFmt, pctFmt, dateShort } from "@/lib/format";
 import type { BetListDTO } from "@/lib/types";
 import type { StreakInfo } from "@/lib/insights";
@@ -33,20 +32,26 @@ type PeriodKey = (typeof PERIODS)[number]["key"];
 export default function OverviewPage() {
   const { cc, glow } = useTheme();
   const { data, loading, reload } = useMetrics();
+  // Shared + deduped fetch. The previous effect keyed on `data` fired twice per
+  // visit (once on mount, once when the metrics object identity changed) and
+  // bypassed the cache. useRecentBets registers with revalidateAll, so a save or
+  // sync still refreshes these rows.
+  const { data: recentData, reload: reloadRecent } = useRecentBets(7);
   const [recent, setRecent] = useState<BetListDTO[]>([]);
   const [period, setPeriod] = useState<PeriodKey>("all");
 
-  // Re-fetch the short list whenever the metrics refresh (a save/settle
-  // triggers reload → new data → fresh recent rows).
+  // Mirror the fetched rows into local state so the optimistic CLV edit below
+  // can patch a single row without waiting for a refetch.
   useEffect(() => {
-    api.get<BetListDTO[]>("/api/bets?limit=7&fields=list").then(setRecent);
-  }, [data]);
+    if (recentData) setRecent(recentData);
+  }, [recentData]);
 
   const onClvSaved = (id: string, next: ClvSaved) => {
     setRecent((rows) =>
       rows.map((b) => (b.id === id ? { ...b, closingOdds: next.closingOdds, clvPct: next.clvPct } : b))
     );
     reload();
+    reloadRecent();
   };
 
   const m = data?.metrics;
@@ -97,12 +102,19 @@ export default function OverviewPage() {
   const showPeriod = period !== "all" && periodDiff != null;
   const headlineKr = showPeriod ? (periodDiff as number) : profitKr;
 
-  // sport distribution with pct
-  const sports = (data?.bySport ?? []).map((s) => ({ ...s }));
-  const totalSportBets = sports.reduce((a, s) => a + s.bets, 0) || 1;
-  const sportsWithPct = sports.map((s) => ({ ...s, pct: Math.round((s.bets / totalSportBets) * 100) }));
+  // sport distribution with pct. Memoised because both of these feed straight
+  // into <Donut> / <PLBars>: a fresh array identity on every render made the
+  // charts rebuild their geometry even when the underlying data hadn't moved.
+  const sportsWithPct = useMemo(() => {
+    const sports = data?.bySport ?? [];
+    const totalSportBets = sports.reduce((a, s) => a + s.bets, 0) || 1;
+    return sports.map((s) => ({ ...s, pct: Math.round((s.bets / totalSportBets) * 100) }));
+  }, [data?.bySport]);
 
-  const months = (data?.monthly ?? []).map((mo) => ({ m: monthLabel(mo.month), units: mo.profitUnits }));
+  const months = useMemo(
+    () => (data?.monthly ?? []).map((mo) => ({ m: monthLabel(mo.month), units: mo.profitUnits })),
+    [data?.monthly]
+  );
   // First year present in the data -> "sedan 2023" copy in the header.
   const allMonths = data?.byMonth ?? [];
   const rangeLabel = allMonths.length ? allMonths[0].month.slice(0, 4) : "";

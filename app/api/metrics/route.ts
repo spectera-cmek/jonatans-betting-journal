@@ -72,14 +72,10 @@ export async function GET() {
   const avgOddsReal = computeMetrics(betLikes.filter(hasRealOdds)).avgOdds;
   const bankroll = bankrollSeries(betLikes, settings.startingBankrollUnits);
 
-  const bySport = breakdownBy(betLikes, (_b) => null).length
-    ? breakdownBy(
-        bets.map(toKeyed),
-        (b) => (b as KeyedBet).sport,
-        "Unknown"
-      )
-    : [];
+  // One keyed projection, reused by every breakdown below.
   const keyed = bets.map(toKeyed);
+
+  const bySport = keyed.length ? breakdownBy(keyed, (b) => (b as KeyedBet).sport, "Unknown") : [];
   const byLeague = breakdownBy(keyed, (b) => (b as KeyedBet).league, "Unknown");
   const byMarket = breakdownBy(keyed, (b) => (b as KeyedBet).market, "Övrigt");
   // Detaljerad, semantisk marknad ("vad") + scope (Spelare/Lag/Match).

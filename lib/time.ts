@@ -4,10 +4,30 @@
 
 const TZ = "Europe/Stockholm";
 
+// One Intl.DateTimeFormat per timezone, built once. `toLocaleDateString` with a
+// timeZone option constructs a fresh formatter internally on every call (~59 us);
+// reusing the instance is ~27x cheaper and yields the identical string. This is
+// the hot path of the metrics aggregations — weekly/monthly/tilt call dayIso
+// once per bet, so it runs ~50k times per /api/metrics request.
+const dayFmts = new Map<string, Intl.DateTimeFormat>();
+function dayFmt(tz: string): Intl.DateTimeFormat {
+  let f = dayFmts.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat("sv-SE", { timeZone: tz });
+    dayFmts.set(tz, f);
+  }
+  return f;
+}
+
 /** ISO day (YYYY-MM-DD) for a timestamp, in Swedish local time. */
 export function dayIso(d: Date | string | number, tz: string = TZ): string {
   // The sv-SE locale formats dates as YYYY-MM-DD.
-  return new Date(d).toLocaleDateString("sv-SE", { timeZone: tz });
+  return dayFmt(tz).format(typeof d === "number" ? d : new Date(d));
+}
+
+/** Epoch ms for an ISO day string at UTC noon — cheap numeric window bounds. */
+export function isoDayToUtcNoon(iso: string): number {
+  return Date.parse(iso + "T12:00:00Z");
 }
 
 /** Monday-first weekday index (0–6) of an ISO day string. */

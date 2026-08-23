@@ -5,7 +5,7 @@
 
 import { useMemo } from "react";
 import { Card } from "./ui";
-import { HBar } from "./charts";
+import { HBar } from "./miniCharts";
 import { useTheme } from "./ThemeProvider";
 import { computeEdgeSegments, type EdgeSegment } from "@/lib/edge";
 import { krFmt, krShort, pctFmt } from "@/lib/format";

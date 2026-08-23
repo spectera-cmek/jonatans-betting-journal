@@ -89,6 +89,24 @@ export interface MetricsResponse {
 // refreshes it in the background, so navigation never shows a spinner twice.
 const cache = new Map<string, unknown>();
 
+// In-flight requests keyed by URL. Several components legitimately read the same
+// endpoint on one screen: the nav's BankrollStrip and the page body both call
+// useMetrics, and useMetrics/useBets each pull settings. Without this every hook
+// instance fired its own round trip (the dashboard cost 2x /api/metrics and
+// 3x /api/settings per load). Joiners now share one response.
+const inflight = new Map<string, Promise<unknown>>();
+
+function sharedGet<T>(url: string): Promise<T> {
+  const pending = inflight.get(url) as Promise<T> | undefined;
+  if (pending) return pending;
+  const p: Promise<T> = api.get<T>(url).finally(() => {
+    // Only clear our own entry — revalidateAll() may already have replaced it.
+    if (inflight.get(url) === p) inflight.delete(url);
+  });
+  inflight.set(url, p);
+  return p;
+}
+
 // Every mounted hook registers its reloader here so a global action (the top-nav
 // "Logga bet" / "Synka", which live outside any data page) can refresh whatever
 // the current page is showing.
@@ -96,6 +114,10 @@ const reloaders = new Set<() => void>();
 
 /** Re-fetch every cached endpoint that a mounted hook is currently reading. */
 export function revalidateAll() {
+  // Drop anything in flight first so a refresh can never resolve to pre-save
+  // data. The reloaders below run synchronously, so the first one re-creates the
+  // request and the rest join it: one round trip per URL, not one per hook.
+  inflight.clear();
   reloaders.forEach((fn) => fn());
 }
 
@@ -107,7 +129,7 @@ function useCachedGet<T>(url: string) {
   const load = useCallback(async () => {
     if (!cache.has(url)) setLoading(true);
     try {
-      const d = await api.get<T>(url);
+      const d = await sharedGet<T>(url);
       cache.set(url, d);
       setData(d);
       setError(null);
@@ -127,6 +149,16 @@ function useCachedGet<T>(url: string) {
   }, [load]);
 
   return { data, loading, error, reload: load };
+}
+
+/** Settings on their own — shares the cache entry with useMetrics/useBets. */
+export function useSettings() {
+  return useCachedGet<SettingsDTO>("/api/settings");
+}
+
+/** The dashboard's "senaste spel" strip: newest N bets, list projection. */
+export function useRecentBets(limit = 7) {
+  return useCachedGet<BetListDTO[]>(`/api/bets?limit=${limit}&fields=list`);
 }
 
 export function useMetrics() {

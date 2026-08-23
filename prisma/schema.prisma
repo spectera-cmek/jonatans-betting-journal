@@ -61,6 +61,12 @@ model Bet {
 
   @@index([userId, outcome])
   @@index([userId, eventAt])
+  // The bets list and CSV export sort by placedAt; without this Postgres seq-scans
+  // the table and sorts (measured: Seq Scan over 10k rows).
+  @@index([userId, placedAt])
+  // The grading queue filters userId + outcome="pending" and sorts by eventAt;
+  // [userId, outcome] covers the filter but leaves the sort uncovered.
+  @@index([userId, outcome, eventAt])
   @@index([userId, league])
   @@index([resultProvider, resultEventRef])
   // Index (not unique): historical imports may hold duplicate refs per user.

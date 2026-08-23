@@ -1,10 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Topbar } from "./Shell";
-import { AddBetModal, type BetPrefill } from "./AddBetModal";
-import { SettlementDialog } from "./SettlementDialog";
+import type { BetPrefill } from "./AddBetModal";
+
+// Fetched on first open instead of shipped in the /vm2026 chunk; the sticky
+// flags below keep them mounted once used, as they were before.
+const AddBetModal = dynamic(() => import("./AddBetModal").then((m) => m.AddBetModal), { ssr: false });
+const SettlementDialog = dynamic(() => import("./SettlementDialog").then((m) => m.SettlementDialog), {
+  ssr: false,
+});
 import { BetTags } from "./BetTags";
 import { Card, Empty, SkeletonCard } from "./ui";
 import { StatTile, BreakdownCard } from "./stats";
@@ -315,8 +322,18 @@ export function WorldCupCenter() {
   const [stage, setStage] = useState<TournamentStage | "all">("all");
   const [prefill, setPrefill] = useState<BetPrefill | null>(null);
   const [settling, setSettling] = useState<BetListDTO | null>(null);
+  const [modalUsed, setModalUsed] = useState(false);
+  const [settleUsed, setSettleUsed] = useState(false);
   const [suggestions, setSuggestions] = useState<GradingSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+  // Once a dialog has been opened it stays mounted for the rest of the visit.
+  useEffect(() => {
+    if (prefill) setModalUsed(true);
+  }, [prefill]);
+  useEffect(() => {
+    if (settling) setSettleUsed(true);
+  }, [settling]);
   const unit = settings?.unitValue ?? 100;
 
   const loadSuggestions = useCallback(async () => {
@@ -471,18 +488,22 @@ export function WorldCupCenter() {
         </>
       )}
 
-      <AddBetModal
-        open={!!prefill}
-        prefill={prefill}
-        onClose={() => setPrefill(null)}
-        onSaved={() => { reloadBets(); loadSuggestions(); }}
-        hasOddsApiKey={settings?.hasOddsApiKey ?? false}
-      />
-      <SettlementDialog
-        bet={settling}
-        onClose={() => setSettling(null)}
-        onChanged={() => { reloadBets(); loadSuggestions(); }}
-      />
+      {(prefill || modalUsed) && (
+        <AddBetModal
+          open={!!prefill}
+          prefill={prefill}
+          onClose={() => setPrefill(null)}
+          onSaved={() => { reloadBets(); loadSuggestions(); }}
+          hasOddsApiKey={settings?.hasOddsApiKey ?? false}
+        />
+      )}
+      {(settling || settleUsed) && (
+        <SettlementDialog
+          bet={settling}
+          onClose={() => setSettling(null)}
+          onChanged={() => { reloadBets(); loadSuggestions(); }}
+        />
+      )}
     </div>
   );
 }

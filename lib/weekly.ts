@@ -7,7 +7,7 @@
 
 import { isSettled, settledProfit, countsForWinRate, isWinLike, round2, type BetLike } from "./betting";
 import { evaluateBet } from "./discipline";
-import { dayIso, weekOf, monthOf, addDays, isoWeekNo, type WeekWindow } from "./time";
+import { dayIso, weekOf, monthOf, addDays, isoWeekNo, isoDayToUtcNoon, type WeekWindow } from "./time";
 
 export interface WeeklyBetInput extends BetLike {
   event?: string;
@@ -82,9 +82,18 @@ export function aggPeriod(bets: WeeklyBetInput[], win: WeekWindow): PeriodAgg {
   let best: WeekBetRef | null = null;
   let worst: WeekBetRef | null = null;
 
+  // Cheap numeric prefilter before the (comparatively costly) timezone format.
+  // A Stockholm calendar day is at most a couple of hours off the UTC day, so a
+  // +/-2 day margin can never drop a bet that dayIso would place inside the
+  // window. The window is a week or a month; the other ~99% of the history skips
+  // the Intl call entirely.
+  const loMs = isoDayToUtcNoon(win.start) - 2 * 864e5;
+  const hiMs = isoDayToUtcNoon(win.end) + 2 * 864e5;
+
   for (const b of bets) {
     const t = betTime(b);
     if (!t) continue;
+    if (t < loMs || t > hiMs) continue;
     const day = dayIso(t);
     if (day < win.start || day > win.end) continue;
 

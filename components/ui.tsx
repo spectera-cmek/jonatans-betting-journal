@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Spark } from "./charts";
+import { Spark } from "./miniCharts";
 import { I, IC, sportIcon } from "./icons";
 import type { LucideIcon } from "lucide-react";
 import { sportColor } from "@/lib/theme";

@@ -6,7 +6,7 @@
 import { Card, type Accent } from "./ui";
 import { I, IC } from "./icons";
 import type { LucideIcon } from "lucide-react";
-import { HBar } from "./charts";
+import { HBar } from "./miniCharts";
 import { useTheme } from "./ThemeProvider";
 import { uFmt, pctFmt, krShort, krFmt, sportTag, dateShort } from "@/lib/format";
 import type { Breakdown } from "@/lib/betting";

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BrandMark } from "@/components/icons";
+import { BrandMark } from "@/components/BrandMark";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");

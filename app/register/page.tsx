@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BrandMark } from "@/components/icons";
+import { BrandMark } from "@/components/BrandMark";
 
 // Standalone registration screen (outside the (app) layout group, like /login).
 // Registration is gated by an invite code so strangers can't sign up on the

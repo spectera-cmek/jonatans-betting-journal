@@ -9,6 +9,19 @@ export interface TimePoint {
   v: number; // value (already in display currency)
 }
 
+/** min/max over a numeric array without spreading it into a call — the spread
+ *  form is slower and overflows the stack on long series. */
+function minOf(arr: number[]): number {
+  let m = arr[0];
+  for (let i = 1; i < arr.length; i++) if (arr[i] < m) m = arr[i];
+  return m;
+}
+function maxOf(arr: number[]): number {
+  let m = arr[0];
+  for (let i = 1; i < arr.length; i++) if (arr[i] > m) m = arr[i];
+  return m;
+}
+
 // Cap the rendered point count — the full history is 8k+ points and the path
 // string alone would be ~100 kB. Hover still resolves to a real point.
 function downsample(points: TimePoint[], max = 600): TimePoint[] {
@@ -79,7 +92,30 @@ export function InteractiveLineChart({
     return maxDd > 0 ? { from, to } : null;
   }, [pts]);
 
-  if (pts.length < 2) {
+  // Geometry depends only on the series and the box. It used to sit below the
+  // early return, so every pointermove re-ran three full sweeps over up to 600
+  // points and rebuilt the whole path string. min/max via a loop rather than
+  // Math.min(...arr) — spreading 600 elements into a call is slow and, on longer
+  // series, a stack-overflow risk.
+  const geom = useMemo(() => {
+    const n = pts.length;
+    if (n < 2) return null;
+    let min = pts[0].v;
+    let max = pts[0].v;
+    for (let i = 1; i < n; i++) {
+      if (pts[i].v < min) min = pts[i].v;
+      if (pts[i].v > max) max = pts[i].v;
+    }
+    const range = max - min || 1;
+    const x = (i: number) => pad + (i / (n - 1)) * (w - pad * 2);
+    const y = (v: number) => pad + (1 - (v - min) / range) * (h - pad * 2);
+    const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+    const area = `${line} L${x(n - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
+    const gridLines = [0.25, 0.5, 0.75].map((g) => pad + g * (h - pad * 2));
+    return { n, x, y, line, area, gridLines };
+  }, [pts, w, h, pad]);
+
+  if (!geom) {
     return (
       <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>
         Inte tillräckligt med data i perioden
@@ -87,15 +123,7 @@ export function InteractiveLineChart({
     );
   }
 
-  const n = pts.length;
-  const min = Math.min(...pts.map((p) => p.v));
-  const max = Math.max(...pts.map((p) => p.v));
-  const range = max - min || 1;
-  const x = (i: number) => pad + (i / (n - 1)) * (w - pad * 2);
-  const y = (v: number) => pad + (1 - (v - min) / range) * (h - pad * 2);
-  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
-  const area = `${line} L${x(n - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
-  const gridLines = [0.25, 0.5, 0.75].map((g) => pad + g * (h - pad * 2));
+  const { n, x, y, line, area, gridLines } = geom;
 
   const onMove = (e: React.PointerEvent) => {
     const rect = boxRef.current?.getBoundingClientRect();
@@ -212,25 +240,40 @@ export function CompareChart({
 }) {
   const sa = useMemo(() => downsample(a), [a]);
   const sb = useMemo(() => downsample(b), [b]);
-  if (sa.length < 2) {
+  // Bounds in one pass over the combined series (up to 1200 points) — the old
+  // Math.min(...all.map(...)) built four throwaway arrays and spread each into
+  // a call. Memoised so a parent re-render with the same data is free.
+  const geom = useMemo(() => {
+    if (sa.length < 2) return null;
+    let tMin = Infinity;
+    let tMax = -Infinity;
+    let vMin = 0;
+    let vMax = 0;
+    for (const s of [sa, sb]) {
+      for (const p of s) {
+        if (p.t < tMin) tMin = p.t;
+        if (p.t > tMax) tMax = p.t;
+        if (p.v < vMin) vMin = p.v;
+        if (p.v > vMax) vMax = p.v;
+      }
+    }
+    const tR = tMax - tMin || 1;
+    const vR = vMax - vMin || 1;
+    const x = (t: number) => pad + ((t - tMin) / tR) * (w - pad * 2);
+    const y = (v: number) => pad + (1 - (v - vMin) / vR) * (h - pad * 2);
+    const path = (pts: TimePoint[]) =>
+      pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+    return { x, y, path, zero: y(0) };
+  }, [sa, sb, w, h, pad]);
+
+  if (!geom) {
     return (
       <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>
         Inte tillräckligt med data
       </div>
     );
   }
-  const all = [...sa, ...sb];
-  const tMin = Math.min(...all.map((p) => p.t));
-  const tMax = Math.max(...all.map((p) => p.t));
-  const vMin = Math.min(0, ...all.map((p) => p.v));
-  const vMax = Math.max(0, ...all.map((p) => p.v));
-  const tR = tMax - tMin || 1;
-  const vR = vMax - vMin || 1;
-  const x = (t: number) => pad + ((t - tMin) / tR) * (w - pad * 2);
-  const y = (v: number) => pad + (1 - (v - vMin) / vR) * (h - pad * 2);
-  const path = (pts: TimePoint[]) =>
-    pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
-  const zero = y(0);
+  const { x, y, path, zero } = geom;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }}>
       <line x1={pad} y1={zero} x2={w - pad} y2={zero} stroke={grid} strokeWidth="1.4" />
@@ -271,8 +314,8 @@ export function LineChart({
       </div>
     );
   }
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  const min = minOf(data);
+  const max = maxOf(data);
   const range = max - min || 1;
   const x = (i: number) => pad + (i / (data.length - 1)) * (w - pad * 2);
   const y = (v: number) => pad + (1 - (v - min) / range) * (h - pad * 2);
@@ -320,7 +363,7 @@ export function PLBars({
     return <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>Ingen data</div>;
   }
   const vals = data.map((d) => d.units);
-  const max = Math.max(...vals.map(Math.abs)) || 1;
+  const max = maxOf(vals.map(Math.abs)) || 1;
   const n = data.length;
   const gap = 10;
   const bw = (w - gap * (n - 1)) / n;
@@ -497,52 +540,6 @@ export function Ring({
   );
 }
 
-/** Inline trend line for KPI cards. Fills a faint wash under the stroke so it
- *  reads as a mini area chart rather than a stray squiggle. */
-export function Spark({
-  data,
-  w = 150,
-  h = 26,
-  stroke = "var(--pos)",
-  strokeW = 1.8,
-  fill = true,
-}: {
-  data: number[];
-  w?: number;
-  h?: number;
-  stroke?: string;
-  strokeW?: number;
-  fill?: boolean;
-}) {
-  const gid = useId().replace(/:/g, "");
-  if (!data || data.length < 2) return <svg width={w} height={h} />;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const x = (i: number) => (i / (data.length - 1)) * w;
-  const y = (v: number) => 2 + (1 - (v - min) / range) * (h - 4);
-  const line = data.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const area = `${line} L${w},${h} L0,${h} Z`;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} preserveAspectRatio="none" style={{ display: "block" }}>
-      {fill && (
-        <defs>
-          <linearGradient id={`sp${gid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-      )}
-      {fill && <path d={area} fill={`url(#sp${gid})`} />}
-      <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-export function HBar({ pct, color, track = "var(--hover)", h = 6, radius = 999 }: { pct: number; color: string; track?: string; h?: number; radius?: number }) {
-  return (
-    <div style={{ height: h, background: track, borderRadius: radius, overflow: "hidden", width: "100%" }}>
-      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: radius }} />
-    </div>
-  );
-}
+// Spark and HBar now live in ./miniCharts so that ui.tsx/stats.tsx can pull them
+// in without this module. Re-exported here so existing import sites keep working.
+export { Spark, HBar } from "./miniCharts";

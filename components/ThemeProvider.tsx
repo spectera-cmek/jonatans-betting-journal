@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { ACCENTS, chartColors, type Accent, type ChartColors } from "@/lib/theme";
 
 interface ThemeState {
@@ -57,19 +57,36 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem("bj.glow", g ? "1" : "0"); } catch {}
   }, []);
 
-  const accent = ACCENTS.find((a) => a.hex === accentHex) || ACCENTS[0];
-  const cc = chartColors(accent.hex, mode);
+  const accent = useMemo(() => ACCENTS.find((a) => a.hex === accentHex) || ACCENTS[0], [accentHex]);
+  const cc = useMemo(() => chartColors(accent.hex, mode), [accent.hex, mode]);
 
-  const rootStyle = {
-    "--acc": accent.hex,
-    "--acc-soft": accent.soft,
-    "--acc-text": accent.text,
-  } as React.CSSProperties;
+  // Held back until the stored prefs have been read. Before that the accent
+  // comes from the inline script in app/layout.tsx, which sets the same three
+  // custom properties on :root — an inline style here would outrank it and
+  // reintroduce the flash for anyone on a non-default accent.
+  const rootStyle = useMemo(
+    () =>
+      ready
+        ? ({
+            "--acc": accent.hex,
+            "--acc-soft": accent.soft,
+            "--acc-text": accent.text,
+          } as React.CSSProperties)
+        : undefined,
+    [ready, accent]
+  );
+
+  const value = useMemo(
+    () => ({ accent, mode, glow, cc, setAccent, setMode, setGlow }),
+    [accent, mode, glow, cc, setAccent, setMode, setGlow]
+  );
 
   return (
-    <ThemeCtx.Provider value={{ accent, mode, glow, cc, setAccent, setMode, setGlow }}>
+    <ThemeCtx.Provider value={value}>
+      {/* children render immediately: the pre-paint script in app/layout.tsx has
+          already put the right theme on <html>, so there is nothing to hide. */}
       <div className="ap" data-mode={mode} style={rootStyle} suppressHydrationWarning>
-        {ready ? children : null}
+        {children}
       </div>
     </ThemeCtx.Provider>
   );

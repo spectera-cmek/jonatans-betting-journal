@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,9 +11,9 @@
    expressed as a tinted icon chip, and monospace on every number.
    ============================================================ */
 :root {
-  --disp: "Space Grotesk", system-ui, sans-serif;
-  --sans: "Manrope", system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --disp: var(--font-disp), "Space Grotesk", system-ui, sans-serif;
+  --sans: var(--font-sans), "Manrope", system-ui, sans-serif;
+  --mono: var(--font-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Emerald is the brand accent (nav, CTAs, active states). Outcome green is a
      lighter shade (--pos) so a win still reads apart from ordinary chrome. */
   --acc: #10b981;
@@ -59,7 +57,8 @@
   --sp-5: 20px;
   --sp-6: 24px;
 }
-.ap[data-mode="dark"] {
+.ap[data-mode="dark"],
+:root[data-mode="dark"] .ap {
   --bg: #020617;
   --side: #0b1120;
   --card: #0f172a;
@@ -81,7 +80,8 @@
   --shadow-lift: 0 20px 25px -5px rgba(2, 6, 23, 0.6), 0 8px 10px -6px rgba(2, 6, 23, 0.6);
   --glow: 0.14;
 }
-.ap[data-mode="light"] {
+.ap[data-mode="light"],
+:root[data-mode="light"] .ap {
   --bg: #f1f5f9;
   --side: #ffffff;
   --card: #ffffff;
@@ -105,7 +105,8 @@
 /* Light mode: the 500-weight hues are tuned for a near-black canvas and read as
    washed-out on white, so text/icon colours drop to the 600 step and the chip
    tints get a higher alpha floor. */
-.ap[data-mode="light"] {
+.ap[data-mode="light"],
+:root[data-mode="light"] .ap {
   --a-emerald: #047857;
   --a-sky: #0369a1;
   --a-amber: #92400e;
@@ -126,7 +127,8 @@
 :root {
   --acc-ink: var(--acc);
 }
-.ap[data-mode="light"] {
+.ap[data-mode="light"],
+:root[data-mode="light"] .ap {
   --acc-ink: color-mix(in srgb, var(--acc) 62%, #000);
 }
 
@@ -1639,7 +1641,8 @@ body {
   outline: none;
   color-scheme: dark;
 }
-.ap[data-mode="light"] .ap-date-filter input {
+.ap[data-mode="light"] .ap-date-filter input,
+:root[data-mode="light"] .ap .ap-date-filter input {
   color-scheme: light;
 }
 .ap-filters {
