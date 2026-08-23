@@ -147,6 +147,9 @@ export function OpenBetsPanel({
                           odds={b.odds}
                           closingOdds={b.closingOdds}
                           clvPctValue={b.clvPct}
+                    closingFairOdds={b.closingFairOdds}
+                    closingSource={b.closingSource}
+                    closingBookmaker={b.closingBookmaker}
                           onSaved={(next) => handleClv(b.id, next)}
                         />
                       </span>

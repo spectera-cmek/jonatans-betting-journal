@@ -175,6 +175,29 @@ export default function SettingsPage() {
               <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: settings?.hasOddsApiKey ? "var(--pos)" : "var(--red)" }} />
               <span>The Odds API: {settings?.hasOddsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}</span>
             </div>
+            {settings?.oddsApiCreditsRemaining != null && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--dim)" }}>
+                <span style={{ display: "inline-block", width: 8 }} />
+                <span>
+                  Krediter kvar:{" "}
+                  <strong
+                    style={{
+                      color:
+                        settings.oddsApiCreditsRemaining < 500 ? "var(--red)" : "var(--txt)",
+                    }}
+                  >
+                    {settings.oddsApiCreditsRemaining.toLocaleString("sv-SE")}
+                  </strong>
+                  {settings.oddsApiCreditsSpent30d != null && (
+                    <>
+                      {" "}· {settings.oddsApiCreditsSpent30d.toLocaleString("sv-SE")} förbrukade
+                      senaste 30 dagarna
+                      {settings.oddsApiCalls30d != null ? ` (${settings.oddsApiCalls30d} anrop)` : ""}
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
 
           {settings?.hasTheStatsApiKey || settings?.hasOddsApiKey ? (
@@ -184,14 +207,18 @@ export default function SettingsPage() {
                   ? "TheStatsAPI hämtar historiska stängningsodds (CLV) för fotboll — även retroaktivt. Synken kör i små batchar (undviker 504); kör igen för fler bets. "
                   : ""}
                 {settings?.hasOddsApiKey
-                  ? "The Odds API länkar icke-fotboll och ger live-closing som fallback. "
+                  ? "The Odds API hämtar den riktiga stängningslinjen ur /historical efter matchen (kräver betald plan) och avviggar den till en fair line. Priser före avspark sparas som linjerörelse. "
                   : ""}
-                ESPN-resultat rättar singlar utan API-länk.
+                ESPN-resultat rättar singlar, kombinationer och hörn-/halvleksmarknader utan API-länk.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <SyncButton kind="closing" label="Hämta closing-odds" showResult />
                   <SyncButton kind="all" label="Full synk" showResult />
+                  {settings?.hasOddsApiKey && (
+                    <SyncButton kind="historical-closing" label="Hämta stängningslinjer" showResult />
+                  )}
+                  <SyncButton kind="accas" label="Rätta kombinationer" showResult />
                   {settings?.hasOddsApiKey && <SyncButton kind="grade" label="Rätta via Odds API" showResult />}
                 </div>
               </div>

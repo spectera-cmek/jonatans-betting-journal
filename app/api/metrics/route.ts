@@ -38,6 +38,9 @@ const METRICS_SELECT = {
   betType: true,
   odds: true,
   closingOdds: true,
+  closingFairOdds: true,
+  closingSource: true,
+  closingBookmaker: true,
   stakeUnits: true,
   outcome: true,
   profitUnits: true,
@@ -60,6 +63,7 @@ export async function GET() {
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     closingOdds: b.closingOdds,
+    closingFairOdds: b.closingFairOdds,
     eventAt: b.eventAt,
     placedAt: b.placedAt,
     createdAt: b.createdAt,
@@ -169,6 +173,9 @@ export async function GET() {
       odds: b.odds,
       stakeUnits: b.stakeUnits,
       closingOdds: b.closingOdds,
+      closingFairOdds: b.closingFairOdds,
+      closingSource: b.closingSource,
+      closingBookmaker: b.closingBookmaker,
       clvPct:
         b.closingOdds && b.closingOdds > 1
           ? (b.odds / b.closingOdds - 1) * 100

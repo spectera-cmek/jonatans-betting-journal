@@ -24,6 +24,10 @@ export interface BetDTO {
   betType: string;
   odds: number;
   closingOdds: number | null;
+  closingFairOdds: number | null;
+  closingSource: string | null;
+  closingBookmaker: string | null;
+  closingCapturedAt: string | null;
   stakeUnits: number;
   outcome: Outcome;
   profitUnits: number | null;
@@ -35,8 +39,11 @@ export interface BetDTO {
   notes: string | null;
   legs: string | null; // JSON-encoded accumulator legs (for the edit modal)
   gradedAt: string | null;
+  gradeBlockedReason: string | null;
   createdAt: string;
   clvPct: number | null;
+  /** CLV against the de-vigged closing line — the honest figure. */
+  clvFairPct: number | null;
 }
 
 // Loose Prisma-row shape (avoids importing the generated client type here).
@@ -61,6 +68,10 @@ type BetRow = {
   betType: string;
   odds: number;
   closingOdds: number | null;
+  closingFairOdds: number | null;
+  closingSource: string | null;
+  closingBookmaker: string | null;
+  closingCapturedAt: Date | null;
   stakeUnits: number;
   outcome: string;
   profitUnits: number | null;
@@ -72,6 +83,7 @@ type BetRow = {
   notes: string | null;
   legs: string | null;
   gradedAt: Date | null;
+  gradeBlockedReason: string | null;
   createdAt: Date;
 };
 
@@ -97,6 +109,10 @@ export function serializeBet(b: BetRow): BetDTO {
     betType: b.betType,
     odds: b.odds,
     closingOdds: b.closingOdds,
+    closingFairOdds: b.closingFairOdds,
+    closingSource: b.closingSource,
+    closingBookmaker: b.closingBookmaker,
+    closingCapturedAt: b.closingCapturedAt ? b.closingCapturedAt.toISOString() : null,
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     profitUnits: b.profitUnits,
@@ -108,10 +124,15 @@ export function serializeBet(b: BetRow): BetDTO {
     notes: b.notes,
     legs: b.legs,
     gradedAt: b.gradedAt ? b.gradedAt.toISOString() : null,
+    gradeBlockedReason: b.gradeBlockedReason,
     createdAt: b.createdAt.toISOString(),
     clvPct:
       b.closingOdds && b.closingOdds > 1
         ? (b.odds / b.closingOdds - 1) * 100
+        : null,
+    clvFairPct:
+      b.closingFairOdds && b.closingFairOdds > 1
+        ? (b.odds / b.closingFairOdds - 1) * 100
         : null,
   };
 }
@@ -139,13 +160,19 @@ export interface BetListDTO {
   betType: string;
   odds: number;
   closingOdds: number | null;
+  closingFairOdds: number | null;
+  closingSource: string | null;
+  closingBookmaker: string | null;
   stakeUnits: number;
   outcome: Outcome;
   profitUnits: number | null;
   bookmaker: string | null;
   resultProvider: string | null;
   resultEventRef: string | null;
+  gradeBlockedReason: string | null;
   clvPct: number | null;
+  /** CLV against the de-vigged closing line — the honest figure. */
+  clvFairPct: number | null;
 }
 
 export type BetListRow = Pick<
@@ -154,6 +181,7 @@ export type BetListRow = Pick<
   | "marketCategory" | "marketScope" | "eventKind" | "tournamentStage"
   | "selection" | "selectionSide" | "line" | "betType" | "odds" | "closingOdds" | "stakeUnits"
   | "outcome" | "profitUnits" | "bookmaker" | "resultProvider" | "resultEventRef"
+  | "closingFairOdds" | "closingSource" | "closingBookmaker" | "gradeBlockedReason"
 >;
 
 export function serializeBetList(b: BetListRow): BetListDTO {
@@ -177,15 +205,23 @@ export function serializeBetList(b: BetListRow): BetListDTO {
     betType: b.betType,
     odds: b.odds,
     closingOdds: b.closingOdds,
+    closingFairOdds: b.closingFairOdds,
+    closingSource: b.closingSource,
+    closingBookmaker: b.closingBookmaker,
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     profitUnits: b.profitUnits,
     bookmaker: b.bookmaker,
     resultProvider: b.resultProvider,
     resultEventRef: b.resultEventRef,
+    gradeBlockedReason: b.gradeBlockedReason,
     clvPct:
       b.closingOdds && b.closingOdds > 1
         ? (b.odds / b.closingOdds - 1) * 100
+        : null,
+    clvFairPct:
+      b.closingFairOdds && b.closingFairOdds > 1
+        ? (b.odds / b.closingFairOdds - 1) * 100
         : null,
   };
 }
@@ -214,4 +250,9 @@ export interface SettingsDTO {
   weeklyStakeBudgetUnits: number | null;
   hasOddsApiKey: boolean;
   hasTheStatsApiKey: boolean;
+  /** Odds API credits left, as last reported by a response header. */
+  oddsApiCreditsRemaining?: number | null;
+  oddsApiCreditsAsOf?: string | null;
+  oddsApiCreditsSpent30d?: number | null;
+  oddsApiCalls30d?: number | null;
 }

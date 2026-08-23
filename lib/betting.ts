@@ -78,6 +78,8 @@ export interface BetLike {
   stakeUnits: number;
   outcome: Outcome;
   closingOdds?: number | null;
+  /** De-vigged closing price — the honest CLV benchmark. */
+  closingFairOdds?: number | null;
   eventAt?: Date | string | null;
   placedAt?: Date | string | null;
   createdAt?: Date | string | null;
@@ -122,11 +124,41 @@ export interface Metrics {
   clvPct: number | null; // mean CLV across bets that have closingOdds
   clvBeatCount: number; // bets where we beat the closing line
   clvSampleSize: number; // bets with a closingOdds value
+  // --- Against the de-vigged closing line ---------------------------------
+  clvFairPct: number | null; // mean CLV vs fair closing — the honest number
+  clvFairBeatCount: number; // bets that beat the fair line
+  clvFairSampleSize: number; // bets with a closingFairOdds value
+  clvUnits: number | null; // expected profit in units at the fair closing price
 }
 
-/** Single-bet CLV as a percentage: (odds / closingOdds - 1) * 100. */
+/**
+ * Single-bet CLV as a percentage: (odds / closingOdds - 1) * 100.
+ *
+ * Note what this measures against. A raw bookmaker closing price carries that
+ * book's margin and is therefore SHORTER than fair, so measuring against it
+ * systematically overstates the bettor's edge: fair 2.00 closing at 1.90 makes a
+ * 2.05 bet look like +7.9% when the honest figure is +2.5%. Pass a de-vigged
+ * closing price to get the second number — see Metrics.clvFairPct.
+ */
 export function clvPct(odds: number, closingOdds: number): number {
   return (odds / closingOdds - 1) * 100;
+}
+
+/**
+ * Expected profit in units at the fair closing price:
+ *   stake × (odds × p_fair − 1)
+ *
+ * The most useful CLV figure there is, because it lands in the same unit as
+ * real P/L. "CLV says +4.2 U, the results came in at −1.8 U" is a variance
+ * reading; two unrelated percentages are not.
+ */
+export function clvUnitsFor(
+  odds: number,
+  fairClosingOdds: number,
+  stakeUnits: number
+): number | null {
+  if (!(odds > 1) || !(fairClosingOdds > 1) || !(stakeUnits > 0)) return null;
+  return stakeUnits * (odds / fairClosingOdds - 1);
 }
 
 /** Aggregate portfolio metrics over a set of bets. Pending excluded from settled stats. */
@@ -143,6 +175,10 @@ export function computeMetrics(bets: BetLike[]): Metrics {
   let clvSum = 0;
   let clvSample = 0;
   let clvBeat = 0;
+  let clvFairSum = 0;
+  let clvFairSample = 0;
+  let clvFairBeat = 0;
+  let clvUnitsSum = 0;
 
   for (const b of bets) {
     const outcome = b.outcome;
@@ -153,6 +189,15 @@ export function computeMetrics(bets: BetLike[]): Metrics {
       clvSum += c;
       clvSample += 1;
       if (c > 0) clvBeat += 1;
+    }
+
+    if (b.closingFairOdds && b.closingFairOdds > 1) {
+      const c = clvPct(b.odds, b.closingFairOdds);
+      clvFairSum += c;
+      clvFairSample += 1;
+      if (c > 0) clvFairBeat += 1;
+      const u = clvUnitsFor(b.odds, b.closingFairOdds, b.stakeUnits);
+      if (u != null) clvUnitsSum += u;
     }
 
     if (!isSettled(outcome)) {
@@ -188,6 +233,10 @@ export function computeMetrics(bets: BetLike[]): Metrics {
     clvPct: clvSample > 0 ? clvSum / clvSample : null,
     clvBeatCount: clvBeat,
     clvSampleSize: clvSample,
+    clvFairPct: clvFairSample > 0 ? clvFairSum / clvFairSample : null,
+    clvFairBeatCount: clvFairBeat,
+    clvFairSampleSize: clvFairSample,
+    clvUnits: clvFairSample > 0 ? round2(clvUnitsSum) : null,
   };
 }
 
@@ -256,6 +305,11 @@ export interface Breakdown {
   roiPct: number | null;
   avgOdds: number | null;
   winRatePct: number | null;
+  /** Mean CLV vs the de-vigged closing line, over the bets that have one. */
+  clvFairPct: number | null;
+  clvFairSampleSize: number;
+  /** Expected units at the closing price — comparable with profitUnits above. */
+  clvUnits: number | null;
 }
 
 /** Group bets by an arbitrary key (sport, league, market, bookmaker...) with per-group metrics. */
@@ -284,6 +338,9 @@ export function breakdownBy(
       roiPct: m.roiPct,
       avgOdds: m.avgOdds,
       winRatePct: m.winRatePct,
+      clvFairPct: m.clvFairPct,
+      clvFairSampleSize: m.clvFairSampleSize,
+      clvUnits: m.clvUnits,
     });
   }
   // Sort by profit descending so the best performers float to the top.

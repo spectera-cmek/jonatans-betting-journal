@@ -1,0 +1,48 @@
+name: CLV kickoff capture
+
+# Snapshots the market in the T-30 … T+5 window around each kickoff, so the
+# line movement between placing a bet and the off is recorded.
+#
+# This used to require a Windows Scheduled Task on Jonatan's own machine, which
+# meant no capture whenever the computer was off. It runs here instead, and —
+# since the REAL closing line now comes from the /historical snapshot after the
+# match (see settle-and-close.yml) — a missed run costs movement detail, never
+# the closing line itself.
+#
+# GitHub delays scheduled workflows under load, so */10 is in practice every
+# 10-20 minutes. The capture window is 35 minutes wide, which absorbs that.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+# A slow run must not overlap the next tick and double-spend credits.
+concurrency:
+  group: clv-kickoff
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Capture near-kickoff prices
+        run: npx tsx scripts/captureKickoffClv.ts --confirm --before 30 --after 5

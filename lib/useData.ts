@@ -52,6 +52,9 @@ export interface OpenBetRow {
   odds: number;
   stakeUnits: number;
   closingOdds: number | null;
+  closingFairOdds: number | null;
+  closingSource: string | null;
+  closingBookmaker: string | null;
   clvPct: number | null;
   eventAt: string | null;
   placedAt: string;

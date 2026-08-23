@@ -13,7 +13,20 @@ type Props = {
   odds: number;
   closingOdds: number | null;
   clvPctValue: number | null;
+  /** De-vigged closing price, when a sharp reference was available. */
+  closingFairOdds?: number | null;
+  closingSource?: string | null;
+  closingBookmaker?: string | null;
   onSaved?: (next: ClvSaved) => void;
+};
+
+/** Human labels for where a closing price came from. */
+const SOURCE_LABEL: Record<string, string> = {
+  odds_api_historical: "Odds API, stängningssnapshot",
+  odds_api_live: "Odds API, pris före avspark (preliminärt)",
+  thestatsapi: "TheStatsAPI",
+  oddsportal: "OddsPortal-scrape",
+  manual: "Manuellt inlagt",
 };
 
 type ClvFetchResponse = {
@@ -29,7 +42,16 @@ function computeClv(odds: number, closing: number | null): number | null {
   return clvPct(odds, closing);
 }
 
-export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Props) {
+export function ClvCell({
+  betId,
+  odds,
+  closingOdds,
+  clvPctValue,
+  closingFairOdds,
+  closingSource,
+  closingBookmaker,
+  onSaved,
+}: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -208,7 +230,19 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
           className="ap-clv-btn"
           title={
             localClosing != null
-              ? `Closing ${localClosing.toFixed(2)} — klicka för att ändra${fetchDetail ? ` · ${fetchDetail}` : ""}`
+              ? [
+                  `Stängning ${localClosing.toFixed(2)}${closingBookmaker ? ` (${closingBookmaker})` : ""}`,
+                  closingFairOdds && closingFairOdds > 1
+                    ? `Fair ${closingFairOdds.toFixed(2)} — CLV ${
+                        odds / closingFairOdds - 1 >= 0 ? "+" : ""
+                      }${((odds / closingFairOdds - 1) * 100).toFixed(1)}% mot fair line`
+                    : "Fair line saknas — siffran är mot rått pris och smickrar därför",
+                  closingSource ? SOURCE_LABEL[closingSource] ?? closingSource : null,
+                  fetchDetail,
+                  "Klicka för att ändra",
+                ]
+                  .filter(Boolean)
+                  .join("\n")
               : "Ändra closing-odds"
           }
           onClick={startEdit}

@@ -11,7 +11,14 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DATABASE_URL: "file:./dev.db"
+      # Prisma needs a syntactically valid connection string to generate the
+      # client and to type-check the build. Nothing here connects, so the value
+      # is deliberately unreachable rather than a real database.
+      #
+      # This used to be "file:./dev.db" — a SQLite URL against a Postgres
+      # schema, which `prisma db push` could not have accepted.
+      DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?sslmode=disable"
+      DIRECT_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?sslmode=disable"
 
     steps:
       - uses: actions/checkout@v4
@@ -25,13 +32,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma client + create dev database
-        run: |
-          npx prisma generate
-          npx prisma db push
+      - name: Generate Prisma client
+        run: npm run generate
+        env:
+          SHOTS_DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?sslmode=disable"
+          SHOTS_DATABASE_URL_UNPOOLED: "postgresql://ci:ci@127.0.0.1:5432/ci?sslmode=disable"
+
+      - name: Type-check
+        run: npx tsc --noEmit
 
       - name: Run tests
         run: npm test
 
       - name: Build
-        run: npm run build
+        run: npx next build

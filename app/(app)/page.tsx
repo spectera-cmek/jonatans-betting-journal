@@ -176,15 +176,30 @@ export default function OverviewPage() {
                 label="CLV"
                 accent="teal"
                 icon={IC.target}
-                hint="Closing line value: hur mycket bättre ditt odds var än stängningsoddset. Att slå stängningen över tid är den bästa indikatorn på edge."
-                value={pctFmt(m?.clvPct ?? null, true)}
+                hint="Closing line value mot fair line — stängningsoddset med bokens marginal borträknad. Mot rå stängning ser CLV alltid bättre ut än den är, eftersom bokens pris är kortare än det rättvisa. Att slå fair line över tid är den bästa indikatorn på edge."
+                value={pctFmt(
+                  (m?.clvFairSampleSize ?? 0) > 0 ? (m?.clvFairPct ?? null) : (m?.clvPct ?? null),
+                  true
+                )}
                 trend={
-                  m?.clvSampleSize
-                    ? `${Math.round(((m.clvBeatCount ?? 0) / m.clvSampleSize) * 100)} % slår stängning`
-                    : "Ingen stängningsdata"
+                  m?.clvFairSampleSize
+                    ? `${Math.round((m.clvFairBeatCount / m.clvFairSampleSize) * 100)} % slår fair line`
+                    : m?.clvSampleSize
+                      ? `${Math.round(((m.clvBeatCount ?? 0) / m.clvSampleSize) * 100)} % slår rå stängning`
+                      : "Ingen stängningsdata"
                 }
-                trendTone={(m?.clvPct ?? 0) > 0 ? "pos" : "flat"}
-                meta={m?.clvSampleSize ? `${m.clvSampleSize} spel` : undefined}
+                trendTone={
+                  ((m?.clvFairSampleSize ?? 0) > 0 ? (m?.clvFairPct ?? 0) : (m?.clvPct ?? 0)) > 0
+                    ? "pos"
+                    : "flat"
+                }
+                meta={
+                  m?.clvUnits != null
+                    ? `${m.clvUnits >= 0 ? "+" : ""}${m.clvUnits.toFixed(2)}U väntevärde`
+                    : m?.clvSampleSize
+                      ? `${m.clvSampleSize} spel`
+                      : undefined
+                }
               />
               <Kpi
                 label="Snittodds"
@@ -341,6 +356,9 @@ export default function OverviewPage() {
                     odds={b.odds}
                     closingOdds={b.closingOdds}
                     clvPctValue={b.clvPct}
+                    closingFairOdds={b.closingFairOdds}
+                    closingSource={b.closingSource}
+                    closingBookmaker={b.closingBookmaker}
                     onSaved={(next) => onClvSaved(b.id, next)}
                   />
                 </span>
@@ -374,6 +392,9 @@ export default function OverviewPage() {
                       odds={b.odds}
                       closingOdds={b.closingOdds}
                       clvPctValue={b.clvPct}
+                    closingFairOdds={b.closingFairOdds}
+                    closingSource={b.closingSource}
+                    closingBookmaker={b.closingBookmaker}
                       onSaved={(next) => onClvSaved(b.id, next)}
                     />
                   </b>

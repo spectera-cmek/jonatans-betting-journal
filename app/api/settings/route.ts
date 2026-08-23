@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, getSettings } from "@/lib/db";
 import { hasOddsApiKey } from "@/lib/oddsApi";
 import { hasTheStatsApiKey } from "@/lib/theStatsApi";
+import { oddsApiCreditStatus } from "@/lib/oddsApiUsage";
 import { getSessionUser, getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,11 @@ export async function GET() {
   const user = await getSessionUser();
   if (!user) return apiUnauthorized();
   const s = await getSettings(user.id);
+  // Credit picture straight from what the API's own headers reported, so the
+  // quota is visible before a run dies halfway through for lack of it.
+  const credits = hasOddsApiKey()
+    ? await oddsApiCreditStatus().catch(() => null)
+    : null;
   return NextResponse.json({
     username: user.username,
     unitValue: s.unitValue,
@@ -19,6 +25,10 @@ export async function GET() {
     weeklyStakeBudgetUnits: s.weeklyStakeBudgetUnits,
     hasOddsApiKey: hasOddsApiKey(),
     hasTheStatsApiKey: hasTheStatsApiKey(),
+    oddsApiCreditsRemaining: credits?.remaining ?? null,
+    oddsApiCreditsAsOf: credits?.asOf ? credits.asOf.toISOString() : null,
+    oddsApiCreditsSpent30d: credits?.spentLast30Days ?? null,
+    oddsApiCalls30d: credits?.callsLast30Days ?? null,
   });
 }
 

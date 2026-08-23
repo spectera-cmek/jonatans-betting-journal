@@ -81,7 +81,8 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run db:studio` | Browse the database in Prisma Studio |
 | `npm run sync` | Auto-settle finished bets + near-kickoff CLV (Odds API) |
 | `npm run scrape:clv` | Batch OddsPortal CLV for featured markets (local) |
-| `npm run capture:kickoff-clv` | Odds API near-kickoff closing capture |
+| `npm run capture:kickoff-clv` | Odds API near-kickoff price snapshot (line movement) |
+| `npm run backfill:closing` | **True closing lines** from Odds API `/historical` (paid plan) |
 | `npm run watch:kickoff-clv` | Daemon: auto-capture CLV T-30…T+5 |
 | `npm run install:kickoff-clv-task` | Install Windows Task (every 10 min) |
 | `npm run backfill:clv-scrape` | 90d OddsPortal CLV backfill (`--confirm`) |
@@ -118,12 +119,52 @@ It matches on each slip's reference, so it never wipes manually-added bets and i
 to re-run. Profit comes from the **actual payout column**, after tax. Statement files
 are git-ignored — they never leave your machine.
 
-### From The Odds API (grading + near-kickoff CLV)
+### From The Odds API (grading + the real closing line)
 
-1. Get a free key (~500 requests/month) at <https://the-odds-api.com/>.
+1. Get a key at <https://the-odds-api.com/>. The free tier (~500 requests/month) covers
+   grading and near-kickoff snapshots; **true closing lines need a paid plan**, because
+   the `/historical` endpoint is paid-only.
 2. Copy `.env.local.example` → `.env.local` and set `ODDS_API_KEY=your_key`.
-3. Restart the dev server. Then **Synka** (or `npm run sync`) settles finished H2H /
-   totals / spreads bets and captures **near-kickoff** closing odds for linked events.
+3. Restart the dev server. Then **Synka** (or `npm run sync`) settles finished bets and
+   pulls the closing line for events that have finished.
+
+#### Two numbers, and why the second one is the honest one
+
+Asking `/historical` for the snapshot at an event's own kickoff time returns the last
+prices the market showed — the close, observed rather than guessed. Every capture stores
+both:
+
+| | What it is | What it tells you |
+|---|---|---|
+| **Raw closing** | the reference book's own price | flattering: it carries their margin, so it is shorter than fair and makes your CLV look better than it was |
+| **Fair closing** | that market with the vig removed | the truth: exchange midpoint, else de-vigged Pinnacle, else the median of individually de-vigged books |
+
+Fair 2.00 closing at 1.90, on a bet struck at 2.05: **+7.9 %** against the raw close,
+**+2.5 %** against fair. The dashboard headlines the second and shows the first beside it.
+
+`clvUnits` on the Analys page puts the same thing in units, so it can sit next to real
+P/L — "CLV says +4.2 U, results came in at −1.8 U" is a variance reading.
+
+Backfill the whole history (groups per event, one snapshot each, 10 × markets × regions
+credits per call, and stops on a credit reserve):
+
+```bash
+npm run backfill:closing                                      # dry-run, prints cost
+npm run backfill:closing -- --confirm --limit 25 --max-credits 400
+```
+
+Asian handicap gets a raw close but **no** fair price: book sign conventions disagree and
+only a few are mapped, so a computed AH fair line would be confidently wrong.
+
+#### Running unattended
+
+Two GitHub Actions workflows keep it current whether or not your computer is on —
+`.github/workflows/clv-kickoff.yml` (every ~10 min, snapshots the T-30…T+5 window for line
+movement) and `settle-and-close.yml` (hourly: settle, then pull closing lines). Add
+`DATABASE_URL`, `DIRECT_URL`, `ODDS_API_KEY` and `THESTATSAPI_KEY` as repository secrets.
+
+A missed kickoff run now costs movement detail only — the closing line itself is picked up
+afterwards by the historical pass.
 
 **Automatic pre-kickoff CLV (recommended):** install a Windows task that runs every
 10 minutes and snapshots featured bets in the **T-30 … T+5** window:
@@ -162,7 +203,16 @@ closing odds.
 | H2H / Moneyline (incl. draw) | ✅ |
 | Totals (Over/Under) | ✅ (exact line = push) |
 | Spread / Handicap | ✅ (whole lines can push) |
-| Other (BTTS, props, …) | ✍️ Settle manually |
+| BTTS | ✅ |
+| Double chance (1X / 12 / X2) | ✅ |
+| Draw no bet | ✅ (draw returns the stake) |
+| Corners / cards | ✅ where the result feed carries the count |
+| First half | ✅ where the feed breaks the game into periods |
+| Accumulators | ✅ leg by leg — void legs drop out and the odds are recomputed |
+| Player props | ✍️ Settle manually (no player-stat source is wired up) |
+
+A bet that cannot be settled records **why** on the row instead of sitting silently
+pending, and backs off exponentially rather than re-attempting on every sync.
 
 ## 🧪 Testing
 

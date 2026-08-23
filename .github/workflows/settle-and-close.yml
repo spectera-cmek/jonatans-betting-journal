@@ -1,0 +1,62 @@
+name: Settle bets and capture closing lines
+
+# The hourly job that actually keeps the journal current:
+#   1. link, settle finished bets, and take any near-kickoff snapshot due
+#   2. pull the REAL closing line for events that have finished
+#
+# Runs the scripts directly against Neon rather than calling the deployed app,
+# so Vercel's 60-second function limit does not apply and no new public
+# endpoint has to exist.
+#
+# Minute 17 rather than 0: scheduled jobs pile up on the hour across GitHub, and
+# an off-peak minute is measurably less likely to be delayed.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      max_credits:
+        description: "Credit ceiling for the historical closing pass"
+        required: false
+        default: "400"
+
+concurrency:
+  group: settle-and-close
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      THESTATSAPI_KEY: ${{ secrets.THESTATSAPI_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Link and settle
+        run: npx tsx scripts/sync.ts
+
+      # Kept separate from the sync so a credit-limited closing pass can never
+      # stop bets from being settled — settling is the job that must not fail.
+      - name: Capture historical closing lines
+        if: always()
+        run: |
+          npx tsx scripts/backfillClosingHistorical.ts \
+            --confirm \
+            --limit 25 \
+            --max-credits "${{ github.event.inputs.max_credits || '400' }}"

@@ -230,3 +230,50 @@ describe("maxDrawdown", () => {
     expect(maxDrawdown([]).maxUnits).toBe(0);
   });
 });
+
+describe("CLV against the fair line", () => {
+  const bet = (odds: number, closing: number, fair: number, stake = 1) => ({
+    odds,
+    stakeUnits: stake,
+    outcome: "win" as const,
+    closingOdds: closing,
+    closingFairOdds: fair,
+  });
+
+  // The point of the whole exercise: a raw book price carries their margin and
+  // is shorter than fair, so CLV measured against it OVERSTATES the edge.
+  it("reports a lower CLV against fair than against the raw close", () => {
+    const m = computeMetrics([bet(2.05, 1.9, 2.0)]);
+    expect(m.clvPct).toBeCloseTo(7.89, 1);
+    expect(m.clvFairPct).toBeCloseTo(2.5, 1);
+    expect(m.clvFairPct!).toBeLessThan(m.clvPct!);
+  });
+
+  it("counts fair beats separately from raw beats", () => {
+    // Beats the vigged close, loses to the fair line — the case that matters.
+    const m = computeMetrics([bet(1.95, 1.9, 2.0)]);
+    expect(m.clvBeatCount).toBe(1);
+    expect(m.clvFairBeatCount).toBe(0);
+    expect(m.clvFairSampleSize).toBe(1);
+  });
+
+  it("puts expected value in units, so it lines up with real P/L", () => {
+    // 2 units at 2.10 against a fair 2.00 = 2 × (2.10/2.00 − 1) = +0.10 U.
+    const m = computeMetrics([bet(2.1, 2.0, 2.0, 2)]);
+    expect(m.clvUnits).toBeCloseTo(0.1, 6);
+  });
+
+  it("ignores bets with no fair line rather than treating them as zero", () => {
+    const m = computeMetrics([
+      { odds: 2.05, stakeUnits: 1, outcome: "win", closingOdds: 1.9, closingFairOdds: null },
+    ]);
+    expect(m.clvSampleSize).toBe(1);
+    expect(m.clvFairSampleSize).toBe(0);
+    expect(m.clvFairPct).toBeNull();
+    expect(m.clvUnits).toBeNull();
+  });
+
+  it("leaves the raw CLV number unchanged", () => {
+    expect(clvPct(2.0, 1.8)).toBeCloseTo(11.11, 2);
+  });
+});

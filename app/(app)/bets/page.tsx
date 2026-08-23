@@ -496,6 +496,9 @@ export default function BetsPage() {
                     odds={b.odds}
                     closingOdds={b.closingOdds}
                     clvPctValue={b.clvPct}
+                    closingFairOdds={b.closingFairOdds}
+                    closingSource={b.closingSource}
+                    closingBookmaker={b.closingBookmaker}
                     onSaved={(next) => onClvSaved(b.id, next)}
                   />
                 </span>
@@ -549,6 +552,9 @@ export default function BetsPage() {
                     odds={b.odds}
                     closingOdds={b.closingOdds}
                     clvPctValue={b.clvPct}
+                    closingFairOdds={b.closingFairOdds}
+                    closingSource={b.closingSource}
+                    closingBookmaker={b.closingBookmaker}
                     onSaved={(next) => onClvSaved(b.id, next)}
                   />
                 </b>

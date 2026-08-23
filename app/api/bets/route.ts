@@ -39,12 +39,16 @@ const LIST_SELECT = {
   betType: true,
   odds: true,
   closingOdds: true,
+  closingFairOdds: true,
+  closingSource: true,
+  closingBookmaker: true,
   stakeUnits: true,
   outcome: true,
   profitUnits: true,
   bookmaker: true,
   resultProvider: true,
   resultEventRef: true,
+  gradeBlockedReason: true,
 } as const;
 
 // GET /api/bets — list the current user's bets, newest event first.

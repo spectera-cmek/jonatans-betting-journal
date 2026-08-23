@@ -72,6 +72,10 @@ export default function AnalyticsPage() {
     roiPct: o.roiPct,
     avgOdds: null,
     winRatePct: o.winRatePct,
+    // The odds-band summary is computed server-side without CLV columns.
+    clvFairPct: null,
+    clvFairSampleSize: 0,
+    clvUnits: null,
   }));
 
   if (loading && !data) {
@@ -145,22 +149,74 @@ export default function AnalyticsPage() {
           </span>
         </div>
         {m && m.clvSampleSize > 0 ? (
-          <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
-            <div>
-              <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
-                <span className={(m.clvPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(m.clvPct, true)}</span>
+          <>
+            <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
+              <div>
+                <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
+                  <span className={(m.clvFairPct ?? 0) >= 0 ? "pos" : "neg"}>
+                    {pctFmt(m.clvFairPct ?? m.clvPct, true)}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
+                  {m.clvFairSampleSize > 0 ? "Snitt-CLV mot fair line" : "Snitt-CLV (rå stängning)"}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>Snitt-CLV</div>
+              {m.clvFairSampleSize > 0 && (
+                <div>
+                  <div className="ap-num ap-kpi-val" style={{ marginTop: 0, color: "var(--dim)" }}>
+                    {pctFmt(m.clvPct, true)}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
+                    Mot rå stängning
+                  </div>
+                </div>
+              )}
+              <div>
+                <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
+                  {pctFmt(
+                    m.clvFairSampleSize > 0
+                      ? (m.clvFairBeatCount / m.clvFairSampleSize) * 100
+                      : (m.clvBeatCount / m.clvSampleSize) * 100
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
+                  Slog linjen ·{" "}
+                  {m.clvFairSampleSize > 0
+                    ? `${m.clvFairBeatCount}/${m.clvFairSampleSize}`
+                    : `${m.clvBeatCount}/${m.clvSampleSize}`}
+                </div>
+              </div>
+              {m.clvUnits != null && (
+                <div>
+                  <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
+                    <span className={m.clvUnits >= 0 ? "pos" : "neg"}>
+                      {m.clvUnits >= 0 ? "+" : ""}
+                      {m.clvUnits.toFixed(2)} U
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
+                    Väntevärde vid stängning
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
-                {pctFmt((m.clvBeatCount / m.clvSampleSize) * 100)}
+            {m.clvFairSampleSize > 0 && (
+              <div
+                style={{
+                  marginTop: 14,
+                  fontSize: 12,
+                  color: "var(--dim2)",
+                  lineHeight: 1.5,
+                  maxWidth: 620,
+                }}
+              >
+                Fair line är stängningsoddset med bokens marginal borträknad. Den råa siffran är
+                alltid snällare — bokens pris är kortare än det rättvisa, så CLV mot rå stängning
+                överskattar din edge. Väntevärdet står i units och går att jämföra rakt av mot din
+                faktiska P/L: skiljer de sig åt är mellanskillnaden varians, inte edge.
               </div>
-              <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
-                Slog stängningsoddset · {m.clvBeatCount}/{m.clvSampleSize}
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         ) : (
           <div style={{ color: "var(--dim2)", fontSize: 13, lineHeight: 1.5, maxWidth: 560 }}>
             Inga stängningsodds insamlade än. CLV mäter om du tog bättre odds än marknadens

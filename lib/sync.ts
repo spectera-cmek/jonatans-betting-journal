@@ -2,8 +2,14 @@
 // Grades finished bets and captures closing odds for CLV.
 
 import { prisma } from "./db";
-import { gradeBet } from "./grading";
-import { espnPath, fetchFinalScore } from "./scores";
+import { gradeBet, resolveGradingMarket, type GradableBet, type ResolvedMarket } from "./grading";
+import { espnPath, fetchFinalScore, fetchMatchDetail, type MatchDetail } from "./scores";
+import {
+  clearGradeBlock,
+  isRetryDue,
+  noteGradeFailure,
+  retryDueFilter,
+} from "./gradeAttempt";
 import { settleBet } from "./settlement";
 import {
   getScores,
@@ -12,7 +18,13 @@ import {
   hasOddsApiKey,
   type ScoreEvent,
 } from "./oddsApi";
-import { linkBetToOddsEvent } from "./eventLink";
+import { linkBetToOddsEvent, parseHomeAway } from "./eventLink";
+import {
+  gradeAccumulator,
+  legOutcomeFromLabel,
+  parseLegs,
+  type LegFixture,
+} from "./gradingLegs";
 import { hasTheStatsApiKey } from "./theStatsApi";
 import {
   linkBetsToStatsMatches,
@@ -147,7 +159,7 @@ export async function runLinkEvents(): Promise<SyncResult> {
 }
 
 /** Auto-grade all pending bets that are linked to a finished event. */
-export async function runGrade(): Promise<SyncResult> {
+export async function runGrade(opts: { limit?: number } = {}): Promise<SyncResult> {
   const details: string[] = [];
   if (!hasOddsApiKey()) {
     return {
@@ -161,6 +173,7 @@ export async function runGrade(): Promise<SyncResult> {
   }
 
   // Only bets we can actually look up: pending + linked to an external event.
+  const now = new Date();
   const pending = await prisma.bet.findMany({
     where: {
       outcome: "pending",
@@ -168,7 +181,12 @@ export async function runGrade(): Promise<SyncResult> {
       sportKey: { not: null },
       betType: "single",
       eventKind: "match",
+      // /scores only reaches back three days, so an older bet can never be
+      // answered here — spending 2 credits per sport to re-learn that is waste.
+      eventAt: { gte: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000), lte: now },
+      ...retryDueFilter(now),
     },
+    take: opts.limit ?? SYNC_GRADE_LIMIT,
   });
 
   if (pending.length === 0) {
@@ -202,12 +220,25 @@ export async function runGrade(): Promise<SyncResult> {
       const parsed = parseScores(ev);
       if (!parsed) continue; // not finished yet
 
-      const outcome = gradeBet(
-        { market: bet.market, selectionSide: bet.selectionSide, line: bet.line },
-        parsed
-      );
+      const gradable = {
+        market: bet.market,
+        marketCategory: bet.marketCategory,
+        selection: bet.selection,
+        selectionSide: bet.selectionSide,
+        line: bet.line,
+      };
+      const outcome = gradeBet(gradable, parsed);
       if (!outcome) {
-        details.push(`${bet.event}: market not auto-gradable, settle manually`);
+        // /scores carries the final score and nothing else, so corners, cards
+        // and half-time markets can only be answered by the ESPN pass.
+        const reason = gradeBlockReason(
+          gradable,
+          resolveGradingMarket(gradable),
+          { homeHalfScore: null },
+          null
+        );
+        details.push(`${bet.event}: ${reason}`);
+        await noteGradeFailure(prisma, bet.id, reason);
         continue;
       }
 
@@ -219,9 +250,12 @@ export async function runGrade(): Promise<SyncResult> {
           reason: `${parsed.homeScore}-${parsed.awayScore} via The Odds API`,
         });
         if (result.changed) graded += 1;
+        await clearGradeBlock(prisma, bet.id);
         details.push(`${bet.event}: ${parsed.homeScore}-${parsed.awayScore} -> ${outcome}`);
       } catch (error) {
-        details.push(`${bet.event}: ${(error as Error).message}`);
+        const msg = (error as Error).message;
+        details.push(`${bet.event}: ${msg}`);
+        await noteGradeFailure(prisma, bet.id, msg);
       }
     }
   }
@@ -241,10 +275,53 @@ export async function runGrade(): Promise<SyncResult> {
 }
 
 /**
- * Auto-grade pending structured (h2h/totals/spreads) single bets from the real
- * final score, fetched from ESPN's free, keyless scoreboard endpoints. Works
- * without any API key. Imported rich-market accumulators won't qualify (their
- * market isn't h2h/totals/spreads) and are left for the PDF import / manual W/L.
+ * Say what stopped a bet from grading, in words the bet row can carry.
+ *
+ * "Marknaden kan inte auto-rättas" was true for every failure and useful for
+ * none of them — a missing corner count, an unreadable BTTS label and a genuine
+ * player prop all looked identical.
+ */
+function gradeBlockReason(
+  bet: GradableBet,
+  resolved: ResolvedMarket | null,
+  score: { homeHalfScore?: number | null },
+  detail: MatchDetail | null
+): string {
+  if (!resolved) {
+    return `Marknaden "${bet.marketCategory || bet.market}" går inte att räkna ur resultatet — rätta manuellt.`;
+  }
+  if (resolved === "corners" && detail?.homeCorners == null) {
+    return "Hörnstatistik saknas hos ESPN för den här ligan.";
+  }
+  if (resolved === "cards" && detail?.homeCards == null) {
+    return "Kortstatistik saknas hos ESPN för den här ligan.";
+  }
+  if (resolved.startsWith("first_half") && score.homeHalfScore == null) {
+    return "Halvtidsresultat saknas i resultatkällan.";
+  }
+  if (resolved === "btts") {
+    return `Kunde inte läsa ja/nej ur "${bet.selection ?? ""}".`;
+  }
+  if (resolved === "double_chance") {
+    return `Kunde inte läsa dubbelchansen ur "${bet.selection ?? ""}".`;
+  }
+  if (bet.line == null && (resolved === "totals" || resolved === "spreads")) {
+    return "Linjen saknas på betet — fyll i den för att kunna auto-rätta.";
+  }
+  if (!bet.selectionSide) {
+    return "Sidan (hemma/borta/över/under) saknas på betet.";
+  }
+  return "Marknad/sida/linje räcker inte för säker automatisk rättning.";
+}
+
+/**
+ * Auto-grade pending single bets from the real final score, fetched from ESPN's
+ * free, keyless scoreboard endpoints. Works without any API key.
+ *
+ * Coverage follows lib/grading.ts: winner, totals and spreads, plus BTTS,
+ * double chance, draw-no-bet, corners, cards and first-half markets where the
+ * feed carries the numbers. Anything it cannot compute records a reason on the
+ * bet rather than failing silently.
  */
 export async function runGradeByScores(
   opts: { limit?: number; deadlineMs?: number } = {}
@@ -253,14 +330,17 @@ export async function runGradeByScores(
   const limit = opts.limit ?? SYNC_GRADE_LIMIT;
   const deadline = opts.deadlineMs ?? Date.now() + SYNC_DEADLINE_MS;
 
+  const now = new Date();
   const pending = await prisma.bet.findMany({
     where: {
       outcome: "pending",
-      market: { in: ["h2h", "totals", "spreads"] },
-      eventAt: { not: null },
+      eventAt: { not: null, lte: now },
       betType: "single",
       eventKind: "match",
       OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
+      // Bets that have failed repeatedly wait longer between attempts, so a
+      // permanently ungradable one stops costing a lookup on every run.
+      ...retryDueFilter(now),
     },
     orderBy: { eventAt: "asc" },
     take: limit,
@@ -276,13 +356,20 @@ export async function runGradeByScores(
       details.push("Timeout-skydd: avbryter ESPN-rättning — kör synk igen.");
       break;
     }
+    if (!isRetryDue(bet, new Date())) continue;
+
+    const fail = async (reason: string) => {
+      details.push(`${bet.event}: ${reason}`);
+      await noteGradeFailure(prisma, bet.id, reason);
+    };
+
     const path = espnPath(bet.sport, bet.league);
     if (!path) {
-      details.push(`${bet.event}: okänd liga för resultat-uppslag`);
+      await fail("okänd liga för resultat-uppslag");
       continue;
     }
     if (!bet.homeTeam || !bet.awayTeam) {
-      details.push(`${bet.event}: saknar lagnamn (home/away)`);
+      await fail("saknar lagnamn (home/away)");
       continue;
     }
 
@@ -296,24 +383,43 @@ export async function runGradeByScores(
         bet.resultProvider === "espn" ? bet.resultEventRef : null
       );
     } catch (e) {
-      details.push(`${bet.event}: ${(e as Error).message}`);
+      await fail((e as Error).message);
       continue;
     }
     if (!score) {
-      details.push(`${bet.event}: inget färdigspelat resultat hittat ännu`);
+      await fail("inget färdigspelat resultat hittat ännu");
       continue;
     }
     if (score.wentToExtraTime) {
-      details.push(`${bet.event}: förlängning/straffar — kräver manuell kontroll av 90-minutersmarknaden`);
+      await fail("förlängning/straffar — kräver manuell kontroll av 90-minutersmarknaden");
       continue;
     }
 
-    const outcome = gradeBet(
-      { market: bet.market, selectionSide: bet.selectionSide, line: bet.line },
-      score
-    );
+    const gradable = {
+      market: bet.market,
+      marketCategory: bet.marketCategory,
+      selection: bet.selection,
+      selectionSide: bet.selectionSide,
+      line: bet.line,
+    };
+
+    // Corners and cards need a second request, so only fetch it for the bets
+    // that actually need those numbers.
+    let detail: Awaited<ReturnType<typeof fetchMatchDetail>> = null;
+    const resolved = resolveGradingMarket(gradable);
+    if ((resolved === "corners" || resolved === "cards") && score.eventId) {
+      detail = await fetchMatchDetail(path, score.eventId).catch(() => null);
+    }
+
+    const outcome = gradeBet(gradable, {
+      ...score,
+      homeCorners: detail?.homeCorners ?? null,
+      awayCorners: detail?.awayCorners ?? null,
+      homeCards: detail?.homeCards ?? null,
+      awayCards: detail?.awayCards ?? null,
+    });
     if (!outcome) {
-      details.push(`${bet.event}: marknaden kan inte auto-rättas`);
+      await fail(gradeBlockReason(gradable, resolved, score, detail));
       continue;
     }
 
@@ -325,9 +431,10 @@ export async function runGradeByScores(
         reason: `${score.homeScore}-${score.awayScore} via ESPN`,
       });
       if (result.changed) graded += 1;
+      await clearGradeBlock(prisma, bet.id);
       details.push(`${bet.event}: ${score.homeScore}-${score.awayScore} -> ${outcome}`);
     } catch (error) {
-      details.push(`${bet.event}: ${(error as Error).message}`);
+      await fail((error as Error).message);
     }
   }
 
@@ -468,6 +575,128 @@ export async function runClosingFromOddsPortal(
 }
 
 /**
+ * Auto-grade accumulators by resolving each leg.
+ *
+ * Imported slips carry the book's own per-leg verdict and settle straight away;
+ * hand-logged coupons need every leg structured and matched to a finished
+ * fixture first. Anything a leg blocks stays pending with that leg named — a
+ * wrongly settled coupon writes a false P/L into the bankroll curve and nothing
+ * downstream ever notices.
+ */
+export async function runGradeAccumulators(
+  opts: { limit?: number; deadlineMs?: number } = {}
+): Promise<SyncResult> {
+  const details: string[] = [];
+  const limit = opts.limit ?? SYNC_GRADE_LIMIT;
+  const deadline = opts.deadlineMs ?? Date.now() + SYNC_DEADLINE_MS;
+  const now = new Date();
+
+  const pending = await prisma.bet.findMany({
+    where: {
+      outcome: "pending",
+      betType: { in: ["accumulator", "betbuilder", "parlay", "double"] },
+      legs: { not: null },
+      ...retryDueFilter(now),
+    },
+    orderBy: [{ eventAt: "asc" }, { placedAt: "asc" }],
+    take: limit,
+  });
+
+  if (pending.length === 0) {
+    return { ok: true, message: "Inga kombinationer att rätta.", linked: 0, graded: 0, closingUpdated: 0, details };
+  }
+
+  let graded = 0;
+  for (const bet of pending) {
+    if (Date.now() > deadline) {
+      details.push("Timeout-skydd: avbryter kombinationsrättning — kör synk igen.");
+      break;
+    }
+    if (!isRetryDue(bet, new Date())) continue;
+
+    const legs = parseLegs(bet.legs);
+    if (legs.length === 0) {
+      await noteGradeFailure(prisma, bet.id, "Kupongen saknar sparade ben.");
+      continue;
+    }
+
+    // Only fetch fixtures for legs the book has not already graded — an
+    // imported slip needs no lookups at all.
+    const needsFixtures = legs.some((l) => !legOutcomeFromLabel(l.outcome));
+    const fixtures: LegFixture[] = [];
+    if (needsFixtures) {
+      const path = espnPath(bet.sport, bet.league);
+      if (!path || !bet.eventAt) {
+        await noteGradeFailure(
+          prisma,
+          bet.id,
+          !path ? "Ligan saknar resultatkoppling för benen." : "Kupongen saknar matchtid."
+        );
+        continue;
+      }
+      for (const leg of legs) {
+        if (legOutcomeFromLabel(leg.outcome)) continue;
+        const teams = parseHomeAway(leg.event || "");
+        if (!teams) continue;
+        const score = await fetchFinalScore(
+          path,
+          new Date(bet.eventAt),
+          teams.home,
+          teams.away
+        ).catch(() => null);
+        if (score && !score.wentToExtraTime) {
+          fixtures.push({ homeTeam: teams.home, awayTeam: teams.away, score });
+        }
+      }
+    }
+
+    const result = gradeAccumulator(legs, bet.stakeUnits, fixtures);
+    if (!result.outcome) {
+      details.push(`${bet.event}: ${result.blockedReason ?? "kunde inte rättas"}`);
+      await noteGradeFailure(prisma, bet.id, result.blockedReason ?? "Kunde inte rättas.");
+      continue;
+    }
+
+    try {
+      const settled = await settleBet(prisma, {
+        betId: bet.id,
+        outcome: result.outcome,
+        source: "espn",
+        reason:
+          result.outcome === "win" && result.effectiveOdds
+            ? `${result.legs.length} ben, ${result.effectiveOdds.toFixed(2)} efter void`
+            : `${result.legs.length} ben rättade`,
+        // Void legs shorten the coupon, so the odds on the row no longer
+        // describe the payout — hand settlement the recomputed profit.
+        explicitProfitUnits: result.profitUnits,
+      });
+      if (settled.changed) graded += 1;
+      await clearGradeBlock(prisma, bet.id);
+      details.push(`${bet.event}: kombination -> ${result.outcome}`);
+    } catch (error) {
+      const msg = (error as Error).message;
+      details.push(`${bet.event}: ${msg}`);
+      await noteGradeFailure(prisma, bet.id, msg);
+    }
+  }
+
+  if (graded > 0) {
+    await prisma.syncLog.create({
+      data: { kind: "grade", summary: `Graded ${graded} accumulator(s).` },
+    });
+  }
+
+  return {
+    ok: true,
+    message: `Rättade ${graded} kombination(er).`,
+    linked: 0,
+    graded,
+    closingUpdated: 0,
+    details,
+  };
+}
+
+/**
  * The real closing line from The Odds API's /historical snapshots.
  *
  * Paid plans only. This is the source that settles a bet's CLV — everything
@@ -591,6 +820,9 @@ export async function runFullSync(): Promise<SyncResult> {
       ? await runClosingNearKickoff({ limit: SYNC_CLOSING_LIMIT })
       : idle;
 
+  // ESPN first because it is free and carries the richer numbers (periods,
+  // corners, cards). The Odds API pass then picks up what is left — linked bets
+  // in sports ESPN has no league mapping for — at 2 credits per sport.
   const scores =
     Date.now() < deadline
       ? await runGradeByScores({ limit: SYNC_GRADE_LIMIT, deadlineMs: deadline })
@@ -603,6 +835,14 @@ export async function runFullSync(): Promise<SyncResult> {
           details: ["Timeout-skydd: hoppade ESPN-rättning — kör synk igen."] as string[],
         };
 
+  const oddsScores =
+    hasOddsApiKey() && Date.now() < deadline ? await runGrade({ limit: SYNC_GRADE_LIMIT }) : idle;
+
+  const accas =
+    Date.now() < deadline
+      ? await runGradeAccumulators({ limit: SYNC_GRADE_LIMIT, deadlineMs: deadline })
+      : idle;
+
   const linked = linkStats.linked + closingKickoff.linked;
   const closingUpdated =
     closingHistorical.closingUpdated + closingStats.closingUpdated + closingKickoff.closingUpdated;
@@ -612,13 +852,22 @@ export async function runFullSync(): Promise<SyncResult> {
     ...closingStats.details,
     ...closingKickoff.details,
     ...scores.details,
+    ...oddsScores.details,
+    ...accas.details,
   ];
   const ok =
-    linkStats.ok || closingHistorical.ok || closingStats.ok || closingKickoff.ok || scores.ok;
+    linkStats.ok ||
+    closingHistorical.ok ||
+    closingStats.ok ||
+    closingKickoff.ok ||
+    scores.ok ||
+    oddsScores.ok ||
+    accas.ok;
+  const graded = scores.graded + oddsScores.graded + accas.graded;
   const parts = [
     linked ? `${linked} länkade` : null,
     closingUpdated ? `${closingUpdated} closing` : null,
-    scores.graded ? `${scores.graded} rättade` : null,
+    graded ? `${graded} rättade` : null,
   ].filter(Boolean);
 
   const batched =
@@ -626,7 +875,7 @@ export async function runFullSync(): Promise<SyncResult> {
     closingHistorical.closingUpdated >= SYNC_CLOSING_LIMIT ||
     closingStats.closingUpdated >= SYNC_CLOSING_LIMIT ||
     closingKickoff.closingUpdated >= SYNC_CLOSING_LIMIT ||
-    scores.graded >= SYNC_GRADE_LIMIT;
+    graded >= SYNC_GRADE_LIMIT;
   const suffix = batched ? " Kör synk igen för nästa batch." : "";
 
   if (!parts.length && details.length) {
@@ -634,7 +883,7 @@ export async function runFullSync(): Promise<SyncResult> {
       ok,
       message: `Synk klar — ingen CLV ännu. ${details.slice(0, 3).join(" · ")}`,
       linked,
-      graded: scores.graded,
+      graded,
       closingUpdated,
       details,
     };
@@ -646,7 +895,7 @@ export async function runFullSync(): Promise<SyncResult> {
       ? `Synk klar: ${parts.join(", ")}.${suffix}`
       : "Synk klar — inget att uppdatera.",
     linked,
-    graded: scores.graded,
+    graded,
     closingUpdated,
     details,
   };

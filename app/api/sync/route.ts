@@ -4,6 +4,7 @@ import {
   runClosing,
   runClosingHistorical,
   runFullSync,
+  runGradeAccumulators,
   runGradeByScores,
   runLinkEvents,
   runClosingNearKickoff,
@@ -31,6 +32,8 @@ export async function POST(req: Request) {
         ? await runGradeByScores()
         : kind === "link"
           ? await runLinkEvents()
+        : kind === "accas"
+          ? await runGradeAccumulators()
         : kind === "grade"
           ? await runGrade()
           : kind === "odds-closing"
