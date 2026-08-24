@@ -10,13 +10,14 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 
-import { PrismaClient } from "@prisma/client";
+import { assertDatabaseUrl, createPrismaClient, describeDbError } from "../../lib/prismaClient";
 
 async function main() {
   const i = process.argv.indexOf("--user");
   const username = i >= 0 ? (process.argv[i + 1] ?? "").toLowerCase() : null;
 
-  const prisma = new PrismaClient();
+  assertDatabaseUrl();
+  const prisma = createPrismaClient();
   try {
     const where: { outcome: string; userId?: string } = { outcome: "pending" };
     if (username) {
@@ -79,6 +80,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error(e);
+  console.error(describeDbError(e) ?? e);
   process.exit(1);
 });

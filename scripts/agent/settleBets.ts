@@ -18,7 +18,7 @@ config({ path: ".env.local" });
 config();
 
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
-import { PrismaClient } from "@prisma/client";
+import { assertDatabaseUrl, createPrismaClient, describeDbError } from "../../lib/prismaClient";
 import { settleBet } from "../../lib/settlement";
 import { profitUnits, type Outcome } from "../../lib/betting";
 
@@ -56,7 +56,8 @@ async function main() {
     }
   }
 
-  const prisma = new PrismaClient();
+  assertDatabaseUrl();
+  const prisma = createPrismaClient();
   try {
     const ids = results.map((r) => r.id);
     const before = await prisma.bet.findMany({ where: { id: { in: ids } } });
@@ -116,6 +117,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error(e);
+  console.error(describeDbError(e) ?? e);
   process.exit(1);
 });

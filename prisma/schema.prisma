@@ -1,6 +1,11 @@
 // Betting Tracker — Prisma schema (Postgres / Neon)
 generator client {
   provider = "prisma-client-js"
+  // driverAdapters lets lib/prismaClient.ts swap the TCP connection for Neon's
+  // serverless driver over HTTPS (see PRISMA_NEON_SERVERLESS there). Enabling the
+  // preview feature changes nothing on its own — without an adapter the client
+  // still connects over TCP exactly as before.
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {

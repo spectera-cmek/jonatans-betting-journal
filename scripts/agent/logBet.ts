@@ -16,7 +16,7 @@ config({ path: ".env.local" });
 config();
 
 import { readFileSync } from "fs";
-import { PrismaClient } from "@prisma/client";
+import { assertDatabaseUrl, createPrismaClient, describeDbError } from "../../lib/prismaClient";
 import { buildBetData, ValidationError, type BetInput } from "../../lib/betInput";
 import { linkBetToOddsEvent } from "../../lib/eventLink";
 import { tryLinkSingleFootballBet, isFootballBet } from "../../lib/clvCapture";
@@ -45,7 +45,8 @@ async function main() {
   }
 
   const input = JSON.parse(readFileSync(file, "utf8")) as AgentBetInput;
-  const prisma = new PrismaClient();
+  assertDatabaseUrl();
+  const prisma = createPrismaClient();
   try {
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) throw new Error(`user "${username}" not found — register the account first`);
@@ -114,6 +115,7 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error(e instanceof ValidationError ? `Valideringsfel: ${e.message}` : e);
+  if (e instanceof ValidationError) console.error(`Valideringsfel: ${e.message}`);
+  else console.error(describeDbError(e) ?? e);
   process.exit(1);
 });
