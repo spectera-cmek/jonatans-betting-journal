@@ -2,7 +2,7 @@
   "name": "betting-tracker",
   "version": "0.1.0",
   "private": true,
-  "description": "A local-first sports betting journal — log bets in units, track ROI and bankroll over time, and auto-settle from a bet365 statement or The Odds API. Next.js + Prisma/SQLite.",
+  "description": "A personal sports betting journal — log bets in units, track ROI, CLV and bankroll over time, and auto-settle from a bet365 statement or The Odds API. Next.js + Prisma/Postgres, deployable to Vercel as a PWA.",
   "license": "MIT",
   "author": "Jonatan",
   "keywords": [
@@ -13,7 +13,8 @@
     "roi",
     "nextjs",
     "prisma",
-    "sqlite",
+    "postgres",
+    "clv",
     "typescript"
   ],
   "engines": {
@@ -71,7 +72,7 @@
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.4.5",
     "lucide-react": "^1.27.0",
-    "next": "14.2.18",
+    "next": "^14.2.35",
     "playwright": "^1.61.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -85,12 +86,12 @@
     "autoprefixer": "10.4.20",
     "nodemailer": "^9.0.3",
     "pdfjs-dist": "^4.0.379",
-    "postcss": "8.4.49",
+    "postcss": "^8.5.26",
     "prisma": "5.22.0",
-    "sharp": "0.33.5",
+    "sharp": "^0.35.3",
     "tailwindcss": "3.4.15",
-    "tsx": "4.19.2",
+    "tsx": "^4.23.12",
     "typescript": "5.6.3",
-    "vitest": "2.1.5"
+    "vitest": "^4.1.11"
   }
 }

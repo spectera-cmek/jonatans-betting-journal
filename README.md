@@ -1,13 +1,14 @@
 # 🎯 Betting Översikt
 
-> A local-first sports betting journal. Log bets in **units**, track **ROI** and
+> A personal sports betting journal. Log bets in **units**, track **ROI** and
 > **bankroll** over time, and **auto-settle** results from a bet365 account statement
-> or The Odds API — all on your machine, no account, no cloud.
+> or The Odds API. Runs locally, or deployed to Vercel + Postgres as an installable
+> PWA with per-account login.
 
 <p align="left">
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-14-black?logo=next.js&logoColor=white">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
-  <img alt="Prisma" src="https://img.shields.io/badge/Prisma-SQLite-2D3748?logo=prisma&logoColor=white">
+  <img alt="Prisma" src="https://img.shields.io/badge/Prisma-Postgres-2D3748?logo=prisma&logoColor=white">
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind-3-38BDF8?logo=tailwindcss&logoColor=white">
   <img alt="Tests: Vitest" src="https://img.shields.io/badge/tests-Vitest-6E9F18?logo=vitest&logoColor=white">
   <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg">
@@ -35,8 +36,12 @@
     *actual payout* (after tax), never recomputed.
   - Optional **[The Odds API](https://the-odds-api.com/)** integration to grade finished
     events and pull closing odds for CLV.
-- **Local & private** — everything lives in a single SQLite file. No login, no server,
-  no third party sees your bets.
+- **Your own instance** — one Postgres database you control (Neon via Vercel, or any
+  Postgres locally). Registration is gated behind an invite code and every query is
+  scoped to the signed-in account, so accounts never see each other's bets.
+- **Optional third-party calls** — grading and CLV use The Odds API and TheStatsAPI, and
+  betslip screenshot import uses the Anthropic API. All three are opt-in: leave the key
+  unset and the app simply falls back to manual entry.
 
 ## 🖼️ Screenshots
 
@@ -46,18 +51,21 @@
 
 ## 🛠️ Tech stack
 
-**Next.js 14** (App Router) · **TypeScript** · **Prisma + SQLite** · **Tailwind CSS** ·
-**Recharts** · **Vitest** · **pdfjs-dist** (statement parsing).
+**Next.js 14** (App Router) · **TypeScript** · **Prisma + Postgres** (Neon) ·
+**Tailwind CSS** · hand-rolled **SVG charts** · **Vitest** · **pdfjs-dist** (statement
+parsing) · **Playwright** (local OddsPortal CLV scrape).
 
 ## 🚀 Quick start
 
-> Requires **Node.js 18.18+**.
+> Requires **Node.js 18.18+** and a **Postgres** database. A free
+> [Neon](https://neon.tech/) project is the quickest way to get one.
 
 ```bash
-npm install        # install dependencies (once)
-npm run db:push    # create the SQLite database
-npm run db:seed    # (optional) load demo bets so the dashboard isn't empty
-npm run dev        # start the dev server
+cp .env.example .env   # then fill in DATABASE_URL, DIRECT_URL and AUTH_SECRET
+npm install            # install dependencies (once)
+npm run db:push        # create the tables
+npm run db:seed        # (optional) load demo bets so the dashboard isn't empty
+npm run dev            # start the dev server
 ```
 
 Open **http://localhost:3000**.
@@ -65,9 +73,9 @@ Open **http://localhost:3000**.
 `db:seed` inserts a handful of **fictional demo bets** so you can explore the app
 immediately — replace them with your own from the **Logga bet** button.
 
-> 📱 **Want it on your phone?** The app can also be deployed to the cloud (Vercel +
-> Postgres) with per-account login (username + password, invite-code registration),
-> so several people can track their own bets. See **[DEPLOY.md](DEPLOY.md)**.
+> 📱 **On your phone.** Deploy to Vercel + Neon Postgres and the app installs as a PWA,
+> with per-account login (username + password, invite-code registration) so several
+> people can each track their own bets. See **[DEPLOY.md](DEPLOY.md)**.
 
 ## 📜 Scripts
 
@@ -76,7 +84,7 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run dev` | Start the development server |
 | `npm run build` / `npm start` | Production build / run it |
 | `npm test` | Run the unit tests (Vitest) |
-| `npm run db:push` | Create / sync the SQLite schema |
+| `npm run db:push` | Create / sync the Postgres schema |
 | `npm run db:seed` | Insert demo bets |
 | `npm run db:studio` | Browse the database in Prisma Studio |
 | `npm run sync` | Auto-settle finished bets + near-kickoff CLV (Odds API) |
@@ -97,6 +105,10 @@ immediately — replace them with your own from the **Logga bet** button.
 | **Kalender** (Calendar) | Calendar heatmap of daily results |
 | **Analys** (Analytics) | P/L by market, league, sport and odds band |
 | **Insikter** (Insights) | Streaks, best/worst days, averages |
+| **VM 2026** | Tournament hub for bets tagged with the World Cup league |
+| **Skottmodell** (Shot model) | Team-level shots & corners model, own database |
+| **Fair odds** | De-vig, combo, correlation and Poisson calculators |
+| **Verktyg** (Tools) | Cashout, hedge, Asian-handicap matrix, bonus value, Kelly |
 | **Inställningar** (Settings) | Unit value, currency, starting bankroll, sync |
 
 > The UI is in **Swedish** 🇸🇪 — it's a personal journal — but the codebase and docs
@@ -221,7 +233,8 @@ The Odds API — allt på din egen dator, ingen inloggning, ingen molntjänst.
 - **Auto-rättning på två sätt:** importera ett **bet365-kontoutdrag (PDF)** — vinst tas
   från den *faktiska utbetalningen* efter skatt — eller koppla på
   **[The Odds API](https://the-odds-api.com/)** för rättning + stängningsodds (CLV).
-- **Lokalt & privat** — allt i en SQLite-fil. Ingen ser dina bets.
+- **Din egen instans** — en Postgres-databas du äger. Registrering kräver inbjudningskod
+  och varje konto ser bara sina egna bets.
 
 ### 🚀 Snabbstart
 
@@ -229,7 +242,7 @@ The Odds API — allt på din egen dator, ingen inloggning, ingen molntjänst.
 
 ```bash
 npm install        # installera beroenden (en gång)
-npm run db:push    # skapa SQLite-databasen
+npm run db:push    # skapa tabellerna (kräver DATABASE_URL i .env)
 npm run db:seed    # (valfritt) lägg in demo-bets
 npm run dev        # starta på http://localhost:3000
 ```

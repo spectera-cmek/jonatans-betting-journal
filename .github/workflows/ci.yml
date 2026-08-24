@@ -10,8 +10,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # `prisma generate` resolves the datasource env vars but never connects, so
+    # placeholders are enough. They must be set at job level because `npm ci`
+    # triggers `postinstall` -> `npm run generate`, which reads both schemas.
+    # The tests are pure unit tests (vitest `environment: node`) and touch no DB.
     env:
-      DATABASE_URL: "file:./dev.db"
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+      DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci"
+      SHOTS_DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+      SHOTS_DATABASE_URL_UNPOOLED: "postgresql://ci:ci@localhost:5432/ci"
 
     steps:
       - uses: actions/checkout@v4
@@ -24,11 +31,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Generate Prisma client + create dev database
-        run: |
-          npx prisma generate
-          npx prisma db push
 
       - name: Run tests
         run: npm test

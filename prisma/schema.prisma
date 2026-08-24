@@ -43,6 +43,10 @@ model Bet {
   betType         String          @default("single") // single | accumulator
   odds            Float // decimal odds you took
   closingOdds     Float? // for CLV
+  // Odds-boost: a boosted price is not a market price, so it must never count as
+  // CLV. This column has existed in the production database since before it was
+  // modelled here — every `prisma db push` silently dropped it until this line.
+  boosted         Boolean         @default(false)
   stakeUnits      Float // e.g. 1.0, 2.5
   outcome         String          @default("pending") // pending|win|loss|push|half_win|half_loss|void
   profitUnits     Float? // computed at settlement
