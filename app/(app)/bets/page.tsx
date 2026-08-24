@@ -21,6 +21,7 @@ const SettlementDialog = dynamic(
 );
 import { ClvCell, type ClvSaved } from "@/components/ClvCell";
 import type { ParsedBetWithDupe } from "@/lib/betslipExtract";
+import { betslipPrefill } from "@/lib/betslipPrefill";
 import { StatTile } from "@/components/stats";
 import { useBets } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
@@ -131,36 +132,11 @@ export default function BetsPage() {
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
 
-  // Nästa kvitto-tolkade bet i kön → förifyllning för modalen (kr → units här).
+  // Nästa kvitto-tolkade bet i kön → förifyllning för modalen (kr → units där).
   const prefill = useMemo<BetPrefill | null>(() => {
     const p = queue[queueIndex];
     if (!p) return null;
-    const form: BetPrefill["form"] = {
-      eventAt: (p.eventAt ?? p.placedAt ?? new Date().toISOString()).slice(0, 10),
-      event: p.event,
-      selection: p.selection,
-      market: p.market,
-      odds: p.odds != null ? String(p.odds) : "",
-      stakeUnits: p.stakeKr != null ? String(+(p.stakeKr / unit).toFixed(2)) : "",
-    };
-    if (p.sport) form.sport = p.sport;
-    if (p.league) form.league = p.league;
-    if (p.homeTeam) form.homeTeam = p.homeTeam;
-    if (p.awayTeam) form.awayTeam = p.awayTeam;
-    if (p.marketCategory) form.marketCategory = p.marketCategory;
-    if (p.marketScope) form.marketScope = p.marketScope;
-    if (p.selectionSide) form.selectionSide = p.selectionSide;
-    if (p.line != null) form.line = String(p.line);
-    if (p.bookmaker) form.bookmaker = p.bookmaker;
-    return {
-      form,
-      importRef: p.importRef,
-      placedAt: p.placedAt,
-      legs: p.legs && p.legs.length ? p.legs : undefined,
-      betType: p.betType === "accumulator" ? "accumulator" : undefined,
-      duplicate: p.duplicate,
-      queue: { index: queueIndex, total: queue.length },
-    };
+    return betslipPrefill(p, { unitValue: unit, index: queueIndex, total: queue.length });
   }, [queue, queueIndex, unit]);
 
   const modalOpen = adding || !!editing || !!prefill;

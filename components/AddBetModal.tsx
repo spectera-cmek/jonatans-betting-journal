@@ -22,6 +22,7 @@ import { inferEventKind } from "@/lib/betTaxonomy";
 import { evaluateBet } from "@/lib/discipline";
 import { accaOdds } from "@/lib/betting";
 import { krFmt } from "@/lib/format";
+import { dayIso } from "@/lib/time";
 import { I, IC } from "./icons";
 import type { BetDTO, BetListDTO } from "@/lib/types";
 
@@ -45,14 +46,16 @@ function legOutcome(token?: string): { label: string; badge: string } {
   return { label: token || "—", badge: "open" };
 }
 
-// Förifyllning från kvitto-tolkningen (parse-screenshot). `form` är formulärfält;
-// importRef/placedAt/legs/betType följer med skapande-POST:en utan synliga fält.
+// Förifyllning från kvitto-tolkningen (parse-screenshot) eller VM-centret. `form`
+// är formulärfält; importRef/placedAt/eventAtIso/legs följer med skapande-POST:en
+// utan synliga fält.
 export interface BetPrefill {
   form: Partial<Form>;
   importRef?: string | null;
   placedAt?: string | null;
+  /** Avspark med klockslag — datumfältet nedan rymmer bara dagen. */
+  eventAtIso?: string | null;
   legs?: unknown;
-  betType?: string | null;
   duplicate?: { betId: string; event: string; selection: string } | null;
   queue?: { index: number; total: number };
 }
@@ -72,6 +75,14 @@ interface Props {
 
 /** One-click stake sizes, so the common cases never need the keyboard. */
 const STAKE_PRESETS = [0.5, 1, 1.5, 2, 3];
+
+/** Kvittots avspark med klockslag — men bara så länge datumfältet står kvar på
+ *  samma dag; har användaren flyttat dagen är det valet som gäller. */
+function kickoffFor(prefill: BetPrefill | null | undefined, formEventAt: string): string | null {
+  const iso = prefill?.eventAtIso;
+  if (!iso || Number.isNaN(Date.parse(iso))) return null;
+  return dayIso(iso) === formEventAt ? iso : null;
+}
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -126,7 +137,9 @@ function formFromBet(b: BetDTO): Form {
     stakeUnits: String(b.stakeUnits),
     outcome: b.outcome,
     betType: b.betType ?? "single",
-    bookmaker: b.bookmaker ?? "Bet365",
+    // Saknad bookmaker visas som tom — annars ser en bet utan bookmaker ut att
+    // ligga på Bet365 i redigeringsvyn.
+    bookmaker: b.bookmaker ?? "",
     externalRef: b.externalRef ?? "",
     resultProvider: b.resultProvider ?? "",
     resultEventRef: b.resultEventRef ?? "",
@@ -358,8 +371,10 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           await api.patch(`/api/bets/${bet.id}`, payload);
         }
       } else {
+        const kickoff = kickoffFor(prefill, form.eventAt);
         await api.post("/api/bets", {
           ...form,
+          eventAt: kickoff ?? form.eventAt,
           line: form.line === "" ? null : form.line,
           closingOdds: form.closingOdds === "" ? null : form.closingOdds,
           externalRef: form.externalRef || null,
@@ -367,7 +382,6 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           ...(prefill?.importRef ? { importRef: prefill.importRef } : {}),
           ...(prefill?.placedAt ? { placedAt: prefill.placedAt } : {}),
           ...(prefill?.legs ? { legs: prefill.legs } : {}),
-          betType: prefill?.betType ?? form.betType,
         });
       }
       onSaved();
@@ -386,7 +400,13 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
   const marketOpts = MARKETS.some((m) => m.value === form.market)
     ? MARKETS
     : [{ value: form.market, label: form.market }, ...MARKETS];
-  const bookOpts = BOOKMAKERS.includes(form.bookmaker) ? BOOKMAKERS : [form.bookmaker, ...BOOKMAKERS];
+  // Tom bookmaker = kvittots varumärke gick inte att läsa. Då ska fältet stå
+  // tomt och synas, inte tyst ärva "Bet365" och landa fel i logg och CLV.
+  const bookOpts = !form.bookmaker || BOOKMAKERS.includes(form.bookmaker)
+    ? BOOKMAKERS
+    : [form.bookmaker, ...BOOKMAKERS];
+  const bookEmpty = !form.bookmaker;
+  const bookWarn = bookEmpty && !editing; // gamla importer utan bookmaker ska inte skrika
   // Detalj-marknad: curated lista per sport (fallback generisk); behåll ett
   // importerat/avvikande värde valbart.
   const catBase = MARKET_CATEGORIES_BY_SPORT[form.sport] ?? GENERIC_MARKET_CATEGORIES;
@@ -467,9 +487,20 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
             </div>
             <div className="ap-field">
               <label>Bookmaker</label>
-              <select className="ap-input" value={form.bookmaker} onChange={(e) => set("bookmaker", e.target.value)}>
+              <select
+                className="ap-input"
+                value={form.bookmaker}
+                onChange={(e) => set("bookmaker", e.target.value)}
+                style={bookWarn ? { borderColor: "var(--red)" } : undefined}
+              >
+                {bookEmpty && <option value="">— välj —</option>}
                 {bookOpts.map((x) => <option key={x}>{x}</option>)}
               </select>
+              {bookWarn && (
+                <div style={{ fontSize: 11.5, color: "var(--red)", marginTop: 4 }}>
+                  {prefill ? "Kunde inte läsas från kvittot — välj bookmaker" : "Välj bookmaker"}
+                </div>
+              )}
             </div>
           </div>
 
@@ -690,7 +721,10 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
             {sides.length > 0 ? (
               <div className="ap-field">
                 <label>Sida</label>
+                {/* Tomt val = kvittot visade ingen sida; servern härleder den ur
+                    selection-texten i stället för att fastna på "Home". */}
                 <select className="ap-input" value={form.selectionSide} onChange={(e) => set("selectionSide", e.target.value)}>
+                  {!form.selectionSide && <option value="">— härleds från spelet —</option>}
                   {sides.map((sd) => <option key={sd.value} value={sd.value}>{sd.label}</option>)}
                 </select>
               </div>

@@ -49,8 +49,16 @@ Tennis/NBA/NHL/MLB m.m. får **ingen** TheStatsAPI-CLV — logga dem ändå med 
 - `selectionSide`: over/under för Ö/U, home/away/draw för matchvinnare — **lämna aldrig tom**
   om marknaden är h2h/totals/spreads.
 - Sätt `sport`/`league` aggressivt från lag/liga-text på kvittot (Allsvenskan, EPL, La Liga …).
-- `eventAt`: matchstart om den syns/kan härledas (Europe/Stockholm om ingen zon syns).
-- `bookmaker`: härleds från kvittots utseende (grönt Betsson-kvitto = "Betsson").
+- `eventAt`: matchstart om den syns/kan härledas (Europe/Stockholm om ingen zon syns) —
+  **med klockslag**, inte bara datum: kickoff-CLV fångas i fönstret T-30…T+5.
+- `bookmaker`: läs varumärket i klartext (logga, sidhuvud, webbadress) i första hand,
+  utseendet först därefter (grönt Betsson-kvitto = "Betsson"). Skriv namnet som det står i
+  `BOOKMAKERS` (lib/constants.ts) — `normalizeBookmaker` fångar stavningsvarianter, men
+  **gissa aldrig**: går varumärket inte att läsa, utelämna fältet hellre än att sätta ett
+  namn. Fel bookmaker ger fel stängningsodds vid CLV-hämtning.
+- `betType`: `single` | `accumulator` (flera matcher) | `betbuilder` (samma match, ett
+  gemensamt odds) — bet builder loggas ALDRIG som `single`, och varje rad på kvittot blir
+  ett ben i `legs`.
 - `importRef`: alltid när Ref/ID syns på kvittot (dedupe).
 
 ## Exempel JSON (fotboll 1X2)

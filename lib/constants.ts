@@ -129,13 +129,67 @@ export const BOOKMAKERS = [
   "Other",
 ];
 
-/** Canonical bookmaker name (e.g. bet365 → Bet365). */
+/** Lowercase, letters and digits only, utan diakriter — "Mr. Green", "mr green"
+ *  och "okänd" faller ihop till en nyckel så stavningsvarianter av samma
+ *  bookmaker landar på ett kanoniskt namn. */
+const bookmakerKey = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+/** Suffixes a betslip tends to hang on the brand ("Bet365 Sportsbook",
+ *  "Unibet.se"). Stripped one at a time, longest first, only when what remains
+ *  matches a known bookmaker — so an unknown "SomeCasino" is left alone. */
+const BOOKMAKER_SUFFIXES = ["sportsbook", "sverige", "sweden", "sport", "com", "net", "se", "dk", "no", "fi"];
+
+/** Shorthands that no amount of punctuation-stripping turns into the canonical
+ *  name. Mirrors the OddsPortal aliases in lib/oddsPortal/mapping.ts. */
+const BOOKMAKER_ALIASES: Record<string, string> = {
+  b365: "Bet365",
+  "888": "888sport",
+  happybet: "Happy",
+};
+
+const BOOKMAKERS_BY_KEY = new Map(BOOKMAKERS.map((b) => [bookmakerKey(b), b]));
+
+/** Unreadable brand on a betslip — treated as "no bookmaker", never as a name. */
+const UNKNOWN_BOOKMAKERS = new Set(["okand", "okantbolag", "unknown", "null", "na", "none", "ingen"]);
+
+/**
+ * Canonical bookmaker name (bet365 / BET 365 / Bet365.se → Bet365), so the same
+ * book logged from a screenshot, a statement import and the form ends up as one
+ * value in filters, analytics and CLV lookups. Unknown names are kept as typed;
+ * an empty or explicitly-unknown value returns null.
+ */
 export function normalizeBookmaker(raw: string | null | undefined): string | null {
   const s = raw?.trim();
   if (!s) return null;
-  if (s.toLowerCase() === "bet365") return "Bet365";
-  const known = BOOKMAKERS.find((b) => b.toLowerCase() === s.toLowerCase());
-  return known ?? s;
+  let key = bookmakerKey(s);
+  if (!key) return s;
+  if (UNKNOWN_BOOKMAKERS.has(key)) return null;
+
+  const match = (k: string) => BOOKMAKER_ALIASES[k] ?? BOOKMAKERS_BY_KEY.get(k);
+  const direct = match(key);
+  if (direct) return direct;
+
+  // "Bet365 Sportsbook Sverige" → drop suffixes until something known remains.
+  let stripped = true;
+  while (stripped) {
+    stripped = false;
+    for (const suffix of BOOKMAKER_SUFFIXES) {
+      if (key.length > suffix.length && key.endsWith(suffix)) {
+        const shorter = key.slice(0, -suffix.length);
+        const hit = match(shorter);
+        if (hit) return hit;
+        key = shorter;
+        stripped = true;
+        break;
+      }
+    }
+  }
+  return s;
 }
 
 export const OUTCOMES: { value: string; label: string }[] = [
