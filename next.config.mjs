@@ -10,6 +10,12 @@ const nextConfig = {
     // actually renders.
     optimizePackageImports: ["lucide-react"],
   },
+  env: {
+    // Playwright's Chromium lives in a user-level cache outside the project, so
+    // it is never part of a serverless bundle. Anywhere but a machine we control
+    // the launch can only fail — see lib/scrapeEnv.ts.
+    NEXT_PUBLIC_CLV_SCRAPE: process.env.VERCEL ? "0" : "1",
+  },
 };
 
 export default nextConfig;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 import { fetchClvForBet } from "@/lib/clvScrape";
+import { CLV_SCRAPE_AVAILABLE, CLV_SCRAPE_UNAVAILABLE_MESSAGE } from "@/lib/scrapeEnv";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -12,6 +13,21 @@ export async function POST(
 ) {
   const userId = getSessionUserId();
   if (!userId) return apiUnauthorized();
+
+  // No browser here — say so plainly instead of launching one and handing back
+  // the raw "Executable doesn't exist" failure as a 502.
+  if (!CLV_SCRAPE_AVAILABLE) {
+    return NextResponse.json(
+      {
+        error: CLV_SCRAPE_UNAVAILABLE_MESSAGE,
+        code: "scrape_unavailable",
+        detail: CLV_SCRAPE_UNAVAILABLE_MESSAGE,
+        closingOdds: null,
+        clvPct: null,
+      },
+      { status: 501 }
+    );
+  }
 
   try {
     const result = await fetchClvForBet(params.id, { userId });

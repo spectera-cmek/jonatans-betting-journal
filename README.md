@@ -166,8 +166,12 @@ npm run backfill:clv-scrape -- --limit 50             # 90d backfill (writes DB)
 Schedule `npm run scrape:clv -- --confirm` hourly via Task Scheduler. Per-bet refresh
 in the UI still works. Prefers the bet’s bookmaker, then Pinnacle → bet365.
 
-Requires local Node — not suited for serverless. Props/niche markets may need manual
-closing odds.
+Requires local Node — not suited for serverless. Playwright keeps its Chromium in a
+user-level cache outside the project, so it is never part of a serverless bundle: on a
+Vercel deployment the per-bet CLV button is hidden and the endpoint answers `501
+scrape_unavailable` rather than failing a browser launch. Manual closing odds and
+`npm run scrape:clv` on your own machine both work as before. Props/niche markets may
+need manual closing odds.
 
 | Market | Auto-settled? |
 |--------|---------------|

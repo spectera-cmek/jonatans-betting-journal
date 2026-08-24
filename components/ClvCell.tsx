@@ -5,6 +5,7 @@ import { api } from "@/lib/fetcher";
 import { clvPct } from "@/lib/betting";
 import type { BetDTO } from "@/lib/types";
 import { I, IC } from "@/components/icons";
+import { CLV_SCRAPE_AVAILABLE } from "@/lib/scrapeEnv";
 
 export type ClvSaved = { closingOdds: number | null; clvPct: number | null };
 
@@ -131,7 +132,8 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
     }
   };
 
-  const fetchBtn = (
+  // Hidden wherever the scrape cannot run at all; manual entry stays available.
+  const fetchBtn = !CLV_SCRAPE_AVAILABLE ? null : (
     <button
       type="button"
       className="ap-iconbtn"
