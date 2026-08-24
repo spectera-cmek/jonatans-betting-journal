@@ -83,6 +83,12 @@ model ShotMatch {
 // ---------------------------------------------------------------------------
 // Oddsjämförelse — huvudmarknaderna (1X2, över/under mål, asiatiskt handikapp)
 //
+// AVVECKLAD 2026-08-22. Oddsjämförelsen (/ev) och dess inläsningsskript är
+// borttagna; ingen kod skriver eller läser MarketPrice och EvSnapshot längre.
+// Modellerna står kvar MEDVETET — att ta bort dem här och köra db:push skulle
+// droppa tabellerna och den historik som redan hunnit samlas. Ska de bort är
+// det ett eget, uttalat beslut.
+//
 // Skild från ShotOddsSnapshot: den normaliserar skott- och hörnmarknader till
 // (metric, side) med en över/under-sida per rad. Huvudmarknaderna har i stället
 // n utfall (1X2 har tre) och bär börsens orderbok, vilket kräver en annan form.
@@ -99,8 +105,8 @@ model MarketPrice {
   market    String // 1x2 | totals | ah
   outcome   String // home | draw | away | over | under
   /// Linjen som API:et angav den. Null för 1X2. Teckenkonventionen för
-  /// handikapp skiljer sig mellan böcker och normaliseras i lib/marketOdds.ts —
-  /// här lagras rådatan så den förblir spårbar.
+  /// handikapp skiljer sig mellan böcker — här lagras rådatan så den förblir
+  /// spårbar.
   line      Float?
   /// Strängnyckel för unikhetsindexet. Postgres räknar NULL som särskiljande,
   /// så en nullbar `line` skulle tillåta dubbletter på 1X2 och göra upsert

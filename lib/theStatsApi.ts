@@ -556,9 +556,9 @@ function priceRow(
  * Plattar ut ett /odds-svar till huvudmarknadernas prisrader.
  *
  * Asiatiskt handikapp lagras per sida och linje, och böckerna är INTE överens
- * om teckenkonventionen — se `normalizeHandicap` i lib/marketOdds.ts. Här
- * lagras linjen precis som API:et angav den; normaliseringen sker en gång, i
- * modellen, så att rådatan förblir spårbar.
+ * om teckenkonventionen. Här lagras linjen precis som API:et angav den;
+ * normaliseringen sker en gång, hos den som läser, så att rådatan förblir
+ * spårbar.
  */
 export function extractMarketPrices(res: MatchOddsResponse): MainMarketPrice[] {
   const out: MainMarketPrice[] = [];
