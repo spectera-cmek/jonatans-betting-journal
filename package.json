@@ -55,6 +55,7 @@
     "recategorize": "tsx scripts/recategorize.ts",
     "recategorize:detail": "tsx scripts/recategorizeDetail.ts",
     "backfill:tags": "tsx scripts/backfillBetTags.ts",
+    "backfill:bookmakers": "tsx scripts/backfillBookmakers.ts",
     "backfill:vm-refs": "tsx scripts/backfillWorldCupRefs.ts",
     "backfill:clv": "tsx scripts/backfillClv.ts",
     "shots:ingest": "tsx scripts/shots/ingestMatches.ts",

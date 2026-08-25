@@ -95,6 +95,7 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run backfill:clv-scrape` | 90d OddsPortal CLV backfill (`--confirm`) |
 | `npm run import:bet365` | Import / sync bets from a bet365 statement PDF |
 | `npm run import:unibet` | Import bets from a Unibet transaction-history CSV |
+| `npm run backfill:bookmakers` | Fold bookmaker spelling variants onto one name (`--confirm`) |
 
 ## 🗂️ Pages
 
