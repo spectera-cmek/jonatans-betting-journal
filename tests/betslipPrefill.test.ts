@@ -176,8 +176,16 @@ describe("normalizeBookmaker", () => {
   it("keeps casino brands apart from their shorter namesakes", () => {
     expect(normalizeBookmaker("lucky casino")).toBe("LuckyCasino");
     expect(normalizeBookmaker("Lucky")).toBe("Lucky");
+  });
+
+  // Two books the log wrote under two names each; the short form is the same
+  // book, so both fold onto the spelling the history already uses.
+  it("folds the short forms of Happy and Vera&John", () => {
     expect(normalizeBookmaker("happy casino")).toBe("HappyCasino");
-    expect(normalizeBookmaker("Happy")).toBe("Happy");
+    expect(normalizeBookmaker("Happy")).toBe("HappyCasino");
+    expect(normalizeBookmaker("Vera & John")).toBe("veraochjohn");
+    expect(normalizeBookmaker("Vera&John")).toBe("veraochjohn");
+    expect(normalizeBookmaker("veraochjohn")).toBe("veraochjohn");
   });
 
   it("treats an unreadable brand as no bookmaker at all", () => {
@@ -191,10 +199,13 @@ describe("normalizeBookmaker", () => {
     expect(normalizeBookmaker("PAF")).toBe("Paf");
     expect(normalizeBookmaker("paf.se")).toBe("Paf");
     expect(normalizeBookmaker("smarkets")).toBe("Smarkets");
+    expect(normalizeBookmaker("speedybet")).toBe("SpeedyBet");
+    expect(normalizeBookmaker("nordic bet")).toBe("NordicBet");
+    expect(normalizeBookmaker("golden bull")).toBe("GoldenBull");
   });
 
   it("keeps a book it has never seen instead of dropping it", () => {
-    expect(normalizeBookmaker("NordicBet.se")).toBe("NordicBet.se");
-    expect(normalizeBookmaker("Betano")).toBe("Betano");
+    expect(normalizeBookmaker("Betano.se")).toBe("Betano.se");
+    expect(normalizeBookmaker("Stake")).toBe("Stake");
   });
 });
