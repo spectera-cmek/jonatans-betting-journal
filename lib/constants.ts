@@ -124,6 +124,8 @@ export const BOOKMAKERS = [
   "Lodur",
   "FrankFred",
   "Lucky",
+  "Paf",
+  "Smarkets",
   "Pinnacle",
   "Betfair",
   "Other",

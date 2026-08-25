@@ -76,6 +76,7 @@ const EXTRACTION_PROMPT = `Du läser skärmdumpar av spelkvitton från svenska b
 ## Odds och insats
 - "odds" är decimalodds (t.ex. 2.50). Går oddset inte att läsa → null. HITTA ALDRIG PÅ ett odds.
 - "stakeKr" är insatsen i kronor ("Insats 150,00 kr" → 150). "Utbetalning"/"Potentiell vinst" är INTE insatsen. Oläsbar insats → null.
+- Börskvitton (Smarkets m.fl.): "PRIS" är oddset och "INSATS" är insatsen. "MATCHAT" (hur mycket som gått igenom) och "V&F" (vinst/förlust) är varken odds eller insats. SIDA "BUY" är ett vanligt spel; SIDA "SELL" är ett spel emot (lay) → inled då selection med "Lay: " så det inte läses som ett vanligt spel.
 
 ## Event och lag
 - Amerikansk notation "PHI Phillies @ CIN Reds" betyder PHI borta, CIN hemma → event: "CIN Reds vs PHI Phillies", homeTeam: "CIN Reds", awayTeam: "PHI Phillies".
@@ -104,6 +105,8 @@ felaktigt namn är sämre än inget namn.
    gissning bara för att kvittot ser typiskt ut — null är rätt svar när du är osäker.
 
 Utseende-ledtrådar (bara som stöd när namnet inte syns i klartext):
+- Paf: vitt kvitto med mörkgrön text, rubriken "Ditt spel har lagts!", "Kvitto #" + ~11 siffror, kryssrutan "Återanvänd val", marknadsrubriker som "Asian totalt"/"Asian handikapp" → "Paf"
+- Smarkets: svart börs-app — flikarna "MATCHAT"/"OMATCHAT", kolumnerna "SIDA" (BUY/SELL), "INSATS" och "PRIS", knappen "HANDEL", vinst/förlust som "V&F", bottenmeny "HEM · BLÄDDRA · SPEL · KONTO" → "Smarkets"
 - bet365: grön header, texten "Spel placerat", referens som börjar på "Ref XP…" → "Bet365"
 - Unibet: grönt kvitto, "Kupong-Id", boostar kallas "Uniboost" → "Unibet"
 - Betsson: vitt kvitto med "SINGEL ×1", eller lila "Superboost", referens "SpelID" → "Betsson"

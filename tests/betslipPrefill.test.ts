@@ -187,6 +187,12 @@ describe("normalizeBookmaker", () => {
     expect(normalizeBookmaker("unknown")).toBeNull();
   });
 
+  it("canonicalises the books logged from screenshots", () => {
+    expect(normalizeBookmaker("PAF")).toBe("Paf");
+    expect(normalizeBookmaker("paf.se")).toBe("Paf");
+    expect(normalizeBookmaker("smarkets")).toBe("Smarkets");
+  });
+
   it("keeps a book it has never seen instead of dropping it", () => {
     expect(normalizeBookmaker("NordicBet.se")).toBe("NordicBet.se");
     expect(normalizeBookmaker("Betano")).toBe("Betano");
