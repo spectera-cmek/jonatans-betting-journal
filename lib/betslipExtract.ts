@@ -106,8 +106,8 @@ felaktigt namn är sämre än inget namn.
 
 Utseende-ledtrådar (bara som stöd när namnet inte syns i klartext):
 - Paf: VITT kvitto med mörkgrön text, rubriken "Ditt spel har lagts!", "Kvitto #" + ~11 siffror, kryssrutan "Återanvänd val", marknadsrubriker som "Asian totalt"/"Asian handikapp" → "Paf"
-- HappyCasino: LILA app med ordet "happy" i regnbågsfärgade gemener uppe till vänster. Samma kvittorubrik som Paf ("Ditt spel har lagts!", "Kvitto #") — skiljs på kryssrutan "Behåll valet på kupongen" (Paf: "Återanvänd val") och den gula CASH OUT-etiketten → "HappyCasino"
-- Kvittonumret ("Kvitto #" + ~11 siffror som börjar på 130…) delas av flera bolag på samma plattform (Paf, HappyCasino, SpeedyBet, veraochjohn) — det avgör ALDRIG vilken bookmaker det är.
+- HappyCasino: LILA app med ordet "happy" i regnbågsfärgade gemener uppe till vänster → "HappyCasino"
+- VARNING om plattformskvitton: Paf, HappyCasino, LuckyCasino, SpeedyBet och veraochjohn kör SAMMA kvittomall — rubriken "Ditt spel har lagts!", "Kvitto #" + ~11 siffror som börjar på 130…, gul CASH OUT-etikett och en kryssruta längst ner. Varken mallen, kvittonumret eller kryssrutans text ("Behåll valet på kupongen" / "Återanvänd val") avgör vilket bolag det är — bara logotypen eller ett utskrivet namn gör det. Syns ingen logga i skärmdumpen → null.
 - Smarkets: svart börs-app — flikarna "MATCHAT"/"OMATCHAT", kolumnerna "SIDA" (BUY/SELL), "INSATS" och "PRIS", knappen "HANDEL", vinst/förlust som "V&F", bottenmeny "HEM · BLÄDDRA · SPEL · KONTO" → "Smarkets"
 - bet365: grön header, texten "Spel placerat", referens som börjar på "Ref XP…" → "Bet365"
 - Unibet: grönt kvitto, "Kupong-Id", boostar kallas "Uniboost" → "Unibet"
