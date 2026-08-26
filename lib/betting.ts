@@ -358,10 +358,10 @@ export function maxDrawdown(points: BankrollPoint[]): DrawdownInfo {
 }
 
 /** True for any multi-leg bet — accumulators, parlays and same-match bet
- *  builders alike. Legacy rows also carry "double"/"parlay". */
+ *  builders alike. Legacy rows also carry "double"/"parlay"/"combo". */
 export function isMultiBet(betType?: string | null): boolean {
   const t = (betType ?? "").toLowerCase();
-  return t === "accumulator" || t === "betbuilder" || t === "parlay" || t === "double";
+  return t === "accumulator" || t === "betbuilder" || t === "parlay" || t === "double" || t === "combo";
 }
 
 /** Swedish label for a bet type, for breakdowns and tables. */
