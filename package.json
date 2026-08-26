@@ -56,6 +56,7 @@
     "recategorize:detail": "tsx scripts/recategorizeDetail.ts",
     "backfill:tags": "tsx scripts/backfillBetTags.ts",
     "backfill:bookmakers": "tsx scripts/backfillBookmakers.ts",
+    "agent:log": "tsx scripts/agent/logBetHttp.ts",
     "backfill:vm-refs": "tsx scripts/backfillWorldCupRefs.ts",
     "backfill:clv": "tsx scripts/backfillClv.ts",
     "shots:ingest": "tsx scripts/shots/ingestMatches.ts",
@@ -79,6 +80,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "@types/node": "20.17.6",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "18.3.12",
