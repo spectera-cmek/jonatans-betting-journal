@@ -65,6 +65,57 @@ describe("oddsApiOutcomeForBet", () => {
     ).toEqual({ market: "h2h", outcomeName: "Draw" });
   });
 
+  // Sidan härleds vid inmatningen och blir fel när hem-/bortalag saknas. Litade
+  // koden på den hämtades motståndarens closing — som ser rimlig ut.
+  it("lets the selection name override a contradicting selectionSide", () => {
+    expect(
+      oddsApiOutcomeForBet(
+        {
+          market: "h2h",
+          selection: "Chelsea vinst fulltid",
+          selectionSide: "home",
+          line: null,
+          homeTeam: null,
+          awayTeam: null,
+          event: "Arsenal - Chelsea",
+        },
+        event
+      )
+    ).toEqual({ market: "h2h", outcomeName: "Chelsea" });
+
+    expect(
+      oddsApiOutcomeForBet(
+        {
+          market: "spreads",
+          selection: "Chelsea -1.5",
+          selectionSide: "home",
+          line: -1.5,
+          homeTeam: null,
+          awayTeam: null,
+          event: "Arsenal - Chelsea",
+        },
+        event
+      )
+    ).toEqual({ market: "spreads", outcomeName: "Chelsea", point: -1.5 });
+  });
+
+  it("still uses selectionSide when the name matches neither team", () => {
+    expect(
+      oddsApiOutcomeForBet(
+        {
+          market: "h2h",
+          selection: "1",
+          selectionSide: "home",
+          line: null,
+          homeTeam: "Arsenal",
+          awayTeam: "Chelsea",
+          event: "Arsenal vs Chelsea",
+        },
+        event
+      )
+    ).toEqual({ market: "h2h", outcomeName: "Arsenal" });
+  });
+
   it("maps totals over/under with line", () => {
     expect(
       oddsApiOutcomeForBet(

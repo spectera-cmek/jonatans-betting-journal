@@ -28,8 +28,7 @@ const LEAGUE_KEYS: Record<string, string> = {
   "ishockey|nhl": "icehockey_nhl",
   "baseball|mlb": "baseball_mlb",
   "american football|nfl": "americanfootball_nfl",
-  "tennis|atp": "tennis_atp",
-  "tennis|wta": "tennis_wta",
+  // Tennis saknar generell nyckel — se kommentaren vid inferSportKey.
   "mma|ufc": "mma_mixed_martial_arts",
 };
 
@@ -41,7 +40,6 @@ const SPORT_ONLY_KEYS: Record<string, string> = {
   ishockey: "icehockey_nhl",
   baseball: "baseball_mlb",
   "american football": "americanfootball_nfl",
-  tennis: "tennis_atp",
   mma: "mma_mixed_martial_arts",
   ufc: "mma_mixed_martial_arts",
 };
@@ -71,16 +69,27 @@ export function inferSportKey(
   if (leagueNorm === VM_2026_LEAGUE.toLowerCase()) return "soccer_fifa_world_cup";
   if (leagueNorm.includes("wnba")) return "basketball_wnba";
   if (leagueNorm.includes("ufc") || sportNorm === "mma") return "mma_mixed_martial_arts";
-  if (sportNorm === "tennis") {
-    if (leagueNorm.includes("wta")) return "tennis_wta";
-    return "tennis_atp";
-  }
+  // Tennis har ingen generell nyckel hos The Odds API — bara en per turnering
+  // ("tennis_atp_us_open" osv.), och de flesta står som inactive utanför sin
+  // vecka. "tennis_atp"/"tennis_wta" som fanns här gav 404 UNKNOWN_SPORT på
+  // varje anrop, både för rättning och CLV. Null är ärligare: ingen täckning.
+  if (sportNorm === "tennis") return null;
   return SPORT_ONLY_KEYS[sportNorm] ?? SPORT_ONLY_KEYS[sport.toLowerCase()] ?? null;
 }
+
+/** Bokstäver som inte faller isär av NFD men ändå skrivs om av engelska API:er. */
+const LETTER_FOLDS: Record<string, string> = {
+  ø: "o", æ: "ae", œ: "oe", ß: "ss", đ: "d", ð: "d", þ: "th", ł: "l", ı: "i",
+};
 
 function norm(s: string): string {
   return s
     .toLowerCase()
+    .replace(/[øæœßðþłı]|đ/g, (c) => LETTER_FOLDS[c] ?? c)
+    // Fäll ihop diakriter innan skiljetecken städas bort. Utan det blir
+    // "Västerås SK" till "v ster s sk" och matchar aldrig API:ets "Vasteras SK".
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
     .replace(/[^a-z0-9 ]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -115,6 +124,12 @@ export function parseHomeAway(event: string): { home: string; away: string } | n
     const [home, away] = e.split(/[–—]/).map((s) => s.trim());
     if (home && away) return { home, away };
   }
+  // "Home - Away" — så skrivs matcherna i flera av importerna. Bindestrecket
+  // måste ha mellanslag omkring sig, annars delas Saint-Étienne mitt itu.
+  if (/ - /.test(e)) {
+    const [home, away] = e.split(/ - /).map((s) => s.trim());
+    if (home && away) return { home, away };
+  }
   return null;
 }
 
@@ -130,11 +145,17 @@ export interface LinkableBet {
   externalRef?: string | null;
 }
 
+/** The fields matching needs — live and historical events both satisfy this. */
+export type MatchableEvent = Pick<
+  OddsEvent,
+  "id" | "home_team" | "away_team" | "commence_time"
+>;
+
 /** Find the single best Odds API event for a bet, or null if ambiguous/unmatched. */
-export function matchOddsEvent(
+export function matchOddsEvent<T extends MatchableEvent>(
   bet: Pick<LinkableBet, "homeTeam" | "awayTeam" | "eventAt" | "event">,
-  events: OddsEvent[]
-): OddsEvent | null {
+  events: T[]
+): T | null {
   let home = bet.homeTeam?.trim() || "";
   let away = bet.awayTeam?.trim() || "";
   if (!home || !away) {
