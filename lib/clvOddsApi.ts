@@ -12,8 +12,7 @@ import {
 } from "./oddsApi";
 import { linkBetToOddsEvent, parseHomeAway, teamNameMatches } from "./eventLink";
 import { isStatsApiMatchRef } from "./theStatsApi";
-
-const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
+import { FEATURED_MARKETS, oddsApiClvEligibility } from "./clvEligibility";
 
 export interface OddsApiKickoffClvOptions {
   /** Capture when kickoff is within this many minutes ahead (default 30). */
@@ -47,10 +46,14 @@ type KickoffBet = {
   sportKey: string | null;
   externalRef: string | null;
   market: string;
+  marketCategory: string | null;
+  marketScope: string | null;
   selection: string;
   selectionSide: string | null;
   line: number | null;
   bookmaker: string | null;
+  notes: string | null;
+  boosted: boolean;
   odds: number;
 };
 
@@ -68,24 +71,30 @@ export function oddsApiOutcomeForBet(
   const away = bet.awayTeam || parseHomeAway(bet.event)?.away || event.away_team;
 
   if (market === "h2h") {
-    if (side === "home") return { market: "h2h", outcomeName: event.home_team };
-    if (side === "away") return { market: "h2h", outcomeName: event.away_team };
     if (side === "draw") return { market: "h2h", outcomeName: "Draw" };
     if (/oavgjort|draw|\bx\b/i.test(bet.selection)) {
       return { market: "h2h", outcomeName: "Draw" };
     }
-    if (home && teamNameMatches(bet.selection, home)) {
-      return { market: "h2h", outcomeName: event.home_team };
-    }
-    if (away && teamNameMatches(bet.selection, away)) {
-      return { market: "h2h", outcomeName: event.away_team };
-    }
-    if (teamNameMatches(bet.selection, event.home_team)) {
-      return { market: "h2h", outcomeName: event.home_team };
-    }
-    if (teamNameMatches(bet.selection, event.away_team)) {
-      return { market: "h2h", outcomeName: event.away_team };
-    }
+
+    // Urvalstexten går före selectionSide.
+    //
+    // Sidan är härledd vid inmatningen och blir fel när hem-/bortalag saknas:
+    // "Liverpool vinst fulltid" i "Newcastle United - Liverpool" låg som
+    // side=home. Litade man på sidan hämtades Newcastles pris i stället för
+    // Liverpools — ett closing som ser rimligt ut men gäller motståndaren.
+    const matchesHome =
+      (!!home && teamNameMatches(bet.selection, home)) ||
+      teamNameMatches(bet.selection, event.home_team);
+    const matchesAway =
+      (!!away && teamNameMatches(bet.selection, away)) ||
+      teamNameMatches(bet.selection, event.away_team);
+
+    if (matchesHome && !matchesAway) return { market: "h2h", outcomeName: event.home_team };
+    if (matchesAway && !matchesHome) return { market: "h2h", outcomeName: event.away_team };
+
+    // Namnet pekar på båda eller inget — då är sidan enda ledtråden.
+    if (side === "home") return { market: "h2h", outcomeName: event.home_team };
+    if (side === "away") return { market: "h2h", outcomeName: event.away_team };
     return null;
   }
 
@@ -102,16 +111,26 @@ export function oddsApiOutcomeForBet(
 
   if (market === "spreads") {
     if (bet.line == null) return null;
+
+    // Samma ordning som h2h ovan: namnet i urvalet är mer tillförlitligt än den
+    // härledda sidan, och ett handikapp på fel lag är fel med omvänt tecken.
+    const matchesHome =
+      (!!home && teamNameMatches(bet.selection, home)) ||
+      teamNameMatches(bet.selection, event.home_team);
+    const matchesAway =
+      (!!away && teamNameMatches(bet.selection, away)) ||
+      teamNameMatches(bet.selection, event.away_team);
+
+    if (matchesHome && !matchesAway) {
+      return { market: "spreads", outcomeName: event.home_team, point: bet.line };
+    }
+    if (matchesAway && !matchesHome) {
+      return { market: "spreads", outcomeName: event.away_team, point: bet.line };
+    }
     if (side === "home") {
       return { market: "spreads", outcomeName: event.home_team, point: bet.line };
     }
     if (side === "away") {
-      return { market: "spreads", outcomeName: event.away_team, point: bet.line };
-    }
-    if (home && teamNameMatches(bet.selection, home)) {
-      return { market: "spreads", outcomeName: event.home_team, point: bet.line };
-    }
-    if (away && teamNameMatches(bet.selection, away)) {
       return { market: "spreads", outcomeName: event.away_team, point: bet.line };
     }
     return null;
@@ -180,10 +199,14 @@ export async function captureClosingNearKickoff(
       sportKey: true,
       externalRef: true,
       market: true,
+      marketCategory: true,
+      marketScope: true,
       selection: true,
       selectionSide: true,
       line: true,
       bookmaker: true,
+      notes: true,
+      boosted: true,
       odds: true,
     },
   });
@@ -203,6 +226,15 @@ export async function captureClosingNearKickoff(
   for (const bet of candidates) {
     if (isStatsApiMatchRef(bet.externalRef)) {
       details.push(`${bet.event}: skip — TheStatsAPI-länk (mt_*)`);
+      continue;
+    }
+
+    // `market` är avräkningstyp, inte semantisk marknad: ett hörn- eller
+    // kortspel ligger också som "totals". Utan den här kontrollen hämtas
+    // målpriset åt dem. Se lib/clvEligibility.ts.
+    const verdict = oddsApiClvEligibility(bet);
+    if (!verdict.ok) {
+      details.push(`${bet.event}: hoppade — ${verdict.reason}`);
       continue;
     }
 

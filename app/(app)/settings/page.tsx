@@ -193,13 +193,16 @@ export default function SettingsPage() {
                   ? "TheStatsAPI hämtar historiska stängningsodds (CLV) för fotboll — även retroaktivt. Synken kör i små batchar (undviker 504); kör igen för fler bets. "
                   : ""}
                 {settings?.hasOddsApiKey
-                  ? "The Odds API länkar icke-fotboll och ger live-closing som fallback. "
+                  ? "The Odds API hämtar closing i efterhand ur historiken — det kräver ingen väntan vid avspark. Kör automatiskt varje natt. "
                   : ""}
                 ESPN-resultat rättar singlar utan API-länk.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <SyncButton kind="closing" label="Hämta closing-odds" showResult />
+                  {settings?.hasOddsApiKey && (
+                    <SyncButton kind="historical-clv" label="Historisk CLV (Odds API)" showResult />
+                  )}
                   <SyncButton kind="all" label="Full synk" showResult />
                   {settings?.hasOddsApiKey && <SyncButton kind="grade" label="Rätta via Odds API" showResult />}
                 </div>

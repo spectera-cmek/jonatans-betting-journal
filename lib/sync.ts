@@ -20,6 +20,7 @@ import {
   isStatsApiMatchRef,
 } from "./clvCapture";
 import { captureClosingNearKickoff } from "./clvOddsApi";
+import { captureHistoricalClv } from "./clvHistorical";
 import { captureClosingFromOddsPortal } from "./clvOddsPortalBatch";
 
 export interface SyncResult {
@@ -430,6 +431,54 @@ export async function runClosingNearKickoff(
 }
 
 /**
+ * Historisk CLV via The Odds API — closing i efterhand, utan tidsfönster.
+ *
+ * Den här vägen är den enda som fungerar för spel vars avspark redan passerat,
+ * vilket är de allra flesta när man synkar för hand. Cronjobbet i
+ * app/api/cron/clv kör samma funktion med större tak.
+ */
+export async function runClosingHistorical(
+  opts: { limit?: number; maxCredits?: number; deadlineMs?: number; dryRun?: boolean } = {}
+): Promise<SyncResult> {
+  if (!hasOddsApiKey()) {
+    return {
+      ok: false,
+      message: "No ODDS_API_KEY set — cannot capture historical CLV.",
+      linked: 0,
+      graded: 0,
+      closingUpdated: 0,
+      details: [],
+    };
+  }
+
+  const result = await captureHistoricalClv({
+    sinceDays: CLV_WINDOW_DAYS,
+    limit: opts.limit ?? 25,
+    maxCredits: opts.maxCredits ?? 600,
+    deadlineMs: opts.deadlineMs,
+    dryRun: opts.dryRun,
+  });
+
+  if (result.closingUpdated > 0 && !opts.dryRun) {
+    await prisma.syncLog.create({
+      data: {
+        kind: "closing",
+        summary: `Historisk CLV för ${result.closingUpdated} bet(s), ${result.creditsSpent} krediter.`,
+      },
+    });
+  }
+
+  return {
+    ok: true,
+    message: `Historisk CLV: ${result.closingUpdated} closing (${result.creditsSpent} krediter, ${result.remaining ?? "?"} kvar).`,
+    linked: result.linked,
+    graded: 0,
+    closingUpdated: result.closingUpdated,
+    details: result.details,
+  };
+}
+
+/**
  * OddsPortal batch scrape for featured markets (local/CLI only — needs Playwright).
  */
 export async function runClosingFromOddsPortal(
@@ -481,13 +530,22 @@ export async function runClosing(): Promise<SyncResult> {
   let linked = link.linked;
   let ok = stats.ok || link.ok || updated > 0;
 
-  // Without TheStatsAPI (or when it found nothing), capture near-kickoff via Odds API.
-  if (hasOddsApiKey() && (!hasTheStatsApiKey() || updated === 0)) {
+  // Odds API-vägarna körs alltid när nyckeln finns. Tidigare hoppades de över så
+  // fort TheStatsAPI hade hittat något — men de täcker olika spel (TheStatsAPI
+  // bara fotboll), så en enda fotbollsträff kunde blockera all annan CLV.
+  if (hasOddsApiKey()) {
     const kickoff = await runClosingNearKickoff({ limit: SYNC_CLOSING_LIMIT });
     details.push(...kickoff.details);
     updated += kickoff.closingUpdated;
     linked += kickoff.linked;
     ok = ok || kickoff.ok || kickoff.closingUpdated > 0;
+
+    // Det mesta ligger bakom avspark och nås bara historiskt.
+    const historical = await runClosingHistorical({ limit: SYNC_CLOSING_LIMIT });
+    details.push(...historical.details);
+    updated += historical.closingUpdated;
+    linked += historical.linked;
+    ok = ok || historical.ok || historical.closingUpdated > 0;
   }
 
   const moreHint =
@@ -521,9 +579,16 @@ export async function runFullSync(): Promise<SyncResult> {
     ? await runClosingFromStatsApi({ limit: SYNC_CLOSING_LIMIT })
     : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
 
+  // Se runClosing(): Odds API-vägarna gäller andra spel än TheStatsAPI och får
+  // inte hoppas över bara för att fotbollsvägen råkade hitta något.
   const closingKickoff =
-    hasOddsApiKey() && Date.now() < deadline && (!hasTheStatsApiKey() || closingStats.closingUpdated === 0)
+    hasOddsApiKey() && Date.now() < deadline
       ? await runClosingNearKickoff({ limit: SYNC_CLOSING_LIMIT })
+      : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
+
+  const closingHistorical =
+    hasOddsApiKey() && Date.now() < deadline
+      ? await runClosingHistorical({ limit: SYNC_CLOSING_LIMIT, deadlineMs: deadline })
       : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
 
   const scores =
@@ -538,15 +603,20 @@ export async function runFullSync(): Promise<SyncResult> {
           details: ["Timeout-skydd: hoppade ESPN-rättning — kör synk igen."] as string[],
         };
 
-  const linked = linkStats.linked + closingKickoff.linked;
-  const closingUpdated = closingStats.closingUpdated + closingKickoff.closingUpdated;
+  const linked = linkStats.linked + closingKickoff.linked + closingHistorical.linked;
+  const closingUpdated =
+    closingStats.closingUpdated +
+    closingKickoff.closingUpdated +
+    closingHistorical.closingUpdated;
   const details = [
     ...linkStats.details,
     ...closingStats.details,
     ...closingKickoff.details,
+    ...closingHistorical.details,
     ...scores.details,
   ];
-  const ok = linkStats.ok || closingStats.ok || closingKickoff.ok || scores.ok;
+  const ok =
+    linkStats.ok || closingStats.ok || closingKickoff.ok || closingHistorical.ok || scores.ok;
   const parts = [
     linked ? `${linked} länkade` : null,
     closingUpdated ? `${closingUpdated} closing` : null,
@@ -557,6 +627,7 @@ export async function runFullSync(): Promise<SyncResult> {
     linkStats.linked >= SYNC_LINK_LIMIT ||
     closingStats.closingUpdated >= SYNC_CLOSING_LIMIT ||
     closingKickoff.closingUpdated >= SYNC_CLOSING_LIMIT ||
+    closingHistorical.closingUpdated >= SYNC_CLOSING_LIMIT ||
     scores.graded >= SYNC_GRADE_LIMIT;
   const suffix = batched ? " Kör synk igen för nästa batch." : "";
 

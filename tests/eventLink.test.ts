@@ -16,10 +16,15 @@ describe("inferSportKey", () => {
   it("falls back to sport-only keys", () => {
     expect(inferSportKey("Basketball", null)).toBe("basketball_nba");
   });
-  it("maps MMA and tennis", () => {
+  it("maps MMA", () => {
     expect(inferSportKey("MMA", "UFC")).toBe("mma_mixed_martial_arts");
-    expect(inferSportKey("Tennis", "ATP")).toBe("tennis_atp");
-    expect(inferSportKey("Tennis", "WTA")).toBe("tennis_wta");
+  });
+  // The Odds API har ingen "tennis_atp" — bara nycklar per turnering. Att hitta
+  // på en gav 404 UNKNOWN_SPORT vid varje rättning och CLV-hämtning.
+  it("returns null for tennis, which has no general sport key", () => {
+    expect(inferSportKey("Tennis", "ATP")).toBeNull();
+    expect(inferSportKey("Tennis", "WTA")).toBeNull();
+    expect(inferSportKey("Tennis", null)).toBeNull();
   });
   it("returns null for unknown sports", () => {
     expect(inferSportKey("Darts", null)).toBeNull();
@@ -39,6 +44,21 @@ describe("parseHomeAway", () => {
       away: "Chelsea",
     });
   });
+  // Importerna skriver matcher så här; utan den här grenen fick de aldrig
+  // hem-/bortalag och kunde alltså aldrig länkas för CLV.
+  it("parses a spaced hyphen as home - away", () => {
+    expect(parseHomeAway("Newcastle United - Liverpool")).toEqual({
+      home: "Newcastle United",
+      away: "Liverpool",
+    });
+  });
+  it("leaves hyphenated team names intact", () => {
+    expect(parseHomeAway("Saint-Étienne vs Lyon")).toEqual({
+      home: "Saint-Étienne",
+      away: "Lyon",
+    });
+    expect(parseHomeAway("Saint-Étienne")).toBeNull();
+  });
 });
 
 describe("teamNameMatches", () => {
@@ -48,6 +68,17 @@ describe("teamNameMatches", () => {
   });
   it("rejects unrelated teams", () => {
     expect(teamNameMatches("Arsenal", "Chelsea")).toBe(false);
+  });
+  // API:et skriver nordiska lagnamn utan diakriter. Tidigare föll å/ä/ö bort
+  // helt och gjorde "Västerås SK" till "v ster s sk" — som aldrig matchade.
+  it("folds diacritics the way the API writes them", () => {
+    expect(teamNameMatches("Västerås SK", "Vasteras SK")).toBe(true);
+    expect(teamNameMatches("Malmö FF", "Malmo FF")).toBe(true);
+    expect(teamNameMatches("Bodø/Glimt", "Bodo Glimt")).toBe(true);
+    expect(teamNameMatches("Djurgårdens IF", "Djurgardens IF")).toBe(true);
+  });
+  it("still rejects unrelated teams after folding", () => {
+    expect(teamNameMatches("Västerås SK", "Malmo FF")).toBe(false);
   });
 });
 

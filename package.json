@@ -57,6 +57,8 @@
     "backfill:tags": "tsx scripts/backfillBetTags.ts",
     "backfill:vm-refs": "tsx scripts/backfillWorldCupRefs.ts",
     "backfill:clv": "tsx scripts/backfillClv.ts",
+    "backfill:clv-historical": "tsx scripts/backfillHistoricalClv.ts",
+    "clv:coverage": "tsx scripts/clvCoverage.ts",
     "shots:ingest": "tsx scripts/shots/ingestMatches.ts",
     "shots:odds": "tsx scripts/shots/ingestOdds.ts",
     "shots:backtest": "tsx scripts/shots/backtest.ts",

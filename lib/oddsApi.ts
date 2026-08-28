@@ -1,6 +1,10 @@
 // Thin client for The Odds API (https://the-odds-api.com/).
-// Free tier (~500 req/month) returns current odds + scores. Used for event
+// Returns current odds, historical odds snapshots and scores. Used for event
 // search, closing-line capture (CLV) and auto-grading.
+//
+// Krediter: en vanlig odds-förfrågan kostar 1 per marknad och region, en
+// historisk kostar 10. Betalplanen ger 20 000 krediter i månaden — se
+// lib/clvHistorical.ts för budgetspärren som håller en körning innanför dem.
 
 const BASE = "https://api.the-odds-api.com/v4";
 
@@ -184,6 +188,72 @@ export function getEventOddsWithQuota(
   });
 }
 
+/**
+ * En historisk ögonblicksbild. API:t returnerar närmaste snapshot som är lika
+ * med eller tidigare än `date`, plus grannarna — `timestamp` är den man faktiskt
+ * fick, och den kan ligga upp till fem minuter före den man bad om.
+ */
+export interface HistoricalSnapshot<T> {
+  timestamp: string;
+  previous_timestamp: string | null;
+  next_timestamp: string | null;
+  data: T;
+}
+
+/** Ett event i en historisk ögonblicksbild — samma form som OddsEvent utan böcker. */
+export type HistoricalEvent = Omit<OddsEvent, "bookmakers">;
+
+/** Sekundprecision utan millisekunder — API:t avvisar `.000Z`. */
+export function historicalDateParam(at: Date | string): string {
+  const d = at instanceof Date ? at : new Date(at);
+  return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+/**
+ * Matchlistan som den såg ut vid en tidpunkt. Kostar 1 kredit (gratis när
+ * snapshotten är tom).
+ *
+ * Det här är enda sättet att länka ett spel i efterhand: `/sports/{key}/odds`
+ * returnerar bara kommande matcher, så en match som redan startat går inte att
+ * hitta där — och då kan closing aldrig hämtas för den.
+ */
+export function getHistoricalEvents(
+  sportKey: string,
+  at: Date | string
+): Promise<{ data: HistoricalSnapshot<HistoricalEvent[]>; quota: OddsApiQuota }> {
+  return getWithQuota<HistoricalSnapshot<HistoricalEvent[]>>(
+    `/historical/sports/${sportKey}/events`,
+    { date: historicalDateParam(at) }
+  );
+}
+
+/**
+ * Oddsen för EN match vid en tidpunkt — den faktiska closing-linjen när man
+ * frågar strax före avspark.
+ *
+ * Kostar 10 krediter per marknad och region, alltså tio gånger en vanlig
+ * odds-förfrågan. Skicka därför bara de marknader spelet faktiskt behöver, och
+ * en enda region.
+ */
+export function getHistoricalEventOdds(
+  sportKey: string,
+  eventId: string,
+  at: Date | string,
+  opts: { regions?: string; markets?: string; bookmakers?: string } = {}
+): Promise<{ data: HistoricalSnapshot<OddsEvent>; quota: OddsApiQuota }> {
+  const params: Record<string, string> = {
+    date: historicalDateParam(at),
+    regions: opts.regions ?? "eu",
+    markets: opts.markets ?? "h2h",
+    oddsFormat: "decimal",
+  };
+  if (opts.bookmakers) params.bookmakers = opts.bookmakers;
+  return getWithQuota<HistoricalSnapshot<OddsEvent>>(
+    `/historical/sports/${sportKey}/events/${eventId}/odds`,
+    params
+  );
+}
+
 export function getScores(
   sportKey: string,
   daysFrom = 3
@@ -228,19 +298,20 @@ export function bestPriceFor(
 const DEFAULT_CLV_BOOKS = ["pinnacle", "bet365", "unibet", "williamhill"];
 
 /**
- * Prefer sharp/common books for CLV; fall back to best available price.
- * Returns null when the outcome/line is missing.
+ * Priset hos den första boken i listan som faktiskt noterar utgången.
+ *
+ * Till skillnad från `preferredPriceFor` finns här ingen reserv: hittas ingen
+ * av böckerna returneras null. Det är vad closing-hämtningen vill ha — en
+ * referens från en känd bok, inte högsta pris bland tjugo slumpmässiga.
  */
-export function preferredPriceFor(
+export function referencePriceFor(
   event: OddsEvent,
   marketKey: string,
   outcomeName: string,
   point?: number,
-  preferredBookKeys: string[] = DEFAULT_CLV_BOOKS
+  bookKeys: string[] = DEFAULT_CLV_BOOKS
 ): { price: number; bookmaker: string } | null {
-  const want = new Set(preferredBookKeys.map((k) => k.toLowerCase()));
-
-  for (const key of preferredBookKeys) {
+  for (const key of bookKeys) {
     const bk = (event.bookmakers || []).find(
       (b) => b.key.toLowerCase() === key.toLowerCase()
     );
@@ -253,6 +324,30 @@ export function preferredPriceFor(
       }
     }
   }
+  return null;
+}
+
+/**
+ * Prefer sharp/common books for CLV; fall back to best available price.
+ * Returns null when the outcome/line is missing.
+ */
+export function preferredPriceFor(
+  event: OddsEvent,
+  marketKey: string,
+  outcomeName: string,
+  point?: number,
+  preferredBookKeys: string[] = DEFAULT_CLV_BOOKS
+): { price: number; bookmaker: string } | null {
+  const want = new Set(preferredBookKeys.map((k) => k.toLowerCase()));
+
+  const preferred = referencePriceFor(
+    event,
+    marketKey,
+    outcomeName,
+    point,
+    preferredBookKeys
+  );
+  if (preferred) return preferred;
 
   // Any remaining bookmaker (not already preferred) — take best price.
   let best: { price: number; bookmaker: string } | null = null;

@@ -19,7 +19,7 @@ export function SyncButton({
   onDone,
   showResult = false,
 }: {
-  kind?: "all" | "grade" | "closing" | "scores" | "link";
+  kind?: "all" | "grade" | "closing" | "scores" | "link" | "odds-closing" | "historical-clv";
   label?: string;
   onDone?: () => void;
   showResult?: boolean;

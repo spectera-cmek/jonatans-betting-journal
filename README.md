@@ -88,6 +88,8 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run db:seed` | Insert demo bets |
 | `npm run db:studio` | Browse the database in Prisma Studio |
 | `npm run sync` | Auto-settle finished bets + near-kickoff CLV (Odds API) |
+| `npm run backfill:clv-historical` | Odds API closing from historical snapshots (`--confirm`) |
+| `npm run clv:coverage` | How many bets can get CLV, and why the rest can't |
 | `npm run scrape:clv` | Batch OddsPortal CLV for featured markets (local) |
 | `npm run capture:kickoff-clv` | Odds API near-kickoff closing capture |
 | `npm run watch:kickoff-clv` | Daemon: auto-capture CLV T-30…T+5 |
@@ -130,24 +132,49 @@ It matches on each slip's reference, so it never wipes manually-added bets and i
 to re-run. Profit comes from the **actual payout column**, after tax. Statement files
 are git-ignored — they never leave your machine.
 
-### From The Odds API (grading + near-kickoff CLV)
+### From The Odds API (grading + CLV)
 
-1. Get a free key (~500 requests/month) at <https://the-odds-api.com/>.
+1. Get a key at <https://the-odds-api.com/>. The free tier gives 500 credits/month;
+   historical odds — which the CLV capture uses — are on every plan.
 2. Copy `.env.local.example` → `.env.local` and set `ODDS_API_KEY=your_key`.
 3. Restart the dev server. Then **Synka** (or `npm run sync`) settles finished H2H /
-   totals / spreads bets and captures **near-kickoff** closing odds for linked events.
+   totals / spreads bets and captures closing odds.
 
-**Automatic pre-kickoff CLV (recommended):** install a Windows task that runs every
-10 minutes and snapshots featured bets in the **T-30 … T+5** window:
+**Automatic CLV (recommended): a Vercel cron.** `vercel.json` schedules
+`GET /api/cron/clv` nightly. It reads The Odds API's *historical* snapshots, so it
+picks the price as it stood two minutes before kickoff — no need for anything to be
+running at kickoff, and it catches up on a backlog.
+
+Set two environment variables in the Vercel project:
+
+| Variable | Why |
+|----------|-----|
+| `ODDS_API_KEY` | the API key itself |
+| `CRON_SECRET` | Vercel sends it as `Authorization: Bearer …`; without it the route falls back to requiring a signed-in session |
+
+On Vercel's Hobby plan crons run once a day; on Pro you can change the schedule in
+`vercel.json` to `0 * * * *` for hourly.
+
+To fill in history by hand, or to check the run before it writes:
 
 ```bash
-npm run install:kickoff-clv-task
-# or keep a terminal open:
-npm run watch:kickoff-clv
+npm run clv:coverage                                       # what can get CLV, and why not the rest
+npm run backfill:clv-historical                            # dry-run
+npm run backfill:clv-historical -- --confirm --since-days 90 --max-credits 5000
 ```
 
-Needs `ODDS_API_KEY`. Logs land in `.claude/logs/kickoff-clv.log`. New bets placed
-inside the window are captured immediately on create.
+**Credits.** A historical event list costs 1; a historical price costs 10 per market.
+Every run reports what it spent and what's left, stops at `--max-credits`, and keeps a
+`--min-remaining` buffer so a backfill can't drain the month's quota.
+
+**Coverage.** The Odds API's featured markets are match winner, goals total and Asian
+handicap — nothing else. Corner, card, shot, player and combined bets cannot get a
+closing price this way, and are skipped rather than priced off the wrong market.
+`npm run clv:coverage` prints exactly how many of your bets fall on each side.
+
+There is also a near-kickoff live capture (T-30 … T+5) kept as a cheap opportunistic
+path, plus a legacy local Windows task (`npm run install:kickoff-clv-task`). Neither
+is needed once the cron runs.
 
 ### Automatic CLV via OddsPortal (local scrape batch)
 
