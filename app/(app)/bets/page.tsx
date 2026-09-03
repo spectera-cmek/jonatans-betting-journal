@@ -22,14 +22,13 @@ const SettlementDialog = dynamic(
 import { ClvCell, type ClvSaved } from "@/components/ClvCell";
 import type { ParsedBetWithDupe } from "@/lib/betslipExtract";
 import { StatTile } from "@/components/stats";
-import { useBets } from "@/lib/useData";
+import { usePagedBets, type BetQuery } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
 import { uFmt, pctFmt, krShort, dateShort } from "@/lib/format";
-import { computeMetrics, type BetLike, type Outcome } from "@/lib/betting";
 import { I, IC } from "@/components/icons";
 import {
   SCOPES,
-  SCOPE_LABELS,
+
   EVENT_KINDS,
   TOURNAMENT_STAGES,
   VM_2026_LEAGUE,
@@ -48,7 +47,6 @@ const RES_CHIPS: [string, string][] = [
 const MONTHS_SV = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
 
 export default function BetsPage() {
-  const { bets, settings, loading, reload } = useBets();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<BetDTO | null>(null);
   const [settling, setSettling] = useState<BetListDTO | null>(null);
@@ -128,6 +126,36 @@ export default function BetsPage() {
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   }, [q, sport, league, book, market, scope, eventKind, stage, res, day, year, month, sortOrder]);
 
+  // The search box fires a request, so let typing settle before asking for rows.
+  const [qDebounced, setQDebounced] = useState(q);
+  useEffect(() => {
+    const t = setTimeout(() => setQDebounced(q), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // Filtering, sorting and paging all happen in the database. `shown` doubles as
+  // the page size, so "Visa fler" widens one request instead of stitching pages
+  // together on the client.
+  const query = useMemo<BetQuery>(
+    () => ({
+      q: qDebounced,
+      sport: sport === "Alla sporter" ? "" : sport,
+      league,
+      bookmaker: book === "Alla bookmakers" ? "" : book,
+      marketCategory: market,
+      marketScope: scope,
+      eventKind,
+      tournamentStage: stage,
+      res: res === "alla" ? "" : res,
+      day,
+      year: year === "Alla år" ? "" : year,
+      month: month === "Alla månader" ? "" : month,
+      sort: sortOrder,
+    }),
+    [qDebounced, sport, league, book, market, scope, eventKind, stage, res, day, year, month, sortOrder]
+  );
+  const { rows, total, metrics, facets, settings, loading, reload } = usePagedBets(query, 0, shown);
+
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
 
@@ -184,75 +212,30 @@ export default function BetsPage() {
     }
   };
 
-  const sports = useMemo(() => Array.from(new Set(bets.map((b) => b.sport).filter(Boolean))) as string[], [bets]);
-  const leagues = useMemo(
-    () => (Array.from(new Set(bets.map((b) => b.league).filter(Boolean))) as string[]).sort((a, b) => a.localeCompare(b, "sv")),
-    [bets]
-  );
-  const books = useMemo(() => Array.from(new Set(bets.map((b) => b.bookmaker).filter(Boolean))) as string[], [bets]);
-  const markets = useMemo(
-    () =>
-      (Array.from(new Set(bets.map((b) => b.marketCategory).filter(Boolean))) as string[])
-        .sort((a, b) => a.localeCompare(b, "sv")),
-    [bets]
-  );
+  // Option lists come from the server, over the whole journal rather than the
+  // current page — narrowing to one sport must not empty the other dropdowns.
+  const sports = facets?.sports ?? [];
+  const leagues = facets?.leagues ?? [];
+  const books = facets?.bookmakers ?? [];
+  const markets = facets?.marketCategories ?? [];
   // Only offer scopes that actually occur in the data.
   const scopes = useMemo(
-    () => SCOPES.filter((sc) => bets.some((b) => b.marketScope === sc.value)),
-    [bets]
+    () => SCOPES.filter((sc) => (facets?.scopes ?? []).includes(sc.value)),
+    [facets?.scopes]
   );
-  const years = useMemo(
-    () => Array.from(new Set(bets.map((b) => new Date(b.eventAt ?? b.placedAt).getFullYear()))).sort((a, b) => b - a).map(String),
-    [bets]
-  );
+  const years = facets?.years ?? [];
   const rangeLabel = years.length ? (years[0] === years[years.length - 1] ? years[0] : `${years[years.length - 1]}–${years[0]}`) : "";
 
-  const filtered = useMemo(() => {
-    return bets.map(applyClv).filter((b) => {
-      if (sport !== "Alla sporter" && b.sport !== sport) return false;
-      if (league && b.league !== league) return false;
-      if (book !== "Alla bookmakers" && b.bookmaker !== book) return false;
-      if (market && b.marketCategory !== market) return false;
-      if (scope && b.marketScope !== scope) return false;
-      if (eventKind && b.eventKind !== eventKind) return false;
-      if (stage && b.tournamentStage !== stage) return false;
-      if (res === "win" && !(b.outcome === "win" || b.outcome === "half_win")) return false;
-      if (res === "loss" && !(b.outcome === "loss" || b.outcome === "half_loss")) return false;
-      if (res === "pending" && b.outcome !== "pending") return false;
-      if (res === "push" && !(b.outcome === "push" || b.outcome === "void")) return false;
-      const d = new Date(b.eventAt ?? b.placedAt);
-      if (day) {
-        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        if (iso !== day) return false;
-      } else {
-        if (year !== "Alla år" && String(d.getFullYear()) !== year) return false;
-        if (month !== "Alla månader" && String(d.getMonth() + 1) !== month) return false;
-      }
-      if (q) {
-        const s = `${b.event} ${b.league ?? ""} ${b.selection} ${b.bookmaker ?? ""} ${b.marketCategory ?? ""} ${b.marketScope ? SCOPE_LABELS[b.marketScope] ?? "" : ""} ${b.eventKind} ${b.tournamentStage ?? ""}`.toLowerCase();
-        if (!s.includes(q.toLowerCase())) return false;
-      }
-      return true;
-    });
-  }, [bets, clvById, sport, league, book, market, scope, eventKind, stage, res, q, day, year, month]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Rows arrive already filtered, sorted and capped; only the optimistic CLV
+  // overrides are layered on here.
+  const visible = useMemo(() => rows.map(applyClv), [rows, clvById]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Render at most `shown` rows; reset when any filter or sort order changes.
+  // Narrowing the filter shrinks the result, so drop back to one page.
   useEffect(() => {
     setShown(PAGE);
-  }, [sport, league, book, market, scope, eventKind, stage, res, q, day, year, month, sortOrder]);
+  }, [sport, league, book, market, scope, eventKind, stage, res, qDebounced, day, year, month, sortOrder]);
 
-  const sorted = useMemo(() => {
-    const list = [...filtered];
-    list.sort((a, b) => {
-      const da = new Date(a.eventAt ?? a.placedAt).getTime();
-      const db = new Date(b.eventAt ?? b.placedAt).getTime();
-      return sortOrder === "desc" ? db - da : da - db;
-    });
-    return list;
-  }, [filtered, sortOrder]);
-
-  const visible = useMemo(() => sorted.slice(0, shown), [sorted, shown]);
-  const remaining = sorted.length - visible.length;
+  const remaining = total - visible.length;
   const advancedCount = [
     sport !== "Alla sporter",
     !!league,
@@ -279,16 +262,9 @@ export default function BetsPage() {
     setMonth("Alla månader");
   };
 
-  const metrics = useMemo(() => {
-    const likes: BetLike[] = filtered.map((b) => ({
-      odds: b.odds,
-      stakeUnits: b.stakeUnits,
-      outcome: b.outcome as Outcome,
-      closingOdds: b.closingOdds,
-      profitUnits: b.profitUnits,
-    }));
-    return computeMetrics(likes);
-  }, [filtered]);
+  // Totals cover the whole filtered set, not just the rows on screen — the
+  // server runs the same computeMetrics over the matching rows.
+  const m = metrics;
 
   const sel = (val: string, set: (v: string) => void, opts: string[]) => (
     <div className="ap-select">
@@ -375,7 +351,7 @@ export default function BetsPage() {
       </div>
       <Topbar
         title="Alla bets"
-        sub={`${bets.length} bets loggade${rangeLabel ? ` · ${rangeLabel}` : ""}`}
+        sub={`${total.toLocaleString("sv-SE")} bets${rangeLabel ? ` · ${rangeLabel}` : ""}`}
         icon={IC.ticket}
         actions={
           <>
@@ -387,10 +363,10 @@ export default function BetsPage() {
 
       {/* summary strip */}
       <div className="ap-grid ap-kpi-row">
-        <StatTile label="Filtrerad P/L" value={uFmt(metrics.profitUnits, true)} tone={metrics.profitUnits >= 0 ? "pos" : "neg"} icon={IC.coins} accent={metrics.profitUnits >= 0 ? "emerald" : "red"} />
-        <StatTile label="ROI" value={pctFmt(metrics.roiPct, true)} tone={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"} icon={IC.percent} accent={(metrics.roiPct ?? 0) >= 0 ? "sky" : "red"} />
-        <StatTile label="Träffprocent" value={pctFmt(metrics.winRatePct)} icon={IC.target} accent="amber" />
-        <StatTile label="Antal bets" value={String(filtered.length)} icon={IC.ticket} accent="purple" sub={`av ${bets.length} totalt`} />
+        <StatTile label="Filtrerad P/L" value={uFmt(m?.profitUnits ?? null, true)} tone={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} icon={IC.coins} accent={(m?.profitUnits ?? 0) >= 0 ? "emerald" : "red"} />
+        <StatTile label="ROI" value={pctFmt(m?.roiPct ?? null, true)} tone={(m?.roiPct ?? 0) >= 0 ? "pos" : "neg"} icon={IC.percent} accent={(m?.roiPct ?? 0) >= 0 ? "sky" : "red"} />
+        <StatTile label="Träffprocent" value={pctFmt(m?.winRatePct ?? null)} icon={IC.target} accent="amber" />
+        <StatTile label="Antal bets" value={total.toLocaleString("sv-SE")} icon={IC.ticket} accent="purple" sub={`träffar filtret`} />
       </div>
 
       {/* filters */}
@@ -420,7 +396,7 @@ export default function BetsPage() {
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {advancedCount > 0 && <button className="ap-link" onClick={clearAdvanced}>Rensa {advancedCount} filter</button>}
           <span style={{ fontSize: 12.5, color: "var(--dim)" }}>
-            <strong style={{ color: "var(--txt)" }}>{Math.min(visible.length, filtered.length)}</strong> av {filtered.length}
+            <strong style={{ color: "var(--txt)" }}>{visible.length}</strong> av {total.toLocaleString("sv-SE")}
           </span>
         </div>
       </div>
@@ -495,7 +471,7 @@ export default function BetsPage() {
               <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">CLV</span><span className="ap-r">Insats</span><span className="ap-r">P/L</span><span className="ap-r">Resultat</span><span className="ap-c">·</span>
             </div>
             {loading && <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>}
-            {!loading && filtered.length === 0 && (
+            {!loading && total === 0 && (
               <Empty
                 icon={IC.search}
                 title="Inga bets matchar filtren"
@@ -537,7 +513,7 @@ export default function BetsPage() {
       {/* cards (mobile) */}
       <div className="ap-betcards">
         {loading && <div className="ap-betcard-empty">Laddar…</div>}
-        {!loading && filtered.length === 0 && (
+        {!loading && total === 0 && (
           <Empty
             icon={IC.search}
             title="Inga bets matchar filtren"

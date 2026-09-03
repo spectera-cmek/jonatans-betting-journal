@@ -189,6 +189,79 @@ export interface UseBetsOptions {
   eventKind?: string;
   tournamentStage?: string;
   outcome?: string;
+  /** Calendar year of eventAt (falling back to placedAt) — filtered in SQL. */
+  year?: string;
+}
+
+/** Filters the bets page mirrors into both the URL and the query string. */
+export interface BetQuery {
+  q?: string;
+  sport?: string;
+  league?: string;
+  bookmaker?: string;
+  marketCategory?: string;
+  marketScope?: string;
+  eventKind?: string;
+  tournamentStage?: string;
+  res?: string;
+  day?: string;
+  year?: string;
+  month?: string;
+  sort?: "asc" | "desc";
+}
+
+export interface BetFacets {
+  sports: string[];
+  leagues: string[];
+  bookmakers: string[];
+  marketCategories: string[];
+  scopes: string[];
+  years: string[];
+}
+
+export interface PagedBets {
+  rows: BetListDTO[];
+  total: number;
+  metrics: Metrics;
+  facets: BetFacets | null;
+}
+
+export function betQueryString(query: BetQuery, extra: Record<string, string> = {}): string {
+  const params = new URLSearchParams({ paged: "1" });
+  for (const [key, value] of Object.entries(query)) {
+    if (value) params.set(key, value);
+  }
+  for (const [key, value] of Object.entries(extra)) params.set(key, value);
+  return params.toString();
+}
+
+/**
+ * One page of bets plus totals over the whole filtered set. Filtering, sorting
+ * and paging all happen in the database — the page used to download every row
+ * (5.8 MB on a 10k-bet journal) and do all three in the browser.
+ */
+export function usePagedBets(query: BetQuery, page: number, pageSize: number) {
+  const qs = betQueryString(query, {
+    page: String(page),
+    pageSize: String(pageSize),
+    facets: "1",
+  });
+  const b = useCachedGet<PagedBets>(`/api/bets?${qs}`);
+  const s = useCachedGet<SettingsDTO>("/api/settings");
+  const reload = useCallback(() => {
+    b.reload();
+    s.reload();
+  }, [b.reload, s.reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  return {
+    rows: b.data?.rows ?? [],
+    total: b.data?.total ?? 0,
+    metrics: b.data?.metrics,
+    facets: b.data?.facets ?? null,
+    settings: s.data,
+    loading: b.loading || s.loading,
+    error: b.error || s.error,
+    reload,
+  };
 }
 
 export function useBets(options: UseBetsOptions = {}) {

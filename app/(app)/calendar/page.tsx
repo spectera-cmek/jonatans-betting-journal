@@ -23,7 +23,16 @@ function isoOf(d: Date): string {
 
 export default function CalendarPage() {
   const { cc } = useTheme();
-  const { bets, settings, loading } = useBets();
+  // Opens on the current month. It used to open on the newest bet by eventAt,
+  // which for a journal holding season outrights meant landing in May 2027 —
+  // an empty grid eleven months ahead of anything that had been played.
+  const [view, setView] = useState<{ y: number; m: number } | null>(null);
+  const today = new Date();
+  const cur = view ?? { y: today.getFullYear(), m: today.getMonth() };
+
+  // Only the viewed year is fetched. The page renders one month grid and one
+  // year heatmap, so pulling the whole journal to draw them was pure waste.
+  const { bets, settings, loading } = useBets({ year: String(cur.y) });
   const unit = settings?.unitValue ?? 100;
 
   // Aggregate P/L per ISO day.
@@ -40,15 +49,6 @@ export default function CalendarPage() {
     return map;
   }, [bets]);
 
-  // Default the view to the most recent bet month (fall back to today).
-  const latest = useMemo(() => {
-    let t = 0;
-    for (const b of bets) t = Math.max(t, new Date(b.eventAt ?? b.placedAt).getTime());
-    return t ? new Date(t) : new Date();
-  }, [bets]);
-
-  const [view, setView] = useState<{ y: number; m: number } | null>(null);
-  const cur = view ?? { y: latest.getFullYear(), m: latest.getMonth() };
   const [selected, setSelected] = useState<string>("");
 
   const shift = (delta: number) => {
