@@ -124,3 +124,30 @@ describe("buildBetData — profit recomputation", () => {
     expect(data.profitUnits).toBe(4); // 2u at 3.00, outcome "win" from `existing`
   });
 });
+
+describe("buildBetData — closing odds provenance", () => {
+  it("stamps a hand-entered closing price as a verified manual source", () => {
+    const d = buildBetData({ ...base, closingOdds: 2.3 });
+    expect(d.closingOdds).toBe(2.3);
+    expect(d.closingSource).toBe("manual");
+    expect(d.closingCapturedAt).toBeInstanceOf(Date);
+  });
+
+  it("clears the stamp when the closing price is removed", () => {
+    const d = buildBetData({ closingOdds: "" }, { partial: true });
+    expect(d.closingOdds).toBeNull();
+    expect(d.closingSource).toBeNull();
+    expect(d.closingCapturedAt).toBeNull();
+  });
+
+  it("leaves provenance untouched when closingOdds is not part of the patch", () => {
+    const d = buildBetData({ odds: 2.1 }, { partial: true });
+    expect("closingSource" in d).toBe(false);
+  });
+
+  it("accepts the boosted flag and coerces it to a boolean", () => {
+    // The modal keeps it as a "1" / "" string like every other form field.
+    expect(buildBetData({ ...base, boosted: true }).boosted).toBe(true);
+    expect(buildBetData({ boosted: null }, { partial: true }).boosted).toBe(false);
+  });
+});

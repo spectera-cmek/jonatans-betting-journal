@@ -622,6 +622,8 @@ export async function captureClosingOdds(
     where: {
       externalRef: { startsWith: "mt_" },
       closingOdds: null,
+      // A boosted price is a promotion, not the market — never CLV.
+      boosted: false,
       selection: { not: "" },
       OR: [
         { eventAt: { gte: since, lte: new Date() } },
@@ -660,7 +662,11 @@ export async function captureClosingOdds(
     if (!options.dryRun) {
       await db.bet.update({
         where: { id: bet.id },
-        data: { closingOdds: closing },
+        data: {
+          closingOdds: closing,
+          closingSource: "thestatsapi",
+          closingCapturedAt: new Date(),
+        },
       });
     }
     closingUpdated += 1;

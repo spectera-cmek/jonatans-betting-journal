@@ -6,7 +6,7 @@
 // Pure & dependency-free (besides betting/discipline helpers) so it is
 // trivially unit-testable.
 
-import { breakdownBy, hasRealOdds, round2, type BetLike, type Breakdown } from "./betting";
+import { breakdownBy, hasRealOdds, oddsBandKey, round2, type BetLike, type Breakdown } from "./betting";
 import { betCategory } from "./discipline";
 
 export interface EdgeBetInput extends BetLike {
@@ -31,20 +31,7 @@ export interface EdgeSegments {
 // Segments need a real sample before they mean anything — below this they're variance.
 const MIN_SETTLED = 40;
 
-const ODDS_BANDS = [
-  { label: "Odds 1.02–1.49", min: 1.01, max: 1.5 },
-  { label: "Odds 1.50–1.99", min: 1.5, max: 2.0 },
-  { label: "Odds 2.00–2.99", min: 2.0, max: 3.0 },
-  { label: "Odds 3.00–4.99", min: 3.0, max: 5.0 },
-  { label: "Odds 5.00+", min: 5.0, max: Infinity },
-] as const;
-
-function oddsBandKey(odds: number): string | null {
-  const band = ODDS_BANDS.find((b) => odds >= b.min && odds < b.max);
-  return band ? band.label : null;
-}
-
-function stakeBandKey(stake: number): string {
+export function stakeBandKey(stake: number): string {
   if (stake <= 0.5) return "Insats ≤ 0,5 u";
   if (stake <= 1) return "Insats 0,51–1 u";
   if (stake <= 2) return "Insats 1,01–2 u";

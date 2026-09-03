@@ -47,6 +47,13 @@ model Bet {
   // CLV. This column has existed in the production database since before it was
   // modelled here — every `prisma db push` silently dropped it until this line.
   boosted         Boolean         @default(false)
+  // Where `closingOdds` came from. Three capture paths use three different
+  // baselines (own book -> Pinnacle -> Bet365; sharp list -> best of market;
+  // OddsPortal market average) and a CSV import wrote de-vigged *fair* odds into
+  // the same column — so the number is only comparable once you know its source.
+  // odds_api | thestatsapi | oddsportal | bethero_fair | manual | legacy
+  closingSource     String?
+  closingCapturedAt DateTime?
   stakeUnits      Float // e.g. 1.0, 2.5
   outcome         String          @default("pending") // pending|win|loss|push|half_win|half_loss|void
   profitUnits     Float? // computed at settlement

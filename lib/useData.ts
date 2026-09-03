@@ -16,6 +16,13 @@ export interface MonthRow {
   roiPct: number | null;
   stakedUnits: number;
   winRatePct?: number | null;
+  // CLV per month — verified series first, then the unverified one, plus how
+  // many bets that month carried any closing price at all (coverage).
+  clvPct?: number | null;
+  clvSampleSize?: number;
+  clvUnverifiedPct?: number | null;
+  clvUnverifiedSampleSize?: number;
+  clvAnySampleSize?: number;
 }
 
 export interface LeaderboardEntry {
@@ -78,7 +85,7 @@ export interface MetricsResponse {
   byBetType: Breakdown[];
   byMonth: MonthRow[];
   monthly: MonthRow[];
-  oddsBands: { label: string; bets: number; profitUnits: number; roiPct: number | null; winRatePct: number | null }[];
+  oddsBands: Breakdown[];
   hallOfFame: LeaderboardEntry[];
   biggestL: LeaderboardEntry[];
   settings: { unitValue: number; currency: string; startingBankrollUnits: number };

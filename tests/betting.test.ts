@@ -76,12 +76,42 @@ describe("computeMetrics", () => {
     expect(m.winRatePct!).toBeCloseTo(50); // 1 / (1+1)
   });
 
-  it("averages CLV only over bets that have closingOdds", () => {
+  it("counts closing prices of unknown provenance separately from verified ones", () => {
     const m = computeMetrics(bets);
+    // The fixture carries no closingSource, so nothing qualifies as verified.
+    expect(m.clvSampleSize).toBe(0);
+    expect(m.clvPct).toBeNull();
+    expect(m.clvUnverifiedSampleSize).toBe(2);
+    expect(m.clvUnverifiedBeatCount).toBe(1);
+    const expected = (clvPct(2.0, 1.9) + clvPct(1.5, 1.6)) / 2;
+    expect(m.clvUnverifiedPct!).toBeCloseTo(expected);
+    // Coverage counts every bet with a price, whatever its source.
+    expect(m.clvAnySampleSize).toBe(2);
+  });
+
+  it("averages verified CLV only over bets with a verified closing source", () => {
+    const m = computeMetrics(
+      bets.map((b) => (b.closingOdds ? { ...b, closingSource: "odds_api" } : b))
+    );
     expect(m.clvSampleSize).toBe(2);
     expect(m.clvBeatCount).toBe(1);
     const expected = (clvPct(2.0, 1.9) + clvPct(1.5, 1.6)) / 2;
     expect(m.clvPct!).toBeCloseTo(expected);
+    expect(m.clvUnverifiedSampleSize).toBe(0);
+  });
+
+  it("never counts a boosted price as CLV", () => {
+    // An odds boost is a promotion, not a market price — schema.prisma says so
+    // and nothing read the flag before.
+    const m = computeMetrics(
+      bets.map((b) => (b.closingOdds ? { ...b, closingSource: "odds_api", boosted: true } : b))
+    );
+    expect(m.clvSampleSize).toBe(0);
+    expect(m.clvUnverifiedSampleSize).toBe(0);
+    expect(m.clvPct).toBeNull();
+    // Still visible as coverage, and reported as deliberately skipped.
+    expect(m.clvAnySampleSize).toBe(2);
+    expect(m.clvBoostedSkipped).toBe(2);
   });
 
   it("returns null metrics for an empty set", () => {

@@ -78,6 +78,10 @@ export interface BetLike {
   stakeUnits: number;
   outcome: Outcome;
   closingOdds?: number | null;
+  // Provenance of closingOdds — see VERIFIED_CLOSING_SOURCES below.
+  closingSource?: string | null;
+  // An odds boost is a promotion, not a market price. Never CLV.
+  boosted?: boolean | null;
   eventAt?: Date | string | null;
   placedAt?: Date | string | null;
   createdAt?: Date | string | null;
@@ -107,6 +111,25 @@ export function hasRealOdds(b: { odds: number }): boolean {
   return b.odds > PLACEHOLDER_ODDS;
 }
 
+/**
+ * Odds bands, shared by the analytics breakdown and the edge/leak search so the
+ * two can never disagree about where a price falls. Bounds are [min, max).
+ * Labels are bare — callers that already show an "Odds" tag don't repeat it.
+ */
+export const ODDS_BANDS = [
+  { label: "1.02–1.49", min: PLACEHOLDER_ODDS, max: 1.5 },
+  { label: "1.50–1.99", min: 1.5, max: 2.0 },
+  { label: "2.00–2.99", min: 2.0, max: 3.0 },
+  { label: "3.00–4.99", min: 3.0, max: 5.0 },
+  { label: "5.00+", min: 5.0, max: Infinity },
+] as const;
+
+/** Band label for a price, or null when it's a 1.01 import placeholder. */
+export function oddsBandKey(odds: number): string | null {
+  const band = ODDS_BANDS.find((b) => odds >= b.min && odds < b.max);
+  return band ? band.label : null;
+}
+
 export interface Metrics {
   totalBets: number;
   settledBets: number;
@@ -119,14 +142,56 @@ export interface Metrics {
   roiPct: number | null; // profit / staked * 100
   winRatePct: number | null; // wins / (wins+losses-ish) * 100
   avgOdds: number | null; // mean odds across settled bets
-  clvPct: number | null; // mean CLV across bets that have closingOdds
+  // Median odds. The mean is dragged upward by a long tail of bet-builder
+  // prices (a handful priced at 1000+), so it stops describing what is
+  // actually being bet — the median is the number to show.
+  medianOdds: number | null;
+  // CLV against a *verified* closing price (see VERIFIED_CLOSING_SOURCES).
+  clvPct: number | null; // mean CLV
   clvBeatCount: number; // bets where we beat the closing line
-  clvSampleSize: number; // bets with a closingOdds value
+  clvSampleSize: number; // bets counted
+  // Same three, for closing prices of unverified provenance — chiefly the
+  // BetHero CSV, which wrote de-vigged *fair* odds into closingOdds. Beating a
+  // fair price is an edge estimate, not closing line value; kept apart so the
+  // headline number is not inflated by it.
+  clvUnverifiedPct: number | null;
+  clvUnverifiedBeatCount: number;
+  clvUnverifiedSampleSize: number;
+  // Bets carrying any closing price at all, boosted and unverified included.
+  // Denominator-free coverage signal: clvAnySampleSize / totalBets.
+  clvAnySampleSize: number;
+  // Boosted bets that had a closing price and were deliberately excluded.
+  clvBoostedSkipped: number;
 }
 
 /** Single-bet CLV as a percentage: (odds / closingOdds - 1) * 100. */
 export function clvPct(odds: number, closingOdds: number): number {
   return (odds / closingOdds - 1) * 100;
+}
+
+/**
+ * Closing-odds sources that really are a market closing price. Everything else
+ * — `bethero_fair` (de-vigged fair odds), `legacy` (imported before the column
+ * existed, provenance unknown), or no source at all — is counted separately.
+ */
+export const VERIFIED_CLOSING_SOURCES = [
+  "odds_api",
+  "thestatsapi",
+  "oddsportal",
+  "manual",
+] as const;
+
+export function isVerifiedClosing(source?: string | null): boolean {
+  return source != null && (VERIFIED_CLOSING_SOURCES as readonly string[]).includes(source);
+}
+
+/**
+ * True when the bet carries a usable closing price and is not odds-boosted.
+ * Structurally typed on just those two fields so raw Prisma rows (whose
+ * `outcome` is a plain string) can be passed without a cast.
+ */
+export function countsForClv(b: { closingOdds?: number | null; boosted?: boolean | null }): boolean {
+  return !b.boosted && !!b.closingOdds && b.closingOdds > 1;
 }
 
 /** Aggregate portfolio metrics over a set of bets. Pending excluded from settled stats. */
@@ -140,19 +205,39 @@ export function computeMetrics(bets: BetLike[]): Metrics {
   let profit = 0;
   let oddsSum = 0;
   let oddsCount = 0;
+  const settledOdds: number[] = [];
   let clvSum = 0;
   let clvSample = 0;
   let clvBeat = 0;
+  let fairSum = 0;
+  let fairSample = 0;
+  let fairBeat = 0;
+  let clvAny = 0;
+  let clvBoostedSkipped = 0;
 
   for (const b of bets) {
     const outcome = b.outcome;
 
     // CLV is independent of settlement: count any bet that has a closing line.
+    // Boosted prices are excluded outright — a boost is a promotion, not the
+    // market — and unverified provenance is tallied separately rather than
+    // averaged in, because the two measure different things.
     if (b.closingOdds && b.closingOdds > 1) {
-      const c = clvPct(b.odds, b.closingOdds);
-      clvSum += c;
-      clvSample += 1;
-      if (c > 0) clvBeat += 1;
+      clvAny += 1;
+      if (b.boosted) {
+        clvBoostedSkipped += 1;
+      } else {
+        const c = clvPct(b.odds, b.closingOdds);
+        if (isVerifiedClosing(b.closingSource)) {
+          clvSum += c;
+          clvSample += 1;
+          if (c > 0) clvBeat += 1;
+        } else {
+          fairSum += c;
+          fairSample += 1;
+          if (c > 0) fairBeat += 1;
+        }
+      }
     }
 
     if (!isSettled(outcome)) {
@@ -165,6 +250,7 @@ export function computeMetrics(bets: BetLike[]): Metrics {
     profit += settledProfit(b);
     oddsSum += b.odds;
     oddsCount += 1;
+    settledOdds.push(b.odds);
 
     if (isWinLike(outcome)) wins += 1;
     else if (outcome === "loss" || outcome === "half_loss") losses += 1;
@@ -185,10 +271,24 @@ export function computeMetrics(bets: BetLike[]): Metrics {
     roiPct: stakedUnits > 0 ? (profit / stakedUnits) * 100 : null,
     winRatePct: winRateDenom > 0 ? (wins / winRateDenom) * 100 : null,
     avgOdds: oddsCount > 0 ? oddsSum / oddsCount : null,
+    medianOdds: median(settledOdds),
     clvPct: clvSample > 0 ? clvSum / clvSample : null,
     clvBeatCount: clvBeat,
     clvSampleSize: clvSample,
+    clvUnverifiedPct: fairSample > 0 ? fairSum / fairSample : null,
+    clvUnverifiedBeatCount: fairBeat,
+    clvUnverifiedSampleSize: fairSample,
+    clvAnySampleSize: clvAny,
+    clvBoostedSkipped,
   };
+}
+
+/** Median of a numeric list; null when empty. Even counts average the middle pair. */
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
 function toTime(d?: Date | string | null): number {
@@ -256,6 +356,14 @@ export interface Breakdown {
   roiPct: number | null;
   avgOdds: number | null;
   winRatePct: number | null;
+  // Verified-closing CLV for the group, plus how much of the group has any
+  // closing price at all. Coverage is the honest companion to the CLV number:
+  // a great CLV over 7 % of a market says almost nothing about that market.
+  clvPct: number | null;
+  clvSampleSize: number;
+  clvBeatCount: number;
+  clvUnverifiedSampleSize: number;
+  clvCoveragePct: number | null;
 }
 
 /** Group bets by an arbitrary key (sport, league, market, bookmaker...) with per-group metrics. */
@@ -284,6 +392,11 @@ export function breakdownBy(
       roiPct: m.roiPct,
       avgOdds: m.avgOdds,
       winRatePct: m.winRatePct,
+      clvPct: m.clvPct,
+      clvSampleSize: m.clvSampleSize,
+      clvBeatCount: m.clvBeatCount,
+      clvUnverifiedSampleSize: m.clvUnverifiedSampleSize,
+      clvCoveragePct: group.length > 0 ? (m.clvAnySampleSize / group.length) * 100 : null,
     });
   }
   // Sort by profit descending so the best performers float to the top.

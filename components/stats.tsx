@@ -63,14 +63,24 @@ export function BreakdownCard({
   rows,
   unit,
   sub,
+  showClv = false,
 }: {
   title: string;
   rows: Breakdown[];
   unit: number;
   sub?: string;
+  /**
+   * Append verified CLV per row, with the sample size it rests on. Off by
+   * default: coverage is ~5 % of the journal, so on most breakdowns the column
+   * would be empty noise.
+   */
+  showClv?: boolean;
 }) {
   const { cc } = useTheme();
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.profitUnits)));
+  // Suppress the column entirely when no row has a verified sample — a list of
+  // 30 dashes is worse than no column at all.
+  const withClv = showClv && rows.some((r) => r.clvSampleSize > 0);
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -93,6 +103,26 @@ export function BreakdownCard({
                   {krShort(r.profitUnits * unit, true)}
                 </em>
                 <span style={{ color: "var(--dim2)", marginLeft: 8 }}>{pctFmt(r.roiPct, true)}</span>
+                {withClv && (
+                  <span
+                    className="ap-num"
+                    style={{ color: "var(--dim2)", marginLeft: 10, fontWeight: 500 }}
+                    title={
+                      r.clvSampleSize
+                        ? `CLV över ${r.clvSampleSize} spel med verifierad stängning`
+                        : "Ingen verifierad stängningsdata"
+                    }
+                  >
+                    {r.clvSampleSize ? (
+                      <em className={(r.clvPct ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>
+                        {pctFmt(r.clvPct, true)}
+                      </em>
+                    ) : (
+                      "—"
+                    )}
+                    <span style={{ marginLeft: 4, fontSize: 11 }}>CLV</span>
+                  </span>
+                )}
               </span>
             </div>
             <HBar

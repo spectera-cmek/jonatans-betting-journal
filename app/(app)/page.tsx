@@ -121,6 +121,21 @@ export default function OverviewPage() {
   const ins = data?.insights;
   const risk = data?.openRisk;
 
+  // The CLV tile shows verified closing prices when there are any, and falls
+  // back to the unverified pile — labelled as such — rather than averaging the
+  // two into one number that means neither.
+  const clv = useMemo(() => {
+    const verified = (m?.clvSampleSize ?? 0) > 0;
+    return verified
+      ? { verified, pct: m?.clvPct ?? null, beat: m?.clvBeatCount ?? 0, sample: m?.clvSampleSize ?? 0 }
+      : {
+          verified,
+          pct: m?.clvUnverifiedPct ?? null,
+          beat: m?.clvUnverifiedBeatCount ?? 0,
+          sample: m?.clvUnverifiedSampleSize ?? 0,
+        };
+  }, [m]);
+
   // Current month/year realised P/L (units) for the goal-pace card.
   const now = new Date();
   const curYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -185,25 +200,29 @@ export default function OverviewPage() {
                 meta={`${m?.wins ?? 0}V · ${m?.losses ?? 0}F`}
               />
               <Kpi
-                label="CLV"
+                label={clv.verified ? "CLV" : "CLV (overifierad)"}
                 accent="teal"
                 icon={IC.target}
-                hint="Closing line value: hur mycket bättre ditt odds var än stängningsoddset. Att slå stängningen över tid är den bästa indikatorn på edge."
-                value={pctFmt(m?.clvPct ?? null, true)}
+                hint={
+                  clv.verified
+                    ? "Closing line value: hur mycket bättre ditt odds var än stängningsoddset. Att slå stängningen över tid är den bästa indikatorn på edge."
+                    : "Inga spel har ännu ett stängningspris som appen själv hämtat. Talet nedan jämför mot priser vars ursprung inte går att belägga — främst importerade fair odds. Se Analys för uppdelningen."
+                }
+                value={pctFmt(clv.pct, true)}
                 trend={
-                  m?.clvSampleSize
-                    ? `${Math.round(((m.clvBeatCount ?? 0) / m.clvSampleSize) * 100)} % slår stängning`
+                  clv.sample
+                    ? `${Math.round((clv.beat / clv.sample) * 100)} % ${clv.verified ? "slår stängning" : "bättre än priset"}`
                     : "Ingen stängningsdata"
                 }
-                trendTone={(m?.clvPct ?? 0) > 0 ? "pos" : "flat"}
-                meta={m?.clvSampleSize ? `${m.clvSampleSize} spel` : undefined}
+                trendTone={clv.verified && (clv.pct ?? 0) > 0 ? "pos" : "flat"}
+                meta={clv.sample ? `${clv.sample} spel` : undefined}
               />
               <Kpi
-                label="Snittodds"
+                label="Medianodds"
                 accent="pink"
                 icon={IC.scale}
-                hint="Genomsnittligt odds på avgjorda spel. Spel med placeholder-odds 1,01 räknas inte."
-                value={m?.avgOdds != null ? m.avgOdds.toFixed(2) : "—"}
+                hint="Medianodds på avgjorda spel. Medianen, inte snittet: en handfull bet builder-spel prissatta över 1000 drar upp medelvärdet så att det slutar beskriva vad du faktiskt spelar. Spel med placeholder-odds 1,01 räknas inte."
+                value={m?.medianOdds != null ? m.medianOdds.toFixed(2) : "—"}
                 trend={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U snittinsats` : "—"}
                 trendTone="flat"
               />

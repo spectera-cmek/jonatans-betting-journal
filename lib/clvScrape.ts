@@ -55,6 +55,20 @@ export async function fetchClvForBet(
     };
   }
 
+  // A boost is a promotion, not a market price, so it can never produce CLV.
+  if (bet.boosted) {
+    return {
+      ok: false,
+      closingOdds: null,
+      clvPct: null,
+      bookmakerUsed: null,
+      matchUrl: null,
+      provisional: false,
+      code: "boosted",
+      detail: "Boostat odds — räknas aldrig som CLV.",
+    };
+  }
+
   const parsed = parseHomeAway(bet.event);
   const homeTeam = bet.homeTeam || parsed?.home || null;
   const awayTeam = bet.awayTeam || parsed?.away || null;
@@ -101,9 +115,30 @@ export async function fetchClvForBet(
     };
   }
 
+  // Before kickoff the scrape returns a *live* price, not a close. Storing it
+  // would be permanent: every automated capture path requires closingOdds to
+  // still be null, so a provisional value can never be corrected afterwards.
+  // Report the price, write nothing.
+  if (scraped.provisional) {
+    return {
+      ok: false,
+      closingOdds: scraped.closingOdds,
+      clvPct: clvPct(bet.odds, scraped.closingOdds),
+      bookmakerUsed: scraped.bookmakerUsed,
+      matchUrl: scraped.matchUrl,
+      provisional: true,
+      code: "provisional",
+      detail: `Live-odds ${scraped.closingOdds.toFixed(2)} före avspark — sparas inte som closing.`,
+    };
+  }
+
   await prisma.bet.update({
     where: { id: bet.id },
-    data: { closingOdds: scraped.closingOdds },
+    data: {
+      closingOdds: scraped.closingOdds,
+      closingSource: "oddsportal",
+      closingCapturedAt: new Date(),
+    },
   });
 
   const pct = clvPct(bet.odds, scraped.closingOdds);

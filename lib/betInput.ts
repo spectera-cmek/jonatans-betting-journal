@@ -51,6 +51,7 @@ export interface BetInput {
   betType?: string;
   odds?: number | string;
   closingOdds?: number | string | null;
+  boosted?: boolean | null;
   stakeUnits?: number | string;
   outcome?: string;
   externalRef?: string | null;
@@ -158,7 +159,15 @@ export function buildBetData(
   }
 
   if (input.line !== undefined) data.line = num(input.line);
-  if (input.closingOdds !== undefined) data.closingOdds = num(input.closingOdds);
+  if (input.closingOdds !== undefined) {
+    const closing = num(input.closingOdds);
+    data.closingOdds = closing;
+    // A hand-entered price is a looked-up market close: stamp it so it counts
+    // as verified, and clear the stamp again when the value is removed.
+    data.closingSource = closing == null ? null : "manual";
+    data.closingCapturedAt = closing == null ? null : new Date();
+  }
+  if (input.boosted !== undefined) data.boosted = !!input.boosted;
   if (input.sportKey !== undefined) data.sportKey = str(input.sportKey);
   if (input.sport !== undefined) data.sport = str(input.sport);
   if (input.league !== undefined) data.league = normalizeLeague(str(input.league));

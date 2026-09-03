@@ -126,6 +126,8 @@ export async function listFeaturedClvCandidates(
     eventKind: "match",
     market: { in: [...FEATURED_MARKETS] },
     closingOdds: null,
+    // A boosted price is a promotion, not the market — never CLV.
+    boosted: false,
     sport: { in: [...SCRAPEABLE_SPORTS] },
     OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
     AND: [
@@ -244,7 +246,11 @@ export async function captureClosingFromOddsPortal(
     if (!dryRun) {
       await prisma.bet.update({
         where: { id: bet.id },
-        data: { closingOdds: row.result.closingOdds },
+        data: {
+          closingOdds: row.result.closingOdds,
+          closingSource: "oddsportal",
+          closingCapturedAt: new Date(),
+        },
       });
     }
     updated += 1;

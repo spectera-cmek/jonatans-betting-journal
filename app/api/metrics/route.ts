@@ -11,7 +11,12 @@ import {
   maxDrawdown,
   hasRealOdds,
   betTypeLabel,
+  clvPct,
+  countsForClv,
+  oddsBandKey,
+  ODDS_BANDS,
   type BetLike,
+  type Breakdown,
 } from "@/lib/betting";
 import type { Outcome } from "@/lib/betting";
 import { computeInsights } from "@/lib/insights";
@@ -38,6 +43,8 @@ const METRICS_SELECT = {
   betType: true,
   odds: true,
   closingOdds: true,
+  closingSource: true,
+  boosted: true,
   stakeUnits: true,
   outcome: true,
   profitUnits: true,
@@ -60,6 +67,8 @@ export async function GET() {
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     closingOdds: b.closingOdds,
+    closingSource: b.closingSource,
+    boosted: b.boosted,
     eventAt: b.eventAt,
     placedAt: b.placedAt,
     createdAt: b.createdAt,
@@ -69,7 +78,7 @@ export async function GET() {
   const metrics = computeMetrics(betLikes);
   // Placeholder odds (1.01 = imported loss with unknown odds) are fake prices —
   // the displayed average is computed on real odds only. P/L is unaffected.
-  const avgOddsReal = computeMetrics(betLikes.filter(hasRealOdds)).avgOdds;
+  const realOddsMetrics = computeMetrics(betLikes.filter(hasRealOdds));
   const bankroll = bankrollSeries(betLikes, settings.startingBankrollUnits);
 
   // One keyed projection, reused by every breakdown below.
@@ -165,17 +174,20 @@ export async function GET() {
       odds: b.odds,
       stakeUnits: b.stakeUnits,
       closingOdds: b.closingOdds,
-      clvPct:
-        b.closingOdds && b.closingOdds > 1
-          ? (b.odds / b.closingOdds - 1) * 100
-          : null,
+      closingSource: b.closingSource,
+      boosted: b.boosted,
+      clvPct: countsForClv(b) ? clvPct(b.odds, b.closingOdds as number) : null,
       eventAt: b.eventAt ? b.eventAt.toISOString() : null,
       placedAt: b.placedAt.toISOString(),
     }));
 
   return NextResponse.json({
     username: user.username,
-    metrics: { ...metrics, avgOdds: avgOddsReal },
+    metrics: {
+      ...metrics,
+      avgOdds: realOddsMetrics.avgOdds,
+      medianOdds: realOddsMetrics.medianOdds,
+    },
     insights,
     openRisk: risk,
     drawdown,
@@ -220,6 +232,8 @@ function toKeyed(b: {
   stakeUnits: number;
   outcome: string;
   closingOdds: number | null;
+  closingSource: string | null;
+  boosted: boolean;
   eventAt: Date | null;
   placedAt: Date;
   createdAt: Date;
@@ -237,6 +251,8 @@ function toKeyed(b: {
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     closingOdds: b.closingOdds,
+    closingSource: b.closingSource,
+    boosted: b.boosted,
     eventAt: b.eventAt,
     placedAt: b.placedAt,
     createdAt: b.createdAt,
@@ -258,7 +274,7 @@ function yearOf(d: Date | string | null | undefined): string {
 
 // All months ascending (YYYY-MM) with per-month metrics.
 function monthlyAll(
-  bets: { eventAt: Date | null; placedAt: Date; odds: number; stakeUnits: number; outcome: string; closingOdds: number | null; createdAt: Date; profitUnits: number | null }[]
+  bets: { eventAt: Date | null; placedAt: Date; odds: number; stakeUnits: number; outcome: string; closingOdds: number | null; closingSource: string | null; boosted: boolean; createdAt: Date; profitUnits: number | null }[]
 ) {
   const groups = new Map<string, BetLike[]>();
   for (const b of bets) {
@@ -270,6 +286,8 @@ function monthlyAll(
       stakeUnits: b.stakeUnits,
       outcome: b.outcome as Outcome,
       closingOdds: b.closingOdds,
+      closingSource: b.closingSource,
+      boosted: b.boosted,
       eventAt: b.eventAt,
       placedAt: b.placedAt,
       createdAt: b.createdAt,
@@ -289,6 +307,13 @@ function monthlyAll(
         roiPct: m.roiPct,
         stakedUnits: m.stakedUnits,
         winRatePct: m.winRatePct,
+        // CLV over time: the verified series, plus how many bets it rests on
+        // that month and how many carried any closing price at all.
+        clvPct: m.clvPct,
+        clvSampleSize: m.clvSampleSize,
+        clvUnverifiedPct: m.clvUnverifiedPct,
+        clvUnverifiedSampleSize: m.clvUnverifiedSampleSize,
+        clvAnySampleSize: m.clvAnySampleSize,
       };
     })
     .sort((a, b) => (a.month < b.month ? -1 : 1));
@@ -343,26 +368,12 @@ function leaderboard(
   }));
 }
 
-function oddsBandBreakdown(bets: BetLike[]) {
-  // Placeholder odds (1.01 = imported loss with unknown odds) would otherwise
-  // pollute the lowest band with fake prices — real odds only here.
-  const real = bets.filter(hasRealOdds);
-  const bands = [
-    { label: "1.02–1.50", min: 1.01, max: 1.5 },
-    { label: "1.50–2.00", min: 1.5, max: 2.0 },
-    { label: "2.00–3.00", min: 2.0, max: 3.0 },
-    { label: "3.00–5.00", min: 3.0, max: 5.0 },
-    { label: "5.00+", min: 5.0, max: Infinity },
-  ];
-  return bands.map((band) => {
-    const inBand = real.filter((b) => b.odds >= band.min && b.odds < band.max);
-    const m = computeMetrics(inBand);
-    return {
-      label: band.label,
-      bets: inBand.length,
-      profitUnits: m.profitUnits,
-      roiPct: m.roiPct,
-      winRatePct: m.winRatePct,
-    };
-  });
+// Odds bands as full Breakdowns, so the analytics card gets the same fields
+// (stake, settled, CLV, coverage) as every other breakdown instead of zeros.
+// Placeholder odds (1.01 = imported loss with unknown odds) would pollute the
+// lowest band with fake prices — real odds only here.
+function oddsBandBreakdown(bets: BetLike[]): Breakdown[] {
+  const rows = breakdownBy(bets.filter(hasRealOdds), (b) => oddsBandKey(b.odds));
+  const order: string[] = ODDS_BANDS.map((b) => b.label);
+  return rows.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
 }

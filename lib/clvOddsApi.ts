@@ -163,6 +163,8 @@ export async function captureClosingNearKickoff(
       eventKind: "match",
       market: { in: [...FEATURED_MARKETS] },
       closingOdds: null,
+      // A boosted price is a promotion, not the market — never CLV.
+      boosted: false,
       eventAt: { gte: windowStart, lte: windowEnd },
       OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
       ...(opts.betIds?.length ? { id: { in: opts.betIds } } : {}),
@@ -293,7 +295,11 @@ export async function captureClosingNearKickoff(
       if (!dryRun) {
         await prisma.bet.update({
           where: { id: bet.id },
-          data: { closingOdds: picked.price },
+          data: {
+            closingOdds: picked.price,
+            closingSource: "odds_api",
+            closingCapturedAt: new Date(),
+          },
         });
       }
       closingUpdated += 1;

@@ -93,6 +93,9 @@ const empty = {
   line: "",
   odds: "1.95",
   closingOdds: "",
+  // "1" / "" — kept as a string so the generic PATCH diff below treats it like
+  // every other field. lib/betInput coerces it back to a boolean.
+  boosted: "",
   stakeUnits: "1",
   outcome: "pending",
   betType: "single",
@@ -123,6 +126,7 @@ function formFromBet(b: BetDTO): Form {
     line: b.line != null ? String(b.line) : "",
     odds: String(b.odds),
     closingOdds: b.closingOdds != null ? String(b.closingOdds) : "",
+    boosted: b.boosted ? "1" : "",
     stakeUnits: String(b.stakeUnits),
     outcome: b.outcome,
     betType: b.betType ?? "single",
@@ -294,6 +298,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
 
   const o = parseFloat(form.odds) || 0;
   const close = parseFloat(form.closingOdds) || 0;
+  const boosted = form.boosted === "1";
   const s = parseFloat(form.stakeUnits) || 0;
   const potential = s * o;
   const profit = s * (o - 1);
@@ -362,6 +367,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           ...form,
           line: form.line === "" ? null : form.line,
           closingOdds: form.closingOdds === "" ? null : form.closingOdds,
+          boosted: form.boosted === "1",
           externalRef: form.externalRef || null,
           // Kvitto-metadata från tolkningen (dedupe-referens, speltid, kombo-ben).
           ...(prefill?.importRef ? { importRef: prefill.importRef } : {}),
@@ -717,9 +723,10 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 type="number"
                 step="0.01"
                 min="1.01"
-                placeholder="t.ex. Pinnacle close"
+                placeholder={boosted ? "räknas inte för boost" : "t.ex. Pinnacle close"}
                 value={form.closingOdds}
                 onChange={(e) => set("closingOdds", e.target.value)}
+                disabled={boosted}
               />
             </div>
             <div className="ap-field">
@@ -735,6 +742,22 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
               >
                 {liveClvPct == null ? "—" : `${liveClvPct >= 0 ? "+" : ""}${liveClvPct.toFixed(1)}%`}
               </div>
+            </div>
+          </div>
+
+          {/* An odds boost is a promotion, not the market's price, so a boosted
+              bet can never produce closing line value. Flagging it here keeps it
+              out of the CLV figures and out of every automated capture run. */}
+          <div className="ap-field">
+            <div className="ap-toggle">
+              <span>Boostat odds (räknas aldrig som CLV)</span>
+              <button
+                type="button"
+                className={"ap-switch" + (boosted ? " on" : "")}
+                onClick={() => set("boosted", boosted ? "" : "1")}
+                aria-label="Växla boostat odds"
+                aria-pressed={boosted}
+              />
             </div>
           </div>
 

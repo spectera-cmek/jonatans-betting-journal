@@ -3,13 +3,19 @@
 import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card, SkeletonCard, SectionHead } from "@/components/ui";
-import { LineChart, Donut } from "@/components/charts";
-import { StatTile, BreakdownCard, PerfCards, LeaderboardCard, BookmakerTable } from "@/components/stats";
+import { LineChart, Donut, HBar } from "@/components/charts";
+import { StatTile, BreakdownCard, MiniStat, PerfCards, LeaderboardCard, BookmakerTable } from "@/components/stats";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
 import { uFmt, pctFmt, krShort, krFmt } from "@/lib/format";
 import type { Breakdown } from "@/lib/betting";
 import { I, IC } from "@/components/icons";
+
+// A month's CLV is meaningless on a handful of bets — the series only plots
+// months that cleared this many.
+const CLV_MONTH_MIN = 10;
+// Below this many bets a market's coverage percentage is just noise.
+const CLV_COVERAGE_MIN_BETS = 25;
 
 const MONTH_NAMES = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 function monthLabel(ym: string): string {
@@ -63,16 +69,33 @@ export default function AnalyticsPage() {
     : [];
   const outColors = [cc.pos, cc.red, cc.acc, cc.dim];
 
-  const oddsBands: Breakdown[] = (data?.oddsBands ?? []).map((o) => ({
-    key: o.label,
-    bets: o.bets,
-    settled: 0,
-    stakedUnits: 0,
-    profitUnits: o.profitUnits,
-    roiPct: o.roiPct,
-    avgOdds: null,
-    winRatePct: o.winRatePct,
-  }));
+  // /api/metrics ships odds bands as full Breakdowns — no reshaping needed.
+  const oddsBands: Breakdown[] = data?.oddsBands ?? [];
+
+  // CLV over time. Prefers the verified series and falls back to the unverified
+  // one, so the chart isn't blank while capture coverage is still thin — the
+  // card's copy says which is which.
+  const clvSeries = useMemo(() => {
+    const useVerified = byMonth.some((mo) => (mo.clvSampleSize ?? 0) >= CLV_MONTH_MIN);
+    return byMonth
+      .map((mo) => ({
+        month: mo.month,
+        pct: (useVerified ? mo.clvPct : mo.clvUnverifiedPct) ?? null,
+        n: (useVerified ? mo.clvSampleSize : mo.clvUnverifiedSampleSize) ?? 0,
+      }))
+      .filter((p): p is { month: string; pct: number; n: number } => p.pct != null && p.n >= CLV_MONTH_MIN);
+  }, [byMonth]);
+
+  // Where the capture pipeline actually reaches. Worst coverage first — the
+  // point of the panel is the holes, not the wins.
+  const clvCoverageRows = useMemo(
+    () =>
+      (data?.byMarketDetail ?? [])
+        .filter((r) => r.bets >= CLV_COVERAGE_MIN_BETS)
+        .sort((a, b) => (a.clvCoveragePct ?? 0) - (b.clvCoveragePct ?? 0))
+        .slice(0, 10),
+    [data?.byMarketDetail]
+  );
 
   if (loading && !data) {
     return (
@@ -99,7 +122,14 @@ export default function AnalyticsPage() {
       <div className="ap-kpi-row">
         <StatTile label="Total P/L" value={uFmt(m?.profitUnits ?? null, true)} sub={`ROI ${pctFmt(m?.roiPct ?? null, true)}`} tone={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} icon={IC.coins} accent={(m?.profitUnits ?? 0) >= 0 ? "emerald" : "red"} />
         <StatTile label="Träffprocent" value={pctFmt(m?.winRatePct ?? null)} sub={`${m?.wins ?? 0}V · ${m?.losses ?? 0}F`} icon={IC.target} accent="amber" />
-        <StatTile label="Snittodds" value={(m?.avgOdds ?? 0).toFixed(2)} sub={`${m?.settledBets ?? 0} avgjorda`} icon={IC.scale} accent="pink" />
+        <StatTile
+          label="Medianodds"
+          value={(m?.medianOdds ?? 0).toFixed(2)}
+          sub={`snitt ${(m?.avgOdds ?? 0).toFixed(2)} · ${m?.settledBets ?? 0} avgjorda`}
+          hint="Medianen, inte snittet: en handfull bet builder-spel prissatta över 1000 drar upp medelvärdet så att det slutar beskriva vad du faktiskt spelar."
+          icon={IC.scale}
+          accent="pink"
+        />
         <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : "ingen data"} icon={IC.layers} accent="purple" />
       </div>
 
@@ -136,31 +166,78 @@ export default function AnalyticsPage() {
 
       <SectionHead icon={IC.chart} title="Utveckling" sub="CLV, år och trend" />
 
-      {/* CLV — closing line value */}
+      {/* CLV — closing line value, split by how trustworthy the closing price is */}
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <span className="ap-label">Closing line value (CLV)</span>
           <span style={{ color: "var(--dim2)", fontSize: 11 }}>
-            {m && m.clvSampleSize > 0 ? `${m.clvSampleSize} bets med stängningsodds` : "kräver TheStatsAPI eller Odds API"}
+            {m && m.totalBets > 0
+              ? `${m.clvAnySampleSize.toLocaleString("sv-SE")} av ${m.totalBets.toLocaleString("sv-SE")} spel · ${pctFmt((m.clvAnySampleSize / m.totalBets) * 100)} täckning`
+              : "kräver TheStatsAPI eller Odds API"}
           </span>
         </div>
-        {m && m.clvSampleSize > 0 ? (
-          <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
-            <div>
-              <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
-                <span className={(m.clvPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(m.clvPct, true)}</span>
-              </div>
-              <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>Snitt-CLV</div>
+
+        {m && m.clvAnySampleSize > 0 ? (
+          <>
+            <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <MiniStat
+                label="Verifierad stängning"
+                value={m.clvSampleSize ? pctFmt(m.clvPct, true) : "—"}
+                tone={m.clvSampleSize ? ((m.clvPct ?? 0) >= 0 ? "pos" : "neg") : undefined}
+                sub={
+                  m.clvSampleSize
+                    ? `${m.clvBeatCount}/${m.clvSampleSize} slog stängningen · ${pctFmt((m.clvBeatCount / m.clvSampleSize) * 100)}`
+                    : "Inga spel med verifierad stängning än"
+                }
+              />
+              <MiniStat
+                label="Overifierad proveniens"
+                value={m.clvUnverifiedSampleSize ? pctFmt(m.clvUnverifiedPct, true) : "—"}
+                tone={m.clvUnverifiedSampleSize ? ((m.clvUnverifiedPct ?? 0) >= 0 ? "pos" : "neg") : undefined}
+                sub={
+                  m.clvUnverifiedSampleSize
+                    ? `${m.clvUnverifiedBeatCount}/${m.clvUnverifiedSampleSize} bättre · ${pctFmt((m.clvUnverifiedBeatCount / m.clvUnverifiedSampleSize) * 100)}`
+                    : "Inga"
+                }
+              />
             </div>
-            <div>
-              <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
-                {pctFmt((m.clvBeatCount / m.clvSampleSize) * 100)}
+            <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 12, marginBottom: 0 }}>
+              Talen hålls isär för att de mäter olika saker. Vänster kolumn jämför mot ett
+              stängningspris som appen själv hämtat. Höger kolumn är rader vars ursprung inte går
+              att belägga i efterhand — främst BetHero-importen, som skrev fair odds i samma fält.
+              Att slå ett fair odds är en edge-uppskattning, inte closing line value, och en
+              beat-rate nära 100 % är omöjlig mot en verklig stängning.
+              {m.clvBoostedSkipped > 0 &&
+                ` ${m.clvBoostedSkipped} boostade spel räknas inte alls — en boost är en kampanj, inte marknadens pris.`}
+            </p>
+
+            {clvSeries.length > 1 && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span className="ap-label">CLV per månad</span>
+                  <span style={{ color: "var(--dim2)", fontSize: 11 }}>
+                    månader med minst {CLV_MONTH_MIN} spel
+                  </span>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <LineChart
+                    data={clvSeries.map((p) => p.pct)}
+                    w={640}
+                    h={140}
+                    stroke={cc.acc}
+                    fill={cc.fill}
+                    grid={cc.grid}
+                    strokeW={2.2}
+                  />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, color: "var(--dim2)", fontSize: 11 }}>
+                  {clvSeries.map((p) => (
+                    <span key={p.month}>{monthLabel(p.month)}</span>
+                  ))}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
-                Slog stängningsoddset · {m.clvBeatCount}/{m.clvSampleSize}
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         ) : (
           <div style={{ color: "var(--dim2)", fontSize: 13, lineHeight: 1.5, maxWidth: 560 }}>
             Inga stängningsodds insamlade än. CLV mäter om du tog bättre odds än marknadens
@@ -169,6 +246,38 @@ export default function AnalyticsPage() {
           </div>
         )}
       </Card>
+
+      {/* Coverage — which markets the capture pipeline actually reaches. */}
+      {clvCoverageRows.length > 0 && (
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span className="ap-label">Stängningsodds-täckning per marknad</span>
+            <span style={{ color: "var(--dim2)", fontSize: 11 }}>andel spel med stängningspris</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
+            {clvCoverageRows.map((r) => (
+              <div key={r.key}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
+                  <span>
+                    {r.key} <span style={{ color: "var(--dim2)", fontSize: 12 }}>· {r.bets} spel</span>
+                  </span>
+                  <span className="ap-num" style={{ fontWeight: 600 }}>{pctFmt(r.clvCoveragePct)}</span>
+                </div>
+                <HBar
+                  pct={Math.max(r.clvCoveragePct ?? 0, 1.5)}
+                  color={(r.clvCoveragePct ?? 0) >= 30 ? cc.acc : cc.red}
+                  track={cc.grid}
+                  h={7}
+                />
+              </div>
+            ))}
+          </div>
+          <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 16, marginBottom: 0 }}>
+            Röd stapel = marknaden fångas i praktiken inte. CLV-siffran ovan säger ingenting om
+            de marknaderna, hur bra den än ser ut.
+          </p>
+        </Card>
+      )}
 
       {/* Per år */}
       <Card style={{ padding: 0, marginBottom: 12 }}>
@@ -199,7 +308,12 @@ export default function AnalyticsPage() {
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <span className="ap-label">ROI-trend (senaste 12 mån)</span>
-            <span className="ap-num pos" style={{ fontWeight: 600 }}>{pctFmt(m?.roiPct ?? null, true)} totalt</span>
+            <span
+              className={"ap-num " + ((m?.roiPct ?? 0) >= 0 ? "pos" : "neg")}
+              style={{ fontWeight: 600 }}
+            >
+              {pctFmt(m?.roiPct ?? null, true)} totalt
+            </span>
           </div>
           <div style={{ marginTop: 16 }}>
             <LineChart data={roiCurve} w={640} h={180} stroke={cc.acc} fill={cc.fill} grid={cc.grid} strokeW={2.2} />
@@ -230,7 +344,7 @@ export default function AnalyticsPage() {
 
       <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
         <BreakdownCard title="P/L per sport" rows={data?.bySport ?? []} unit={unit} />
-        <BreakdownCard title="P/L per marknad" sub="vad du bettat på" rows={data?.byMarketDetail ?? []} unit={unit} />
+        <BreakdownCard title="P/L per marknad" sub="vad du bettat på" rows={data?.byMarketDetail ?? []} unit={unit} showClv />
         <BreakdownCard title="P/L: spelare / lag / match" rows={data?.byScope ?? []} unit={unit} />
       </div>
 

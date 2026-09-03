@@ -39,6 +39,8 @@ const LIST_SELECT = {
   betType: true,
   odds: true,
   closingOdds: true,
+  closingSource: true,
+  boosted: true,
   stakeUnits: true,
   outcome: true,
   profitUnits: true,

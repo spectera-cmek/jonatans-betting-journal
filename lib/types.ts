@@ -1,6 +1,7 @@
 // Plain DTOs passed from server components / API to client components.
 // Dates are serialized to ISO strings so they survive the server->client boundary.
 
+import { clvPct, countsForClv } from "./betting";
 import type { Outcome } from "./betting";
 
 export interface BetDTO {
@@ -24,6 +25,8 @@ export interface BetDTO {
   betType: string;
   odds: number;
   closingOdds: number | null;
+  closingSource: string | null;
+  boosted: boolean;
   stakeUnits: number;
   outcome: Outcome;
   profitUnits: number | null;
@@ -61,6 +64,8 @@ type BetRow = {
   betType: string;
   odds: number;
   closingOdds: number | null;
+  closingSource: string | null;
+  boosted: boolean;
   stakeUnits: number;
   outcome: string;
   profitUnits: number | null;
@@ -97,6 +102,8 @@ export function serializeBet(b: BetRow): BetDTO {
     betType: b.betType,
     odds: b.odds,
     closingOdds: b.closingOdds,
+    closingSource: b.closingSource,
+    boosted: b.boosted,
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     profitUnits: b.profitUnits,
@@ -109,10 +116,7 @@ export function serializeBet(b: BetRow): BetDTO {
     legs: b.legs,
     gradedAt: b.gradedAt ? b.gradedAt.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
-    clvPct:
-      b.closingOdds && b.closingOdds > 1
-        ? (b.odds / b.closingOdds - 1) * 100
-        : null,
+    clvPct: countsForClv(b) ? clvPct(b.odds, b.closingOdds as number) : null,
   };
 }
 
@@ -139,6 +143,8 @@ export interface BetListDTO {
   betType: string;
   odds: number;
   closingOdds: number | null;
+  closingSource: string | null;
+  boosted: boolean;
   stakeUnits: number;
   outcome: Outcome;
   profitUnits: number | null;
@@ -152,7 +158,8 @@ export type BetListRow = Pick<
   BetRow,
   | "id" | "placedAt" | "eventAt" | "sport" | "league" | "event" | "homeTeam" | "awayTeam" | "market"
   | "marketCategory" | "marketScope" | "eventKind" | "tournamentStage"
-  | "selection" | "selectionSide" | "line" | "betType" | "odds" | "closingOdds" | "stakeUnits"
+  | "selection" | "selectionSide" | "line" | "betType" | "odds" | "closingOdds"
+  | "closingSource" | "boosted" | "stakeUnits"
   | "outcome" | "profitUnits" | "bookmaker" | "resultProvider" | "resultEventRef"
 >;
 
@@ -177,16 +184,15 @@ export function serializeBetList(b: BetListRow): BetListDTO {
     betType: b.betType,
     odds: b.odds,
     closingOdds: b.closingOdds,
+    closingSource: b.closingSource,
+    boosted: b.boosted,
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     profitUnits: b.profitUnits,
     bookmaker: b.bookmaker,
     resultProvider: b.resultProvider,
     resultEventRef: b.resultEventRef,
-    clvPct:
-      b.closingOdds && b.closingOdds > 1
-        ? (b.odds / b.closingOdds - 1) * 100
-        : null,
+    clvPct: countsForClv(b) ? clvPct(b.odds, b.closingOdds as number) : null,
   };
 }
 
