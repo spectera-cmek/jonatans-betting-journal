@@ -20,6 +20,7 @@ import { inferSelection } from "@/lib/grading";
 import { categorizeDetail } from "@/lib/categorize";
 import { inferEventKind } from "@/lib/betTaxonomy";
 import { evaluateBet } from "@/lib/discipline";
+import { useMetrics } from "@/lib/useData";
 import { accaOdds } from "@/lib/betting";
 import { krFmt } from "@/lib/format";
 import { I, IC } from "./icons";
@@ -257,20 +258,27 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
     return byFrequency(pool.map((b) => b.selection), 6);
   }, [history, form.sport, form.marketCategory]);
 
-  // Live leak/edge check against the personal loss-analysis rules.
+  // Live leak/edge check against rules derived from the journal itself. They
+  // ride along on the shared (cached) metrics fetch, so this costs nothing
+  // extra; before it resolves the verdict is simply empty.
+  const { data: metrics } = useMetrics();
   const verdict = useMemo(
     () =>
-      evaluateBet({
-        sport: form.sport,
-        selection: form.selection,
-        market: form.market,
-        odds: parseFloat(form.odds) || null,
-        stakeUnits: parseFloat(form.stakeUnits) || null,
-        // Read the live form value, not the edited row — otherwise picking
-        // "Kombination" in the form never triggers the accumulator warning.
-        betType: form.betType,
-      }),
-    [form.sport, form.selection, form.market, form.odds, form.stakeUnits, form.betType]
+      evaluateBet(
+        {
+          sport: form.sport,
+          selection: form.selection,
+          market: form.market,
+          marketCategory: form.marketCategory || null,
+          odds: parseFloat(form.odds) || null,
+          stakeUnits: parseFloat(form.stakeUnits) || null,
+          // Read the live form value, not the edited row — otherwise picking
+          // "Kombination" in the form never triggers the accumulator warning.
+          betType: form.betType,
+        },
+        metrics?.disciplineRules
+      ),
+    [form.sport, form.selection, form.market, form.marketCategory, form.odds, form.stakeUnits, form.betType, metrics?.disciplineRules]
   );
 
   // Accumulator-ben: från den redigerade betet (JSON-sträng) eller, vid kvitto-

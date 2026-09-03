@@ -7,7 +7,7 @@
 // trivially unit-testable.
 
 import { breakdownBy, hasRealOdds, oddsBandKey, round2, type BetLike, type Breakdown } from "./betting";
-import { betCategory } from "./discipline";
+import { betCategory, stakeBandKey } from "./disciplineRules";
 
 export interface EdgeBetInput extends BetLike {
   selection?: string | null;
@@ -31,12 +31,6 @@ export interface EdgeSegments {
 // Segments need a real sample before they mean anything — below this they're variance.
 const MIN_SETTLED = 40;
 
-export function stakeBandKey(stake: number): string {
-  if (stake <= 0.5) return "Insats ≤ 0,5 u";
-  if (stake <= 1) return "Insats 0,51–1 u";
-  if (stake <= 2) return "Insats 1,01–2 u";
-  return "Insats > 2 u";
-}
 
 export function computeEdgeSegments(bets: EdgeBetInput[], minSettled = MIN_SETTLED): EdgeSegments {
   const withDim = (rows: Breakdown[], dim: EdgeSegment["dim"]): EdgeSegment[] =>

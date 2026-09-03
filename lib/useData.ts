@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./fetcher";
 import type { Metrics, BankrollPoint, Breakdown, OpenRisk, DrawdownInfo } from "./betting";
 import type { Insights } from "./insights";
+import type { DisciplineRuleSet } from "./disciplineRules";
 import type { TiltStatus } from "./tilt";
 import type { WeeklyReport, MonthlyReport } from "./weekly";
 import type { BetListDTO, SettingsDTO } from "./types";
@@ -68,6 +69,7 @@ export interface MetricsResponse {
   username: string;
   metrics: Metrics;
   insights: Insights;
+  disciplineRules: DisciplineRuleSet;
   openRisk: OpenRisk;
   drawdown: DrawdownInfo;
   tilt: TiltStatus;

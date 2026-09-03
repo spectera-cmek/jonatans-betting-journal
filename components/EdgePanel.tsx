@@ -11,6 +11,7 @@ import { computeEdgeSegments, type EdgeSegment } from "@/lib/edge";
 import { krFmt, krShort, pctFmt } from "@/lib/format";
 import type { BetListDTO } from "@/lib/types";
 import type { ChartColors } from "@/lib/theme";
+import type { DisciplineRuleSet } from "@/lib/disciplineRules";
 
 function SegmentRows({
   segments,
@@ -53,7 +54,16 @@ function SegmentRows({
   );
 }
 
-export function EdgePanel({ bets, unit }: { bets: BetListDTO[]; unit: number }) {
+export function EdgePanel({
+  bets,
+  unit,
+  ruleSet,
+}: {
+  bets: BetListDTO[];
+  unit: number;
+  /** The rules the add-bet modal warns on, shown here so they are inspectable. */
+  ruleSet?: DisciplineRuleSet;
+}) {
   const { cc } = useTheme();
   const seg = useMemo(() => computeEdgeSegments(bets), [bets]);
   if (seg.leaks.length === 0 && seg.edges.length === 0) return null;
@@ -91,6 +101,41 @@ export function EdgePanel({ bets, unit }: { bets: BetListDTO[]; unit: number }) 
         Segment över marknad, oddsspann, singel/ack och insatsstorlek med minst {seg.minSettled} avgjorda spel.
         Odds-platshållare (1.01) är exkluderade ur oddsspannen. Testa reglerna i simulatorn längre ner.
       </p>
+
+      {ruleSet && ruleSet.rules.length > 0 && (
+        <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+            <span className="ap-label">Reglerna som varnar i Logga bet</span>
+            <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>
+              {ruleSet.settledInWindow.toLocaleString("sv-SE")} avgjorda
+              {ruleSet.windowFrom ? ` sedan ${ruleSet.windowFrom}` : " i hela historiken"}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+            {ruleSet.rules.map((r) => (
+              <span
+                key={`${r.dim}:${r.key}`}
+                className="ap-tag"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "baseline",
+                  gap: 6,
+                  borderColor: r.tone === "pos" ? cc.pos : cc.red,
+                }}
+                title={`${r.dim} · ${r.settled.toLocaleString("sv-SE")} avgjorda spel`}
+              >
+                {r.key}
+                <b className={"ap-num " + (r.tone === "pos" ? "pos" : "neg")}>{pctFmt(r.roiPct, true)}</b>
+              </span>
+            ))}
+          </div>
+          <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
+            Räknas om ur din egen historik vid varje sidladdning: minst {ruleSet.minSettled} avgjorda
+            spel i segmentet och minst {ruleSet.minRoiPct} % ROI åt något håll. Inget är hårdkodat —
+            en marknad som vänder tar reglerna med sig.
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

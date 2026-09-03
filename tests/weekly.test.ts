@@ -1,7 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { weeklyReport, monthlyReport, type WeeklyBetInput } from "../lib/weekly";
+import { EMPTY_RULE_SET, type DisciplineRuleSet } from "../lib/disciplineRules";
 
 const NOW = new Date("2026-06-12T12:00:00Z"); // Friday, week 24 (8–14 jun)
+
+// One leak rule, so the discipline grade has something to penalise.
+const LEAK_RULES: DisciplineRuleSet = {
+  ...EMPTY_RULE_SET,
+  rules: [
+    { dim: "Typ", key: "Ackumulator", tone: "neg", settled: 1885, profitUnits: -123.9, roiPct: -6.1 },
+  ],
+};
 
 function bet(day: string, overrides: Partial<WeeklyBetInput> = {}): WeeklyBetInput {
   return {
@@ -69,8 +78,15 @@ describe("weeklyReport", () => {
       // Leak: accumulator.
       bet("2026-06-10", { betType: "accumulator", odds: 8, stakeUnits: 1 }),
     ];
-    const r = weeklyReport(bets, NOW);
+    const r = weeklyReport(bets, NOW, LEAK_RULES);
     expect(r.current.disciplinePct).toBeCloseTo(75, 5);
+  });
+
+  it("grades every stake as disciplined when there are no rules to break", () => {
+    // The grade is only as good as the rules behind it: with none derived yet,
+    // nothing can be flagged, so nothing is penalised.
+    const bets = [bet("2026-06-10", { betType: "accumulator", odds: 8, stakeUnits: 1 })];
+    expect(weeklyReport(bets, NOW).current.disciplinePct).toBe(100);
   });
 
   it("handles an empty week", () => {

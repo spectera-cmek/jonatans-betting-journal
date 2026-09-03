@@ -18,8 +18,10 @@ import {
   type BetLike,
   type Breakdown,
 } from "@/lib/betting";
+import type { RuleBetInput } from "@/lib/disciplineRules";
 import type { Outcome } from "@/lib/betting";
 import { computeInsights } from "@/lib/insights";
+import { deriveDisciplineRules } from "@/lib/disciplineRules";
 import { tiltStatus } from "@/lib/tilt";
 import { weeklyReport, monthlyReport, type WeeklyBetInput } from "@/lib/weekly";
 import { getSessionUser, apiUnauthorized } from "@/lib/auth";
@@ -119,6 +121,11 @@ export async function GET() {
   // Personal "form" insights (streaks, best/worst day, month-over-month…).
   const insights = computeInsights(betLikes);
 
+  // Leak/edge rules recomputed from the journal on every load. These drive both
+  // the warnings in the add-bet modal and the discipline grade below, so they
+  // are derived before the reports rather than read from frozen constants.
+  const disciplineRules = deriveDisciplineRules(keyed as RuleBetInput[]);
+
   // Exposure on pending bets + worst historical peak-to-trough drop.
   const risk = openRisk(betLikes);
   const drawdown = maxDrawdown(bankroll);
@@ -146,8 +153,8 @@ export async function GET() {
     market: b.market,
     betType: b.betType,
   }));
-  const weekly = weeklyReport(weeklyInput, new Date());
-  const monthlyRep = monthlyReport(weeklyInput, new Date());
+  const weekly = weeklyReport(weeklyInput, new Date(), disciplineRules);
+  const monthlyRep = monthlyReport(weeklyInput, new Date(), disciplineRules);
 
   // Pending bets, soonest event first (nulls last) — the dashboard "Öppna spel" panel.
   const openBets = bets
@@ -189,6 +196,7 @@ export async function GET() {
       medianOdds: realOddsMetrics.medianOdds,
     },
     insights,
+    disciplineRules,
     openRisk: risk,
     drawdown,
     tilt,

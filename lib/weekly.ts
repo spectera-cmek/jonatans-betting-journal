@@ -7,6 +7,7 @@
 
 import { isSettled, settledProfit, countsForWinRate, isWinLike, round2, type BetLike } from "./betting";
 import { evaluateBet } from "./discipline";
+import { EMPTY_RULE_SET, type DisciplineRuleSet } from "./disciplineRules";
 import { dayIso, weekOf, monthOf, addDays, isoWeekNo, isoDayToUtcNoon, type WeekWindow } from "./time";
 
 export interface WeeklyBetInput extends BetLike {
@@ -70,7 +71,13 @@ function betTime(b: BetLike): number {
 }
 
 /** Aggregate one arbitrary {start,end} window — the week/month reports both wrap this. */
-export function aggPeriod(bets: WeeklyBetInput[], win: WeekWindow): PeriodAgg {
+export function aggPeriod(
+  bets: WeeklyBetInput[],
+  win: WeekWindow,
+  // The discipline grade is only as good as the rules behind it. With no rule
+  // set nothing is flagged, so the period counts as fully disciplined.
+  ruleSet: DisciplineRuleSet = EMPTY_RULE_SET
+): PeriodAgg {
   let settled = 0;
   let pending = 0;
   let staked = 0;
@@ -99,14 +106,17 @@ export function aggPeriod(bets: WeeklyBetInput[], win: WeekWindow): PeriodAgg {
 
     if (b.stakeUnits > 0) {
       allStake += b.stakeUnits;
-      const verdict = evaluateBet({
-        sport: b.sport,
-        selection: b.selection,
-        market: b.market,
-        odds: b.odds,
-        stakeUnits: b.stakeUnits,
-        betType: b.betType,
-      });
+      const verdict = evaluateBet(
+        {
+          sport: b.sport,
+          selection: b.selection,
+          market: b.market,
+          odds: b.odds,
+          stakeUnits: b.stakeUnits,
+          betType: b.betType,
+        },
+        ruleSet
+      );
       if (!verdict.notes.some((n) => n.tone === "neg")) cleanStake += b.stakeUnits;
     }
 
@@ -150,21 +160,29 @@ export function aggPeriod(bets: WeeklyBetInput[], win: WeekWindow): PeriodAgg {
   };
 }
 
-export function weeklyReport(bets: WeeklyBetInput[], now: Date | number = Date.now()): WeeklyReport {
+export function weeklyReport(
+  bets: WeeklyBetInput[],
+  now: Date | number = Date.now(),
+  ruleSet: DisciplineRuleSet = EMPTY_RULE_SET
+): WeeklyReport {
   const cur = weekOf(now);
   const prev: WeekWindow = { start: addDays(cur.start, -7), end: addDays(cur.start, -1) };
   return {
-    current: { ...aggPeriod(bets, cur), weekNo: isoWeekNo(cur.start) },
-    previous: { ...aggPeriod(bets, prev), weekNo: isoWeekNo(prev.start) },
+    current: { ...aggPeriod(bets, cur, ruleSet), weekNo: isoWeekNo(cur.start) },
+    previous: { ...aggPeriod(bets, prev, ruleSet), weekNo: isoWeekNo(prev.start) },
   };
 }
 
 /** Calendar-month version of the weekly report: this month vs last month. */
-export function monthlyReport(bets: WeeklyBetInput[], now: Date | number = Date.now()): MonthlyReport {
+export function monthlyReport(
+  bets: WeeklyBetInput[],
+  now: Date | number = Date.now(),
+  ruleSet: DisciplineRuleSet = EMPTY_RULE_SET
+): MonthlyReport {
   const cur = monthOf(now);
   const prev = monthOf(addDays(cur.start, -1) + "T12:00:00Z");
   return {
-    current: { ...aggPeriod(bets, cur), month: cur.start.slice(0, 7) },
-    previous: { ...aggPeriod(bets, prev), month: prev.start.slice(0, 7) },
+    current: { ...aggPeriod(bets, cur, ruleSet), month: cur.start.slice(0, 7) },
+    previous: { ...aggPeriod(bets, prev, ruleSet), month: prev.start.slice(0, 7) },
   };
 }

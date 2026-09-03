@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card, Skeleton, SkeletonCard, SectionHead } from "@/components/ui";
 import { HBar, CompareChart, type TimePoint } from "@/components/charts";
@@ -16,6 +16,7 @@ import { betCategory } from "@/lib/discipline";
 import { noEdgeVariance, varianceByKey } from "@/lib/variance";
 import type { BetListDTO } from "@/lib/types";
 import type { ChartColors } from "@/lib/theme";
+import type { DisciplineRuleSet } from "@/lib/disciplineRules";
 import { I, IC } from "@/components/icons";
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
@@ -102,7 +103,9 @@ export default function InsightsPage() {
             </div>
           )}
 
-          {!betsLoading && bets.length > 0 && <EdgePanel bets={bets} unit={unit} />}
+          {!betsLoading && bets.length > 0 && (
+            <EdgePanel bets={bets} unit={unit} ruleSet={data?.disciplineRules} />
+          )}
 
           <div className="ap-kpi-row">
             <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} icon={IC.flame} accent="amber" />
@@ -182,7 +185,7 @@ export default function InsightsPage() {
           {!betsLoading && bets.length > 0 && (
             <>
               <LuckCard bets={bets} unit={unit} cc={cc} />
-              <Simulator bets={bets} unit={unit} cc={cc} />
+              <Simulator bets={bets} unit={unit} cc={cc} ruleSet={data?.disciplineRules} />
             </>
           )}
         </>
@@ -260,7 +263,14 @@ function LuckCard({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: Ch
 
 /* ----------------------------- Tänk om-simulatorn -------------------------- */
 
-const EDGE_PRESET = new Set(["Skott", "Returer", "Hörnor", "Halvlek"]);
+// The simulator's starting selection used to be a hardcoded list of four
+// categories. It now seeds from the markets the derived rules currently call an
+// edge, so the preset follows the data instead of a snapshot of it.
+function edgePresetFrom(ruleSet?: DisciplineRuleSet): Set<string> {
+  return new Set(
+    (ruleSet?.rules ?? []).filter((r) => r.dim === "Marknad" && r.tone === "pos").map((r) => r.key)
+  );
+}
 
 interface SimResult {
   actual: TimePoint[];
@@ -272,8 +282,25 @@ interface SimResult {
   actualProfitUnits: number;
 }
 
-function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: ChartColors }) {
-  const [cats, setCats] = useState<Set<string>>(new Set(EDGE_PRESET));
+function Simulator({
+  bets,
+  unit,
+  cc,
+  ruleSet,
+}: {
+  bets: BetListDTO[];
+  unit: number;
+  cc: ChartColors;
+  ruleSet?: DisciplineRuleSet;
+}) {
+  const edgePreset = useMemo(() => edgePresetFrom(ruleSet), [ruleSet]);
+  const [cats, setCats] = useState<Set<string>>(edgePreset);
+  // The rules arrive with the metrics fetch, after first paint. Adopt them once,
+  // and only while the user has not touched the chips.
+  const touched = useRef(false);
+  useEffect(() => {
+    if (!touched.current) setCats(edgePreset);
+  }, [edgePreset]);
   const [oddsMin, setOddsMin] = useState("1.5");
   const [oddsMax, setOddsMax] = useState("3");
   const [maxStake, setMaxStake] = useState("");
@@ -345,6 +372,7 @@ function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: C
   }, [bets, cats, oddsMin, oddsMax, maxStake, singlesOnly, unit]);
 
   const toggleCat = (c: string) => {
+    touched.current = true;
     setCats((prev) => {
       const next = new Set(prev);
       if (next.has(c)) next.delete(c);
@@ -354,7 +382,8 @@ function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: C
   };
 
   const applyEdgePreset = () => {
-    setCats(new Set(EDGE_PRESET));
+    touched.current = true;
+    setCats(new Set(edgePreset));
     setOddsMin("1.5");
     setOddsMax("3");
     setSinglesOnly(true);
