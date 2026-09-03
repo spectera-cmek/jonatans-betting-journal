@@ -72,6 +72,8 @@ export interface MetricsResponse {
   disciplineRules: DisciplineRuleSet;
   openRisk: OpenRisk;
   drawdown: DrawdownInfo;
+  /** Metrics per selectable period ("all" | "1y" | "90d" | "30d" | "7d"). */
+  periodMetrics: Record<string, Metrics & { drawdown: DrawdownInfo }>;
   tilt: TiltStatus;
   weekly: WeeklyReport;
   monthlyReport: MonthlyReport;

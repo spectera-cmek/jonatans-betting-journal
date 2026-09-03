@@ -54,9 +54,17 @@ export default function OverviewPage() {
     reloadRecent();
   };
 
-  const m = data?.metrics;
   const unit = data?.settings.unitValue ?? 100;
+  // Every KPI reads the selected period, not just the two that used to. The
+  // server computes all five windows in one pass, so switching period costs no
+  // refetch. Falls back to the all-time metrics until the payload lands.
+  const m = data
+    ? data.periodMetrics?.[period] ?? { ...data.metrics, drawdown: data.drawdown }
+    : undefined;
+  const allTime = data?.metrics;
   const profitKr = (m?.profitUnits ?? 0) * unit;
+  const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? "Hela historiken";
+  const showPeriod = period !== "all";
 
   // Chart points cut to the chosen period. The point just before the cutoff
   // is kept so the curve enters at its real level.
@@ -73,17 +81,11 @@ export default function OverviewPage() {
     return allPts.slice(Math.max(0, idx - 1));
   }, [allPts, period]);
 
-  // Max drawdown over the visible period, in kr. (No %-of-peak — that only
-  // made sense against the old arbitrary starting bankroll.)
-  const visDdKr = useMemo(() => {
-    let peak = -Infinity;
-    let maxDd = 0;
-    for (const p of pts) {
-      if (p.v > peak) peak = p.v;
-      if (peak - p.v > maxDd) maxDd = peak - p.v;
-    }
-    return maxDd;
-  }, [pts]);
+  // Max drawdown for the selected period, in kr. Comes from the same
+  // maxDrawdown() the API uses everywhere else — this page used to recompute it
+  // from the chart's points, so the dashboard and Analys could disagree about
+  // what "max drawdown" meant.
+  const visDdKr = (m?.drawdown?.maxUnits ?? 0) * unit;
 
   // ~40 evenly spaced samples of the visible curve for the KPI sparkline.
   const sparkPts = useMemo(() => {
@@ -95,12 +97,14 @@ export default function OverviewPage() {
     return out.length > 1 ? out : undefined;
   }, [pts]);
 
-  // Period P/L: last point vs the period's entry level. The headline follows
-  // the selected period; "Allt" shows the all-time total.
-  const periodDiff = pts.length >= 2 ? pts[pts.length - 1].v - pts[0].v : null;
-  const periodBets = Math.max(0, pts.length - 1); // every point after the entry = one settled bet
-  const showPeriod = period !== "all" && periodDiff != null;
-  const headlineKr = showPeriod ? (periodDiff as number) : profitKr;
+  // Headline P/L and the chart's caption both come from the period metrics, so
+  // the number and the count agree. (The chart's own points are still sliced
+  // client-side — it is a picture of the curve, not a source of figures.)
+  const periodBets = m?.settledBets ?? 0;
+  const headlineKr = profitKr;
+  // Average stake for the selected period, so this sub-line isn't all-time
+  // under a headline that isn't.
+  const periodAvgStake = m && m.settledBets > 0 ? m.stakedUnits / m.settledBets : null;
 
   // sport distribution with pct. Memoised because both of these feed straight
   // into <Donut> / <PLBars>: a fresh array identity on every render made the
@@ -154,7 +158,7 @@ export default function OverviewPage() {
       <header className="ap-terminal-head">
         <div>
           <h1>{title}</h1>
-          <p>{m?.totalBets?.toLocaleString("sv-SE") ?? 0} bets · {rangeLabel ? `${rangeLabel}` : "ingen historik"}</p>
+          <p>{allTime?.totalBets?.toLocaleString("sv-SE") ?? 0} bets · {rangeLabel ? `${rangeLabel}` : "ingen historik"}</p>
         </div>
         <div className="ap-terminal-status">
           <span>Portfölj</span>
@@ -177,7 +181,7 @@ export default function OverviewPage() {
                 icon={IC.coins}
                 value={<CountUp value={headlineKr} format={(n) => krFmt(n, true)} />}
                 spark={sparkPts}
-                trend={showPeriod ? PERIODS.find((p) => p.key === period)?.label : "Hela historiken"}
+                trend={periodLabel}
                 trendTone={headlineKr >= 0 ? "pos" : "neg"}
                 meta={`${uFmt(m?.profitUnits ?? 0, true)}`}
               />
@@ -223,7 +227,7 @@ export default function OverviewPage() {
                 icon={IC.scale}
                 hint="Medianodds på avgjorda spel. Medianen, inte snittet: en handfull bet builder-spel prissatta över 1000 drar upp medelvärdet så att det slutar beskriva vad du faktiskt spelar. Spel med placeholder-odds 1,01 räknas inte."
                 value={m?.medianOdds != null ? m.medianOdds.toFixed(2) : "—"}
-                trend={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U snittinsats` : "—"}
+                trend={periodAvgStake != null ? `${periodAvgStake.toFixed(2)}U snittinsats` : "—"}
                 trendTone="flat"
               />
               <Kpi
@@ -232,7 +236,7 @@ export default function OverviewPage() {
                 icon={IC.trendDown}
                 hint="Största fall från en topp till efterföljande botten inom vald period."
                 value={visDdKr > 0 ? krShort(-visDdKr, false) : "—"}
-                trend={showPeriod ? PERIODS.find((p) => p.key === period)?.label : "Hela historiken"}
+                trend={periodLabel}
                 trendTone="flat"
                 meta={`${(m?.totalBets ?? 0).toLocaleString("sv-SE")} spel`}
               />
@@ -246,11 +250,7 @@ export default function OverviewPage() {
           icon={IC.chart}
           accent="emerald"
           title="Resultatutveckling"
-          sub={
-            showPeriod
-              ? `${periodBets.toLocaleString("sv-SE")} avgjorda · ${PERIODS.find((p) => p.key === period)?.label}`
-              : `${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda · hela perioden`
-          }
+          sub={`${periodBets.toLocaleString("sv-SE")} avgjorda · ${showPeriod ? periodLabel : "hela perioden"}`}
           actions={
             <div className="ap-seg">
               {PERIODS.map((p) => (

@@ -130,6 +130,12 @@ export async function GET() {
   const risk = openRisk(betLikes);
   const drawdown = maxDrawdown(bankroll);
 
+  // Metrics for each period the overview's selector offers, computed in one
+  // pass over rows already in memory. The selector used to move only the chart
+  // and two of six KPI cards; ROI, win rate, CLV and odds stayed all-time,
+  // which quietly mixed two different periods in one row of cards.
+  const periodMetrics = computePeriodMetrics(betLikes, settings.startingBankrollUnits);
+
   // Tilt guard (stake budgets + chasing) and the weekly report.
   const tilt = tiltStatus(
     betLikes,
@@ -199,6 +205,7 @@ export async function GET() {
     disciplineRules,
     openRisk: risk,
     drawdown,
+    periodMetrics,
     tilt,
     weekly,
     monthlyReport: monthlyRep,
@@ -223,6 +230,37 @@ export async function GET() {
       startingBankrollUnits: settings.startingBankrollUnits,
     },
   });
+}
+
+// Windows the overview's period selector offers. "all" is the whole history.
+const PERIOD_DAYS = { "1y": 365, "90d": 90, "30d": 30, "7d": 7 } as const;
+export type PeriodKey = "all" | keyof typeof PERIOD_DAYS;
+
+/**
+ * Metrics + drawdown per selectable period. Median odds comes from real prices
+ * only, matching the all-time figure.
+ */
+function computePeriodMetrics(bets: BetLike[], startingBankrollUnits: number) {
+  const now = Date.now();
+  const at = (b: BetLike) => new Date(b.eventAt ?? b.placedAt ?? b.createdAt ?? 0).getTime();
+
+  const forRows = (rows: BetLike[]) => {
+    const m = computeMetrics(rows);
+    const real = computeMetrics(rows.filter(hasRealOdds));
+    return {
+      ...m,
+      avgOdds: real.avgOdds,
+      medianOdds: real.medianOdds,
+      drawdown: maxDrawdown(bankrollSeries(rows, startingBankrollUnits)),
+    };
+  };
+
+  const out: Record<string, ReturnType<typeof forRows>> = { all: forRows(bets) };
+  for (const [key, days] of Object.entries(PERIOD_DAYS)) {
+    const cutoff = now - days * 864e5;
+    out[key] = forRows(bets.filter((b) => at(b) >= cutoff));
+  }
+  return out;
 }
 
 interface KeyedBet extends BetLike {
