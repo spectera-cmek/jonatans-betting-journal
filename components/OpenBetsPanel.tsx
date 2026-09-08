@@ -89,6 +89,11 @@ export function OpenBetsPanel({
                 Rätta nästa{readyCount > 1 ? ` (${readyCount})` : ""}
               </button>
             )}
+            {readyCount > 1 && (
+              <Link href="/rattning" className="ap-link">
+                Hela kön →
+              </Link>
+            )}
           </div>
         </div>
 
@@ -147,6 +152,7 @@ export function OpenBetsPanel({
                           odds={b.odds}
                           closingOdds={b.closingOdds}
                           clvPctValue={b.clvPct}
+                          boosted={b.boosted}
                           onSaved={(next) => handleClv(b.id, next)}
                         />
                       </span>

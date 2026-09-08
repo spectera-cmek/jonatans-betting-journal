@@ -5,13 +5,19 @@ import { buildGradingQueue } from "@/lib/gradingQueue";
 import { settleBet } from "@/lib/settlement";
 
 export const dynamic = "force-dynamic";
+// The unfiltered queue walks every pending bet and looks each one up against
+// ESPN. Cached per (league, day) it is a handful of round trips, but a cold
+// journal with many leagues still needs more than the default budget.
+export const maxDuration = 60;
 
 export async function GET(req: Request) {
   const userId = getSessionUserId();
   if (!userId) return apiUnauthorized();
   const { searchParams } = new URL(req.url);
   const league = searchParams.get("league")?.trim() || undefined;
-  const suggestions = await buildGradingQueue(prisma, userId, { league });
+  const rawLimit = parseInt(searchParams.get("limit") ?? "", 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 300) : undefined;
+  const suggestions = await buildGradingQueue(prisma, userId, { league, limit });
   return NextResponse.json(suggestions);
 }
 

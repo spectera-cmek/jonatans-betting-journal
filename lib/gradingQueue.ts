@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { gradeBet } from "./grading";
-import { espnPath, fetchFinalScore } from "./scores";
+import { espnPath, fetchFinalScore, type ScoreboardCache } from "./scores";
 import {
   fetchWorldCupData,
   findWorldCupMatchForBet,
@@ -17,7 +17,10 @@ export interface GradingSuggestion {
   selection: string;
   eventAt: string | null;
   league: string | null;
+  sport: string | null;
   marketCategory: string | null;
+  odds: number;
+  stakeUnits: number;
   readiness: GradingReadiness;
   suggestedOutcome: Outcome | null;
   reason: string;
@@ -75,6 +78,11 @@ export async function buildGradingQueue(
 
   const needsWorldCup = bets.some((bet) => bet.league === VM_2026_LEAGUE);
   const worldCup = needsWorldCup ? await fetchWorldCupData() : null;
+  // One scoreboard memo for the whole queue. Without it a full journal (up to
+  // `take` pending bets, three day-lookups each) hammers ESPN hundreds of times
+  // and blows the route's time budget; bets cluster on a few league-days, so
+  // this collapses to a handful of requests.
+  const scoreboards: ScoreboardCache = new Map();
   const suggestions: GradingSuggestion[] = [];
 
   for (const bet of bets) {
@@ -84,7 +92,10 @@ export async function buildGradingQueue(
       selection: bet.selection,
       eventAt: bet.eventAt?.toISOString() ?? null,
       league: bet.league,
+      sport: bet.sport,
       marketCategory: bet.marketCategory,
+      odds: bet.odds,
+      stakeUnits: bet.stakeUnits,
     };
     const needsManual = manualReason(bet);
     if (needsManual) {
@@ -154,7 +165,8 @@ export async function buildGradingQueue(
           bet.eventAt,
           bet.homeTeam,
           bet.awayTeam,
-          bet.resultProvider === "espn" ? bet.resultEventRef : null
+          bet.resultProvider === "espn" ? bet.resultEventRef : null,
+          scoreboards
         );
       }
       if (!path || !score) {

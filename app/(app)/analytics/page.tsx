@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
 import { Card, SkeletonCard, SectionHead } from "@/components/ui";
+import Link from "next/link";
 import { LineChart, Donut } from "@/components/charts";
+import { HBar } from "@/components/miniCharts";
 import { StatTile, BreakdownCard, PerfCards, LeaderboardCard, BookmakerTable } from "@/components/stats";
 import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics } from "@/lib/useData";
@@ -23,6 +25,7 @@ export default function AnalyticsPage() {
   const m = data?.metrics;
   const ins = data?.insights;
   const dd = data?.drawdown;
+  const cov = data?.clvCoverage;
   const unit = data?.settings.unitValue ?? 100;
 
   const roiCurve = (data?.monthly ?? []).map((mo) => mo.roiPct ?? 0);
@@ -145,22 +148,45 @@ export default function AnalyticsPage() {
           </span>
         </div>
         {m && m.clvSampleSize > 0 ? (
-          <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
-            <div>
-              <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
-                <span className={(m.clvPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(m.clvPct, true)}</span>
+          <>
+            <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
+              <div>
+                <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
+                  <span className={(m.clvPct ?? 0) >= 0 ? "pos" : "neg"}>{pctFmt(m.clvPct, true)}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>Snitt-CLV</div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>Snitt-CLV</div>
+              <div>
+                <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
+                  {pctFmt((m.clvBeatCount / m.clvSampleSize) * 100)}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
+                  Slog stängningsoddset · {m.clvBeatCount}/{m.clvSampleSize}
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="ap-num ap-kpi-val" style={{ marginTop: 0 }}>
-                {pctFmt((m.clvBeatCount / m.clvSampleSize) * 100)}
+            {/* Coverage decides how much the two numbers above are worth: an
+                average over 6 % of the journal is not the journal's CLV. */}
+            {cov && cov.eligible > 0 && (
+              <div style={{ marginTop: 22 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12.5, color: "var(--dim)" }}>
+                    Täckning: <b className="ap-num">{cov.withClosing.toLocaleString("sv-SE")}</b> av{" "}
+                    {cov.eligible.toLocaleString("sv-SE")} spel har stängningsodds
+                  </span>
+                  <span className="ap-num" style={{ fontWeight: 700 }}>{pctFmt(cov.pct)}</span>
+                </div>
+                <HBar pct={Math.max(cov.pct ?? 0, 1)} color={cc.acc} track={cc.grid} h={8} />
+                <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 8, lineHeight: 1.55 }}>
+                  {cov.boosted > 0 && `${cov.boosted.toLocaleString("sv-SE")} boostade spel är undantagna (en boost är inget marknadspris). `}
+                  {cov.placeholder > 0 && `${cov.placeholder.toLocaleString("sv-SE")} spel med platshållarodds 1,01 är också undantagna. `}
+                  <Link href="/bets?clv=missing" className="ap-link">
+                    Visa spel utan stängningsodds →
+                  </Link>
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 4 }}>
-                Slog stängningsoddset · {m.clvBeatCount}/{m.clvSampleSize}
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         ) : (
           <div style={{ color: "var(--dim2)", fontSize: 13, lineHeight: 1.5, maxWidth: 560 }}>
             Inga stängningsodds insamlade än. CLV mäter om du tog bättre odds än marknadens

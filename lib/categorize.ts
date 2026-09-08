@@ -262,3 +262,18 @@ export function categorizeDetail(
   const marketScope = inferScope(scopeText, marketCategory, teams);
   return { marketCategory, marketScope };
 }
+
+/**
+ * Category for a single bet: the free-text selection usually carries the market
+ * keywords ("skott", "hörnor", "kort"...), with the raw market field as
+ * fallback. Returns "Övrigt" when nothing matches.
+ *
+ * Lives here rather than in lib/discipline so that lib/edge (which groups the
+ * history by it) and the discipline guard (which reads lib/edge's dimensions)
+ * do not import each other in a cycle.
+ */
+export function betCategory(input: { selection?: string | null; market?: string | null }): string {
+  const fromSelection = normalizeMarket(input.selection);
+  if (fromSelection !== "Övrigt") return fromSelection;
+  return normalizeMarket(input.market);
+}

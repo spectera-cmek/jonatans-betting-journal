@@ -14,6 +14,7 @@ import { uFmt, krShort, krFmt, pctFmt, dateShort } from "@/lib/format";
 import { settledProfit, isSettled, countsForWinRate, isWinLike } from "@/lib/betting";
 import { betCategory } from "@/lib/discipline";
 import { noEdgeVariance, varianceByKey } from "@/lib/variance";
+import { ANALYSIS_PERIODS, filterByPeriod, minSettledFor, periodByKey } from "@/lib/periods";
 import type { BetListDTO } from "@/lib/types";
 import type { ChartColors } from "@/lib/theme";
 import { I, IC } from "@/components/icons";
@@ -50,6 +51,12 @@ export default function InsightsPage() {
 
   const weekdays = ins?.byWeekday ?? [];
   const maxWd = Math.max(1, ...weekdays.map((w) => Math.abs(w.profitUnits)));
+
+  // One window for the whole analysis block below. The journal covers several
+  // seasons and they do not describe the same bettor.
+  const [periodKey, setPeriodKey] = useState("all");
+  const period = periodByKey(ANALYSIS_PERIODS, periodKey);
+  const windowBets = useMemo(() => filterByPeriod(bets, period.days), [bets, period.days]);
 
   return (
     <div>
@@ -102,7 +109,28 @@ export default function InsightsPage() {
             </div>
           )}
 
-          {!betsLoading && bets.length > 0 && <EdgePanel bets={bets} unit={unit} />}
+          {!betsLoading && bets.length > 0 && (
+            <>
+              <div className="ap-period-bar">
+                <span className="ap-label">Analysperiod</span>
+                <div className="ap-seg">
+                  {ANALYSIS_PERIODS.map((p) => (
+                    <button
+                      key={p.key}
+                      className={periodKey === p.key ? "is-active" : ""}
+                      onClick={() => setPeriodKey(p.key)}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>
+                  {windowBets.length.toLocaleString("sv-SE")} spel · styr läckor, tur-index och simulatorn
+                </span>
+              </div>
+              <EdgePanel bets={bets} unit={unit} days={period.days} periodLabel={period.label} />
+            </>
+          )}
 
           <div className="ap-kpi-row">
             <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} icon={IC.flame} accent="amber" />
@@ -181,8 +209,8 @@ export default function InsightsPage() {
 
           {!betsLoading && bets.length > 0 && (
             <>
-              <LuckCard bets={bets} unit={unit} cc={cc} />
-              <Simulator bets={bets} unit={unit} cc={cc} />
+              <LuckCard bets={windowBets} unit={unit} cc={cc} minN={minSettledFor(period.days)} periodLabel={period.label} />
+              <Simulator bets={windowBets} unit={unit} cc={cc} />
             </>
           )}
         </>
@@ -205,22 +233,38 @@ function zFmt(z: number): string {
   return (z >= 0 ? "+" : "−") + Math.abs(z).toLocaleString("sv-SE", { maximumFractionDigits: 1 }) + "σ";
 }
 
-function LuckCard({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: ChartColors }) {
+function LuckCard({
+  bets,
+  unit,
+  cc,
+  minN,
+  periodLabel,
+}: {
+  bets: BetListDTO[];
+  unit: number;
+  cc: ChartColors;
+  /** Sample floor per category — scales with the selected window. */
+  minN: number;
+  periodLabel: string;
+}) {
   const overall = useMemo(() => noEdgeVariance(bets), [bets]);
   const cats = useMemo(
     () =>
       varianceByKey(
         bets,
         (b) => betCategory({ selection: (b as BetListDTO).selection, market: (b as BetListDTO).market }),
-        50
+        minN
       ).slice(0, 10),
-    [bets]
+    [bets, minN]
   );
   if (overall.z == null) return null;
   const maxZ = Math.max(1, ...cats.map((c) => Math.abs(c.z ?? 0)));
   return (
     <Card style={{ marginBottom: 12 }}>
-      <span className="ap-label">Tur eller skicklighet?</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+        <span className="ap-label">Tur eller skicklighet?</span>
+        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>{periodLabel.toLowerCase()}</span>
+      </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
         <span className="ap-num" style={{ fontSize: 30, fontWeight: 700 }}>
           <span className={overall.z >= 0 ? "pos" : "neg"}>{zFmt(overall.z)}</span>

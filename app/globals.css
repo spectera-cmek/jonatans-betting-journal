@@ -3049,7 +3049,7 @@ select.ap-input {
   background: var(--acc-soft);
 }
 .ap-wc-match-list,
-.ap-wc-queue {
+.ap-queue {
   display: flex;
   flex-direction: column;
 }
@@ -3155,47 +3155,83 @@ select.ap-input {
 .ap-wc-match-actions {
   margin-top: 9px;
 }
-.ap-wc-panel-empty {
+.ap-panel-empty {
   padding: 28px 16px;
   color: var(--dim2);
   text-align: center;
   font-size: 12.5px;
 }
-.ap-wc-queue > div {
+.ap-queue > div {
   display: grid;
-  grid-template-columns: 9px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
   padding: 11px 14px;
   border-bottom: 1px solid var(--line);
 }
-.ap-wc-queue > div:last-child {
+.ap-queue > div:last-child {
   border-bottom: 0;
 }
-.ap-wc-queue b,
-.ap-wc-queue small {
+.ap-queue b,
+.ap-queue small {
   display: block;
 }
-.ap-wc-queue b {
+.ap-queue b {
   font-size: 12px;
 }
-.ap-wc-queue small {
+.ap-queue small {
   margin-top: 3px;
   color: var(--dim2);
   font-size: 10.5px;
   line-height: 1.4;
 }
-.ap-wc-queue-dot {
+/* Bulk-select toolbar above the queue rows. */
+.ap-queue-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.ap-queue-bar > span {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 620px) {
+  .ap-queue-bar > span {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+/* Checkbox (selectable rows only) + readiness dot share the first column, so a
+   mixed list keeps its text left edge whether or not a row can be selected. */
+.ap-queue-mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 7px;
+}
+.ap-queue-mark input {
+  accent-color: var(--acc);
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+.ap-queue-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--dim2);
+  flex: none;
 }
-.ap-wc-queue-dot.is-ready {
+.ap-queue-dot.is-ready {
   background: var(--pos);
 }
-.ap-wc-queue-dot.is-manual,
-.ap-wc-queue-dot.is-unmatched {
+.ap-queue-dot.is-manual,
+.ap-queue-dot.is-unmatched {
   background: var(--red);
 }
 .ap-wc-groups {
@@ -3275,5 +3311,25 @@ select.ap-input {
   }
   .ap-settlement-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Analysperiod-väljaren på Insikter: styr läckor, tur-index och simulatorn. */
+.ap-period-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ap-period-bar > span:last-child {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+}
+@media (max-width: 620px) {
+  .ap-period-bar > span:last-child {
+    flex-basis: 100%;
+    text-align: left;
   }
 }

@@ -6,7 +6,9 @@ import { Card } from "@/components/ui";
 import { SyncButton } from "@/components/SyncButton";
 import { ImportPanel } from "@/components/ImportPanel";
 import { api } from "@/lib/fetcher";
-import { useSettings } from "@/lib/useData";
+import Link from "next/link";
+import { useMetrics, useSettings } from "@/lib/useData";
+import { FABRICATED_TAG, QUALITY_FLAG_HINTS, QUALITY_FLAG_LABELS, type QualityFlag } from "@/lib/dataQuality";
 import type { SettingsDTO } from "@/lib/types";
 import { I, IC } from "@/components/icons";
 import { useTheme } from "@/components/ThemeProvider";
@@ -152,6 +154,10 @@ export default function SettingsPage() {
 
         <div style={{ height: 12 }} />
 
+        <DataQualityCard />
+
+        <div style={{ height: 12 }} />
+
         <Card>
           <span className="ap-label">Auto-rättning från kontoutdrag (Bet365)</span>
           <div style={{ marginTop: 14 }}>
@@ -253,5 +259,65 @@ export default function SettingsPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/**
+ * Datakvalitet — what in the journal the analyses can't fully trust. Each row
+ * links into the bets list filtered to exactly those rows, so a count is always
+ * one click from the bets behind it.
+ */
+function DataQualityCard() {
+  const { data } = useMetrics();
+  const dq = data?.dataQuality;
+  if (!dq) return null;
+
+  const rows: { flag: QualityFlag; count: number }[] = [
+    { flag: "stale-pending", count: dq["stale-pending"] },
+    { flag: "dupe", count: dq.dupe },
+    { flag: "placeholder", count: dq.placeholder },
+    { flag: "no-league", count: dq["no-league"] },
+    { flag: "no-category", count: dq["no-category"] },
+  ];
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <span className="ap-label">Datakvalitet</span>
+        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>
+          {dq.flagged.toLocaleString("sv-SE")} av {dq.total.toLocaleString("sv-SE")} spel har en anmärkning
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 14 }}>
+        {rows.map((r) => (
+          <div key={r.flag} className="ap-legrow" style={{ padding: "7px 0" }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ color: r.count > 0 ? "var(--txt)" : "var(--dim)" }}>{QUALITY_FLAG_LABELS[r.flag]}</span>
+              <small style={{ display: "block", color: "var(--dim2)", fontSize: 11, lineHeight: 1.45, marginTop: 2 }}>
+                {QUALITY_FLAG_HINTS[r.flag]}
+              </small>
+            </span>
+            {r.count > 0 ? (
+              <Link href={`/bets?flag=${r.flag}`} className="ap-link ap-num" style={{ fontWeight: 700 }}>
+                {r.count.toLocaleString("sv-SE")} →
+              </Link>
+            ) : (
+              <span className="ap-num pos" style={{ fontWeight: 700 }}>0</span>
+            )}
+          </div>
+        ))}
+        {dq.fabricated > 0 && (
+          <div className="ap-legrow" style={{ padding: "7px 0" }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              Fabricerade spel (märkta {FABRICATED_TAG})
+              <small style={{ display: "block", color: "var(--dim2)", fontSize: 11, lineHeight: 1.45, marginTop: 2 }}>
+                Riktiga rader i databasen som flyttar totalerna — sök på taggen i anteckningarna för att hitta dem.
+              </small>
+            </span>
+            <span className="ap-num neg" style={{ fontWeight: 700 }}>{dq.fabricated.toLocaleString("sv-SE")}</span>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

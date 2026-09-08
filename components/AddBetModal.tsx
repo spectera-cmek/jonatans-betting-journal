@@ -20,6 +20,7 @@ import { inferSelection } from "@/lib/grading";
 import { categorizeDetail } from "@/lib/categorize";
 import { inferEventKind } from "@/lib/betTaxonomy";
 import { evaluateBet } from "@/lib/discipline";
+import { useMetrics } from "@/lib/useData";
 import { accaOdds } from "@/lib/betting";
 import { krFmt } from "@/lib/format";
 import { I, IC } from "./icons";
@@ -253,20 +254,43 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
     return byFrequency(pool.map((b) => b.selection), 6);
   }, [history, form.sport, form.marketCategory]);
 
-  // Live leak/edge check against the personal loss-analysis rules.
+  // Live leak/edge check against rules derived from this journal (see
+  // lib/disciplineRules). The metrics payload is already cached by the nav's
+  // bankroll strip, so reading it here costs no extra request.
+  const { data: metrics } = useMetrics();
   const verdict = useMemo(
     () =>
-      evaluateBet({
-        sport: form.sport,
-        selection: form.selection,
-        market: form.market,
-        odds: parseFloat(form.odds) || null,
-        stakeUnits: parseFloat(form.stakeUnits) || null,
-        // Read the live form value, not the edited row — otherwise picking
-        // "Kombination" in the form never triggers the accumulator warning.
-        betType: form.betType,
-      }),
-    [form.sport, form.selection, form.market, form.odds, form.stakeUnits, form.betType]
+      evaluateBet(
+        {
+          sport: form.sport,
+          selection: form.selection,
+          market: form.market,
+          marketCategory: form.marketCategory,
+          event: form.event,
+          odds: parseFloat(form.odds) || null,
+          stakeUnits: parseFloat(form.stakeUnits) || null,
+          // Read the live form value, not the edited row — otherwise picking
+          // "Kombination" in the form never triggers the accumulator warning.
+          betType: form.betType,
+        },
+        metrics?.disciplineRules,
+        // While editing an existing bet it is already in the open tally, so
+        // don't count it against itself.
+        bet ? undefined : metrics?.openEvents
+      ),
+    [
+      form.sport,
+      form.selection,
+      form.market,
+      form.marketCategory,
+      form.event,
+      form.odds,
+      form.stakeUnits,
+      form.betType,
+      metrics?.disciplineRules,
+      metrics?.openEvents,
+      bet,
+    ]
   );
 
   // Accumulator-ben: från den redigerade betet (JSON-sträng) eller, vid kvitto-
@@ -766,11 +790,18 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
             >
               <span style={{ fontSize: 11, color: "var(--dim2)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
                 Disciplinvakt
+                {metrics?.disciplineRules && (
+                  <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>
+                    {" "}· ur din data, {metrics.disciplineRules.windowLabel}
+                  </span>
+                )}
               </span>
               {verdict.notes.map((n, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.45 }}>
-                  <span className={n.tone} style={{ fontWeight: 700 }}>{n.tone === "pos" ? "✓" : "⚠"}</span>
-                  <span style={{ color: n.tone === "pos" ? "var(--pos)" : "var(--red)" }}>{n.text}</span>
+                  <span className={n.tone === "info" ? "" : n.tone} style={{ fontWeight: 700, color: n.tone === "info" ? "var(--dim2)" : undefined }}>
+                    {n.tone === "pos" ? "✓" : n.tone === "info" ? "•" : "⚠"}
+                  </span>
+                  <span style={{ color: n.tone === "pos" ? "var(--pos)" : n.tone === "info" ? "var(--dim)" : "var(--red)" }}>{n.text}</span>
                 </div>
               ))}
             </div>
