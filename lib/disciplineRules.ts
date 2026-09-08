@@ -43,10 +43,12 @@ export interface DeriveOptions {
   minSettled?: number;
   /** How far from the no-edge baseline a segment must sit to become a rule. */
   minAbsZ?: number;
+  /** Largest share of the window a segment may cover and still be a rule. */
+  maxShare?: number;
   now?: number;
 }
 
-const DEFAULTS = { sinceDays: 365, minSettled: 40, minAbsZ: 1 };
+const DEFAULTS = { sinceDays: 365, minSettled: 40, minAbsZ: 1, maxShare: 0.35 };
 
 export function windowLabelFor(sinceDays: number | null): string {
   if (!sinceDays) return "hela historiken";
@@ -65,6 +67,7 @@ export function deriveDisciplineRules(
   const sinceDays = options.sinceDays === undefined ? DEFAULTS.sinceDays : options.sinceDays;
   const minSettled = options.minSettled ?? DEFAULTS.minSettled;
   const minAbsZ = options.minAbsZ ?? DEFAULTS.minAbsZ;
+  const maxShare = options.maxShare ?? DEFAULTS.maxShare;
   const windowBets = filterByPeriod(bets, sinceDays, options.now ?? Date.now());
 
   // z per (dimension, key), grouped exactly as the segments are.
@@ -84,9 +87,16 @@ export function deriveDisciplineRules(
   // warning while typing ("Övrigt: +18 % ROI") they say nothing actionable.
   const catchAll = new Set(EDGE_DIMENSIONS.map((d) => `${d.dim}:${d.fallback}`));
 
+  // A segment that covers most of the journal describes the bettor, not the
+  // bet: "Singel: +7 % ROI" on 87 % of all bets fires on almost everything
+  // typed and teaches nothing. Advice has to be about *this* bet.
+  const settledInWindow = windowBets.filter((b) => b.outcome !== "pending").length;
+  const shareCap = Math.max(minSettled, settledInWindow * maxShare);
+
   const rules: DisciplineRule[] = [];
   for (const seg of edgeSegmentCandidates(windowBets, minSettled)) {
     if (catchAll.has(`${seg.dim}:${seg.key}`)) continue;
+    if (seg.settled > shareCap) continue;
     const z = zByDim.get(seg.dim)?.get(seg.key) ?? null;
     if (z == null || Math.abs(z) < minAbsZ) continue;
     rules.push({
@@ -102,8 +112,7 @@ export function deriveDisciplineRules(
   // Strongest signal first, so a modal that only has room for a few shows those.
   rules.sort((a, b) => Math.abs(b.z ?? 0) - Math.abs(a.z ?? 0));
 
-  const settled = windowBets.filter((b) => b.outcome !== "pending").length;
-  return { rules, windowLabel: windowLabelFor(sinceDays), settled, minSettled };
+  return { rules, windowLabel: windowLabelFor(sinceDays), settled: settledInWindow, minSettled };
 }
 
 /* ------------------------- Spel på samma match ---------------------------- */

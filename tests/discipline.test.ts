@@ -34,6 +34,9 @@ describe("deriveDisciplineRules", () => {
       ...series(120, 8, { odds: 5.5, selection: "Arsenal vinner", market: "h2h" }),
       // Shots at short odds, well above break-even (needs ~54 %).
       ...series(120, 84, { odds: 1.85, selection: "Över 24.5 skott", market: "other" }),
+      // Filler, so neither segment above covers more than a third of the window
+      // and trips the share cap.
+      ...series(300, 120, { odds: 2.5, selection: "Arsenal vinner", market: "h2h" }),
     ];
     const { rules, windowLabel } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
 
@@ -65,9 +68,13 @@ describe("deriveDisciplineRules", () => {
       ...b,
       placedAt: new Date("2023-01-15T12:00:00Z"),
     }));
-    expect(deriveDisciplineRules(old, { now: NOW, sinceDays: 365, minSettled: 40 }).rules).toHaveLength(0);
+    // maxShare lifted: this fixture is one uniform segment, which the share cap
+    // would otherwise drop for reasons unrelated to the window.
     expect(
-      deriveDisciplineRules(old, { now: NOW, sinceDays: null, minSettled: 40 }).rules.length
+      deriveDisciplineRules(old, { now: NOW, sinceDays: 365, minSettled: 40, maxShare: 1 }).rules
+    ).toHaveLength(0);
+    expect(
+      deriveDisciplineRules(old, { now: NOW, sinceDays: null, minSettled: 40, maxShare: 1 }).rules.length
     ).toBeGreaterThan(0);
   });
 });
@@ -141,7 +148,7 @@ describe("catch-all segments", () => {
       // Uncategorised singles that happen to have run hot.
       ...series(120, 84, { odds: 1.85, selection: "???", market: "other" }),
     ];
-    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40, maxShare: 1 });
     expect(rules.some((r) => r.dim === "Typ" && r.key === "Singel")).toBe(true);
     expect(rules.some((r) => r.key === "Övrigt")).toBe(false);
     expect(rules.some((r) => r.key === "Okänd sport")).toBe(false);
@@ -162,5 +169,25 @@ describe("empty form fields", () => {
     // The add-bet form sends "" for an unset dropdown, not null.
     const v = evaluateBet({ selection: "Över 24.5 skott", marketCategory: "", odds: 1.9 }, ruleSet);
     expect(v.notes.some((n) => n.text.includes("Skott"))).toBe(true);
+  });
+});
+
+describe("share cap", () => {
+  it("drops a segment that covers most of the window", () => {
+    // 400 singles, of which 120 are shots: "Singel" covers everything typed and
+    // says nothing about this bet; "Skott" is a third of it and does.
+    const bets = [
+      ...series(280, 196, { odds: 1.85, selection: "Arsenal vinner", market: "h2h" }),
+      ...series(120, 84, { odds: 1.85, selection: "Över 24.5 skott", market: "other" }),
+    ];
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    expect(rules.some((r) => r.dim === "Typ" && r.key === "Singel")).toBe(false);
+    expect(rules.some((r) => r.dim === "Marknad" && r.key === "Skott")).toBe(true);
+  });
+
+  it("keeps everything when the cap is lifted", () => {
+    const bets = series(400, 280, { odds: 1.85, selection: "Arsenal vinner", market: "h2h" });
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40, maxShare: 1 });
+    expect(rules.some((r) => r.dim === "Typ" && r.key === "Singel")).toBe(true);
   });
 });
