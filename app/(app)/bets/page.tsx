@@ -26,6 +26,13 @@ import { useBets } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
 import { uFmt, pctFmt, krShort, dateShort } from "@/lib/format";
 import { computeMetrics, type BetLike, type Outcome } from "@/lib/betting";
+import {
+  QUALITY_FLAG_LABELS,
+  findSuspectedDuplicates,
+  flagsFor,
+  missingClosing,
+  type QualityFlag,
+} from "@/lib/dataQuality";
 import { I, IC } from "@/components/icons";
 import {
   SCOPES,
@@ -45,6 +52,7 @@ const RES_CHIPS: [string, string][] = [
   ["loss", "Förlorade"],
   ["push", "Push"],
 ];
+const EMPTY_IDS: Set<string> = new Set();
 const MONTHS_SV = ["Januari", "Februari", "Mars", "April", "Maj", "Juni", "Juli", "Augusti", "September", "Oktober", "November", "December"];
 
 export default function BetsPage() {
@@ -68,6 +76,9 @@ export default function BetsPage() {
   const [eventKind, setEventKind] = useState("");
   const [stage, setStage] = useState("");
   const [res, setRes] = useState("alla");
+  // Data-quality entry points, linked from Inställningar and the CLV card.
+  const [flag, setFlag] = useState("");
+  const [clv, setClv] = useState("");
   const [day, setDay] = useState(""); // YYYY-MM-DD, specific day
   const [year, setYear] = useState("Alla år");
   const [month, setMonth] = useState("Alla månader");
@@ -100,6 +111,8 @@ export default function BetsPage() {
     if (sp.has("eventKind")) setEventKind(sp.get("eventKind") || "");
     if (sp.has("stage")) setStage(sp.get("stage") || "");
     if (sp.has("res")) setRes(sp.get("res") || "alla");
+    if (sp.has("flag")) setFlag(sp.get("flag") || "");
+    if (sp.has("clv")) setClv(sp.get("clv") || "");
     if (sp.has("day")) setDay(sp.get("day") || "");
     if (sp.has("year")) setYear(sp.get("year") || "Alla år");
     if (sp.has("month")) setMonth(sp.get("month") || "Alla månader");
@@ -120,13 +133,15 @@ export default function BetsPage() {
     if (eventKind) sp.set("eventKind", eventKind);
     if (stage) sp.set("stage", stage);
     if (res !== "alla") sp.set("res", res);
+    if (flag) sp.set("flag", flag);
+    if (clv) sp.set("clv", clv);
     if (day) sp.set("day", day);
     if (year !== "Alla år") sp.set("year", year);
     if (month !== "Alla månader") sp.set("month", month);
     if (sortOrder !== "desc") sp.set("sort", sortOrder);
     const qs = sp.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [q, sport, league, book, market, scope, eventKind, stage, res, day, year, month, sortOrder]);
+  }, [q, sport, league, book, market, scope, eventKind, stage, res, flag, clv, day, year, month, sortOrder]);
 
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
@@ -207,8 +222,14 @@ export default function BetsPage() {
   );
   const rangeLabel = years.length ? (years[0] === years[years.length - 1] ? years[0] : `${years[years.length - 1]}–${years[0]}`) : "";
 
+  // Data-quality flags are computed over the whole list once, since a duplicate
+  // is only recognisable relative to its neighbours.
+  const dupes = useMemo(() => (flag === "dupe" ? findSuspectedDuplicates(bets) : EMPTY_IDS), [bets, flag]);
+
   const filtered = useMemo(() => {
     return bets.map(applyClv).filter((b) => {
+      if (clv === "missing" && !missingClosing(b)) return false;
+      if (flag && !flagsFor(b, dupes).includes(flag as QualityFlag)) return false;
       if (sport !== "Alla sporter" && b.sport !== sport) return false;
       if (league && b.league !== league) return false;
       if (book !== "Alla bookmakers" && b.bookmaker !== book) return false;
@@ -234,12 +255,12 @@ export default function BetsPage() {
       }
       return true;
     });
-  }, [bets, clvById, sport, league, book, market, scope, eventKind, stage, res, q, day, year, month]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bets, clvById, sport, league, book, market, scope, eventKind, stage, res, flag, clv, dupes, q, day, year, month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Render at most `shown` rows; reset when any filter or sort order changes.
   useEffect(() => {
     setShown(PAGE);
-  }, [sport, league, book, market, scope, eventKind, stage, res, q, day, year, month, sortOrder]);
+  }, [sport, league, book, market, scope, eventKind, stage, res, flag, clv, q, day, year, month, sortOrder]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -416,6 +437,18 @@ export default function BetsPage() {
           {RES_CHIPS.map(([v, l]) => (
             <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} onClick={() => setRes(v)}>{l}</button>
           ))}
+          {/* Arriving from Inställningar or the CLV card: show what was applied
+              and make it one click to leave. */}
+          {flag && (
+            <button className="ap-chip is-active" onClick={() => setFlag("")}>
+              {QUALITY_FLAG_LABELS[flag as QualityFlag] ?? flag} ✕
+            </button>
+          )}
+          {clv === "missing" && (
+            <button className="ap-chip is-active" onClick={() => setClv("")}>
+              Saknar stängningsodds ✕
+            </button>
+          )}
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {advancedCount > 0 && <button className="ap-link" onClick={clearAdvanced}>Rensa {advancedCount} filter</button>}
@@ -519,6 +552,7 @@ export default function BetsPage() {
                     odds={b.odds}
                     closingOdds={b.closingOdds}
                     clvPctValue={b.clvPct}
+                    boosted={b.boosted}
                     onSaved={(next) => onClvSaved(b.id, next)}
                   />
                 </span>
@@ -572,6 +606,7 @@ export default function BetsPage() {
                     odds={b.odds}
                     closingOdds={b.closingOdds}
                     clvPctValue={b.clvPct}
+                    boosted={b.boosted}
                     onSaved={(next) => onClvSaved(b.id, next)}
                   />
                 </b>

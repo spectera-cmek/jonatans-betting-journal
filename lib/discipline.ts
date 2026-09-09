@@ -1,25 +1,37 @@
-// Personal discipline rules derived from the 2026-06-11 loss analysis of the
-// full history (8 588 bets, sep 2023–jun 2026): where money has leaked and
-// where the real edge is. Numbers below are from that analysis — update them
-// when the analysis is redone.
+// Disciplinvakten — the verdict shown while a bet is being typed.
 //
-// Pure & dependency-free (besides the market normalizer) so it is trivially
-// unit-testable and reusable from both the add-bet modal and scripts.
+// Every number here comes from the bet's own journal (see lib/disciplineRules,
+// derived over a trailing window). It used to be a hardcoded table copied out of
+// one analysis; a season later several of those verdicts had flipped sign and
+// the guard was confidently warning about the wrong markets. Nothing is
+// hardcoded now — if the data stops supporting a rule, the rule disappears.
+//
+// Pure & dependency-free (besides the market normalizer and formatting) so it is
+// trivially unit-testable and reusable from both the add-bet modal and scripts.
 
 import { isMultiBet } from "./betting";
-import { normalizeMarket } from "./categorize";
+import { betCategory } from "./categorize";
+import { pctFmt, uFmt } from "./format";
+import { countOnEvent, type DisciplineRule, type DisciplineRuleSet, type OpenEventCount } from "./disciplineRules";
+import { EDGE_DIMENSIONS, type EdgeBetInput } from "./edge";
+
+// Re-exported so the pages and tests that have always imported it from here
+// keep working; the implementation now sits beside the market normalizer.
+export { betCategory };
 
 export interface DisciplineInput {
   sport?: string | null; // display name, e.g. "Basketball"
   selection?: string | null; // free text, e.g. "Bridges över 13.5 skott"
   market?: string | null; // raw code (h2h/totals/spreads/other) or category
+  marketCategory?: string | null; // semantic market when the form already knows it
   odds?: number | null;
   stakeUnits?: number | null;
   betType?: string | null; // single | accumulator
+  event?: string | null; // "Team A vs Team B" — for the same-match check
 }
 
 export interface DisciplineNote {
-  tone: "pos" | "neg";
+  tone: "pos" | "neg" | "info";
   text: string;
 }
 
@@ -28,75 +40,60 @@ export interface DisciplineVerdict {
   notes: DisciplineNote[];
 }
 
-// Categories that historically print money at sane odds.
-const EDGE_CATEGORIES: Record<string, string> = {
-  Skott: "Skott: +5,9 % ROI över 1 261 bets — din starkaste marknad",
-  "Skott på mål": "Skott på mål: del av din starkaste marknad (Skott, +5,9 % ROI)",
-  Returer: "Returer: +14,6 % ROI historiskt",
-  Hörnor: "Hörnor: +8,4 % ROI historiskt",
-  Halvlek: "Halvlek: +1 879 kr historiskt",
-};
-
-// Basketball props that have leaked (Returer excluded — it's an edge).
-const BASKET_PROP_LEAKS = new Set(["Spelarpoäng", "Assists", "Trepoängare"]);
-
-/**
- * Category for the bet being typed: the free-text selection usually carries
- * the market keywords ("skott", "hörnor", "kort"...), with the market field
- * as fallback. Returns "Övrigt" when nothing matches.
- */
-export function betCategory(input: DisciplineInput): string {
-  const fromSelection = normalizeMarket(input.selection);
-  if (fromSelection !== "Övrigt") return fromSelection;
-  return normalizeMarket(input.market);
+/** The typed form as something the edge dimensions can key on. */
+function asBet(input: DisciplineInput): EdgeBetInput {
+  return {
+    odds: input.odds ?? 0,
+    stakeUnits: input.stakeUnits ?? 0,
+    outcome: "pending",
+    selection: input.selection,
+    market: input.market,
+    marketCategory: input.marketCategory ?? null,
+    betType: isMultiBet(input.betType) ? "accumulator" : "single",
+    sport: input.sport ?? null,
+  };
 }
 
-/** Evaluate a bet (typically mid-entry) against the personal leak/edge rules. */
-export function evaluateBet(input: DisciplineInput): DisciplineVerdict {
+function ruleText(rule: DisciplineRule, windowLabel: string): string {
+  return `${rule.key}: ${pctFmt(rule.roiPct, true)} ROI och ${uFmt(rule.profitUnits, true)} över ${rule.settled.toLocaleString("sv-SE")} avgjorda (${windowLabel})`;
+}
+
+/**
+ * Evaluate a bet mid-entry against the journal's own rules.
+ *
+ * Only dimensions the form has actually filled in are matched: odds and stake
+ * bands are skipped while those fields are empty, so an untouched form does not
+ * claim the 0-unit stake band is a leak.
+ */
+export function evaluateBet(
+  input: DisciplineInput,
+  ruleSet?: DisciplineRuleSet | null,
+  openEvents?: OpenEventCount[]
+): DisciplineVerdict {
   const notes: DisciplineNote[] = [];
-  const odds = input.odds ?? null;
-  const stake = input.stakeUnits ?? null;
-  const sport = (input.sport ?? "").toLowerCase();
-  const category = betCategory(input);
-  const isEdgeCategory = category in EDGE_CATEGORIES;
+  const bet = asBet(input);
+  const hasOdds = input.odds != null && input.odds > 1;
+  const hasStake = input.stakeUnits != null && input.stakeUnits > 0;
 
-  // --- Leaks ---
-  if (isMultiBet(input.betType)) {
-    notes.push({ tone: "neg", text: "Ackumulatorer: −14 860 kr historiskt (−8,4 % ROI, 28 % träff)" });
-  }
-  if (odds != null && odds >= 5) {
-    notes.push({ tone: "neg", text: "Odds 5+: −20,9 % ROI historiskt — största läckan" });
-  } else if (odds != null && odds >= 3) {
-    notes.push({ tone: "neg", text: "Odds ≥ 3 har läckt totalt −27 647 kr historiskt" });
-  }
-  if (odds != null && odds >= 5 && stake != null && stake > 0 && stake <= 0.5) {
-    notes.push({ tone: "neg", text: "Småinsats på högt odds = longshot-lotteriet: −8 791 kr historiskt" });
-  }
-  if (sport === "basketball" && BASKET_PROP_LEAKS.has(category)) {
-    notes.push({ tone: "neg", text: `Basketprops (${category}): ≈ −13 100 kr historiskt` });
-  } else if (sport === "basketball" && !isEdgeCategory) {
-    notes.push({ tone: "neg", text: "Basket som sport: −12 030 kr historiskt" });
-  }
-  if (sport === "tennis") {
-    notes.push({ tone: "neg", text: "Tennis: −15 % ROI historiskt" });
-  }
-  if (category === "Kort & fouls") {
-    notes.push({ tone: "neg", text: "Kort & fouls: −6 712 kr historiskt (−17 % ROI)" });
-  }
-  if (category === "Handikapp" || (input.market ?? "").toLowerCase() === "spreads") {
-    notes.push({ tone: "neg", text: "Handikapp: −7 960 kr historiskt" });
+  for (const d of EDGE_DIMENSIONS) {
+    if (d.dim === "Odds" && !hasOdds) continue;
+    if (d.dim === "Insats" && !hasStake) continue;
+    if (d.include && !d.include(bet)) continue;
+    const key = d.keyOf(bet) ?? d.fallback;
+    const rule = ruleSet?.rules.find((r) => r.dim === d.dim && r.key === key);
+    if (rule) notes.push({ tone: rule.tone, text: ruleText(rule, ruleSet!.windowLabel) });
   }
 
-  // --- Edges ---
-  const inEdgeOdds = odds != null && odds >= 1.5 && odds < 3;
-  if (isEdgeCategory && inEdgeOdds) {
-    notes.push({ tone: "pos", text: EDGE_CATEGORIES[category] });
-  }
-  if (odds != null && odds >= 2 && odds < 3) {
-    notes.push({ tone: "pos", text: "Odds 2,00–2,99: +8 582 kr historiskt (+2,7 % ROI)" });
-  }
-  if (stake != null && stake > 2) {
-    notes.push({ tone: "pos", text: "Conviction bets > 2u: +5,5 % ROI historiskt" });
+  // Concentration on one match: not a segment in the history, but the pile-up
+  // itself is the pattern worth flagging while the bet is still editable.
+  const onEvent = openEvents?.length ? countOnEvent(input.event, openEvents) : null;
+  if (onEvent && onEvent.bets >= 3) {
+    notes.push({
+      tone: "neg",
+      text: `Du har redan ${onEvent.bets} öppna spel på den här matchen (${uFmt(onEvent.stakeUnits)}) — det här blir det ${onEvent.bets + 1}:e.`,
+    });
+  } else if (onEvent && onEvent.bets === 2) {
+    notes.push({ tone: "info", text: "Du har redan 2 öppna spel på den här matchen." });
   }
 
   const hasWarn = notes.some((n) => n.tone === "neg");

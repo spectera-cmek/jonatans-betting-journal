@@ -13,6 +13,7 @@ const SettlementDialog = dynamic(() => import("./SettlementDialog").then((m) => 
   ssr: false,
 });
 import { BetTags } from "./BetTags";
+import { GradingQueueCard } from "./GradingQueue";
 import { Card, Empty, SkeletonCard } from "./ui";
 import { StatTile, BreakdownCard } from "./stats";
 import { InteractiveLineChart } from "./charts";
@@ -213,59 +214,6 @@ function BracketView({
   );
 }
 
-function GradingQueue({
-  suggestions,
-  loading,
-  onApply,
-  onManual,
-}: {
-  suggestions: GradingSuggestion[];
-  loading: boolean;
-  onApply: (ids: string[]) => void;
-  onManual: (id: string) => void;
-}) {
-  const ready = suggestions.filter((item) => item.readiness === "ready");
-  const attention = suggestions.filter((item) => item.readiness === "manual" || item.readiness === "unmatched");
-  return (
-    <Card style={{ padding: 0 }}>
-      <div className="ap-card-head">
-        <span className="ap-card-title">Rättningskö</span>
-        {ready.length > 0 && (
-          <button className="ap-btn" onClick={() => onApply(ready.map((item) => item.betId))}>
-            Rätta {ready.length} säkra
-          </button>
-        )}
-      </div>
-      {loading ? (
-        <div className="ap-wc-panel-empty">Kontrollerar resultat…</div>
-      ) : suggestions.length === 0 ? (
-        <div className="ap-wc-panel-empty">Inga öppna VM-bets.</div>
-      ) : (
-        <div className="ap-wc-queue">
-          {suggestions.slice(0, 8).map((item) => (
-            <div key={item.betId}>
-              <span className={`ap-wc-queue-dot is-${item.readiness}`} />
-              <span>
-                <b>{item.event}</b>
-                <small>{item.selection} · {item.reason}</small>
-              </span>
-              {item.readiness === "ready" ? (
-                <button className="ap-link" onClick={() => onApply([item.betId])}>
-                  {item.suggestedOutcome}
-                </button>
-              ) : attention.some((candidate) => candidate.betId === item.betId) ? (
-                <button className="ap-link" onClick={() => onManual(item.betId)}>Granska</button>
-              ) : (
-                <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Väntar</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
-
 function BetsAnalytics({ bets, unit }: { bets: BetListDTO[]; unit: number }) {
   const metrics = useMemo(() => computeMetrics(bets), [bets]);
   const points = useMemo(
@@ -452,10 +400,16 @@ export function WorldCupCenter() {
                 {upcoming.map((match) => (
                   <MatchCard key={match.id} match={match} bets={byMatch.get(match.id) ?? []} unit={unit} onAdd={addForMatch} onSettle={setSettling} />
                 ))}
-                {!upcoming.length && <div className="ap-wc-panel-empty">Turneringen är färdigspelad.</div>}
+                {!upcoming.length && <div className="ap-panel-empty">Turneringen är färdigspelad.</div>}
               </div>
             </Card>
-            <GradingQueue suggestions={suggestions} loading={suggestionsLoading} onApply={applySuggestions} onManual={openManual} />
+            <GradingQueueCard
+              suggestions={suggestions}
+              loading={suggestionsLoading}
+              onApply={applySuggestions}
+              onManual={openManual}
+              emptyText="Inga öppna VM-bets."
+            />
           </div>
         </>
       ) : tab === "matches" ? (

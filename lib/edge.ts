@@ -7,17 +7,18 @@
 // trivially unit-testable.
 
 import { breakdownBy, hasRealOdds, round2, type BetLike, type Breakdown } from "./betting";
-import { betCategory } from "./discipline";
+import { betCategory } from "./categorize";
 
 export interface EdgeBetInput extends BetLike {
   selection?: string | null;
   market?: string | null;
   marketCategory?: string | null;
   betType?: string | null;
+  sport?: string | null;
 }
 
 export interface EdgeSegment extends Breakdown {
-  dim: "Marknad" | "Odds" | "Typ" | "Insats";
+  dim: "Marknad" | "Sport" | "Odds" | "Typ" | "Insats";
 }
 
 export interface EdgeSegments {
@@ -51,32 +52,64 @@ function stakeBandKey(stake: number): string {
   return "Insats > 2 u";
 }
 
+/**
+ * The four axes the history is sliced along. Exported so anything that needs to
+ * reason about the same segments — the discipline guard derives its rules from
+ * them, and adds a per-segment z-score — groups bets exactly like this panel
+ * does, instead of keeping a second, drifting copy of the bands.
+ */
+export interface EdgeDimension {
+  dim: EdgeSegment["dim"];
+  keyOf: (b: EdgeBetInput) => string | null;
+  fallback: string;
+  /** Bets this dimension is not defined for (placeholder odds, say). */
+  include?: (b: EdgeBetInput) => boolean;
+}
+
+export const EDGE_DIMENSIONS: EdgeDimension[] = [
+  {
+    // `||`, not `??`: an unset category reaches this as "" from the add-bet form
+    // and as null from the database, and both must fall through to the
+    // selection text rather than becoming an empty key nothing can match.
+    dim: "Marknad",
+    keyOf: (b) => b.marketCategory || betCategory({ selection: b.selection, market: b.market }),
+    fallback: "Övrigt",
+  },
+  { dim: "Sport", keyOf: (b) => b.sport ?? null, fallback: "Okänd sport" },
+  {
+    // Odds dimension only sees real prices — 1.01 placeholders are import artifacts.
+    dim: "Odds",
+    keyOf: (b) => oddsBandKey(b.odds),
+    fallback: "Unknown",
+    include: hasRealOdds,
+  },
+  {
+    // keyOf always answers, so the fallback is unreachable — but it must not
+    // collide with a real key, or the discipline guard's catch-all filter would
+    // drop "Singel" along with the genuine "unclassified" buckets.
+    dim: "Typ",
+    keyOf: (b) => (b.betType === "accumulator" ? "Ackumulator" : "Singel"),
+    fallback: "Okänd typ",
+  },
+  { dim: "Insats", keyOf: (b) => stakeBandKey(b.stakeUnits), fallback: "Unknown" },
+];
+
+/** Every segment that clears the sample-size floor, across all four dimensions. */
+export function edgeSegmentCandidates(bets: EdgeBetInput[], minSettled = MIN_SETTLED): EdgeSegment[] {
+  const out: EdgeSegment[] = [];
+  for (const d of EDGE_DIMENSIONS) {
+    const rows = breakdownBy(
+      d.include ? bets.filter((b) => d.include!(b)) : bets,
+      (b) => d.keyOf(b as EdgeBetInput),
+      d.fallback
+    );
+    for (const r of rows) if (r.settled >= minSettled) out.push({ ...r, dim: d.dim });
+  }
+  return out;
+}
+
 export function computeEdgeSegments(bets: EdgeBetInput[], minSettled = MIN_SETTLED): EdgeSegments {
-  const withDim = (rows: Breakdown[], dim: EdgeSegment["dim"]): EdgeSegment[] =>
-    rows.map((r) => ({ ...r, dim }));
-
-  const byMarket = withDim(
-    breakdownBy(
-      bets,
-      (b) => {
-        const e = b as EdgeBetInput;
-        return e.marketCategory ?? betCategory({ selection: e.selection, market: e.market });
-      },
-      "Övrigt"
-    ),
-    "Marknad"
-  );
-  // Odds dimension only sees real prices — 1.01 placeholders are import artifacts.
-  const byOdds = withDim(breakdownBy(bets.filter(hasRealOdds), (b) => oddsBandKey(b.odds)), "Odds");
-  const byType = withDim(
-    breakdownBy(bets, (b) => ((b as EdgeBetInput).betType === "accumulator" ? "Ackumulator" : "Singel")),
-    "Typ"
-  );
-  const byStake = withDim(breakdownBy(bets, (b) => stakeBandKey(b.stakeUnits)), "Insats");
-
-  const candidates = [...byMarket, ...byOdds, ...byType, ...byStake].filter(
-    (s) => s.settled >= minSettled
-  );
+  const candidates = edgeSegmentCandidates(bets, minSettled);
 
   const leaks = candidates
     .filter((s) => s.profitUnits < 0)

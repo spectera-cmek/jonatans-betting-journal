@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { weeklyReport, monthlyReport, type WeeklyBetInput } from "../lib/weekly";
+import type { DisciplineRuleSet } from "../lib/disciplineRules";
 
 const NOW = new Date("2026-06-12T12:00:00Z"); // Friday, week 24 (8–14 jun)
 
@@ -69,8 +70,23 @@ describe("weeklyReport", () => {
       // Leak: accumulator.
       bet("2026-06-10", { betType: "accumulator", odds: 8, stakeUnits: 1 }),
     ];
-    const r = weeklyReport(bets, NOW);
+    const rules: DisciplineRuleSet = {
+      windowLabel: "senaste året",
+      settled: 400,
+      minSettled: 40,
+      rules: [
+        { dim: "Typ", key: "Ackumulator", settled: 90, profitUnits: -30, roiPct: -14, z: -1.8, tone: "neg" },
+      ],
+    };
+    const r = weeklyReport(bets, NOW, rules);
     expect(r.current.disciplinePct).toBeCloseTo(75, 5);
+  });
+
+  it("leaves discipline unscored when no rules are supplied", () => {
+    // Nothing has been derived from the journal yet, so calling every bet
+    // "clean" would be a flattering lie.
+    const bets = [bet("2026-06-10", { betType: "accumulator", odds: 8, stakeUnits: 1 })];
+    expect(weeklyReport(bets, NOW).current.disciplinePct).toBeNull();
   });
 
   it("handles an empty week", () => {

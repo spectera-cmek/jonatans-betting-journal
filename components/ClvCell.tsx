@@ -14,6 +14,8 @@ type Props = {
   odds: number;
   closingOdds: number | null;
   clvPctValue: number | null;
+  /** Odds-boost: a boosted price is not a market price, so it has no CLV. */
+  boosted?: boolean | null;
   onSaved?: (next: ClvSaved) => void;
 };
 
@@ -30,7 +32,7 @@ function computeClv(odds: number, closing: number | null): number | null {
   return clvPct(odds, closing);
 }
 
-export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Props) {
+export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSaved }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -154,6 +156,20 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, onSaved }: Prop
       <I p={IC.refresh} size={12} />
     </button>
   );
+
+  // A boost is priced against nothing the market ever offered — comparing it to
+  // the close measures the boost, not the bet. Say so instead of inviting a
+  // closing price that would only pollute the CLV average.
+  if (boosted) {
+    return (
+      <span
+        style={{ fontSize: 11.5, color: "var(--dim2)", whiteSpace: "nowrap" }}
+        title="Boostat odds räknas aldrig som CLV."
+      >
+        boost
+      </span>
+    );
+  }
 
   if (editing) {
     return (

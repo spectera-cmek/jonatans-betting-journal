@@ -16,18 +16,13 @@ import { useMetrics, useRecentBets } from "@/lib/useData";
 import { krFmt, krShort, uFmt, pctFmt, dateShort } from "@/lib/format";
 import type { BetListDTO } from "@/lib/types";
 import type { StreakInfo } from "@/lib/insights";
+import { CHART_PERIODS } from "@/lib/periods";
 import { useEffect } from "react";
 
 const RECENT_GRID = "66px 50px 1.7fr 1.2fr 100px 58px 64px 76px 84px";
 
-const PERIODS = [
-  { key: "all", label: "Allt", days: null },
-  { key: "1y", label: "1 år", days: 365 },
-  { key: "90d", label: "90 d", days: 90 },
-  { key: "30d", label: "30 d", days: 30 },
-  { key: "7d", label: "7 d", days: 7 },
-] as const;
-type PeriodKey = (typeof PERIODS)[number]["key"];
+const PERIODS = CHART_PERIODS;
+type PeriodKey = string;
 
 export default function OverviewPage() {
   const { cc, glow } = useTheme();
@@ -353,6 +348,7 @@ export default function OverviewPage() {
                     odds={b.odds}
                     closingOdds={b.closingOdds}
                     clvPctValue={b.clvPct}
+                    boosted={b.boosted}
                     onSaved={(next) => onClvSaved(b.id, next)}
                   />
                 </span>
@@ -386,6 +382,7 @@ export default function OverviewPage() {
                       odds={b.odds}
                       closingOdds={b.closingOdds}
                       clvPctValue={b.clvPct}
+                    boosted={b.boosted}
                       onSaved={(next) => onClvSaved(b.id, next)}
                     />
                   </b>

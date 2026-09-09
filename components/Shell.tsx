@@ -17,6 +17,7 @@ const PRIMARY_NAV = [
 ];
 
 const SECONDARY_NAV = [
+  { href: "/rattning", label: "Rättning", icon: IC.zap },
   { href: "/vm2026", label: "VM 2026", icon: IC.trophy },
   { href: "/insights", label: "Insikter", icon: IC.spark },
   { href: "/skott", label: "Skottmodell", icon: IC.bars },
@@ -181,6 +182,7 @@ export function MobileNav() {
 }
 
 function secondaryDescription(href: string) {
+  if (href === "/rattning") return "Rätta öppna spel";
   if (href === "/vm2026") return "Turneringsöversikt";
   if (href === "/insights") return "Mönster, form och edge";
   if (href === "/skott") return "Skott och hörnor";

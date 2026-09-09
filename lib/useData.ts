@@ -6,6 +6,8 @@ import type { Metrics, BankrollPoint, Breakdown, OpenRisk, DrawdownInfo } from "
 import type { Insights } from "./insights";
 import type { TiltStatus } from "./tilt";
 import type { WeeklyReport, MonthlyReport } from "./weekly";
+import type { DisciplineRuleSet, OpenEventCount } from "./disciplineRules";
+import type { ClvCoverage, DataQualitySummary } from "./dataQuality";
 import type { BetListDTO, SettingsDTO } from "./types";
 import type { WorldCupData } from "./worldCup";
 
@@ -52,6 +54,7 @@ export interface OpenBetRow {
   odds: number;
   stakeUnits: number;
   closingOdds: number | null;
+  boosted: boolean;
   clvPct: number | null;
   eventAt: string | null;
   placedAt: string;
@@ -66,6 +69,13 @@ export interface MetricsResponse {
   tilt: TiltStatus;
   weekly: WeeklyReport;
   monthlyReport: MonthlyReport;
+  /** Leak/edge rules the add-bet guard quotes, derived from this journal. */
+  disciplineRules: DisciplineRuleSet;
+  /** Open bets per match — the guard's concentration check. */
+  openEvents: OpenEventCount[];
+  /** Counts per data-quality flag, plus the fabricated-bet tally. */
+  dataQuality: DataQualitySummary & { fabricated: number };
+  clvCoverage: ClvCoverage;
   openBets: OpenBetRow[];
   bankroll: BankrollPoint[];
   bySport: Breakdown[];

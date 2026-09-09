@@ -66,6 +66,40 @@ interface EspnEvent {
   competitions?: { competitors?: EspnCompetitor[] }[];
 }
 
+/**
+ * Per-request memo of scoreboard responses, keyed "<path>|<YYYYMMDD>".
+ *
+ * Grading a whole journal asks for the same handful of (league, day) pages over
+ * and over — one bet costs up to three fetches, and a hundred pending bets
+ * would otherwise cost three hundred. Deliberately caller-owned rather than a
+ * module-level cache: a warm serverless instance would then serve yesterday's
+ * "not finished yet" answer forever.
+ */
+export type ScoreboardCache = Map<string, EspnEvent[]>;
+
+/**
+ * One scoreboard page. A failed request is memoised as "no events" so a broken
+ * endpoint is not retried once per bet; the next request starts a fresh cache
+ * and tries again.
+ */
+async function loadScoreboard(path: string, day: Date, cache?: ScoreboardCache): Promise<EspnEvent[]> {
+  const key = `${path}|${ymd(day)}`;
+  const hit = cache?.get(key);
+  if (hit) return hit;
+  let events: EspnEvent[] = [];
+  try {
+    const res = await fetch(`${BASE}/${path}/scoreboard?dates=${ymd(day)}`, { cache: "no-store" });
+    if (res.ok) {
+      const json = (await res.json()) as { events?: EspnEvent[] };
+      events = json.events ?? [];
+    }
+  } catch {
+    events = [];
+  }
+  cache?.set(key, events);
+  return events;
+}
+
 function norm(s: string): string {
   return s
     .toLowerCase()
@@ -114,19 +148,12 @@ export async function fetchFinalScore(
   eventAt: Date,
   homeTeam: string,
   awayTeam: string,
-  eventRef?: string | null
+  eventRef?: string | null,
+  cache?: ScoreboardCache
 ): Promise<FinalScore | null> {
   const days = [eventAt, new Date(eventAt.getTime() + 24 * 3600 * 1000), new Date(eventAt.getTime() - 24 * 3600 * 1000)];
   for (const day of days) {
-    let events: EspnEvent[];
-    try {
-      const res = await fetch(`${BASE}/${path}/scoreboard?dates=${ymd(day)}`, { cache: "no-store" });
-      if (!res.ok) continue;
-      const json = (await res.json()) as { events?: EspnEvent[] };
-      events = json.events ?? [];
-    } catch {
-      continue;
-    }
+    const events = await loadScoreboard(path, day, cache);
 
     for (const ev of events) {
       if (eventRef && ev.id !== eventRef) continue;

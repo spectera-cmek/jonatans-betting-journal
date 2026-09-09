@@ -61,6 +61,7 @@ type BetRow = {
   betType: string;
   odds: number;
   closingOdds: number | null;
+  boosted: boolean;
   stakeUnits: number;
   outcome: string;
   profitUnits: number | null;
@@ -139,6 +140,8 @@ export interface BetListDTO {
   betType: string;
   odds: number;
   closingOdds: number | null;
+  /** Odds-boost: never a market price, so it is never a CLV candidate. */
+  boosted: boolean;
   stakeUnits: number;
   outcome: Outcome;
   profitUnits: number | null;
@@ -152,7 +155,7 @@ export type BetListRow = Pick<
   BetRow,
   | "id" | "placedAt" | "eventAt" | "sport" | "league" | "event" | "homeTeam" | "awayTeam" | "market"
   | "marketCategory" | "marketScope" | "eventKind" | "tournamentStage"
-  | "selection" | "selectionSide" | "line" | "betType" | "odds" | "closingOdds" | "stakeUnits"
+  | "selection" | "selectionSide" | "line" | "betType" | "odds" | "closingOdds" | "boosted" | "stakeUnits"
   | "outcome" | "profitUnits" | "bookmaker" | "resultProvider" | "resultEventRef"
 >;
 
@@ -177,6 +180,7 @@ export function serializeBetList(b: BetListRow): BetListDTO {
     betType: b.betType,
     odds: b.odds,
     closingOdds: b.closingOdds,
+    boosted: b.boosted,
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
     profitUnits: b.profitUnits,

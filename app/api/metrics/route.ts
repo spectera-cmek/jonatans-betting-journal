@@ -15,6 +15,8 @@ import {
 } from "@/lib/betting";
 import type { Outcome } from "@/lib/betting";
 import { computeInsights } from "@/lib/insights";
+import { deriveDisciplineRules, openEventCounts } from "@/lib/disciplineRules";
+import { clvCoverage, dataQualitySummary, FABRICATED_TAG } from "@/lib/dataQuality";
 import { tiltStatus } from "@/lib/tilt";
 import { weeklyReport, monthlyReport, type WeeklyBetInput } from "@/lib/weekly";
 import { getSessionUser, apiUnauthorized } from "@/lib/auth";
@@ -38,6 +40,7 @@ const METRICS_SELECT = {
   betType: true,
   odds: true,
   closingOdds: true,
+  boosted: true,
   stakeUnits: true,
   outcome: true,
   profitUnits: true,
@@ -50,16 +53,23 @@ const METRICS_SELECT = {
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return apiUnauthorized();
-  const [bets, settings] = await Promise.all([
+  const [bets, settings, fabricated] = await Promise.all([
     prisma.bet.findMany({ where: { userId: user.id }, select: METRICS_SELECT }),
     getSettings(user.id),
+    // Counted with its own query on purpose: `notes` is the bulk of a row and
+    // must stay out of METRICS_SELECT, but the fabricated-bet tag lives in it.
+    prisma.bet.count({ where: { userId: user.id, notes: { contains: FABRICATED_TAG } } }),
   ]);
 
   const betLikes: BetLike[] = bets.map((b) => ({
     odds: b.odds,
     stakeUnits: b.stakeUnits,
     outcome: b.outcome as Outcome,
-    closingOdds: b.closingOdds,
+    // A boosted price is not a market price, so it can never be beaten by the
+    // close in any meaningful sense. Dropping the closing odds here keeps every
+    // CLV aggregate (average, beat count, sample size) off boosted bets, and
+    // matches the coverage meter's denominator. Nothing else reads closingOdds.
+    closingOdds: b.boosted ? null : b.closingOdds,
     eventAt: b.eventAt,
     placedAt: b.placedAt,
     createdAt: b.createdAt,
@@ -110,6 +120,16 @@ export async function GET() {
   // Personal "form" insights (streaks, best/worst day, month-over-month…).
   const insights = computeInsights(betLikes);
 
+  // The add-bet guard's rules, derived from this journal over a trailing year —
+  // and the open-bets-per-match tally it warns on. Computed here because the
+  // whole history is already in memory; the modal just reads the cached payload.
+  const disciplineRules = deriveDisciplineRules(keyed);
+  const openEvents = openEventCounts(bets);
+
+  // What in the journal can't be trusted, and how much of it has a closing price.
+  const dataQuality = { ...dataQualitySummary(bets), fabricated };
+  const clv = clvCoverage(bets);
+
   // Exposure on pending bets + worst historical peak-to-trough drop.
   const risk = openRisk(betLikes);
   const drawdown = maxDrawdown(bankroll);
@@ -137,8 +157,8 @@ export async function GET() {
     market: b.market,
     betType: b.betType,
   }));
-  const weekly = weeklyReport(weeklyInput, new Date());
-  const monthlyRep = monthlyReport(weeklyInput, new Date());
+  const weekly = weeklyReport(weeklyInput, new Date(), disciplineRules);
+  const monthlyRep = monthlyReport(weeklyInput, new Date(), disciplineRules);
 
   // Pending bets, soonest event first (nulls last) — the dashboard "Öppna spel" panel.
   const openBets = bets
@@ -165,6 +185,7 @@ export async function GET() {
       odds: b.odds,
       stakeUnits: b.stakeUnits,
       closingOdds: b.closingOdds,
+      boosted: b.boosted,
       clvPct:
         b.closingOdds && b.closingOdds > 1
           ? (b.odds / b.closingOdds - 1) * 100
@@ -182,6 +203,10 @@ export async function GET() {
     tilt,
     weekly,
     monthlyReport: monthlyRep,
+    disciplineRules,
+    openEvents,
+    dataQuality,
+    clvCoverage: clv,
     openBets,
     bankroll,
     bySport,
@@ -206,6 +231,7 @@ export async function GET() {
 }
 
 interface KeyedBet extends BetLike {
+  selection: string;
   sport: string | null;
   league: string | null;
   market: string;
@@ -224,6 +250,7 @@ function toKeyed(b: {
   placedAt: Date;
   createdAt: Date;
   profitUnits: number | null;
+  selection: string;
   sport: string | null;
   league: string | null;
   market: string;
@@ -241,6 +268,7 @@ function toKeyed(b: {
     placedAt: b.placedAt,
     createdAt: b.createdAt,
     profitUnits: b.profitUnits,
+    selection: b.selection,
     sport: b.sport,
     league: b.league,
     market: b.market,

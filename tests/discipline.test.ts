@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { evaluateBet, betCategory } from "../lib/discipline";
+import { deriveDisciplineRules, openEventCounts, type DisciplineRuleSet } from "../lib/disciplineRules";
+import type { EdgeBetInput } from "../lib/edge";
 
 describe("betCategory", () => {
   it("reads the category from the free-text selection", () => {
@@ -13,69 +15,179 @@ describe("betCategory", () => {
   });
 });
 
-describe("evaluateBet — leaks", () => {
-  it("warns on odds >= 3 and harder on 5+", () => {
-    const v3 = evaluateBet({ odds: 3.2 });
-    expect(v3.level).toBe("warn");
-    expect(v3.notes.some((n) => n.text.includes("Odds ≥ 3"))).toBe(true);
+/** n bets of one shape, alternating win/loss to hit an exact win rate. */
+function series(n: number, wins: number, bet: Partial<EdgeBetInput> & { odds: number }): EdgeBetInput[] {
+  return Array.from({ length: n }, (_, i) => ({
+    stakeUnits: 1,
+    outcome: i < wins ? ("win" as const) : ("loss" as const),
+    placedAt: new Date("2026-06-01T12:00:00Z"),
+    ...bet,
+  })) as EdgeBetInput[];
+}
 
-    const v5 = evaluateBet({ odds: 6.0 });
-    expect(v5.notes.some((n) => n.text.includes("Odds 5+"))).toBe(true);
+const NOW = Date.parse("2026-09-01T12:00:00Z");
+
+describe("deriveDisciplineRules", () => {
+  it("derives a leak and an edge from the journal itself", () => {
+    const bets = [
+      // Long odds, far below break-even (needs 20 % to break even at 5.00).
+      ...series(120, 8, { odds: 5.5, selection: "Arsenal vinner", market: "h2h" }),
+      // Shots at short odds, well above break-even (needs ~54 %).
+      ...series(120, 84, { odds: 1.85, selection: "Över 24.5 skott", market: "other" }),
+      // Filler, so neither segment above covers more than a third of the window
+      // and trips the share cap.
+      ...series(300, 120, { odds: 2.5, selection: "Arsenal vinner", market: "h2h" }),
+    ];
+    const { rules, windowLabel } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+
+    expect(windowLabel).toBe("senaste året");
+    const oddsLeak = rules.find((r) => r.dim === "Odds" && r.key.startsWith("Odds 5"));
+    expect(oddsLeak?.tone).toBe("neg");
+    expect(oddsLeak!.roiPct!).toBeLessThan(0);
+
+    const shots = rules.find((r) => r.dim === "Marknad" && r.key === "Skott");
+    expect(shots?.tone).toBe("pos");
   });
 
-  it("warns on the longshot lottery (small stake at high odds)", () => {
-    const v = evaluateBet({ odds: 12, stakeUnits: 0.25 });
-    expect(v.notes.some((n) => n.text.includes("longshot"))).toBe(true);
+  it("stays silent on segments below the sample floor", () => {
+    const bets = series(10, 0, { odds: 5.5, selection: "Arsenal vinner" });
+    expect(deriveDisciplineRules(bets, { now: NOW, minSettled: 40 }).rules).toHaveLength(0);
   });
 
-  it("warns on accumulators", () => {
-    const v = evaluateBet({ betType: "accumulator", odds: 2.0 });
-    expect(v.notes.some((n) => n.text.includes("Ackumulatorer"))).toBe(true);
+  it("stays silent on segments that sit inside the no-edge spread", () => {
+    // 60 bets at 2.00 with exactly half won = dead on the baseline.
+    const bets = series(60, 30, { odds: 2.0, selection: "Arsenal vinner", market: "h2h" });
+    const oddsRule = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 }).rules.find(
+      (r) => r.dim === "Odds"
+    );
+    expect(oddsRule).toBeUndefined();
   });
 
-  it("warns on basketball props but not basketball rebounds in the edge zone", () => {
-    const props = evaluateBet({ sport: "Basketball", selection: "LeBron över 27.5 poäng", odds: 1.9 });
-    expect(props.notes.some((n) => n.text.includes("Basketprops"))).toBe(true);
-
-    const rebounds = evaluateBet({ sport: "Basketball", selection: "Jokic över 11.5 returer", odds: 1.9 });
-    expect(rebounds.notes.some((n) => n.text.includes("Basketprops"))).toBe(false);
-    expect(rebounds.notes.some((n) => n.tone === "pos" && n.text.includes("Returer"))).toBe(true);
-  });
-
-  it("warns on kort & fouls and tennis", () => {
-    expect(evaluateBet({ selection: "Över 4.5 kort", odds: 1.8 }).notes.some((n) => n.text.includes("Kort & fouls"))).toBe(true);
-    expect(evaluateBet({ sport: "Tennis", odds: 1.8 }).notes.some((n) => n.text.includes("Tennis"))).toBe(true);
+  it("only looks at the trailing window", () => {
+    const old = series(120, 8, { odds: 5.5, selection: "Arsenal vinner" }).map((b) => ({
+      ...b,
+      placedAt: new Date("2023-01-15T12:00:00Z"),
+    }));
+    // maxShare lifted: this fixture is one uniform segment, which the share cap
+    // would otherwise drop for reasons unrelated to the window.
+    expect(
+      deriveDisciplineRules(old, { now: NOW, sinceDays: 365, minSettled: 40, maxShare: 1 }).rules
+    ).toHaveLength(0);
+    expect(
+      deriveDisciplineRules(old, { now: NOW, sinceDays: null, minSettled: 40, maxShare: 1 }).rules.length
+    ).toBeGreaterThan(0);
   });
 });
 
-describe("evaluateBet — edges", () => {
-  it("flags shots/corners/rebounds at odds 1.5–3 as edge", () => {
-    const v = evaluateBet({ sport: "Football", selection: "Saka 1+ skott på mål", odds: 1.85, stakeUnits: 1 });
-    expect(v.level).toBe("edge");
-    expect(v.notes.some((n) => n.tone === "pos" && n.text.includes("Skott"))).toBe(true);
+describe("evaluateBet", () => {
+  const ruleSet: DisciplineRuleSet = {
+    windowLabel: "senaste året",
+    settled: 500,
+    minSettled: 40,
+    rules: [
+      { dim: "Odds", key: "Odds 5.00+", settled: 120, profitUnits: -60, roiPct: -21, z: -2.4, tone: "neg" },
+      { dim: "Marknad", key: "Skott", settled: 300, profitUnits: 40, roiPct: 6.2, z: 2.1, tone: "pos" },
+      { dim: "Typ", key: "Ackumulator", settled: 90, profitUnits: -30, roiPct: -14, z: -1.8, tone: "neg" },
+    ],
+  };
+
+  it("quotes the derived numbers for a matching segment", () => {
+    const v = evaluateBet({ odds: 6.0, stakeUnits: 1, selection: "Arsenal vinner" }, ruleSet);
+    expect(v.level).toBe("warn");
+    expect(v.notes[0].text).toContain("Odds 5.00+");
+    expect(v.notes[0].text).toContain("−21,0% ROI");
+    expect(v.notes[0].text).toContain("senaste året");
   });
 
-  it("does not call the same category an edge at odds 5+", () => {
-    const v = evaluateBet({ selection: "Över 10.5 hörnor", odds: 5.5 });
-    expect(v.notes.some((n) => n.tone === "pos" && n.text.includes("Hörnor"))).toBe(false);
-    expect(v.notes.some((n) => n.tone === "neg")).toBe(true);
+  it("reports an edge market as positive, and both together as mixed", () => {
+    expect(evaluateBet({ odds: 1.85, selection: "Över 24.5 skott" }, ruleSet).level).toBe("edge");
+    expect(evaluateBet({ odds: 6.0, selection: "Över 24.5 skott" }, ruleSet).level).toBe("mixed");
   });
 
-  it("flags the 2.00–2.99 odds band and conviction stakes", () => {
-    const v = evaluateBet({ selection: "Över 24.5 skott", odds: 2.1, stakeUnits: 3 });
-    expect(v.level).toBe("edge");
-    expect(v.notes.some((n) => n.text.includes("2,00–2,99"))).toBe(true);
-    expect(v.notes.some((n) => n.text.includes("Conviction"))).toBe(true);
+  it("flags accumulators through the Typ dimension", () => {
+    const v = evaluateBet({ betType: "accumulator", odds: 2.0 }, ruleSet);
+    expect(v.notes.some((n) => n.text.includes("Ackumulator"))).toBe(true);
   });
 
-  it("mixed when both edge and leak apply", () => {
-    // Shots edge category but on a basketball player props day at high odds.
-    const v = evaluateBet({ selection: "Över 9.5 hörnor", odds: 2.5, stakeUnits: 0.25 });
-    expect(v.notes.some((n) => n.tone === "pos")).toBe(true);
-  });
-
-  it("none when nothing matches", () => {
-    const v = evaluateBet({ sport: "Football", selection: "Arsenal vinner", market: "h2h", odds: 1.6, stakeUnits: 1 });
+  it("says nothing about odds or stake while those fields are empty", () => {
+    const v = evaluateBet({ selection: "Arsenal vinner" }, ruleSet);
+    expect(v.notes.some((n) => n.text.includes("Odds"))).toBe(false);
     expect(v.level).toBe("none");
+  });
+
+  it("says nothing at all without a rule set", () => {
+    expect(evaluateBet({ odds: 6.0, stakeUnits: 1 }).notes).toHaveLength(0);
+  });
+
+  it("warns when the bet piles onto a match that already has three open bets", () => {
+    const open = openEventCounts([
+      { event: "Arsenal vs Chelsea", stakeUnits: 1, outcome: "pending" },
+      { event: "arsenal  vs chelsea", stakeUnits: 1, outcome: "pending" },
+      { event: "Arsenal vs Chelsea", stakeUnits: 0.5, outcome: "pending" },
+      { event: "Arsenal vs Chelsea", stakeUnits: 9, outcome: "win" }, // settled — not counted
+    ]);
+    const v = evaluateBet({ event: "Arsenal vs Chelsea ", odds: 1.9 }, ruleSet, open);
+    expect(v.level).toBe("warn");
+    expect(v.notes.some((n) => n.text.includes("redan 3 öppna spel"))).toBe(true);
+  });
+
+  it("only notes — does not warn — on the third bet of a match", () => {
+    const open = openEventCounts([
+      { event: "Arsenal vs Chelsea", stakeUnits: 1, outcome: "pending" },
+      { event: "Arsenal vs Chelsea", stakeUnits: 1, outcome: "pending" },
+    ]);
+    const v = evaluateBet({ event: "Arsenal vs Chelsea", odds: 1.9 }, ruleSet, open);
+    expect(v.level).toBe("none");
+    expect(v.notes.some((n) => n.tone === "info")).toBe(true);
+  });
+});
+
+describe("catch-all segments", () => {
+  it("keeps Singel but drops the unclassified buckets", () => {
+    const bets = [
+      // Uncategorised singles that happen to have run hot.
+      ...series(120, 84, { odds: 1.85, selection: "???", market: "other" }),
+    ];
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40, maxShare: 1 });
+    expect(rules.some((r) => r.dim === "Typ" && r.key === "Singel")).toBe(true);
+    expect(rules.some((r) => r.key === "Övrigt")).toBe(false);
+    expect(rules.some((r) => r.key === "Okänd sport")).toBe(false);
+  });
+});
+
+describe("empty form fields", () => {
+  const ruleSet: DisciplineRuleSet = {
+    windowLabel: "senaste året",
+    settled: 500,
+    minSettled: 40,
+    rules: [
+      { dim: "Marknad", key: "Skott", settled: 300, profitUnits: 40, roiPct: 6.2, z: 2.1, tone: "pos" },
+    ],
+  };
+
+  it("reads the category from the selection when the category dropdown is untouched", () => {
+    // The add-bet form sends "" for an unset dropdown, not null.
+    const v = evaluateBet({ selection: "Över 24.5 skott", marketCategory: "", odds: 1.9 }, ruleSet);
+    expect(v.notes.some((n) => n.text.includes("Skott"))).toBe(true);
+  });
+});
+
+describe("share cap", () => {
+  it("drops a segment that covers most of the window", () => {
+    // 400 singles, of which 120 are shots: "Singel" covers everything typed and
+    // says nothing about this bet; "Skott" is a third of it and does.
+    const bets = [
+      ...series(280, 196, { odds: 1.85, selection: "Arsenal vinner", market: "h2h" }),
+      ...series(120, 84, { odds: 1.85, selection: "Över 24.5 skott", market: "other" }),
+    ];
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    expect(rules.some((r) => r.dim === "Typ" && r.key === "Singel")).toBe(false);
+    expect(rules.some((r) => r.dim === "Marknad" && r.key === "Skott")).toBe(true);
+  });
+
+  it("keeps everything when the cap is lifted", () => {
+    const bets = series(400, 280, { odds: 1.85, selection: "Arsenal vinner", market: "h2h" });
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40, maxShare: 1 });
+    expect(rules.some((r) => r.dim === "Typ" && r.key === "Singel")).toBe(true);
   });
 });
