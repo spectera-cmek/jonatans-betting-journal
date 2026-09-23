@@ -5,6 +5,7 @@ import {
   kellyAdvice,
   impliedProb,
   survivableLossStreak,
+  winProbFromEv,
 } from "../lib/staking";
 
 describe("kellyFraction", () => {
@@ -66,5 +67,25 @@ describe("survivableLossStreak", () => {
   it("handles edge cases", () => {
     expect(survivableLossStreak(100, 0)).toBe(Infinity);
     expect(survivableLossStreak(0, 2)).toBe(0);
+  });
+});
+
+describe("winProbFromEv", () => {
+  it("turns +8.55% EV at odds 2.00 into p = 0.54275", () => {
+    expect(winProbFromEv(2.0, 0.0855)).toBeCloseTo(0.54275, 10);
+  });
+
+  it("feeds Kelly so that f* = EV / (odds − 1)", () => {
+    const p = winProbFromEv(2.0, 0.0855)!;
+    expect(kellyFraction(2.0, p)).toBeCloseTo(0.0855, 10);
+    const p3 = winProbFromEv(3.5, 0.1)!;
+    expect(kellyFraction(3.5, p3)).toBeCloseTo(0.1 / 2.5, 10);
+  });
+
+  it("rejects impossible inputs", () => {
+    expect(winProbFromEv(1, 0.05)).toBeNull();
+    expect(winProbFromEv(1.5, 0.6)).toBeNull(); // p would be ≥ 1
+    expect(winProbFromEv(2, -1)).toBeNull(); // p = 0
+    expect(winProbFromEv(2, NaN)).toBeNull();
   });
 });

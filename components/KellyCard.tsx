@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { Card } from "./ui";
-import { kellyAdvice, impliedProb } from "@/lib/staking";
+import { kellyAdvice, impliedProb, winProbFromEv } from "@/lib/staking";
 import { uFmt, krFmt, pctFmt } from "@/lib/format";
 
-// Self-contained Kelly stake calculator. Bankroll prefilled from the caller
-// (starting bankroll + realised P/L) but fully editable.
+// Self-contained Kelly stake calculator. The edge goes in either as EV % (what
+// a value tool quotes) or as your own win probability. Bankroll prefilled from
+// the caller (starting bankroll + realised P/L) but fully editable.
 export function KellyCard({
   defaultBankrollUnits,
   unit,
@@ -15,11 +16,16 @@ export function KellyCard({
   unit: number;
 }) {
   const [odds, setOdds] = useState("2.00");
+  const [mode, setMode] = useState<"ev" | "prob">("ev");
+  const [evPct, setEvPct] = useState("5");
   const [winPct, setWinPct] = useState("55");
   const [bankroll, setBankroll] = useState(String(Math.max(1, Math.round(defaultBankrollUnits))));
 
   const o = parseFloat(odds.replace(",", "."));
-  const p = parseFloat(winPct.replace(",", ".")) / 100;
+  const p =
+    mode === "ev"
+      ? winProbFromEv(o, parseFloat(evPct.replace(",", ".")) / 100) ?? NaN
+      : parseFloat(winPct.replace(",", ".")) / 100;
   const bank = parseFloat(bankroll.replace(",", "."));
   const valid = o > 1 && p > 0 && p < 1 && bank > 0;
   const a = valid ? kellyAdvice(o, p, bank) : null;
@@ -37,10 +43,24 @@ export function KellyCard({
           <label>Odds</label>
           <input className="ap-input ap-num" inputMode="decimal" value={odds} onChange={(e) => setOdds(e.target.value)} />
         </div>
-        <div className="ap-field" style={{ width: 130 }}>
-          <label>Din vinstchans (%)</label>
-          <input className="ap-input ap-num" inputMode="decimal" value={winPct} onChange={(e) => setWinPct(e.target.value)} />
+        <div className="ap-field" style={{ width: 230 }}>
+          <label>Edge anges som</label>
+          <div className="ap-seg2">
+            <button className={mode === "ev" ? "is-active" : ""} onClick={() => setMode("ev")}>EV %</button>
+            <button className={mode === "prob" ? "is-active" : ""} onClick={() => setMode("prob")}>Vinstchans %</button>
+          </div>
         </div>
+        {mode === "ev" ? (
+          <div className="ap-field" style={{ width: 96 }}>
+            <label>EV (%)</label>
+            <input className="ap-input ap-num" inputMode="decimal" value={evPct} onChange={(e) => setEvPct(e.target.value)} />
+          </div>
+        ) : (
+          <div className="ap-field" style={{ width: 130 }}>
+            <label>Din vinstchans (%)</label>
+            <input className="ap-input ap-num" inputMode="decimal" value={winPct} onChange={(e) => setWinPct(e.target.value)} />
+          </div>
+        )}
         <div className="ap-field" style={{ width: 120 }}>
           <label>Bankrulle (U)</label>
           <input className="ap-input ap-num" inputMode="decimal" value={bankroll} onChange={(e) => setBankroll(e.target.value)} />
@@ -49,7 +69,7 @@ export function KellyCard({
 
       {implied != null && (
         <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 10 }}>
-          Oddset prissätter {pctFmt(implied * 100)} vinstchans — du tror{" "}
+          Oddset prissätter {pctFmt(implied * 100)} vinstchans — {mode === "ev" ? "din EV motsvarar" : "du tror"}{" "}
           {valid ? (
             <em className={p > implied ? "pos" : "neg"} style={{ fontStyle: "normal", fontWeight: 600 }}>
               {pctFmt(p * 100)}
@@ -63,7 +83,9 @@ export function KellyCard({
 
       {a == null ? (
         <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
-          Fyll i odds (&gt;1), vinstchans (0–100 %) och bankrulle.
+          {mode === "ev"
+            ? "Fyll i odds (>1), EV (%) och bankrulle."
+            : "Fyll i odds (>1), vinstchans (0–100 %) och bankrulle."}
         </div>
       ) : !a.hasEdge ? (
         <div
@@ -78,7 +100,7 @@ export function KellyCard({
             lineHeight: 1.5,
           }}
         >
-          Ingen edge vid dessa odds och din skattade vinstchans — Kelly säger: <strong>lägg inget</strong>.
+          Ingen edge vid dessa odds och {mode === "ev" ? "denna EV" : "din skattade vinstchans"} — Kelly säger: <strong>lägg inget</strong>.
         </div>
       ) : (
         <>
@@ -93,7 +115,7 @@ export function KellyCard({
           </div>
           <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
             Full Kelly maximerar tillväxt men svänger hårt — de flesta proffs spelar ¼–½ Kelly för lugnare
-            bankrulle. Siffrorna förutsätter att din vinstchans stämmer; överskatta den och Kelly blir för aggressiv.
+            bankrulle. Full Kelly = EV ÷ (odds − 1). Siffrorna förutsätter att din edge stämmer; överskatta den och Kelly blir för aggressiv.
           </p>
         </>
       )}

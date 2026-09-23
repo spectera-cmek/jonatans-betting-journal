@@ -22,6 +22,18 @@ export function expectedValuePerUnit(odds: number, winProb: number): number {
   return winProb * (odds - 1) - q;
 }
 
+/**
+ * Win probability implied by a stated EV at the given odds: EV = p·odds − 1
+ * ⇒ p = (1 + EV) / odds. `ev` is a fraction (0.0855 = +8.55%). Returns null
+ * when the result isn't a probability (odds ≤ 1, or EV so high that p ≥ 1).
+ * With this p, Kelly simplifies to f* = EV / (odds − 1).
+ */
+export function winProbFromEv(odds: number, ev: number): number | null {
+  if (!(odds > 1) || !Number.isFinite(ev)) return null;
+  const p = (1 + ev) / odds;
+  return p > 0 && p < 1 ? p : null;
+}
+
 export interface KellyAdvice {
   edge: number; // EV per unit staked (fraction; 0.04 = +4%)
   full: number; // full Kelly fraction of bankroll (0..1)
