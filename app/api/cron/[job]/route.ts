@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import { runClosingNearKickoff, runGradeByScores, runClosing, type SyncResult } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
@@ -55,14 +56,28 @@ export async function GET(req: Request, { params }: { params: { job: string } })
     );
   }
 
+  // Every run leaves a `cron:<job>` row, empty or failed ones included. The
+  // runners only log when they changed something, so without this a quiet
+  // night and a cron that never fired look identical — which is how a month
+  // of failed closing captures went unnoticed before.
   try {
     const result = await run();
+    await logRun(params.job, result.message || "ok");
     return NextResponse.json({ job: params.job, ...result });
   } catch (e) {
     console.error(`cron/${params.job}`, e);
+    await logRun(params.job, `FEL: ${(e as Error).message}`);
     return NextResponse.json(
       { ok: false, job: params.job, message: (e as Error).message },
       { status: 500 }
     );
+  }
+}
+
+async function logRun(job: string, summary: string) {
+  try {
+    await prisma.syncLog.create({ data: { kind: `cron:${job}`, summary: summary.slice(0, 500) } });
+  } catch (e) {
+    console.error(`cron/${job}: could not write syncLog`, e);
   }
 }

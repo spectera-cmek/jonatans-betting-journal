@@ -4,6 +4,19 @@ Schemalagd eller manuell agent-rutin. Körs mot Neon Postgres via `DATABASE_URL`
 (sätts i `.env` / Cloud Agent secrets). Målet: **rätta så många avgjorda bets som
 möjligt** utan att gissa — prova flera källor tills resultatet är entydigt.
 
+## Två lager
+
+1. **Natten (Vercel-cron, ingen dator behövs):** `/api/cron/grade` 04:00 UTC rättar
+   strukturerade singlar mot ESPN (hoppar över förlängning/straffar),
+   `/api/cron/closing` 05:00 UTC hämtar closing odds. Varje körning lämnar en
+   `cron:<jobb>`-rad i `syncLog`.
+2. **Morgonen (den här rutinen, 08:00 lokalt):** allt nattjobbet inte kan — props,
+   kombi, daterlösa spel, ligor ESPN inte känner — plus rapport via mejl.
+
+Nattjobbet har redan tagit de lätta spelen; lägg tiden på resten. Om
+`cron:grade` saknas för senaste natten är det ett **fel** — skriv det överst i
+rapporten, tyst avbrott är inte okej.
+
 ## Säkerhetsregler (får aldrig brytas)
 
 - Rätta **bara** när utfallet är **definitivt avgjort** och bekräftat av minst en
@@ -71,6 +84,11 @@ motsäger sig själv, eller saknar den marknad du behöver.
 
 ## Steg
 
+0. Kontrollera nattjobbet (senaste 36 h ur `syncLog`):
+   ```
+   npx tsx scripts/agent/cronStatus.ts
+   ```
+   Ta med utfallet i rapporten ("Natten: 3 rättade av cron, closing 5").
 1. Lista öppna bets:
    ```
    npx tsx scripts/agent/openBets.ts > .claude/tmp/open-bets.json
