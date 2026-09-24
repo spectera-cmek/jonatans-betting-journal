@@ -70,7 +70,16 @@ export async function GET(req: Request) {
     const value = searchParams.get(query)?.trim();
     if (value) (where as Record<string, unknown>)[field] = value;
   }
-  const orderBy = [{ eventAt: "desc" }, { createdAt: "desc" }] as never;
+  // A capped list means "the latest bets" (dashboard, add-bet pick-lists), so
+  // it goes by when the bet was placed: by eventAt it would open on next
+  // season's futures. The full list keeps event order, with undated rows last —
+  // Postgres sorts NULL first under DESC, which put 242 undated bets on top and
+  // left every dated bet out of the dashboard's "Senaste bets".
+  const orderBy = (
+    take
+      ? [{ placedAt: "desc" }, { createdAt: "desc" }]
+      : [{ eventAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
+  ) as never;
 
   if (searchParams.get("fields") === "list") {
     const bets = await prisma.bet.findMany({ where, orderBy, take, select: LIST_SELECT });
