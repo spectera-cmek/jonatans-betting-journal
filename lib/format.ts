@@ -82,7 +82,7 @@ export function krShort(n: number | null | undefined, sign = false): string {
   const a = Math.abs(n);
   let s: string;
   if (a >= 1000) s = (a / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 }) + "k";
-  else s = a.toLocaleString("sv-SE");
+  else s = Math.round(a).toLocaleString("sv-SE");
   return (n < 0 ? "−" : sign ? "+" : "") + s;
 }
 

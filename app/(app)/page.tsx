@@ -49,9 +49,15 @@ export default function OverviewPage() {
     reloadRecent();
   };
 
-  const m = data?.metrics;
   const unit = data?.settings.unitValue ?? 100;
-  const profitKr = (m?.profitUnits ?? 0) * unit;
+  // Every KPI card reads the selected period. Falls back to the all-time
+  // figures only while an older cached payload without periodMetrics is shown.
+  const m = data?.periodMetrics?.[period] ?? data?.metrics;
+  const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? "Allt";
+  const periodTrend = period === "all" ? "Hela historiken" : periodLabel;
+  const headlineKr = (m?.profitUnits ?? 0) * unit;
+  const ddU = (data?.periodMetrics?.[period]?.drawdown ?? data?.drawdown)?.maxUnits ?? 0;
+  const avgStakeU = m?.settledBets ? m.stakedUnits / m.settledBets : null;
 
   // Chart points cut to the chosen period. The point just before the cutoff
   // is kept so the curve enters at its real level.
@@ -68,18 +74,6 @@ export default function OverviewPage() {
     return allPts.slice(Math.max(0, idx - 1));
   }, [allPts, period]);
 
-  // Max drawdown over the visible period, in kr. (No %-of-peak — that only
-  // made sense against the old arbitrary starting bankroll.)
-  const visDdKr = useMemo(() => {
-    let peak = -Infinity;
-    let maxDd = 0;
-    for (const p of pts) {
-      if (p.v > peak) peak = p.v;
-      if (peak - p.v > maxDd) maxDd = peak - p.v;
-    }
-    return maxDd;
-  }, [pts]);
-
   // ~40 evenly spaced samples of the visible curve for the KPI sparkline.
   const sparkPts = useMemo(() => {
     if (pts.length < 2) return undefined;
@@ -89,13 +83,6 @@ export default function OverviewPage() {
     if (out.length && out[out.length - 1] !== pts[pts.length - 1].v) out.push(pts[pts.length - 1].v);
     return out.length > 1 ? out : undefined;
   }, [pts]);
-
-  // Period P/L: last point vs the period's entry level. The headline follows
-  // the selected period; "Allt" shows the all-time total.
-  const periodDiff = pts.length >= 2 ? pts[pts.length - 1].v - pts[0].v : null;
-  const periodBets = Math.max(0, pts.length - 1); // every point after the entry = one settled bet
-  const showPeriod = period !== "all" && periodDiff != null;
-  const headlineKr = showPeriod ? (periodDiff as number) : profitKr;
 
   // sport distribution with pct. Memoised because both of these feed straight
   // into <Donut> / <PLBars>: a fresh array identity on every render made the
@@ -134,7 +121,7 @@ export default function OverviewPage() {
       <header className="ap-terminal-head">
         <div>
           <h1>{title}</h1>
-          <p>{m?.totalBets?.toLocaleString("sv-SE") ?? 0} bets · {rangeLabel ? `${rangeLabel}` : "ingen historik"}</p>
+          <p>{(data?.metrics.totalBets ?? 0).toLocaleString("sv-SE")} spel{rangeLabel ? ` sedan ${rangeLabel}` : " · ingen historik"}</p>
         </div>
         <div className="ap-terminal-status">
           <span>Portfölj</span>
@@ -157,7 +144,7 @@ export default function OverviewPage() {
                 icon={IC.coins}
                 value={<CountUp value={headlineKr} format={(n) => krFmt(n, true)} />}
                 spark={sparkPts}
-                trend={showPeriod ? PERIODS.find((p) => p.key === period)?.label : "Hela historiken"}
+                trend={periodTrend}
                 trendTone={headlineKr >= 0 ? "pos" : "neg"}
                 meta={`${uFmt(m?.profitUnits ?? 0, true)}`}
               />
@@ -194,12 +181,12 @@ export default function OverviewPage() {
                 meta={m?.clvSampleSize ? `${m.clvSampleSize} spel` : undefined}
               />
               <Kpi
-                label="Snittodds"
+                label="Medianodds"
                 accent="pink"
                 icon={IC.scale}
-                hint="Genomsnittligt odds på avgjorda spel. Spel med placeholder-odds 1,01 räknas inte."
-                value={m?.avgOdds != null ? m.avgOdds.toFixed(2) : "—"}
-                trend={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U snittinsats` : "—"}
+                hint="Medianodds på avgjorda spel — inte snittet, som ett fåtal kombispel över 100x drar upp så att det slutar beskriva vad du faktiskt spelar. Placeholder-odds 1,01 räknas inte."
+                value={m?.medianOdds != null ? m.medianOdds.toFixed(2) : "—"}
+                trend={avgStakeU != null ? `${avgStakeU.toFixed(2)}U snittinsats` : "—"}
                 trendTone="flat"
               />
               <Kpi
@@ -207,10 +194,10 @@ export default function OverviewPage() {
                 accent="purple"
                 icon={IC.trendDown}
                 hint="Största fall från en topp till efterföljande botten inom vald period."
-                value={visDdKr > 0 ? krShort(-visDdKr, false) : "—"}
-                trend={showPeriod ? PERIODS.find((p) => p.key === period)?.label : "Hela historiken"}
+                value={ddU > 0 ? krShort(-ddU * unit, false) : "—"}
+                trend={periodTrend}
                 trendTone="flat"
-                meta={`${(m?.totalBets ?? 0).toLocaleString("sv-SE")} spel`}
+                meta={`${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda`}
               />
             </>
           )}
@@ -223,9 +210,7 @@ export default function OverviewPage() {
           accent="emerald"
           title="Resultatutveckling"
           sub={
-            showPeriod
-              ? `${periodBets.toLocaleString("sv-SE")} avgjorda · ${PERIODS.find((p) => p.key === period)?.label}`
-              : `${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda · hela perioden`
+            `${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda · ${period === "all" ? "hela perioden" : periodLabel}`
           }
           actions={
             <div className="ap-seg">
@@ -283,31 +268,6 @@ export default function OverviewPage() {
                 </div>
               ))}
             </div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 16 }}>
-        <Card>
-          <PanelHead icon={IC.flame} accent="amber" title="Form &amp; rekord" sub="Sviter över hela historiken" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <FormRow label="Nuvarande svit" value={streakText(ins?.streaks)} tone={streakTone(ins?.streaks)} />
-            <FormRow label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin} i rad` : "—"} tone="pos" />
-            <FormRow label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss} i rad` : "—"} tone="neg" />
-          </div>
-        </Card>
-        <Card>
-          <PanelHead
-            icon={IC.award}
-            accent="teal"
-            title="Extremer &amp; insats"
-            sub="Bästa och sämsta dagarna"
-            actions={<Link href="/insights" className="ap-link">Mer →</Link>}
-          />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <FormRow label="Bästa dag" value={ins?.best ? `${krShort(ins.best.profitUnits * unit, true)} · ${dateShort(ins.best.date)}` : "—"} tone="pos" />
-            <FormRow label="Sämsta dag" value={ins?.worst ? `${krShort(ins.worst.profitUnits * unit, true)} · ${dateShort(ins.worst.date)}` : "—"} tone="neg" />
-            <FormRow label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U · ${krFmt(ins.avgStakeUnits * unit)}` : "—"} />
           </div>
         </Card>
       </div>
@@ -410,17 +370,6 @@ function monthLabel(ym: string): string {
   return months[mi] ?? ym;
 }
 
-// One label/value line in the "Form & rekord" card.
-function FormRow({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
-  return (
-    <div className="ap-legrow">
-      <span style={{ flex: 1, color: "var(--dim)" }}>{label}</span>
-      <span className="ap-num" style={{ fontWeight: 700 }}>
-        <em className={tone ?? ""} style={{ fontStyle: "normal" }}>{value}</em>
-      </span>
-    </div>
-  );
-}
 
 function streakText(s?: StreakInfo): string {
   if (!s || s.currentType === "none" || s.current === 0) return "—";

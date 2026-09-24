@@ -119,6 +119,7 @@ export interface Metrics {
   roiPct: number | null; // profit / staked * 100
   winRatePct: number | null; // wins / (wins+losses-ish) * 100
   avgOdds: number | null; // mean odds across settled bets
+  medianOdds: number | null; // median — a few 1000x bet builders can't drag it
   clvPct: number | null; // mean CLV across bets that have closingOdds
   clvBeatCount: number; // bets where we beat the closing line
   clvSampleSize: number; // bets with a closingOdds value
@@ -140,6 +141,7 @@ export function computeMetrics(bets: BetLike[]): Metrics {
   let profit = 0;
   let oddsSum = 0;
   let oddsCount = 0;
+  const settledOdds: number[] = [];
   let clvSum = 0;
   let clvSample = 0;
   let clvBeat = 0;
@@ -165,6 +167,7 @@ export function computeMetrics(bets: BetLike[]): Metrics {
     profit += settledProfit(b);
     oddsSum += b.odds;
     oddsCount += 1;
+    settledOdds.push(b.odds);
 
     if (isWinLike(outcome)) wins += 1;
     else if (outcome === "loss" || outcome === "half_loss") losses += 1;
@@ -185,10 +188,18 @@ export function computeMetrics(bets: BetLike[]): Metrics {
     roiPct: stakedUnits > 0 ? (profit / stakedUnits) * 100 : null,
     winRatePct: winRateDenom > 0 ? (wins / winRateDenom) * 100 : null,
     avgOdds: oddsCount > 0 ? oddsSum / oddsCount : null,
+    medianOdds: median(settledOdds),
     clvPct: clvSample > 0 ? clvSum / clvSample : null,
     clvBeatCount: clvBeat,
     clvSampleSize: clvSample,
   };
+}
+
+function median(xs: number[]): number | null {
+  if (xs.length === 0) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
 function toTime(d?: Date | string | null): number {

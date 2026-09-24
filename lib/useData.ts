@@ -10,6 +10,7 @@ import type { DisciplineRuleSet, OpenEventCount } from "./disciplineRules";
 import type { ClvCoverage, DataQualitySummary } from "./dataQuality";
 import type { BetListDTO, SettingsDTO } from "./types";
 import type { WorldCupData } from "./worldCup";
+import type { PeriodMetrics } from "./periods";
 
 export interface MonthRow {
   month: string;
@@ -66,6 +67,8 @@ export interface MetricsResponse {
   insights: Insights;
   openRisk: OpenRisk;
   drawdown: DrawdownInfo;
+  /** Overview KPIs per CHART_PERIODS key ("all" | "1y" | "90d" | "30d" | "7d"). */
+  periodMetrics: Record<string, PeriodMetrics>;
   tilt: TiltStatus;
   weekly: WeeklyReport;
   monthlyReport: MonthlyReport;

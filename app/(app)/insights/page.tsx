@@ -136,10 +136,17 @@ export default function InsightsPage() {
             <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} icon={IC.flame} accent="amber" />
             <StatTile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" icon={IC.trendUp} />
             <StatTile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" icon={IC.trendDown} />
-            <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : undefined} icon={IC.layers} accent="purple" />
+            <StatTile
+              label={mom ? `Månaden · ${monthLabel(mom.month)}` : "Den här månaden"}
+              value={mom ? krShort(mom.profitUnits * unit, true) : "—"}
+              tone={mom ? (mom.profitUnits >= 0 ? "pos" : "neg") : ""}
+              sub={mom ? `${mom.bets} bets${momDelta != null ? ` · ${momDelta >= 0 ? "▲" : "▼"} ${uFmt(Math.abs(momDelta))} vs ${monthLabel(momPrev?.month)}` : ""}` : "ingen data"}
+              icon={IC.calendar}
+              accent="purple"
+            />
           </div>
 
-          <div className="ap-grid ap-three" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 12 }}>
+          <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
             <Card>
               <span className="ap-label">Bästa dag 🟢</span>
               {ins?.best ? (
@@ -164,22 +171,6 @@ export default function InsightsPage() {
               ) : <div style={{ color: "var(--dim2)", fontSize: 13, marginTop: 10 }}>Ingen data</div>}
             </Card>
 
-            <Card>
-              <span className="ap-label">Den här månaden</span>
-              {mom ? (
-                <>
-                  <div className="ap-num" style={{ fontSize: 26, fontWeight: 700, marginTop: 10 }}>
-                    <span className={mom.profitUnits >= 0 ? "pos" : "neg"}>{krShort(mom.profitUnits * unit, true)}</span>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>
-                    {monthLabel(mom.month)} · {mom.bets} bets
-                    {momDelta != null && (
-                      <> · <span className={momDelta >= 0 ? "pos" : "neg"}>{momDelta >= 0 ? "▲" : "▼"} {uFmt(Math.abs(momDelta))}</span> vs {monthLabel(momPrev?.month)}</>
-                    )}
-                  </div>
-                </>
-              ) : <div style={{ color: "var(--dim2)", fontSize: 13, marginTop: 10 }}>Ingen data</div>}
-            </Card>
           </div>
 
           <Card style={{ marginBottom: 12 }}>

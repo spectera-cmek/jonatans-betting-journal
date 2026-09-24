@@ -3,9 +3,17 @@
 // average over all of it describes none of them, so every surface that draws
 // conclusions from the history gets to say which stretch it means.
 //
-// Pure & dependency-free.
+// Pure; depends only on lib/betting, which is pure too.
 
-import type { BetLike } from "./betting";
+import {
+  bankrollSeries,
+  computeMetrics,
+  hasRealOdds,
+  maxDrawdown,
+  type BetLike,
+  type DrawdownInfo,
+  type Metrics,
+} from "./betting";
 
 export interface Period {
   key: string;
@@ -67,4 +75,59 @@ export function minSettledFor(days: number | null): number {
   if (days >= 365) return 40;
   if (days >= 182) return 25;
   return 15;
+}
+
+export interface MonthRow {
+  month: string; // YYYY-MM
+  bets: number;
+  profitUnits: number;
+  roiPct: number | null;
+  stakedUnits: number;
+  winRatePct: number | null;
+}
+
+/**
+ * The `count` calendar months ending with `now`'s month, oldest first. Months
+ * with no bets come back as zero rows, and months after `now` — futures keyed
+ * on next season's date — are left out, so a bar chart of the result always
+ * means "the last year", not "the last twelve months that happen to have rows".
+ */
+export function lastCalendarMonths(rows: MonthRow[], count: number, now: Date): MonthRow[] {
+  const byKey = new Map(rows.map((r) => [r.month, r]));
+  const out: MonthRow[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    out.push(
+      byKey.get(key) ?? { month: key, bets: 0, profitUnits: 0, roiPct: null, stakedUnits: 0, winRatePct: null }
+    );
+  }
+  return out;
+}
+
+export type PeriodMetrics = Metrics & { drawdown: DrawdownInfo };
+
+/**
+ * Overview KPIs for every CHART_PERIODS window, keyed by period key. Odds
+ * figures are taken over real prices only (1.01 placeholders excluded), the
+ * same rule the all-time figure follows. Drawdown goes through maxDrawdown()
+ * so the overview and Analys cannot disagree about what it means.
+ */
+export function computePeriodMetrics(
+  bets: BetLike[],
+  startingBankrollUnits: number,
+  now = Date.now()
+): Record<string, PeriodMetrics> {
+  const out: Record<string, PeriodMetrics> = {};
+  for (const p of CHART_PERIODS) {
+    const rows = filterByPeriod(bets, p.days, now);
+    const real = computeMetrics(rows.filter(hasRealOdds));
+    out[p.key] = {
+      ...computeMetrics(rows),
+      avgOdds: real.avgOdds,
+      medianOdds: real.medianOdds,
+      drawdown: maxDrawdown(bankrollSeries(rows, startingBankrollUnits)),
+    };
+  }
+  return out;
 }

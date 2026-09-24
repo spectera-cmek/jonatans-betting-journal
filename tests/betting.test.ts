@@ -230,3 +230,22 @@ describe("maxDrawdown", () => {
     expect(maxDrawdown([]).maxUnits).toBe(0);
   });
 });
+
+describe("computeMetrics medianOdds", () => {
+  it("is not dragged by one huge bet builder", () => {
+    const at = "2026-09-01T12:00:00Z";
+    const m = computeMetrics([
+      { odds: 1.9, stakeUnits: 1, outcome: "win", eventAt: at },
+      { odds: 2.1, stakeUnits: 1, outcome: "loss", eventAt: at },
+      { odds: 2.3, stakeUnits: 1, outcome: "loss", eventAt: at },
+      { odds: 1000, stakeUnits: 1, outcome: "loss", eventAt: at },
+      { odds: 50, stakeUnits: 1, outcome: "pending", eventAt: at },
+    ]);
+    expect(m.medianOdds).toBeCloseTo(2.2);
+    expect(m.avgOdds).toBeGreaterThan(250);
+  });
+
+  it("is null with nothing settled", () => {
+    expect(computeMetrics([]).medianOdds).toBeNull();
+  });
+});

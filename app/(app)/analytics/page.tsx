@@ -102,7 +102,7 @@ export default function AnalyticsPage() {
       <div className="ap-kpi-row">
         <StatTile label="Total P/L" value={uFmt(m?.profitUnits ?? null, true)} sub={`ROI ${pctFmt(m?.roiPct ?? null, true)}`} tone={(m?.profitUnits ?? 0) >= 0 ? "pos" : "neg"} icon={IC.coins} accent={(m?.profitUnits ?? 0) >= 0 ? "emerald" : "red"} />
         <StatTile label="Träffprocent" value={pctFmt(m?.winRatePct ?? null)} sub={`${m?.wins ?? 0}V · ${m?.losses ?? 0}F`} icon={IC.target} accent="amber" />
-        <StatTile label="Snittodds" value={(m?.avgOdds ?? 0).toFixed(2)} sub={`${m?.settledBets ?? 0} avgjorda`} icon={IC.scale} accent="pink" />
+        <StatTile label="Medianodds" value={m?.medianOdds != null ? m.medianOdds.toFixed(2) : "—"} sub={m?.avgOdds != null ? `snitt ${m.avgOdds.toFixed(2)}` : undefined} icon={IC.scale} accent="pink" />
         <StatTile label="Snittinsats" value={ins?.avgStakeUnits != null ? `${ins.avgStakeUnits.toFixed(2)}U` : "—"} sub={ins?.avgStakeUnits != null ? krFmt(ins.avgStakeUnits * unit) : "ingen data"} icon={IC.layers} accent="purple" />
       </div>
 

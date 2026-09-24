@@ -20,6 +20,7 @@ import { clvCoverage, dataQualitySummary, FABRICATED_TAG } from "@/lib/dataQuali
 import { tiltStatus } from "@/lib/tilt";
 import { weeklyReport, monthlyReport, type WeeklyBetInput } from "@/lib/weekly";
 import { getSessionUser, apiUnauthorized } from "@/lib/auth";
+import { computePeriodMetrics, lastCalendarMonths } from "@/lib/periods";
 
 export const dynamic = "force-dynamic";
 
@@ -53,13 +54,21 @@ const METRICS_SELECT = {
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return apiUnauthorized();
-  const [bets, settings, fabricated] = await Promise.all([
+  const [rows, settings, fabricatedRows] = await Promise.all([
     prisma.bet.findMany({ where: { userId: user.id }, select: METRICS_SELECT }),
     getSettings(user.id),
-    // Counted with its own query on purpose: `notes` is the bulk of a row and
-    // must stay out of METRICS_SELECT, but the fabricated-bet tag lives in it.
-    prisma.bet.count({ where: { userId: user.id, notes: { contains: FABRICATED_TAG } } }),
+    // Its own query on purpose: `notes` is the bulk of a row and must stay out
+    // of METRICS_SELECT, but the fabricated-bet tag lives in it.
+    prisma.bet.findMany({
+      where: { userId: user.id, notes: { contains: FABRICATED_TAG } },
+      select: { id: true },
+    }),
   ]);
+  // Fabricated demo bets never happened, so no number on any page may count
+  // them. They stay in the table only so Settings can say they are there.
+  const fabricated = fabricatedRows.length;
+  const fabricatedIds = new Set(fabricatedRows.map((r) => r.id));
+  const bets = fabricated ? rows.filter((b) => !fabricatedIds.has(b.id)) : rows;
 
   const betLikes: BetLike[] = bets.map((b) => ({
     odds: b.odds,
@@ -79,7 +88,7 @@ export async function GET() {
   const metrics = computeMetrics(betLikes);
   // Placeholder odds (1.01 = imported loss with unknown odds) are fake prices —
   // the displayed average is computed on real odds only. P/L is unaffected.
-  const avgOddsReal = computeMetrics(betLikes.filter(hasRealOdds)).avgOdds;
+  const { avgOdds: avgOddsReal, medianOdds: medianOddsReal } = computeMetrics(betLikes.filter(hasRealOdds));
   const bankroll = bankrollSeries(betLikes, settings.startingBankrollUnits);
 
   // One keyed projection, reused by every breakdown below.
@@ -106,9 +115,11 @@ export async function GET() {
   );
   const byBetType = breakdownBy(keyed, (b) => betTypeLabel((b as KeyedBet).betType));
 
-  // Monthly: all months (ascending) + last 12 for the overview chart.
+  // Monthly: all months (ascending) + the last 12 calendar months for the
+  // overview chart. Futures keyed on a 2027 eventAt used to take the chart's
+  // tail, so it showed half a year of real months and six empty future ones.
   const byMonth = monthlyAll(bets);
-  const monthly = byMonth.slice(-12);
+  const monthly = lastCalendarMonths(byMonth, 12, new Date());
 
   // Odds-band breakdown.
   const oddsBands = oddsBandBreakdown(betLikes);
@@ -133,6 +144,11 @@ export async function GET() {
   // Exposure on pending bets + worst historical peak-to-trough drop.
   const risk = openRisk(betLikes);
   const drawdown = maxDrawdown(bankroll);
+
+  // Every overview KPI per selectable period, from rows already in memory. The
+  // selector used to move only the curve and two of six cards, so one row could
+  // show a 30-day P/L next to an all-time ROI with nothing saying so.
+  const periodMetrics = computePeriodMetrics(betLikes, settings.startingBankrollUnits);
 
   // Tilt guard (stake budgets + chasing) and the weekly report.
   const tilt = tiltStatus(
@@ -196,10 +212,11 @@ export async function GET() {
 
   return NextResponse.json({
     username: user.username,
-    metrics: { ...metrics, avgOdds: avgOddsReal },
+    metrics: { ...metrics, avgOdds: avgOddsReal, medianOdds: medianOddsReal },
     insights,
     openRisk: risk,
     drawdown,
+    periodMetrics,
     tilt,
     weekly,
     monthlyReport: monthlyRep,
