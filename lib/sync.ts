@@ -246,7 +246,7 @@ export async function runGrade(): Promise<SyncResult> {
  * market isn't h2h/totals/spreads) and are left for the PDF import / manual W/L.
  */
 export async function runGradeByScores(
-  opts: { limit?: number; deadlineMs?: number } = {}
+  opts: { limit?: number; deadlineMs?: number; source?: "espn" | "cron" } = {}
 ): Promise<SyncResult> {
   const details: string[] = [];
   const limit = opts.limit ?? SYNC_GRADE_LIMIT;
@@ -320,7 +320,7 @@ export async function runGradeByScores(
       const result = await settleBet(prisma, {
         betId: bet.id,
         outcome,
-        source: "espn",
+        source: opts.source ?? "espn",
         reason: `${score.homeScore}-${score.awayScore} via ESPN`,
       });
       if (result.changed) graded += 1;

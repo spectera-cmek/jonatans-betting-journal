@@ -25,7 +25,8 @@ export const maxDuration = 60;
  */
 const JOBS: Record<string, () => Promise<SyncResult>> = {
   clv: () => runClosingNearKickoff(),
-  grade: () => runGradeByScores(),
+  // Tagged "cron" so /rattning can show what the night settled on its own.
+  grade: () => runGradeByScores({ source: "cron" }),
   closing: () => runClosing(),
 };
 

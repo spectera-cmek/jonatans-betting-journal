@@ -3333,3 +3333,51 @@ select.ap-input {
     text-align: left;
   }
 }
+
+/* Senast rättade (/rattning): the queue rows, grouped per day, with the
+   outcome pill and undo on the right. */
+.ap-log-day {
+  padding: 8px 14px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim2);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.ap-log-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 26px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.ap-log-event {
+  font-weight: 400;
+  color: var(--dim);
+}
+.ap-log-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ap-log-note {
+  color: var(--dim2);
+  font-size: 11.5px;
+}
+.ap-log > div.is-reverted b,
+.ap-log > div.is-reverted .ap-pill {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+@media (max-width: 560px) {
+  .ap-log > div {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .ap-log-right {
+    grid-column: 2;
+    justify-content: space-between;
+  }
+}

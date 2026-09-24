@@ -209,6 +209,26 @@ export interface BetSettlementDTO {
   revertedAt: string | null;
 }
 
+/** A settlement plus the bet it touched — the /rattning audit list. */
+export interface RecentSettlementDTO extends BetSettlementDTO {
+  /** True when DELETE /api/bets/:id/settle would revert exactly this row. */
+  undoable: boolean;
+  bet: {
+    id: string;
+    event: string;
+    selection: string;
+    sport: string | null;
+    league: string | null;
+    bookmaker: string | null;
+    betType: string;
+    odds: number;
+    stakeUnits: number;
+    eventAt: string | null;
+    outcome: string;
+    profitUnits: number | null;
+  };
+}
+
 export interface SettingsDTO {
   username?: string; // present on GET (who's logged in), not echoed by PUT
   unitValue: number;

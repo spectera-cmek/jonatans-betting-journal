@@ -122,6 +122,8 @@ motsäger sig själv, eller saknar den marknad du behöver.
    - Netto totalt
    - Kvar öppna med **orsak** (ej färdig / prop saknar box score / konflikt / future)
    - Inga öppna → "Inga öppna bets."
+   - Sista raden: `Granska/ångra: https://project-yp6b3.vercel.app/rattning#rattade`
+     — där listas varje rättning (nattjobb, agent, manuell) med orsak och Ångra-knapp.
 8. Mejla (om rutinens secrets finns):
    ```
    npx tsx scripts/agent/sendReport.ts --subject "Bettingjournal – rättning YYYY-MM-DD" --body-file .claude/tmp/report-YYYY-MM-DD.txt

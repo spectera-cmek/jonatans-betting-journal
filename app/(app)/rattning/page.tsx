@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 import { Topbar } from "@/components/Shell";
 import { Card, Empty } from "@/components/ui";
 import { StatTile } from "@/components/stats";
+import { SettlementLog } from "@/components/SettlementLog";
 import {
   GradingRow,
   READINESS_HINTS,
@@ -51,6 +52,8 @@ export default function RattningPage() {
   const [applying, setApplying] = useState(false);
   const [result, setResult] = useState<ApplyResult | null>(null);
   const [settling, setSettling] = useState<SettleTarget | null>(null);
+  // Bumped whenever the queue settles something, so the log below refetches.
+  const [logKey, setLogKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +140,7 @@ export default function RattningPage() {
       }
       setResult(total);
       setSelected(new Set());
+      setLogKey((k) => k + 1);
       // Dashboard, bets list and metrics all move when bets get settled.
       revalidateAll();
       await load();
@@ -306,6 +310,15 @@ export default function RattningPage() {
         )}
       </Card>
 
+      <SettlementLog
+        unit={unit}
+        refreshKey={logKey}
+        onUndone={() => {
+          revalidateAll();
+          load();
+        }}
+      />
+
       {settling && (
         <SettlementDialog
           bet={settling}
@@ -313,6 +326,7 @@ export default function RattningPage() {
           onChanged={() => {
             revalidateAll();
             load();
+            setLogKey((k) => k + 1);
           }}
         />
       )}

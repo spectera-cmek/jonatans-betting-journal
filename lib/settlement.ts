@@ -15,6 +15,7 @@ export type SettlementSource =
   | "manual"
   | "agent"
   | "espn"
+  | "cron" // ESPN grading run by the nightly Vercel cron, not a click
   | "odds_api"
   | "bet365"
   | "unibet"
