@@ -21,6 +21,7 @@ const SECONDARY_NAV = [
   { href: "/vm2026", label: "VM 2026", icon: IC.trophy },
   { href: "/insights", label: "Insikter", icon: IC.spark },
   { href: "/skott", label: "Skottmodell", icon: IC.bars },
+  { href: "/cs2", label: "CS2", icon: IC.gamepad },
   { href: "/fairodds", label: "Fair odds", icon: IC.percent },
   { href: "/verktyg", label: "Verktyg", icon: IC.wrench },
   { href: "/settings", label: "Inställningar", icon: IC.gear },
@@ -186,6 +187,7 @@ function secondaryDescription(href: string) {
   if (href === "/vm2026") return "Turneringsöversikt";
   if (href === "/insights") return "Mönster, form och edge";
   if (href === "/skott") return "Skott och hörnor";
+  if (href === "/cs2") return "Lag, spelare och props";
   if (href === "/fairodds") return "Räkna ut rättvist odds";
   if (href === "/verktyg") return "Hedge, cashout och Kelly";
   return "Konto och konfiguration";

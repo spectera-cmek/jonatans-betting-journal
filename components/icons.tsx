@@ -87,6 +87,7 @@ export const IC = {
   wrench: Wrench,
   menu: Ellipsis,
   activity: Activity,
+  gamepad: Gamepad2,
 
   // actions
   plus: Plus,
