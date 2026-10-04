@@ -236,6 +236,8 @@ metrics can be computed with `cs2:demos -- --confirm --reanalyze`.
 
 - Scraping and demo download run **locally only**. HLTV is behind Cloudflare and its
   terms do not allow scraping. Keep the default throttle (4–8 s per page) and page budget.
+- The scripts use `patchright` (Playwright without the automation traces Cloudflare
+  looks for) and your installed Chrome when available.
 - If the Cloudflare check keeps coming back, run with `--headed` and click it once. If
   it still loops, start your own Chrome with `--remote-debugging-port=9222` and set
   `CS2_CDP_URL=http://localhost:9222` (see `.env.local.example`).

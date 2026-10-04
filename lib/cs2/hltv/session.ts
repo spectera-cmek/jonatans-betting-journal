@@ -10,16 +10,19 @@
 //  3. Persistent webbläsarprofil (.cache/cs2/browser), så en Cloudflare-
 //     utmaning som klarats en gång (kör med --headed) gäller nästa körning.
 //
-// Cloudflare känner igen automatiserade webbläsare. Därför används den
-// installerade Chrome när den finns (inte Playwrights testbygge), utan
-// flaggan --enable-automation. Räcker inte det: starta en vanlig Chrome med
+// Cloudflare känner igen automatiserade webbläsare. Därför används
+// patchright när det finns (Playwright utan felsökningsspåren), den
+// installerade Chrome i stället för testbygget, och inga avlyssnade anrop.
+// Räcker inte det: starta en vanlig Chrome med
 // fjärrfelsökning och sätt CS2_CDP_URL — då kopplar skripten upp sig mot den
 // i stället för att starta en egen.
 
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { Browser, BrowserContext, Page } from "playwright";
+import type { Browser, BrowserContext, BrowserType, Page } from "playwright";
+
+type Chromium = BrowserType;
 import { HLTV_ORIGIN } from "./urls";
 import { isChallengePage } from "./parse";
 
@@ -84,7 +87,28 @@ export class HltvSession {
     this.maxPages = opts.maxPages ?? (Number(process.env.CS2_HLTV_MAX_PAGES) || 1500);
   }
 
-  private async openContext(chromium: typeof import("playwright").chromium): Promise<BrowserContext> {
+  /**
+   * patchright (en Playwright-variant som inte lämnar de spår Cloudflare
+   * letar efter) om den finns, annars vanliga Playwright.
+   */
+  private async loadChromium(): Promise<{ chromium: Chromium; stealth: boolean }> {
+    const tryImport = async (name: string): Promise<Chromium | null> => {
+      try {
+        return ((await import(name)) as { chromium: Chromium }).chromium;
+      } catch {
+        return null;
+      }
+    };
+    // Variabelnamn så att bundlare och typkontroll inte kräver paketet.
+    const stealthPkg = "patchright";
+    const stealth = await tryImport(stealthPkg);
+    if (stealth) return { chromium: stealth, stealth: true };
+    const plain = await tryImport("playwright");
+    if (plain) return { chromium: plain, stealth: false };
+    throw new Error("Varken patchright eller playwright är installerat. Kör: npm i");
+  }
+
+  private async openContext(chromium: Chromium, stealth: boolean): Promise<BrowserContext> {
     const cdp = process.env.CS2_CDP_URL;
     if (cdp) {
       // En Chrome som användaren själv startat — Cloudflare ser en vanlig webbläsare.
@@ -95,45 +119,37 @@ export class HltvSession {
     const profile = path.join(this.cacheDir, "browser");
     await fs.mkdir(profile, { recursive: true });
     const launch = (channel: string | undefined) =>
-      chromium.launchPersistentContext(profile, {
-        headless: !this.opts.headed,
-        channel,
-        acceptDownloads: true,
-        locale: "en-US",
-        viewport: { width: 1400, height: 900 },
-        ignoreDefaultArgs: ["--enable-automation"],
-        args: ["--disable-blink-features=AutomationControlled"],
-      });
+      chromium.launchPersistentContext(
+        profile,
+        stealth
+          ? // patchright sköter flaggorna själv; egna headers/viewport avslöjar mer än de döljer.
+            { headless: !this.opts.headed, channel, acceptDownloads: true, viewport: null }
+          : {
+              headless: !this.opts.headed,
+              channel,
+              acceptDownloads: true,
+              locale: "en-US",
+              viewport: { width: 1400, height: 900 },
+              ignoreDefaultArgs: ["--enable-automation"],
+              args: ["--disable-blink-features=AutomationControlled"],
+            }
+      );
     const wanted = process.env.CS2_BROWSER_CHANNEL;
     if (wanted) return launch(wanted === "chromium" ? undefined : wanted);
     try {
       return await launch("chrome");
     } catch {
-      console.log("  (Chrome hittades inte — använder Playwrights Chromium)");
+      console.log(`  (Chrome hittades inte — använder ${stealth ? "patchrights" : "Playwrights"} Chromium)`);
       return launch(undefined);
     }
   }
 
   private async ensurePage(): Promise<Page> {
     if (this.page) return this.page;
-    let chromium: typeof import("playwright").chromium;
-    try {
-      ({ chromium } = await import("playwright"));
-    } catch {
-      throw new Error("playwright saknas. Kör: npm i && npx playwright install chromium");
-    }
-    this.context = await this.openContext(chromium);
-    // Bilder och typsnitt från HLTV behövs inte för att läsa sidorna — spara
-    // bandbredd. Cloudflares egna resurser släpps alltid igenom, annars kan
-    // kontrollen inte bli klar.
-    await this.context.route("**/*", (route) => {
-      const req = route.request();
-      const type = req.resourceType();
-      const url = req.url();
-      const cloudflare = url.includes("/cdn-cgi/") || url.includes("cloudflare.com");
-      if (!cloudflare && (type === "image" || type === "font" || type === "media")) return route.abort();
-      return route.continue();
-    });
+    const { chromium, stealth } = await this.loadChromium();
+    console.log(`  (webbläsare: ${stealth ? "patchright" : "playwright"}${this.opts.headed ? ", synlig" : ""})`);
+    this.context = await this.openContext(chromium, stealth);
+    // Inga avlyssnade anrop (route): Cloudflare märker när de fångas upp.
     // I användarens egen Chrome: en egen flik, inte någon av de redan öppna.
     this.page = (!this.browser && this.context.pages()[0]) || (await this.context.newPage());
     this.page.setDefaultTimeout(60_000);
