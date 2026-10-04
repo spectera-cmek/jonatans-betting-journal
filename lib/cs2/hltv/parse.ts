@@ -664,9 +664,10 @@ export function summarizeRounds(rounds: RoundOutcome[]): {
  * nästan inga.
  */
 export function isChallengePage(html: string): boolean {
-  const marker =
-    /<title>\s*Just a moment|_cf_chl_opt|cf-browser-verification|id=["']challenge-form|cf-turnstile|challenges\.cloudflare\.com\/turnstile/i.test(html);
+  // Bara mellansidans egna tecken — Turnstile-rutor kan finnas på vanliga
+  // sidor också (inloggning, kommentarer).
+  const marker = /<title>\s*Just a moment|_cf_chl_opt|cf-browser-verification|id=["']challenge-form/i.test(html);
   if (!marker) return false;
-  const internalLinks = (html.match(/href=["']\/(?!cdn-cgi)[a-z]/gi) ?? []).length;
+  const internalLinks = (html.match(/href=["'](?:https?:\/\/(?:www\.)?hltv\.org)?\/(?!cdn-cgi)[a-z]/gi) ?? []).length;
   return internalLinks < 15;
 }

@@ -156,6 +156,19 @@ export class HltvSession {
     return this.page;
   }
 
+  /** Sparar sidan och skriver ut titel + adress — för felsökning av Cloudflare. */
+  private async saveDebug(page: Page, html: string, label: string): Promise<void> {
+    const title = await page.title().catch(() => "?");
+    const file = path.join(this.cacheDir, "debug", `${label}-${Date.now()}.html`);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, html, "utf8");
+    } catch {
+      // Felsökningen får aldrig stoppa körningen.
+    }
+    console.log(`    [${label}] titel="${title}" adress=${page.url()} → ${file}`);
+  }
+
   /** Sidans HTML, eller "" medan den byter sida (efter en klarad kontroll). */
   private async readPage(page: Page): Promise<string> {
     await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => undefined);
@@ -211,6 +224,7 @@ export class HltvSession {
       if (!html || isChallengePage(html)) {
         // Ge utmaningen tid att lösa sig själv (eller användaren att klicka).
         // Ingen omladdning under tiden — den skulle starta om kontrollen.
+        await this.saveDebug(page, html, "challenge");
         if (this.opts.headed) console.log("    Cloudflare-kontroll: klicka i rutan i Chrome-fönstret och vänta (upp till 3 min) …");
         else console.log("    Cloudflare-kontroll — väntar 20 s. Fastnar den: kör igen med --headed.");
         const deadline = Date.now() + (this.opts.headed ? 180_000 : 20_000);
@@ -219,14 +233,21 @@ export class HltvSession {
           html = await this.readPage(page);
         }
         if (!html || isChallengePage(html)) {
+          await this.saveDebug(page, html, "still-challenge");
           if (attempt === 2) throw new HltvBlockedError(url);
+          console.log(`    Kontrollen blev inte klar — försöker igen (${attempt + 2}/3).`);
           await sleep(15_000 * (attempt + 1));
           continue;
         }
+        // Klarad. Svarskoden från goto hör till kontrollsidan (ofta 403/503),
+        // inte till HLTV-sidan som nu visas — titta inte på den.
+        console.log(`    Kontrollen klarad: ${await page.title().catch(() => "?")}`);
+        break;
       }
       const status = res?.status() ?? 200;
       if (status === 404) throw new Error(`404 från HLTV: ${url}`);
       if (status >= 500 || status === 429) {
+        console.log(`    HLTV svarade ${status} — väntar och försöker igen.`);
         await sleep(10_000 * (attempt + 1));
         continue;
       }

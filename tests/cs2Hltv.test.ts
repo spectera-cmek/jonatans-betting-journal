@@ -250,6 +250,10 @@ describe("Cloudflare och trimning", () => {
     // Turnstile-rutan på mellansidan, utan riktigt innehåll runt.
     const turnstile = `<html><head><title>Just a moment...</title></head><body><div class="cf-turnstile"></div><script>window._cf_chl_opt={}</script></body></html>`;
     expect(isChallengePage(turnstile)).toBe(true);
+    // Absoluta HLTV-länkar räknas också, och en Turnstile-ruta i ett formulär gör inte sidan till en utmaning.
+    const absolute = Array.from({ length: 40 }, (_, i) => `<a href="https://www.hltv.org/team/${i}/x">t</a>`).join("");
+    expect(isChallengePage(`<html><title>Just a moment...</title><body>${absolute}</body></html>`)).toBe(false);
+    expect(isChallengePage(`<html><title>HLTV</title><body><div class="cf-turnstile"></div></body></html>`)).toBe(false);
   });
 
   const kinds: Array<[HltvPageKind, string, (h: string) => unknown]> = [
