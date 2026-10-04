@@ -8,7 +8,7 @@
 //  2. Långsam takt med slump (standard 4–8 s) och ett tak per körning. HLTV
 //     står bakom Cloudflare och spärrar IP:n vid för hög takt.
 //  3. Persistent webbläsarprofil (.cache/cs2/browser), så en Cloudflare-
-//     utmaning som klarats en gång (kör med --headed) gäller nästa körning.
+//     utmaning som klarats en gång (i det synliga fönstret) gäller nästa körning.
 //
 // Cloudflare känner igen automatiserade webbläsare. Därför används
 // patchright när det finns (Playwright utan felsökningsspåren), den
@@ -28,10 +28,20 @@ import { isChallengePage } from "./parse";
 
 export const CS2_CACHE_DIR = process.env.CS2_CACHE_DIR || ".cache/cs2";
 
+/**
+ * Synligt fönster som standard: Cloudflare släpper nästan aldrig igenom en
+ * osynlig webbläsare, och i ett synligt fönster kan man klicka i rutan.
+ * `--headless` (eller CS2_HEADLESS=1) för att köra osynligt ändå.
+ * `--headed` godtas fortfarande men behövs inte.
+ */
+export function headedFromArgs(argv: string[] = process.argv): boolean {
+  return !(argv.includes("--headless") || process.env.CS2_HEADLESS === "1");
+}
+
 export class HltvBlockedError extends Error {
   constructor(url: string) {
     super(
-      `HLTV svarade med en Cloudflare-utmaning på ${url}. Kör om med --headed och klicka igenom utmaningen i fönstret, eller vänta en stund.`
+      `HLTV svarade med en Cloudflare-utmaning på ${url}. Klicka i rutan i webbläsarfönstret när den visas (kör utan --headless), eller vänta en stund och kör igen.`
     );
   }
 }
@@ -241,7 +251,7 @@ export class HltvSession {
         // Ingen omladdning under tiden — den skulle starta om kontrollen.
         await this.saveDebug(page, html, "challenge");
         if (this.opts.headed) console.log("    Cloudflare-kontroll: klicka i rutan i webbläsarfönstret och vänta (upp till 3 min) …");
-        else console.log("    Cloudflare-kontroll — väntar 20 s. Fastnar den: kör igen med --headed.");
+        else console.log("    Cloudflare-kontroll — väntar 20 s. Fastnar den: kör igen utan --headless och klicka i rutan.");
         const deadline = Date.now() + (this.opts.headed ? 180_000 : 20_000);
         while (Date.now() < deadline && (!html || isChallengePage(html))) {
           await sleep(2000);

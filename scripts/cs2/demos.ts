@@ -18,7 +18,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 import { cs2Prisma as prisma, hasCs2Db } from "../../lib/cs2Db";
-import { HltvSession, CS2_CACHE_DIR } from "../../lib/cs2/hltv/session";
+import { HltvSession, CS2_CACHE_DIR, headedFromArgs } from "../../lib/cs2/hltv/session";
 import { loadDemoparser } from "../../lib/cs2/demo/parseDemo";
 import { processDemoFile } from "../../lib/cs2/demo/process";
 import { reanalyzeCached, runDemoQueue } from "../../lib/cs2/demo/run";
@@ -83,7 +83,7 @@ async function main() {
   console.log(`Läge: ${confirm ? "CONFIRM" : "DRY-RUN"} · ${opts.upcomingOnly ? "lag med kommande match" : "bevakade lag"} · ${opts.perTeamMap} kartor per lag och karta, ${opts.months} mån`);
 
   const api = confirm ? await loadDemoparser() : null;
-  const session = new HltvSession({ headed: process.argv.includes("--headed") });
+  const session = new HltvSession({ headed: headedFromArgs() });
   try {
     const s = await runDemoQueue(prisma, session, api, opts, console.log);
     console.log("");

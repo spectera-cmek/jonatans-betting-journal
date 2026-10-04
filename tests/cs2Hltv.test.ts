@@ -297,3 +297,18 @@ describe.skipIf(!existsSync(live("match.html")))("live-fixturer från HLTV", () 
     expect(s.rounds.length).toBe((s.team1Score ?? 0) + (s.team2Score ?? 0));
   });
 });
+
+describe("synligt fönster som standard", () => {
+  it("är synligt utom med --headless eller CS2_HEADLESS=1", async () => {
+    const { headedFromArgs } = await import("../lib/cs2/hltv/session");
+    const prev = process.env.CS2_HEADLESS;
+    delete process.env.CS2_HEADLESS;
+    expect(headedFromArgs(["node", "x"])).toBe(true);
+    expect(headedFromArgs(["node", "x", "--headed"])).toBe(true);
+    expect(headedFromArgs(["node", "x", "--confirm", "--headless"])).toBe(false);
+    process.env.CS2_HEADLESS = "1";
+    expect(headedFromArgs(["node", "x"])).toBe(false);
+    if (prev === undefined) delete process.env.CS2_HEADLESS;
+    else process.env.CS2_HEADLESS = prev;
+  });
+});

@@ -220,7 +220,6 @@ CS2 DB → profiles · gameplan · ratings/veto/map/kill models → /api/cs2 →
 ```bash
 npm run cs2:ingest                                 # dry-run: page budget only
 npm run cs2:ingest -- --confirm                    # top 50 (VRS), last 6 months
-npm run cs2:ingest -- --confirm --headed           # visible window if Cloudflare asks
 npm run cs2:demos -- --confirm --upcoming --max-gb 20
 npm run cs2:update                                 # daily: all of the above + settle lines
 npm run cs2:backtest -- --save                     # model track record → Facit tab
@@ -237,10 +236,12 @@ metrics can be computed with `cs2:demos -- --confirm --reanalyze`.
 - Scraping and demo download run **locally only**. HLTV is behind Cloudflare and its
   terms do not allow scraping. Keep the default throttle (4–8 s per page) and page budget.
 - The scripts use `patchright` (Playwright without the automation traces Cloudflare
-  looks for) and your installed Chrome when available.
-- If the Cloudflare check keeps coming back, run with `--headed` and click it once. If
-  it still loops, start your own Chrome with `--remote-debugging-port=9222` and set
-  `CS2_CDP_URL=http://localhost:9222` (see `.env.local.example`).
+  looks for) and your installed Chrome or Edge when available.
+- The scripts open a visible browser window by default, because Cloudflare rarely lets a
+  hidden one through. Click the check when it appears; `--headless` hides the window.
+- If the Cloudflare check keeps coming back after a click, start your own Chrome or Edge
+  with `--remote-debugging-port=9222` and set `CS2_CDP_URL=http://localhost:9222`
+  (see `.env.local.example`).
 - A series is ~0.3–1 GB of demos, so cap each run with `--max-gb`.
 - The model needs real history before its prices mean anything. Run `cs2:backtest`
   and check the Facit tab. Until the map-winner log-loss beats 0.693 (coin flip) on a

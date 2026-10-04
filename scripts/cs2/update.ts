@@ -12,7 +12,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 import { cs2Prisma as prisma, hasCs2Db } from "../../lib/cs2Db";
-import { HltvSession, CS2_CACHE_DIR } from "../../lib/cs2/hltv/session";
+import { HltvSession, CS2_CACHE_DIR, headedFromArgs } from "../../lib/cs2/hltv/session";
 import { runIngest } from "../../lib/cs2/pipeline";
 import { runDemoQueue } from "../../lib/cs2/demo/run";
 import { loadDemoparser } from "../../lib/cs2/demo/parseDemo";
@@ -30,7 +30,7 @@ async function main() {
     console.error("CS2_DATABASE_URL saknas i .env.local");
     process.exit(1);
   }
-  const session = new HltvSession({ headed: process.argv.includes("--headed"), maxPages: numberArg("--max-pages", 600) });
+  const session = new HltvSession({ headed: headedFromArgs(), maxPages: numberArg("--max-pages", 600) });
   try {
     console.log("1/4 HLTV");
     const s = await runIngest(
