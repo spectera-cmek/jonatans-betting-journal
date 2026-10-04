@@ -91,6 +91,30 @@ npm run import:bet365 -- --confirm --user <ditt-användarnamn>
 
 Ändringarna syns direkt på telefonen efter en omladdning.
 
+## Valfritt: CS2-modulen (/cs2)
+
+CS2-sidorna läser från en egen databas. Utan den visar `/cs2` bara hur den ställs in.
+Resten av appen påverkas inte.
+
+1. I Vercel: skapa en ny Neon-databas med **Custom Prefix `CS2`**. Det ger
+   `CS2_DATABASE_URL` och `CS2_DATABASE_URL_UNPOOLED`. Vill du använda samma databas
+   som appen går det också, men lägg då till `&schema=cs2` sist i båda strängarna och
+   sätt dem för hand. Utan eget schema raderar nästa steg appens tabeller.
+2. Lägg samma två rader i `.env` / `.env.local` på datorn och kör en gång:
+   ```bash
+   npm run db:push:cs2
+   ```
+3. Datan hämtas **från datorn**. HLTV skrapas med Playwright och demos tolkas lokalt:
+   ```bash
+   npm run cs2:capture                     # kontrollera parsrarna först
+   npm run cs2:ingest -- --confirm         # topp 50, senaste 6 månaderna
+   npm run cs2:demos -- --confirm --upcoming --max-gb 20
+   ```
+   Schemalägg `npm run cs2:update` en gång per dygn i Schemaläggaren i Windows.
+   Peka åtgärden på `npm.cmd`, med argumenten `run cs2:update` och projektmappen som
+   "Starta i".
+4. Skärmdumpsimporten av props använder samma `ANTHROPIC_API_KEY` som bet-importen.
+
 ---
 
 ## Felsökning

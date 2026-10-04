@@ -3394,6 +3394,22 @@ select.ap-input {
 .ap-cs2-tabs {
   margin-bottom: var(--sp-4);
 }
+/* Den globala mobilregeln döljer .ap-seg (dashboardens periodväljare) —
+   i CS2 är de flikar och vyval, så de måste synas. */
+.ap-cs2 .ap-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+@media (max-width: 560px) {
+  .ap-cs2 .ap-top {
+    flex-wrap: wrap;
+  }
+  .ap-cs2 .ap-top-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}
 .ap-cs2-controls {
   display: flex;
   flex-wrap: wrap;

@@ -8,8 +8,9 @@ import { IC } from "@/components/icons";
 import { api } from "@/lib/fetcher";
 import type { TeamListItem, UpcomingMatch } from "@/lib/cs2/queries";
 import { Cs2Empty, Cs2NoDb, dateLabel } from "@/components/cs2/common";
+import { FacitPanel } from "@/components/cs2/FacitPanel";
 
-type Tab = "matcher" | "lag" | "spelare";
+type Tab = "matcher" | "lag" | "spelare" | "facit";
 
 function MatchesTab() {
   const [data, setData] = useState<{ dbConfigured: boolean; matches?: UpcomingMatch[] } | null>(null);
@@ -192,10 +193,14 @@ export default function Cs2Page() {
         <button className={tab === "spelare" ? "is-active" : ""} onClick={() => setTab("spelare")}>
           Spelare
         </button>
+        <button className={tab === "facit" ? "is-active" : ""} onClick={() => setTab("facit")}>
+          Facit
+        </button>
       </div>
       {tab === "matcher" && <MatchesTab />}
       {tab === "lag" && <TeamsTab />}
       {tab === "spelare" && <PlayersTab />}
+      {tab === "facit" && <FacitPanel />}
     </div>
   );
 }

@@ -316,3 +316,14 @@ model Cs2Projection {
   @@index([modelVersion, createdAt])
   @@index([settledAt])
 }
+
+/// Ett backtest av modellen (scripts/cs2/backtest.ts). Visas i facit-panelen.
+model Cs2BacktestRun {
+  id           Int      @id @default(autoincrement())
+  modelVersion String
+  /// Se BacktestSummary i lib/cs2/backtest.ts.
+  summary      Json
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
