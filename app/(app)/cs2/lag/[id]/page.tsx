@@ -56,12 +56,13 @@ export default function Cs2TeamPage({ params }: { params: { id: string } }) {
         actions={<SampleWindowPicker maps={10} months={months} onChange={(w) => setMonths(w.months)} showMaps={false} />}
       />
 
-      <div className="ap-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", marginBottom: 16 }}>
+      <div className="ap-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))", marginBottom: 16 }}>
         <Card style={{ padding: 0 }}>
           <div className="ap-card-head">
             <span className="ap-card-title">Trupp</span>
           </div>
-          <div className="ap-table">
+          <div className="ap-cs2-scroll">
+          <div className="ap-table" style={{ minWidth: 440 }}>
             <div className="ap-thead" style={{ gridTemplateColumns: "1.3fr 1fr 50px 60px 60px 60px" }}>
               <span>Spelare</span>
               <span>Roll</span>
@@ -88,13 +89,15 @@ export default function Cs2TeamPage({ params }: { params: { id: string } }) {
             ))}
             {d.roster.length === 0 && <div className="ap-trow">Truppen är inte inläst än.</div>}
           </div>
+          </div>
         </Card>
 
         <Card style={{ padding: 0 }}>
           <div className="ap-card-head">
             <span className="ap-card-title">Matcher</span>
           </div>
-          <div className="ap-table">
+          <div className="ap-cs2-scroll">
+          <div className="ap-table" style={{ minWidth: 420 }}>
             {[...d.upcoming, ...d.recent].slice(0, 10).map((m) => (
               <Link key={m.id} href={`/cs2/match/${m.id}`} className="ap-trow" style={{ gridTemplateColumns: "84px 1fr 70px", color: "inherit", textDecoration: "none" }}>
                 <span className="ap-num" style={{ color: "var(--dim)" }}>
@@ -111,6 +114,7 @@ export default function Cs2TeamPage({ params }: { params: { id: string } }) {
                 </span>
               </Link>
             ))}
+          </div>
           </div>
         </Card>
       </div>

@@ -43,7 +43,8 @@ function MatchesTab() {
       )}
       {rows.length > 0 && (
         <Card style={{ padding: 0 }}>
-          <div className="ap-table">
+          <div className="ap-cs2-scroll">
+          <div className="ap-table" style={{ minWidth: 640 }}>
             <div className="ap-thead" style={{ gridTemplateColumns: "92px 1.6fr 1fr 70px 120px" }}>
               <span>Start</span>
               <span>Match</span>
@@ -78,6 +79,7 @@ function MatchesTab() {
                 </span>
               </Link>
             ))}
+          </div>
           </div>
         </Card>
       )}

@@ -122,7 +122,7 @@ export default function Cs2PlayerPage({ params }: { params: { id: string } }) {
         </div>
       </Card>
 
-      <div className="ap-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", marginBottom: 16 }}>
+      <div className="ap-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(330px, 100%), 1fr))", marginBottom: 16 }}>
         {(["ct", "t"] as const).map((side) => {
           const s = demoAll.find((x) => x.side === side);
           const f = s?.facts;
