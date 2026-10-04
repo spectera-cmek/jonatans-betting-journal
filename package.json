@@ -32,13 +32,14 @@
     "dev": "next dev",
     "build": "npm run generate && next build",
     "postinstall": "npm run generate",
-    "generate": "prisma generate && prisma generate --schema prisma/shots.prisma",
+    "generate": "prisma generate && prisma generate --schema prisma/shots.prisma && prisma generate --schema prisma/cs2.prisma",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:push": "prisma db push",
     "db:push:shots": "prisma db push --schema prisma/shots.prisma",
+    "db:push:cs2": "prisma db push --schema prisma/cs2.prisma",
     "db:migrate-users": "tsx scripts/migrateToMultiUser.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
@@ -61,7 +62,12 @@
     "shots:odds": "tsx scripts/shots/ingestOdds.ts",
     "shots:backtest": "tsx scripts/shots/backtest.ts",
     "shots:tune": "tsx scripts/shots/tune.ts",
-    "backfill:clv-scrape": "tsx scripts/scrapeClv.ts --confirm --since-days 90"
+    "backfill:clv-scrape": "tsx scripts/scrapeClv.ts --confirm --since-days 90",
+    "cs2:ingest": "tsx scripts/cs2/ingest.ts",
+    "cs2:demos": "tsx scripts/cs2/demos.ts",
+    "cs2:update": "tsx scripts/cs2/update.ts",
+    "cs2:backtest": "tsx scripts/cs2/backtest.ts",
+    "cs2:capture": "tsx scripts/cs2/capture.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -82,7 +88,10 @@
     "@types/nodemailer": "^8.0.1",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
+    "@types/yauzl": "^3.4.0",
     "autoprefixer": "10.4.20",
+    "cheerio": "^1.2.0",
+    "node-unrar-js": "^2.0.2",
     "nodemailer": "^9.0.3",
     "pdfjs-dist": "^4.0.379",
     "playwright": "^1.61.1",
@@ -92,6 +101,10 @@
     "tailwindcss": "3.4.15",
     "tsx": "^4.23.12",
     "typescript": "5.6.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "yauzl": "^3.4.0"
+  },
+  "optionalDependencies": {
+    "@laihoe/demoparser2": "^0.42.0"
   }
 }
