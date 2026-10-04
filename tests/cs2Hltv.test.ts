@@ -243,6 +243,15 @@ describe("Cloudflare och trimning", () => {
     expect(isChallengePage(read("match.html"))).toBe(false);
   });
 
+  it("tar inte en vanlig sida med Cloudflares skript för en utmaning", () => {
+    const links = Array.from({ length: 40 }, (_, i) => `<a href="/team/${i}/x">t${i}</a>`).join("");
+    const normal = `<html><head><title>CS2 Valve ranking | HLTV.org</title></head><body>${links}<script>(function(){var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';})();</script></body></html>`;
+    expect(isChallengePage(normal)).toBe(false);
+    // Turnstile-rutan på mellansidan, utan riktigt innehåll runt.
+    const turnstile = `<html><head><title>Just a moment...</title></head><body><div class="cf-turnstile"></div><script>window._cf_chl_opt={}</script></body></html>`;
+    expect(isChallengePage(turnstile)).toBe(true);
+  });
+
   const kinds: Array<[HltvPageKind, string, (h: string) => unknown]> = [
     ["ranking", "ranking.html", parseRanking],
     ["team", "team.html", parseTeamPage],

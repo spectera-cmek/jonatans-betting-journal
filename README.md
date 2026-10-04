@@ -236,6 +236,9 @@ metrics can be computed with `cs2:demos -- --confirm --reanalyze`.
 
 - Scraping and demo download run **locally only**. HLTV is behind Cloudflare and its
   terms do not allow scraping. Keep the default throttle (4–8 s per page) and page budget.
+- If the Cloudflare check keeps coming back, run with `--headed` and click it once. If
+  it still loops, start your own Chrome with `--remote-debugging-port=9222` and set
+  `CS2_CDP_URL=http://localhost:9222` (see `.env.local.example`).
 - A series is ~0.3–1 GB of demos, so cap each run with `--max-gb`.
 - The model needs real history before its prices mean anything. Run `cs2:backtest`
   and check the Facit tab. Until the map-winner log-loss beats 0.693 (coin flip) on a

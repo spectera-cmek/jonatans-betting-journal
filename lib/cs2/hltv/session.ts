@@ -9,11 +9,17 @@
 //     står bakom Cloudflare och spärrar IP:n vid för hög takt.
 //  3. Persistent webbläsarprofil (.cache/cs2/browser), så en Cloudflare-
 //     utmaning som klarats en gång (kör med --headed) gäller nästa körning.
+//
+// Cloudflare känner igen automatiserade webbläsare. Därför används den
+// installerade Chrome när den finns (inte Playwrights testbygge), utan
+// flaggan --enable-automation. Räcker inte det: starta en vanlig Chrome med
+// fjärrfelsökning och sätt CS2_CDP_URL — då kopplar skripten upp sig mot den
+// i stället för att starta en egen.
 
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { BrowserContext, Page } from "playwright";
+import type { Browser, BrowserContext, Page } from "playwright";
 import { HLTV_ORIGIN } from "./urls";
 import { isChallengePage } from "./parse";
 
@@ -70,10 +76,42 @@ export class HltvSession {
   private readonly throttleMs: number;
   private readonly maxPages: number;
 
+  private browser: Browser | null = null;
+
   constructor(private readonly opts: HltvSessionOptions = {}) {
     this.cacheDir = opts.cacheDir ?? CS2_CACHE_DIR;
     this.throttleMs = opts.throttleMs ?? (Number(process.env.CS2_HLTV_THROTTLE_MS) || 4000);
     this.maxPages = opts.maxPages ?? (Number(process.env.CS2_HLTV_MAX_PAGES) || 1500);
+  }
+
+  private async openContext(chromium: typeof import("playwright").chromium): Promise<BrowserContext> {
+    const cdp = process.env.CS2_CDP_URL;
+    if (cdp) {
+      // En Chrome som användaren själv startat — Cloudflare ser en vanlig webbläsare.
+      this.browser = await chromium.connectOverCDP(cdp);
+      console.log(`  (kopplad till Chrome på ${cdp})`);
+      return this.browser.contexts()[0] ?? (await this.browser.newContext());
+    }
+    const profile = path.join(this.cacheDir, "browser");
+    await fs.mkdir(profile, { recursive: true });
+    const launch = (channel: string | undefined) =>
+      chromium.launchPersistentContext(profile, {
+        headless: !this.opts.headed,
+        channel,
+        acceptDownloads: true,
+        locale: "en-US",
+        viewport: { width: 1400, height: 900 },
+        ignoreDefaultArgs: ["--enable-automation"],
+        args: ["--disable-blink-features=AutomationControlled"],
+      });
+    const wanted = process.env.CS2_BROWSER_CHANNEL;
+    if (wanted) return launch(wanted === "chromium" ? undefined : wanted);
+    try {
+      return await launch("chrome");
+    } catch {
+      console.log("  (Chrome hittades inte — använder Playwrights Chromium)");
+      return launch(undefined);
+    }
   }
 
   private async ensurePage(): Promise<Page> {
@@ -84,25 +122,32 @@ export class HltvSession {
     } catch {
       throw new Error("playwright saknas. Kör: npm i && npx playwright install chromium");
     }
-    const profile = path.join(this.cacheDir, "browser");
-    await fs.mkdir(profile, { recursive: true });
-    this.context = await chromium.launchPersistentContext(profile, {
-      headless: !this.opts.headed,
-      channel: process.env.CS2_BROWSER_CHANNEL || undefined,
-      acceptDownloads: true,
-      locale: "en-US",
-      viewport: { width: 1400, height: 900 },
-      args: ["--disable-blink-features=AutomationControlled"],
-    });
-    // Bilder och typsnitt behövs inte för att läsa sidorna — spara bandbredd.
+    this.context = await this.openContext(chromium);
+    // Bilder och typsnitt från HLTV behövs inte för att läsa sidorna — spara
+    // bandbredd. Cloudflares egna resurser släpps alltid igenom, annars kan
+    // kontrollen inte bli klar.
     await this.context.route("**/*", (route) => {
-      const type = route.request().resourceType();
-      if (type === "image" || type === "font" || type === "media") return route.abort();
+      const req = route.request();
+      const type = req.resourceType();
+      const url = req.url();
+      const cloudflare = url.includes("/cdn-cgi/") || url.includes("cloudflare.com");
+      if (!cloudflare && (type === "image" || type === "font" || type === "media")) return route.abort();
       return route.continue();
     });
-    this.page = this.context.pages()[0] ?? (await this.context.newPage());
+    // I användarens egen Chrome: en egen flik, inte någon av de redan öppna.
+    this.page = (!this.browser && this.context.pages()[0]) || (await this.context.newPage());
     this.page.setDefaultTimeout(60_000);
     return this.page;
+  }
+
+  /** Sidans HTML, eller "" medan den byter sida (efter en klarad kontroll). */
+  private async readPage(page: Page): Promise<string> {
+    await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => undefined);
+    try {
+      return await page.content();
+    } catch {
+      return "";
+    }
   }
 
   private async throttle(): Promise<void> {
@@ -142,18 +187,22 @@ export class HltvSession {
     const page = await this.ensurePage();
     const url = HLTV_ORIGIN + urlPath;
     let html = "";
+    console.log(`  → ${urlPath}`);
     for (let attempt = 0; attempt < 3; attempt++) {
       await this.throttle();
       const res = await page.goto(url, { waitUntil: "domcontentloaded" });
-      html = await page.content();
-      if (isChallengePage(html)) {
+      html = await this.readPage(page);
+      if (!html || isChallengePage(html)) {
         // Ge utmaningen tid att lösa sig själv (eller användaren att klicka).
-        const deadline = Date.now() + (this.opts.headed ? 90_000 : 20_000);
-        while (Date.now() < deadline && isChallengePage(html)) {
+        // Ingen omladdning under tiden — den skulle starta om kontrollen.
+        if (this.opts.headed) console.log("    Cloudflare-kontroll: klicka i rutan i Chrome-fönstret och vänta (upp till 3 min) …");
+        else console.log("    Cloudflare-kontroll — väntar 20 s. Fastnar den: kör igen med --headed.");
+        const deadline = Date.now() + (this.opts.headed ? 180_000 : 20_000);
+        while (Date.now() < deadline && (!html || isChallengePage(html))) {
           await sleep(2000);
-          html = await page.content();
+          html = await this.readPage(page);
         }
-        if (isChallengePage(html)) {
+        if (!html || isChallengePage(html)) {
           if (attempt === 2) throw new HltvBlockedError(url);
           await sleep(15_000 * (attempt + 1));
           continue;
@@ -199,7 +248,14 @@ export class HltvSession {
   }
 
   async close(): Promise<void> {
-    await this.context?.close().catch(() => undefined);
+    if (this.browser) {
+      // Användarens egen Chrome stängs inte — bara vår flik och kopplingen.
+      await this.page?.close().catch(() => undefined);
+      await this.browser.close().catch(() => undefined);
+    } else {
+      await this.context?.close().catch(() => undefined);
+    }
+    this.browser = null;
     this.context = null;
     this.page = null;
   }
