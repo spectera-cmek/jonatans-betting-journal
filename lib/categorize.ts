@@ -202,7 +202,7 @@ const MATCH_CATEGORY = new Set([
 // Stat categories that can be player, team or match — disambiguated from the text.
 const AMBIG_STAT = new Set([
   "Skott", "Skott på mål", "Mål", "Hörnor", "Kort & fouls", "Räddningar",
-  "Ess", "Frisparkar", "Offside", "Utvisningar",
+  "Ess", "Frisparkar", "Offside", "Utvisningar", "Kills", "Headshots",
 ]);
 
 /**

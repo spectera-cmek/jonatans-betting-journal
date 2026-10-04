@@ -19,6 +19,8 @@ jobs:
       DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci"
       SHOTS_DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
       SHOTS_DATABASE_URL_UNPOOLED: "postgresql://ci:ci@localhost:5432/ci"
+      CS2_DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+      CS2_DATABASE_URL_UNPOOLED: "postgresql://ci:ci@localhost:5432/ci"
 
     steps:
       - uses: actions/checkout@v4

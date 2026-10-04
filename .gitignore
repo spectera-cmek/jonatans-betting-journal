@@ -54,3 +54,6 @@ _tmp_*
 
 # Handgjorda databasbackuper
 *.db.bak-*
+
+# CS2-modulen: HLTV-sidcache, webbläsarprofil, demos och råfakta (kan bli många GB)
+/.cache/

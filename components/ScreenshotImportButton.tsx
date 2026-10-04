@@ -12,7 +12,7 @@ import type { ParsedBetWithDupe } from "@/lib/betslipExtract";
 const MAX_EDGE = 1600;
 const JPEG_QUALITY = 0.85;
 
-async function fileToJpegBase64(file: File): Promise<string> {
+export async function fileToJpegBase64(file: File): Promise<string> {
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file);

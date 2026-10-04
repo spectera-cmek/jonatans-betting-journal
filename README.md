@@ -95,6 +95,12 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run backfill:clv-scrape` | 90d OddsPortal CLV backfill (`--confirm`) |
 | `npm run import:bet365` | Import / sync bets from a bet365 statement PDF |
 | `npm run import:unibet` | Import bets from a Unibet transaction-history CSV |
+| `npm run db:push:cs2` | Create / sync the CS2 schema (`CS2_DATABASE_URL`) |
+| `npm run cs2:capture` | Check the HLTV parsers against live pages (local) |
+| `npm run cs2:ingest` | HLTV → teams, rosters, matches, vetoes, map stats (local, `--confirm`) |
+| `npm run cs2:demos` | Download + parse HLTV demos → demo facts (local, `--confirm`) |
+| `npm run cs2:update` | Daily run: ingest + demos for upcoming matches + settle lines |
+| `npm run cs2:backtest` | Walk-forward backtest of the CS2 model (`--save` → Facit tab) |
 
 ## 🗂️ Pages
 
@@ -107,6 +113,7 @@ immediately — replace them with your own from the **Logga bet** button.
 | **Insikter** (Insights) | Streaks, best/worst days, averages |
 | **VM 2026** | Tournament hub for bets tagged with the World Cup league |
 | **Skottmodell** (Shot model) | Team-level shots & corners model, own database |
+| **CS2** | Teams, players, per-map gameplan (T/CT), match pricing and props angles, own database |
 | **Fair odds** | De-vig, combo, correlation and Poisson calculators |
 | **Verktyg** (Tools) | Cashout, hedge, Asian-handicap matrix, bonus value, Kelly |
 | **Inställningar** (Settings) | Unit value, currency, starting bankroll, sync |
@@ -180,6 +187,61 @@ need manual closing odds.
 | Spread / Handicap | ✅ (whole lines can push) |
 | Other (BTTS, props, …) | ✍️ Settle manually |
 
+## 🎮 CS2 module (`/cs2`)
+
+A separate CS2 database (teams, players, matches, vetoes, per-map scoreboards and
+facts parsed from demos), a per-map **GAMEPLAN** view per team and side, and a model
+that prices map/match winner, handicaps, total rounds, total maps, pistol, first kill
+and player kills/headshots against the lines you enter (by hand or from a screenshot).
+
+**Data flow**
+
+```
+HLTV (Playwright, your PC) → HTML cache (.cache/cs2/html) → parsers → CS2 DB
+HLTV demos (.rar/.zip)     → demoparser2 → facts (.cache/cs2/demos/norm) → CS2 DB
+CS2 DB → profiles · gameplan · ratings/veto/map/kill models → /api/cs2 → /cs2
+```
+
+**Setup (once)**
+
+1. Set `CS2_DATABASE_URL` / `CS2_DATABASE_URL_UNPOOLED` in `.env.local` (see
+   `.env.local.example`). Recommended: a separate Neon database (Custom Prefix
+   `CS2` in Vercel). The same endpoint with `&schema=cs2` also works. **Never** point
+   it at the bet log's schema: `db push` drops tables that are not in
+   `prisma/cs2.prisma`.
+2. `npm run db:push:cs2`
+3. `npm i playwright && npx playwright install chromium` (as for the OddsPortal scraper).
+   `npm i @laihoe/demoparser2` for demos (an optional native module).
+4. `npm run cs2:capture`: checks every parser against live HLTV pages and prints a
+   report. Any missing field means a selector needs fixing before you ingest.
+
+**Running it**
+
+```bash
+npm run cs2:ingest                                 # dry-run: page budget only
+npm run cs2:ingest -- --confirm                    # top 50 (VRS), last 6 months
+npm run cs2:ingest -- --confirm --headed           # visible window if Cloudflare asks
+npm run cs2:demos -- --confirm --upcoming --max-gb 20
+npm run cs2:update                                 # daily: all of the above + settle lines
+npm run cs2:backtest -- --save                     # model track record → Facit tab
+```
+
+Schedule `npm run cs2:update` once a day in Windows Task Scheduler. Every HLTV page is
+cached on disk, so an interrupted run resumes where it stopped. A parser fix is applied
+with `npm run cs2:ingest -- --confirm --reparse`, which needs no network. Demo archives
+are deleted after parsing. The compressed facts stay in `.cache/cs2/demos/norm`, so new
+metrics can be computed with `cs2:demos -- --confirm --reanalyze`.
+
+**Caveats**
+
+- Scraping and demo download run **locally only**. HLTV is behind Cloudflare and its
+  terms do not allow scraping. Keep the default throttle (4–8 s per page) and page budget.
+- A series is ~0.3–1 GB of demos, so cap each run with `--max-gb`.
+- The model needs real history before its prices mean anything. Run `cs2:backtest`
+  and check the Facit tab. Until the map-winner log-loss beats 0.693 (coin flip) on a
+  few hundred maps, treat the edges as hints, not bets.
+- Books differ on overtime and on maps 1–2 rules. Set "inkl. OT" per line.
+
 ## 🧪 Testing
 
 ```bash
@@ -196,8 +258,10 @@ app/            Pages + API routes (App Router)
 components/     UI components and charts
 lib/            betting.ts (math) · grading.ts (auto-settle) · bet365.ts (PDF parse)
                 oddsApi.ts · sync.ts · insights.ts
-prisma/         schema.prisma + seed.ts (demo data)
-scripts/        sync.ts · importBet365.ts (CLI tools)
+lib/cs2/        CS2 module: hltv/ (scrape + parse) · demo/ (demo pipeline) ·
+                ratings · veto · mapModel · killModel · pricing · backtest · settle
+prisma/         schema.prisma + seed.ts (demo data) · shots.prisma · cs2.prisma
+scripts/        sync.ts · importBet365.ts (CLI tools) · cs2/ (CS2 scripts)
 tests/          Unit tests for the math and grading
 ```
 
@@ -287,6 +351,26 @@ refresh i UI fungerar fortfarande.
 
 Fungerar lokalt (`next dev`) — inte på serverless. Props/udda marknader kan kräva
 manuell closing.
+
+### 🎮 CS2 (`/cs2`)
+
+En egen CS2-databas med lag, spelare, matcher, veton, scoreboards per karta och fakta
+ur demos. Varje lag får en GAMEPLAN per karta och sida (T/CT), med docens rubriker.
+En modell prissätter de linjer du lägger in för hand eller via skärmdump.
+
+1. Skapa en egen Neon-databas i Vercel med Custom Prefix `CS2`, och lägg
+   `CS2_DATABASE_URL` och `CS2_DATABASE_URL_UNPOOLED` i `.env.local`. Peka **aldrig**
+   på speljournalens databas.
+2. `npm run db:push:cs2`
+3. `npm run cs2:capture`: kontrollerar parsrarna mot riktiga HLTV-sidor.
+4. `npm run cs2:ingest -- --confirm` och sedan
+   `npm run cs2:demos -- --confirm --upcoming --max-gb 20`.
+5. Schemalägg `npm run cs2:update` en gång per dygn.
+6. `npm run cs2:backtest -- --save` visar modellens facit under fliken Facit.
+
+Skrapning och demos körs bara lokalt. HLTV:s villkor tillåter inte skrapning, så behåll
+den låga takten. Lita inte på modellens edge förrän backtestet slår myntkast på några
+hundra kartor.
 
 ### ⚠️ Friskrivning
 

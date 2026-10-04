@@ -1,0 +1,329 @@
+// CS2-databasen — egen databas, skild från bet-loggen och skottmodellen.
+//
+// Referensdata: lag, spelare, matcher, kartor och det som tolkats ur
+// demofilerna. Allt delas av alla konton och har ingen relation till Bet.
+// Källa: HLTV (skrapas lokalt, se lib/cs2/hltv) och HLTV:s demos (tolkas
+// lokalt med demoparser2, se lib/cs2/demo).
+//
+// Generera:  npm run generate
+// Migrera:   npm run db:push:cs2
+//
+// OBS: kör aldrig db:push:cs2 mot samma databas som DATABASE_URL eller
+// SHOTS_DATABASE_URL — `db push` tar bort tabeller som inte finns i schemat.
+// Samma Neon-endpoint går bra med ett eget Postgres-schema: `…?schema=cs2`.
+generator cs2Client {
+  provider = "prisma-client-js"
+  // Egen output — annars skriver den över huvudschemats klient.
+  output   = "../node_modules/.prisma/cs2-client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("CS2_DATABASE_URL")
+  directUrl = env("CS2_DATABASE_URL_UNPOOLED")
+}
+
+/// Ett lag. Id är HLTV:s team-id, så samma lag aldrig dubbleras mellan
+/// ranking, matchsidor och resultatlistor.
+model Cs2Team {
+  id              Int       @id
+  name            String
+  slug            String?
+  country         String?
+  /// Placering i den ranking ingest använde (VRS som standard).
+  rank            Int?
+  rankPoints      Float?
+  /// true = bevakas löpande (topp N). false = hämtat vid behov, när laget
+  /// mött ett bevakat lag.
+  tracked         Boolean   @default(false)
+  rosterFetchedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  players Cs2Player[]
+
+  @@index([tracked, rank])
+}
+
+/// En spelare, med nuvarande lag. Historiken bor i Cs2PlayerMap — där står
+/// laget spelaren faktiskt spelade för på kartan.
+model Cs2Player {
+  id          Int       @id
+  nickname    String
+  realName    String?
+  country     String?
+  teamId      Int?
+  team        Cs2Team?  @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  /// awper | entry | lurker | anchor | support | rifler — härledd ur demos.
+  roleDerived String?
+  /// Egen rättning av rollen. Vinner över den härledda.
+  roleManual  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([teamId])
+  @@index([nickname])
+}
+
+/// En serie (bo1/bo3/bo5). Lagnamnen lagras också, så en match kan visas
+/// innan laget finns i Cs2Team.
+model Cs2Match {
+  id            Int       @id
+  slug          String?
+  eventId       Int?
+  eventName     String?
+  startAt       DateTime
+  format        String // bo1 | bo3 | bo5
+  team1Id       Int?
+  team2Id       Int?
+  team1Name     String
+  team2Name     String
+  score1        Int?
+  score2        Int?
+  winnerId      Int?
+  status        String // scheduled | live | finished | cancelled
+  lan           Boolean?
+  /// Rå vetotext, en rad per steg. Tolkad till Cs2Veto.
+  vetoText      String?
+  /// Relativ länk, /download/demo/<id>.
+  demoUrl       String?
+  /// none | done | failed | unavailable
+  demoStatus    String    @default("none")
+  demoError     String?
+  pageFetchedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  vetoes      Cs2Veto[]
+  maps        Cs2Map[]
+  lines       Cs2Line[]
+  projections Cs2Projection[]
+
+  @@index([status, startAt])
+  @@index([team1Id, startAt])
+  @@index([team2Id, startAt])
+}
+
+model Cs2Veto {
+  id       Int      @id @default(autoincrement())
+  matchId  Int
+  match    Cs2Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  step     Int
+  /// null för decidern ("was left over").
+  teamId   Int?
+  teamName String?
+  action   String // ban | pick | decider
+  mapName  String
+
+  @@unique([matchId, step])
+  @@index([teamId])
+  @@index([mapName])
+}
+
+/// En spelad karta. Id är HLTV:s mapstatsid.
+model Cs2Map {
+  id             Int       @id
+  matchId        Int
+  match          Cs2Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  mapNumber      Int
+  /// Kanonisk nyckel: ancient | anubis | dust2 | inferno | mirage | nuke | train …
+  mapName        String
+  playedAt       DateTime
+  pickedById     Int?
+  team1Id        Int
+  team2Id        Int
+  team1Rounds    Int
+  team2Rounds    Int
+  /// Sidan team1 började på: ct | t
+  team1StartSide String?
+  team1CtRounds  Int?
+  team1TRounds   Int?
+  team2CtRounds  Int?
+  team2TRounds   Int?
+  otRounds       Int       @default(0)
+  winnerId       Int?
+  /// [{ n, winner: "team1" | "team2", side: "ct" | "t", reason }] — se
+  /// lib/cs2/types.ts (RoundOutcome). Null tills mapstats hämtats.
+  roundHistory   Json?
+  statsFetchedAt DateTime?
+  demoParsedAt   DateTime?
+  /// Version av demoanalysen raden byggdes med. Höjs den kan gamla kartor
+  /// räknas om ur råfaktacachen utan ny nedladdning.
+  demoVersion    Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  playerStats Cs2PlayerMap[]
+  demoPlayers Cs2DemoPlayerMap[]
+  demoTeams   Cs2DemoTeamMap[]
+
+  @@index([team1Id, playedAt])
+  @@index([team2Id, playedAt])
+  @@index([mapName, playedAt])
+  @@index([matchId])
+}
+
+/// HLTV:s scoreboard för en spelare på en karta. side = all | ct | t.
+/// Det här är siffrorna böckerna normalt rättar kills-props mot.
+model Cs2PlayerMap {
+  id            Int    @id @default(autoincrement())
+  mapId         Int
+  map           Cs2Map @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  playerId      Int
+  nickname      String
+  teamId        Int
+  side          String
+  kills         Int
+  headshots     Int?
+  assists       Int?
+  flashAssists  Int?
+  deaths        Int
+  kast          Float?
+  adr           Float?
+  rating        Float?
+  /// HLTV visar bara differensen öppningskills − öppningsdöd.
+  openingDiff   Int?
+
+  @@unique([mapId, playerId, side])
+  @@index([playerId])
+  @@index([teamId])
+}
+
+/// Demofakta per spelare, karta och sida (ct | t). `facts` följer
+/// PlayerSideFacts i lib/cs2/demo/types.ts.
+model Cs2DemoPlayerMap {
+  id       Int    @id @default(autoincrement())
+  mapId    Int
+  map      Cs2Map @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  steamId  String
+  /// HLTV-id när länken är känd.
+  playerId Int?
+  name     String
+  teamId   Int?
+  side     String
+  facts    Json
+
+  @@unique([mapId, steamId, side])
+  @@index([playerId])
+}
+
+/// Demofakta per lag, karta och sida — underlaget för docens sektioner.
+/// `facts` följer TeamSideFacts i lib/cs2/demo/types.ts.
+model Cs2DemoTeamMap {
+  id     Int    @id @default(autoincrement())
+  mapId  Int
+  map    Cs2Map @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  teamId Int
+  side   String
+  facts  Json
+
+  @@unique([mapId, teamId, side])
+  @@index([teamId])
+}
+
+/// Koordinat → callout per karta. Byggs ur spelarnas positioner
+/// (`last_place_name`) och används för att namnge granaters landningsplats.
+model Cs2PlaceGrid {
+  mapName   String   @id
+  cellSize  Int
+  /// { "cx:cy:cz": "BombsiteA", … }
+  cells     Json
+  samples   Int
+  updatedAt DateTime @updatedAt
+}
+
+/// steamId i demon → HLTV-spelare.
+model Cs2SteamLink {
+  steamId   String   @id
+  playerId  Int
+  /// auto = matchat på nick i kartans lineup, manual = rättat för hand.
+  source    String   @default("auto")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([playerId])
+}
+
+/// Egna anteckningar till en sektion i gameplan-vyn (docens fritext).
+model Cs2GameplanNote {
+  id        Int      @id @default(autoincrement())
+  teamId    Int
+  mapName   String
+  side      String // t | ct
+  section   String
+  text      String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, mapName, side, section])
+}
+
+/// En bokmakarlinje som matats in för hand eller tolkats ur en skärmdump.
+model Cs2Line {
+  id         Int      @id @default(autoincrement())
+  matchId    Int
+  match      Cs2Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  /// Se Cs2Market i lib/cs2/types.ts.
+  market     String
+  /// map1 | map2 | map3 | maps12 | match
+  scope      String
+  playerId   Int?
+  teamId     Int?
+  line       Float?
+  /// Över / lag 1 / ja.
+  overOdds   Float?
+  /// Under / lag 2 / nej.
+  underOdds  Float?
+  /// Räknas övertid in? Böckerna skiljer sig.
+  includesOt Boolean  @default(true)
+  bookmaker  String?
+  source     String   @default("manual")
+  createdBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([matchId])
+}
+
+/// Modellens pris när en linje prissattes. `actual` fylls i när kartan är
+/// spelad — utan det går modellen inte att kalibrera i efterhand.
+model Cs2Projection {
+  id           Int       @id @default(autoincrement())
+  matchId      Int
+  match        Cs2Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  lineId       Int?
+  market       String
+  scope        String
+  playerId     Int?
+  teamId       Int?
+  line         Float?
+  includesOt   Boolean   @default(true)
+  mean         Float?
+  /// P(över / lag 1 / ja) ur modellen.
+  pModel       Float
+  pMarket      Float?
+  pFinal       Float
+  fairOver     Float?
+  fairUnder    Float?
+  bestSide     String?
+  bestOdds     Float?
+  edgePct      Float?
+  modelVersion String
+  actual       Float?
+  settledAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([matchId])
+  @@index([modelVersion, createdAt])
+  @@index([settledAt])
+}
+
+/// Ett backtest av modellen (scripts/cs2/backtest.ts). Visas i facit-panelen.
+model Cs2BacktestRun {
+  id           Int      @id @default(autoincrement())
+  modelVersion String
+  /// Se BacktestSummary i lib/cs2/backtest.ts.
+  summary      Json
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}

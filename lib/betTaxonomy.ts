@@ -77,7 +77,8 @@ export const MARKET_CATEGORIES_BY_SPORT: Record<string, readonly string[]> = {
     "Home runs", "Walks", "Övrigt",
   ],
   Esports: [
-    "Matchvinnare", "Handikapp", "Totalt", "Kills", "Rundor", "Kartor", "Övrigt",
+    "Matchvinnare", "Handikapp", "Totalt", "Kills", "Headshots", "Rundor", "Kartor",
+    "Pistolrunda", "Första kill", "Övrigt",
   ],
   Golf: ["Matchvinnare", "Handikapp", "Slutplacering", "Specialspel", "Övrigt"],
   Other: ["Matchvinnare", "Totalt", "180s", "Game", "Rond", "Utmärkelse", "Specialspel", "Övrigt"],
@@ -124,6 +125,12 @@ const EXACT_CATEGORY_ALIASES: Record<string, string> = {
   "batter walks": "Walks",
   "walks": "Walks",
   "kills": "Kills",
+  "headshots": "Headshots",
+  "pistol round": "Pistolrunda",
+  "pistolrunda": "Pistolrunda",
+  "first kill": "Första kill",
+  "first blood": "Första kill",
+  "första kill": "Första kill",
   "game": "Game",
   "vunna game": "Game",
   "rondgrupp": "Rond",
@@ -169,6 +176,10 @@ export function normalizeMarketCategory(raw: string | null | undefined): string 
   if (has(/\bhits?\b|\bträffar\b/)) return "Träffar";
   if (has(/batter walks?|\bwalks?\b/)) return "Walks";
   if (has(/home runs?|\bhr\b/)) return "Home runs";
+  // CS2: headshots och första kill före kills — "headshot kills" är headshots.
+  if (has(/headshot|\bhs\b/)) return "Headshots";
+  if (has(/first (kill|blood)|första (kill|blod)|opening kill/)) return "Första kill";
+  if (has(/pistol ?round|pistolrunda/)) return "Pistolrunda";
   if (has(/\bkills?\b/)) return "Kills";
   if (has(/\b180s?\b/)) return "180s";
   if (has(/slutplacering|finishing position|top \d+/)) return "Slutplacering";
