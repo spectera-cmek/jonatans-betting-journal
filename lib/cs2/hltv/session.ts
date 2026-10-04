@@ -136,12 +136,22 @@ export class HltvSession {
       );
     const wanted = process.env.CS2_BROWSER_CHANNEL;
     if (wanted) return launch(wanted === "chromium" ? undefined : wanted);
-    try {
-      return await launch("chrome");
-    } catch {
-      console.log(`  (Chrome hittades inte — använder ${stealth ? "patchrights" : "Playwrights"} Chromium)`);
-      return launch(undefined);
+    // En riktig, installerad webbläsare först: Chrome, sedan Edge (finns på
+    // alla Windows-datorer). Testbygget sist — det är lättast att känna igen.
+    for (const [channel, name] of [
+      ["chrome", "Chrome"],
+      ["msedge", "Edge"],
+    ] as const) {
+      try {
+        const ctx = await launch(channel);
+        console.log(`  (använder ${name})`);
+        return ctx;
+      } catch {
+        // Inte installerad — prova nästa.
+      }
     }
+    console.log(`  (varken Chrome eller Edge hittades — använder ${stealth ? "patchrights" : "Playwrights"} Chromium)`);
+    return launch(undefined);
   }
 
   private async ensurePage(): Promise<Page> {
@@ -219,7 +229,12 @@ export class HltvSession {
     console.log(`  → ${urlPath}`);
     for (let attempt = 0; attempt < 3; attempt++) {
       await this.throttle();
-      const res = await page.goto(url, { waitUntil: "domcontentloaded" });
+      const res = await page.goto(url, { waitUntil: "domcontentloaded" }).catch((err: unknown) => {
+        if (String(err).includes("has been closed")) {
+          throw new Error("Webbläsarfönstret stängdes. Låt det vara öppet tills skriptet är klart — det stänger det själv.");
+        }
+        throw err;
+      });
       html = await this.readPage(page);
       if (!html || isChallengePage(html)) {
         // Ge utmaningen tid att lösa sig själv (eller användaren att klicka).
