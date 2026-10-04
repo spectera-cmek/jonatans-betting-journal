@@ -214,8 +214,8 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   const dists: Record<string, MapDistribution> = {};
   for (const map of new Set([...pool, ...veto.paths.flatMap((p) => p.maps)])) {
     dists[map] = mapDistribution({
-      pCtA: roundWinProb(r, map, team1.id, team2.id),
-      pCtB: roundWinProb(r, map, team2.id, team1.id),
+      pCtA: roundWinProb(r, map, team1.id, team2.id, team1.id),
+      pCtB: roundWinProb(r, map, team2.id, team1.id, team1.id),
       pistolCtA: pistolCt1,
       pistolCtB: pistolCt2,
       conv2: r.conv2,
@@ -606,8 +606,8 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
         pTeam1Win: d.pAWin,
         expRounds: d.expRounds,
         pOt: d.pOt,
-        team1Ct: roundWinProb(ctx.global.ratings, map, ctx.team1.id, ctx.team2.id),
-        team2Ct: roundWinProb(ctx.global.ratings, map, ctx.team2.id, ctx.team1.id),
+        team1Ct: roundWinProb(ctx.global.ratings, map, ctx.team1.id, ctx.team2.id, ctx.team1.id),
+        team2Ct: roundWinProb(ctx.global.ratings, map, ctx.team2.id, ctx.team1.id, ctx.team1.id),
         roundsLine: medianLine(d.roundsPmf),
         sample1: ratingSample(ctx.global.ratings, ctx.team1.id, map),
         sample2: ratingSample(ctx.global.ratings, ctx.team2.id, map),

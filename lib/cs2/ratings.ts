@@ -2,12 +2,20 @@
 // karta och sida mot ett visst motstånd.
 //
 //   logit P(CT-laget X vinner en runda mot T-laget Y på karta m)
-//     = μ_m + ct[X,m] − t[Y,m]
+//     = μ_m + ct[X,m] − t[Y,m] ± h
+//
+// h är HLTV:s lag 1-fördel (+h när lag 1 är CT, −h när lag 1 är T). Lag 1
+// vinner klart oftare än modellen utan h tror — troligen för att HLTV
+// listar den högre seedade laget först — och ordningen är känd före matchen.
 //
 // μ_m är kartans CT-fördel. ct/t är lagets förmåga på sidan, krympta i två
 // nivåer: kartans värde mot lagets värde över alla kartor (τ_map), och det
 // mot noll (τ_team). Ett lag med tre kartor Anubis får alltså mest sin
 // allmänna nivå där, inte tre kartors brus.
+//
+// Rundorna i en karta är inte oberoende (ekonomi, momentum), så varje
+// runda räknas som 1/roundDispersion observation. Annars tror modellen att
+// en karta säger mer än den gör, och lag med få kartor får extremvärden.
 //
 // Observationer vägs med halveringstid (standard 120 dagar). Pistolrundor
 // modelleras separat — de är nästan slumpmässiga och skulle annars spä ut
@@ -23,6 +31,8 @@ export interface SideObs {
   ctWins: number;
   rounds: number;
   w: number;
+  /** HLTV:s lag 1 i matchen (för lag 1-fördelen). */
+  team1?: number;
 }
 
 export interface PistolObs {
@@ -37,7 +47,15 @@ export interface RatingOptions {
   tauMap?: number;
   tauPistol?: number;
   iterations?: number;
+  /** Hur många rundor som motsvarar en oberoende observation (≥ 1). */
+  roundDispersion?: number;
+  /** Prior-sd för lag 1-fördelen h. 0 = ingen lag 1-fördel. */
+  tauTeam1?: number;
 }
+
+/** Standard, valda med walk-forward-backtest på HLTV-data (se backtest.ts). */
+export const DEFAULT_ROUND_DISPERSION = 4;
+export const DEFAULT_TAU_TEAM1 = 0.2;
 
 export interface RatingModel {
   mapBias: Record<string, number>;
@@ -46,6 +64,8 @@ export interface RatingModel {
   t: Record<string, number>;
   pistolBias: number;
   pistol: Record<number, number>;
+  /** Lag 1-fördel per runda på logit-skala (h). */
+  team1Bias: number;
   /** P(pistolvinnaren vinner runda 2) och P(vinnaren av 1+2 vinner runda 3). */
   conv2: number;
   conv3: number;
@@ -85,8 +105,9 @@ export function sideObsFromMap(
   const { team1CtRounds: a, team1TRounds: b, team2CtRounds: c, team2TRounds: d } = m;
   if (a == null || b == null || c == null || d == null) return [];
   const out: SideObs[] = [];
-  if (a + d > 0) out.push({ map: m.mapName, ctTeam: m.team1Id, tTeam: m.team2Id, ctWins: a, rounds: a + d, w });
-  if (c + b > 0) out.push({ map: m.mapName, ctTeam: m.team2Id, tTeam: m.team1Id, ctWins: c, rounds: c + b, w });
+  const team1 = m.team1Id;
+  if (a + d > 0) out.push({ map: m.mapName, ctTeam: m.team1Id, tTeam: m.team2Id, ctWins: a, rounds: a + d, w, team1 });
+  if (c + b > 0) out.push({ map: m.mapName, ctTeam: m.team2Id, tTeam: m.team1Id, ctWins: c, rounds: c + b, w, team1 });
   return out;
 }
 
@@ -150,6 +171,11 @@ export function fitRatings(
   const iterations = opts.iterations ?? 60;
   const vTeam = tauTeam * tauTeam;
   const vMap = tauMap * tauMap;
+  const tauTeam1 = opts.tauTeam1 ?? DEFAULT_TAU_TEAM1;
+  const vTeam1 = tauTeam1 * tauTeam1;
+  // Rundorna vägs ner en gång för alla, så att resten av anpassningen är oförändrad.
+  const disp = Math.max(1, opts.roundDispersion ?? DEFAULT_ROUND_DISPERSION);
+  if (disp !== 1) obs = obs.map((o) => ({ ...o, w: o.w / disp }));
 
   const mapBias: Record<string, number> = {};
   const ct: Record<string, number> = {};
@@ -165,7 +191,9 @@ export function fitRatings(
     rounds[`${o.tTeam}|${o.map}`] = (rounds[`${o.tTeam}|${o.map}`] ?? 0) + o.rounds;
   }
 
-  const eta = (o: SideObs) => mapBias[o.map] + ct[`${o.ctTeam}|${o.map}`] - t[`${o.tTeam}|${o.map}`];
+  let team1Bias = 0;
+  const eta = (o: SideObs) =>
+    mapBias[o.map] + ct[`${o.ctTeam}|${o.map}`] - t[`${o.tTeam}|${o.map}`] + team1Bias * team1Sign(o.ctTeam, o.tTeam, o.team1);
 
   for (let it = 0; it < iterations; it++) {
     // Kartornas CT-fördel (svag prior mot 0).
@@ -177,6 +205,20 @@ export function fitRatings(
       hm[o.map] = (hm[o.map] ?? 0) + o.w * o.rounds * p * (1 - p);
     }
     for (const m of Object.keys(mapBias)) mapBias[m] += (gm[m] - mapBias[m]) / (hm[m] + 1);
+
+    // Lag 1-fördelen, krympt mot 0 med prior-sd tauTeam1.
+    if (vTeam1 > 0) {
+      let gh = 0,
+        hh = 0;
+      for (const o of obs) {
+        const sgn = team1Sign(o.ctTeam, o.tTeam, o.team1);
+        if (sgn === 0) continue;
+        const p = sigmoid(eta(o));
+        gh += sgn * o.w * (o.ctWins - o.rounds * p);
+        hh += o.w * o.rounds * p * (1 - p);
+      }
+      team1Bias += (gh - team1Bias / vTeam1) / (hh + 1 / vTeam1);
+    }
 
     // Lagets förmåga per karta och sida, med prior = lagets allmänna nivå.
     const g: Record<string, number> = {};
@@ -252,16 +294,30 @@ export function fitRatings(
     }
   }
 
-  return { mapBias, ct, t, pistolBias, pistol, conv2: conv.conv2, conv3: conv.conv3, rounds };
+  return { mapBias, ct, t, pistolBias, pistol, team1Bias, conv2: conv.conv2, conv3: conv.conv3, rounds };
+}
+
+/** +1 om CT-laget är lag 1, −1 om T-laget är det, 0 om okänt. */
+function team1Sign(ctTeam: number, tTeam: number, team1: number | undefined): number {
+  if (team1 == null) return 0;
+  return ctTeam === team1 ? 1 : tTeam === team1 ? -1 : 0;
 }
 
 function ability(store: Record<string, number>, team: number, map: string): number {
   return store[`${team}|${map}`] ?? store[`${team}|*`] ?? 0;
 }
 
-/** P(CT-laget vinner en köprunda mot T-laget på kartan). */
-export function roundWinProb(model: RatingModel, map: string, ctTeam: number, tTeam: number): number {
-  return sigmoid((model.mapBias[map] ?? 0) + ability(model.ct, ctTeam, map) - ability(model.t, tTeam, map));
+/**
+ * P(CT-laget vinner en köprunda mot T-laget på kartan). `team1` = HLTV:s
+ * lag 1 i matchen, för lag 1-fördelen (utelämnad = ingen fördel).
+ */
+export function roundWinProb(model: RatingModel, map: string, ctTeam: number, tTeam: number, team1?: number): number {
+  return sigmoid(
+    (model.mapBias[map] ?? 0) +
+      ability(model.ct, ctTeam, map) -
+      ability(model.t, tTeam, map) +
+      (model.team1Bias ?? 0) * team1Sign(ctTeam, tTeam, team1)
+  );
 }
 
 /** P(CT-laget vinner pistolrundan). */

@@ -31,8 +31,8 @@ describe("ratings", () => {
   it("bygger observationer ur kartor och rundhistorik", () => {
     const m = { mapName: "nuke", team1Id: 1, team2Id: 2, team1CtRounds: 8, team1TRounds: 5, team2CtRounds: 7, team2TRounds: 2 };
     expect(sideObsFromMap(m, 1)).toEqual([
-      { map: "nuke", ctTeam: 1, tTeam: 2, ctWins: 8, rounds: 10, w: 1 },
-      { map: "nuke", ctTeam: 2, tTeam: 1, ctWins: 7, rounds: 12, w: 1 },
+      { map: "nuke", ctTeam: 1, tTeam: 2, ctWins: 8, rounds: 10, w: 1, team1: 1 },
+      { map: "nuke", ctTeam: 2, tTeam: 1, ctWins: 7, rounds: 12, w: 1, team1: 1 },
     ]);
     expect(sideObsFromMap({ ...m, team1CtRounds: null }, 1)).toEqual([]);
     const hist: RoundOutcome[] = [
@@ -110,6 +110,36 @@ describe("ratings återskapar en känd liga", () => {
     const p = pistolWinProb(model, 1, 2);
     expect(p).toBeGreaterThan(0.65);
     expect(p).toBeLessThan(0.78);
+  });
+
+  it("hittar lag 1-fördelen när lag 1 vinner oftare", () => {
+    // Sex jämbördiga lag; den som listas som lag 1 vinner 58 % av rundorna.
+    const obs = [];
+    for (let rep = 0; rep < 10; rep++)
+      for (let a = 1; a <= 6; a++)
+        for (let b = 1; b <= 6; b++) {
+          if (a === b) continue;
+          // a är lag 1: 7 av 12 som CT, 7 av 12 som T (motståndaren vinner 5 som CT).
+          obs.push({ map: "mirage", ctTeam: a, tTeam: b, ctWins: 7, rounds: 12, w: 1, team1: a });
+          obs.push({ map: "mirage", ctTeam: b, tTeam: a, ctWins: 5, rounds: 12, w: 1, team1: a });
+        }
+    const model = fitRatings(obs, [], { conv2: 0.8, conv3: 0.7 });
+    expect(model.team1Bias).toBeGreaterThan(0.2);
+    expect(roundWinProb(model, "mirage", 1, 2, 1)).toBeGreaterThan(roundWinProb(model, "mirage", 1, 2, 2));
+    // Utan känt lag 1: ingen fördel åt något håll.
+    const off = fitRatings(obs, [], { conv2: 0.8, conv3: 0.7 }, { tauTeam1: 0 });
+    expect(off.team1Bias).toBe(0);
+  });
+
+  it("rundspridningen gör få kartor mindre övertygande", () => {
+    // Lag 1 vann 10 av 12 CT-rundor i en enda karta.
+    const obs = [{ map: "nuke", ctTeam: 1, tTeam: 2, ctWins: 10, rounds: 12, w: 1 }];
+    const naive = fitRatings(obs, [], { conv2: 0.8, conv3: 0.7 }, { roundDispersion: 1 });
+    const damped = fitRatings(obs, [], { conv2: 0.8, conv3: 0.7 }, { roundDispersion: 4 });
+    const pNaive = roundWinProb(naive, "nuke", 1, 2);
+    const pDamped = roundWinProb(damped, "nuke", 1, 2);
+    expect(pNaive).toBeGreaterThan(pDamped);
+    expect(pDamped).toBeGreaterThan(0.5);
   });
 });
 
@@ -351,7 +381,7 @@ describe("matchup utan databas", () => {
       }))
     ),
     global: {
-      ratings: { mapBias: {}, ct: {}, t: {}, pistolBias: 0, pistol: {}, conv2: 0.8, conv3: 0.7, rounds: {} },
+      ratings: { mapBias: {}, ct: {}, t: {}, pistolBias: 0, pistol: {}, team1Bias: 0, conv2: 0.8, conv3: 0.7, rounds: {} },
       league: DEFAULT_LEAGUE_PRIOR,
       leagueRounds: 21.5,
       trainedMaps: 100,
