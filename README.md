@@ -205,9 +205,10 @@ CS2 DB → profiles · gameplan · ratings/veto/map/kill models → /api/cs2 →
 **Setup (once)**
 
 1. Set `CS2_DATABASE_URL` / `CS2_DATABASE_URL_UNPOOLED` in `.env.local` (see
-   `.env.local.example`). A separate Neon database, or the same endpoint with
-   `&schema=cs2`. **Never** point it at the bet log's schema: `db push` drops tables
-   that are not in `prisma/cs2.prisma`.
+   `.env.local.example`). Recommended: a separate Neon database (Custom Prefix
+   `CS2` in Vercel). The same endpoint with `&schema=cs2` also works. **Never** point
+   it at the bet log's schema: `db push` drops tables that are not in
+   `prisma/cs2.prisma`.
 2. `npm run db:push:cs2`
 3. `npm i playwright && npx playwright install chromium` (as for the OddsPortal scraper).
    `npm i @laihoe/demoparser2` for demos (an optional native module).
@@ -357,9 +358,9 @@ En egen CS2-databas med lag, spelare, matcher, veton, scoreboards per karta och 
 ur demos. Varje lag får en GAMEPLAN per karta och sida (T/CT), med docens rubriker.
 En modell prissätter de linjer du lägger in för hand eller via skärmdump.
 
-1. Sätt `CS2_DATABASE_URL` och `CS2_DATABASE_URL_UNPOOLED` i `.env.local`. Det kan vara
-   en egen Neon-databas eller samma endpoint med `&schema=cs2`. Peka **aldrig** på
-   speljournalens schema.
+1. Skapa en egen Neon-databas i Vercel med Custom Prefix `CS2`, och lägg
+   `CS2_DATABASE_URL` och `CS2_DATABASE_URL_UNPOOLED` i `.env.local`. Peka **aldrig**
+   på speljournalens databas.
 2. `npm run db:push:cs2`
 3. `npm run cs2:capture`: kontrollerar parsrarna mot riktiga HLTV-sidor.
 4. `npm run cs2:ingest -- --confirm` och sedan
