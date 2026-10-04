@@ -93,6 +93,7 @@
     "cheerio": "^1.2.0",
     "node-unrar-js": "^2.0.2",
     "nodemailer": "^9.0.3",
+    "patchright": "^1.63.0",
     "pdfjs-dist": "^4.0.379",
     "playwright": "^1.61.1",
     "postcss": "^8.5.26",

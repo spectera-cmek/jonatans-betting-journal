@@ -9,7 +9,7 @@
 //     kalibrerad modell träffar ~50 % — plus skattad dispersion φ
 // Resultatet sparas i Cs2BacktestRun och visas i facit-panelen.
 
-import { fitDispersion, lineProbs } from "../shotModel";
+import { lineProbs } from "../shotModel";
 import { DEFAULT_KILL_PHI, DEFAULT_LEAGUE_PRIOR, killPmfForMap, killRates, medianLine, pmfMean, type LeagueKillPrior } from "./killModel";
 import { flipDistribution, mapDistribution, DEFAULT_SIGMA, type MapDistribution } from "./mapModel";
 import {
@@ -53,7 +53,18 @@ export interface BacktestSummary {
   to: string | null;
   mapWinner: { n: number; logLoss: number; brier: number; baselineLogLoss: number; accuracy: number; calibration: CalibrationBucket[] };
   rounds: { n: number; meanError: number; mae: number; overLine: number; logLoss: number; calibration: CalibrationBucket[] };
-  kills: { n: number; meanError: number; mae: number; overRate: number; logLoss: number; phi: number | null; calibration: CalibrationBucket[] };
+  kills: {
+    n: number;
+    meanError: number;
+    mae: number;
+    overRate: number;
+    logLoss: number;
+    /** Medel av −log P(faktiskt antal kills) — mäter hela fördelningen, inte bara mitten. Lägre = bättre. */
+    logScore: number;
+    /** Det φ i PHI_GRID som gav bäst log-score (null vid för få spelare). */
+    phi: number | null;
+    calibration: CalibrationBucket[];
+  };
   notes: string[];
 }
 
@@ -77,6 +88,9 @@ export function calibrationBuckets(samples: Array<{ p: number; y: number }>, buc
   }
   return out;
 }
+
+/** φ-kandidater för kills-modellen. Bäst log-score vinner. */
+export const PHI_GRID = [15, 25, 40, 60, 100] as const;
 
 export interface BacktestOptions {
   /** Hur ofta ratings anpassas om (dagar). */
@@ -103,7 +117,11 @@ export function runBacktest(mapsIn: BacktestMap[], opts: BacktestOptions = {}): 
   const roundErr: number[] = [];
   const killS: Array<{ p: number; y: number }> = [];
   const killErr: number[] = [];
-  const disp: Array<{ observed: number; expected: number }> = [];
+  const killScore: number[] = [];
+  // −log P(faktiskt antal) per φ-kandidat. φ skattas på hela fördelningen:
+  // ett momentmått mot medelvärdet tar osäkerheten i rundor och kartutfall
+  // (som modellen redan blandar in) för extra spridning och blir för lågt.
+  const phiScore = new Map<number, number>(PHI_GRID.map((f) => [f, 0]));
 
   // Löpande HLTV-summor per spelare och karta (bara data före aktuell karta).
   const acc = new Map<number, Record<string, { kills: number; headshots: number | null; roundsWon: number; roundsLost: number }>>();
@@ -149,7 +167,11 @@ export function runBacktest(mapsIn: BacktestMap[], opts: BacktestOptions = {}): 
         const mean = pmfMean(pmf);
         killS.push({ p: lineProbs(pmf, line).pOverNoPush, y: p.kills > line ? 1 : 0 });
         killErr.push(mean - p.kills);
-        disp.push({ observed: p.kills, expected: mean });
+        killScore.push(-Math.log(Math.max(pmf[p.kills] ?? 0, 1e-12)));
+        for (const f of PHI_GRID) {
+          const alt = f === phi ? pmf : killPmfForMap(rates[m.mapName] ?? rates.all, d, true, f);
+          phiScore.set(f, phiScore.get(f)! - Math.log(Math.max(alt[p.kills] ?? 0, 1e-12)));
+        }
       }
     }
     // Lägg till kartan i historiken först efter att den prissatts.
@@ -168,7 +190,11 @@ export function runBacktest(mapsIn: BacktestMap[], opts: BacktestOptions = {}): 
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
   const notes: string[] = [];
   if (maps.length < warmup + 50) notes.push(`Bara ${Math.max(0, maps.length - warmup)} kartor efter uppvärmningen — för lite för säkra slutsatser.`);
-  const phiHat = disp.length > 100 ? fitDispersion(disp) : null;
+  let phiHat: number | null = null;
+  if (killS.length > 100) {
+    let best = Infinity;
+    for (const [f, score] of phiScore) if (score < best) [best, phiHat] = [score, f];
+  }
   const winLL = mean(winS.map((s) => ll(s.p, s.y)));
   if (winS.length > 50 && winLL >= Math.log(2)) notes.push("Kartvinnarmodellen slår inte myntkast på log-loss — lita inte på karthandikapp och matchvinnare.");
 
@@ -198,7 +224,8 @@ export function runBacktest(mapsIn: BacktestMap[], opts: BacktestOptions = {}): 
       mae: mean(killErr.map(Math.abs)),
       overRate: mean(killS.map((s) => s.y)),
       logLoss: mean(killS.map((s) => ll(s.p, s.y))),
-      phi: phiHat != null && Number.isFinite(phiHat) ? phiHat : null,
+      logScore: mean(killScore),
+      phi: phiHat,
       calibration: calibrationBuckets(killS),
     },
     notes,

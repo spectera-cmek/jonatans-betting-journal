@@ -6,7 +6,7 @@
  *   npm run cs2:ingest -- --confirm            # topp 50 (VRS), 6 månader
  *   npm run cs2:ingest -- --confirm --top 30 --months 3
  *   npm run cs2:ingest -- --confirm --team 9565   # ett extra lag (HLTV-id)
- *   npm run cs2:ingest -- --confirm --headed      # synligt fönster (Cloudflare)
+ *   npm run cs2:ingest -- --confirm --headless    # osynligt (standard är synligt fönster för Cloudflare)
  *   npm run cs2:ingest -- --confirm --reparse     # tolka om cachen, inget nätverk
  *
  * Varje sida cachas i .cache/cs2/html, så en avbruten körning fortsätter där
@@ -16,7 +16,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 import { cs2Prisma as prisma, hasCs2Db } from "../../lib/cs2Db";
-import { HltvSession } from "../../lib/cs2/hltv/session";
+import { HltvSession, headedFromArgs } from "../../lib/cs2/hltv/session";
 import { runIngest, runReparse } from "../../lib/cs2/pipeline";
 
 function argValue(flag: string): string | undefined {
@@ -49,7 +49,7 @@ async function main() {
   const confirm = process.argv.includes("--confirm");
   const reparse = process.argv.includes("--reparse");
   const session = new HltvSession({
-    headed: process.argv.includes("--headed"),
+    headed: headedFromArgs(),
     maxPages: numberArg("--max-pages", Number(process.env.CS2_HLTV_MAX_PAGES) || 1500),
     offline: reparse,
   });

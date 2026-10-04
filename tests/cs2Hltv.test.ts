@@ -243,6 +243,19 @@ describe("Cloudflare och trimning", () => {
     expect(isChallengePage(read("match.html"))).toBe(false);
   });
 
+  it("tar inte en vanlig sida med Cloudflares skript för en utmaning", () => {
+    const links = Array.from({ length: 40 }, (_, i) => `<a href="/team/${i}/x">t${i}</a>`).join("");
+    const normal = `<html><head><title>CS2 Valve ranking | HLTV.org</title></head><body>${links}<script>(function(){var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';})();</script></body></html>`;
+    expect(isChallengePage(normal)).toBe(false);
+    // Turnstile-rutan på mellansidan, utan riktigt innehåll runt.
+    const turnstile = `<html><head><title>Just a moment...</title></head><body><div class="cf-turnstile"></div><script>window._cf_chl_opt={}</script></body></html>`;
+    expect(isChallengePage(turnstile)).toBe(true);
+    // Absoluta HLTV-länkar räknas också, och en Turnstile-ruta i ett formulär gör inte sidan till en utmaning.
+    const absolute = Array.from({ length: 40 }, (_, i) => `<a href="https://www.hltv.org/team/${i}/x">t</a>`).join("");
+    expect(isChallengePage(`<html><title>Just a moment...</title><body>${absolute}</body></html>`)).toBe(false);
+    expect(isChallengePage(`<html><title>HLTV</title><body><div class="cf-turnstile"></div></body></html>`)).toBe(false);
+  });
+
   const kinds: Array<[HltvPageKind, string, (h: string) => unknown]> = [
     ["ranking", "ranking.html", parseRanking],
     ["team", "team.html", parseTeamPage],
@@ -282,5 +295,20 @@ describe.skipIf(!existsSync(live("match.html")))("live-fixturer från HLTV", () 
     const s = parseMapStats(readFileSync(live("mapstats.html"), "utf8"));
     expect(s.players.filter((p) => p.side === "all")).toHaveLength(10);
     expect(s.rounds.length).toBe((s.team1Score ?? 0) + (s.team2Score ?? 0));
+  });
+});
+
+describe("synligt fönster som standard", () => {
+  it("är synligt utom med --headless eller CS2_HEADLESS=1", async () => {
+    const { headedFromArgs } = await import("../lib/cs2/hltv/session");
+    const prev = process.env.CS2_HEADLESS;
+    delete process.env.CS2_HEADLESS;
+    expect(headedFromArgs(["node", "x"])).toBe(true);
+    expect(headedFromArgs(["node", "x", "--headed"])).toBe(true);
+    expect(headedFromArgs(["node", "x", "--confirm", "--headless"])).toBe(false);
+    process.env.CS2_HEADLESS = "1";
+    expect(headedFromArgs(["node", "x"])).toBe(false);
+    if (prev === undefined) delete process.env.CS2_HEADLESS;
+    else process.env.CS2_HEADLESS = prev;
   });
 });

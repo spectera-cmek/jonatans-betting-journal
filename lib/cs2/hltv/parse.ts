@@ -655,6 +655,19 @@ export function summarizeRounds(rounds: RoundOutcome[]): {
 }
 
 /** Är sidan en Cloudflare-utmaning i stället för riktigt innehåll? */
+/**
+ * Cloudflares mellansida ("Just a moment…"), inte en riktig HLTV-sida.
+ *
+ * `challenge-platform` räcker inte som tecken: Cloudflare lägger in ett
+ * skript med det namnet på vanliga sidor också. En riktig HLTV-sida har
+ * dessutom massor av interna länkar (meny, lag, matcher); mellansidan har
+ * nästan inga.
+ */
 export function isChallengePage(html: string): boolean {
-  return /cf-browser-verification|challenge-platform|cf_chl_|Just a moment\.\.\./i.test(html) && !/hltv\.org\/team|profile-team-name|mapholder|ranked-team|result-con|stats-table/i.test(html);
+  // Bara mellansidans egna tecken — Turnstile-rutor kan finnas på vanliga
+  // sidor också (inloggning, kommentarer).
+  const marker = /<title>\s*Just a moment|_cf_chl_opt|cf-browser-verification|id=["']challenge-form/i.test(html);
+  if (!marker) return false;
+  const internalLinks = (html.match(/href=["'](?:https?:\/\/(?:www\.)?hltv\.org)?\/(?!cdn-cgi)[a-z]/gi) ?? []).length;
+  return internalLinks < 15;
 }
