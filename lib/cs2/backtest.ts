@@ -21,6 +21,7 @@ import {
   sideObsFromMap,
   timeWeight,
   type RatingModel,
+  type RatingOptions,
 } from "./ratings";
 
 export interface BacktestMap {
@@ -101,6 +102,8 @@ export interface BacktestOptions {
   league?: LeagueKillPrior;
   phi?: number;
   sigma?: number;
+  /** Skickas vidare till fitRatings (rundspridning, lag 1-fördel …). */
+  rating?: RatingOptions;
 }
 
 export function runBacktest(mapsIn: BacktestMap[], opts: BacktestOptions = {}): BacktestSummary {
@@ -138,13 +141,13 @@ export function runBacktest(mapsIn: BacktestMap[], opts: BacktestOptions = {}): 
           past.flatMap((x) => sideObsFromMap(x, timeWeight(x.playedAt, m.playedAt))),
           past.flatMap((x) => pistolObsFromMap(x, timeWeight(x.playedAt, m.playedAt))),
           conversionRates(past.map((x) => x.roundHistory)),
-          { iterations: 40 }
+          { iterations: 40, ...opts.rating }
         );
         fittedAt = t;
       }
       const dist: MapDistribution = mapDistribution({
-        pCtA: roundWinProb(model, m.mapName, m.team1Id, m.team2Id),
-        pCtB: roundWinProb(model, m.mapName, m.team2Id, m.team1Id),
+        pCtA: roundWinProb(model, m.mapName, m.team1Id, m.team2Id, m.team1Id),
+        pCtB: roundWinProb(model, m.mapName, m.team2Id, m.team1Id, m.team1Id),
         pistolCtA: pistolWinProb(model, m.team1Id, m.team2Id),
         pistolCtB: pistolWinProb(model, m.team2Id, m.team1Id),
         conv2: model.conv2,
