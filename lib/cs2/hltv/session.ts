@@ -240,7 +240,7 @@ export class HltvSession {
         // Ge utmaningen tid att lösa sig själv (eller användaren att klicka).
         // Ingen omladdning under tiden — den skulle starta om kontrollen.
         await this.saveDebug(page, html, "challenge");
-        if (this.opts.headed) console.log("    Cloudflare-kontroll: klicka i rutan i Chrome-fönstret och vänta (upp till 3 min) …");
+        if (this.opts.headed) console.log("    Cloudflare-kontroll: klicka i rutan i webbläsarfönstret och vänta (upp till 3 min) …");
         else console.log("    Cloudflare-kontroll — väntar 20 s. Fastnar den: kör igen med --headed.");
         const deadline = Date.now() + (this.opts.headed ? 180_000 : 20_000);
         while (Date.now() < deadline && (!html || isChallengePage(html))) {
