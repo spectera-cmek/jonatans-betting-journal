@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calibrationBuckets, runBacktest, type BacktestMap } from "../lib/cs2/backtest";
+import { calibrationBuckets, PHI_GRID, runBacktest, type BacktestMap } from "../lib/cs2/backtest";
 import { overResult, projectionActual, summarizeFacit, type FacitRow } from "../lib/cs2/settle";
 import type { RoundOutcome } from "../lib/cs2/types";
 
@@ -266,6 +266,12 @@ describe("runBacktest", () => {
     expect(Math.abs(s.kills.meanError)).toBeLessThan(2);
     expect(s.kills.overRate).toBeGreaterThan(0.3);
     expect(s.kills.overRate).toBeLessThan(0.7);
+  });
+
+  it("skattar φ på hela kills-fördelningen", () => {
+    expect(PHI_GRID).toContain(s.kills.phi);
+    expect(Number.isFinite(s.kills.logScore)).toBe(true);
+    expect(s.kills.logScore).toBeGreaterThan(0);
   });
 
   it("varnar för litet underlag", () => {
