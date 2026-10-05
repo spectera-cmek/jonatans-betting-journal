@@ -19,6 +19,7 @@ import {
   type RatingModel,
 } from "./ratings";
 import { flipDistribution, handicapProbs, mapDistribution, roundsPmf, type MapDistribution } from "./mapModel";
+import { isManualVetoStep } from "./manualVeto";
 import { knownVeto, seriesProbs, vetoDistribution, vetoProfile, type VetoDistribution } from "./veto";
 import {
   DEFAULT_KILL_PHI,
@@ -143,6 +144,8 @@ export interface MatchupContext {
   pool: string[];
   veto: VetoDistribution;
   vetoKnown: boolean;
+  /** Vetot är inmatat för hand (se manualVeto.ts), inte inläst från HLTV. */
+  vetoManual: boolean;
   dists: Record<string, MapDistribution>;
   series: { pA: number; scores: Record<string, number>; pMapPlayed: number[] };
   pistolCt1: number;
@@ -193,6 +196,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   let veto: VetoDistribution;
   const done = m.vetoes.filter((v) => v.action === "pick" || v.action === "decider");
   const vetoKnown = done.length > 0 && m.vetoes.some((v) => v.action === "decider");
+  const vetoManual = vetoKnown && m.vetoes.every((v) => isManualVetoStep(v.step));
   if (vetoKnown) {
     veto = knownVeto(done.map((v) => v.mapName), pool);
   } else {
@@ -362,6 +366,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
     pool,
     veto,
     vetoKnown,
+    vetoManual,
     dists,
     series,
     pistolCt1,
@@ -577,6 +582,9 @@ export interface MatchupView {
   team1: TeamInfo;
   team2: TeamInfo;
   vetoKnown: boolean;
+  vetoManual: boolean;
+  /** Kartorna i spelordning när vetot är känt. */
+  vetoMaps: string[];
   pool: string[];
   maps: MatchupMapView[];
   series: { pTeam1: number; scores: Record<string, number>; pMap3: number; pistolTeam1: number; firstKillTeam1: number };
@@ -670,6 +678,8 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
     team1: ctx.team1,
     team2: ctx.team2,
     vetoKnown: ctx.vetoKnown,
+    vetoManual: ctx.vetoManual,
+    vetoMaps: ctx.vetoKnown ? ctx.veto.paths[0]?.maps ?? [] : [],
     pool: ctx.pool,
     maps,
     series: {

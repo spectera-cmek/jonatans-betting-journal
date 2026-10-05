@@ -11,6 +11,7 @@ import type { MatchupView } from "@/lib/cs2/matchup";
 import { ROLE_LABEL, type Role } from "@/lib/cs2/roles";
 import { GameplanView } from "@/components/cs2/GameplanView";
 import { LinesPanel } from "@/components/cs2/LinesPanel";
+import { ManualVeto } from "@/components/cs2/ManualVeto";
 import { Cs2Empty, Cs2NoDb, TeamLink, dateLabel, dec, pct } from "@/components/cs2/common";
 
 type Resp =
@@ -105,10 +106,12 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
         </details>
       </Card>
 
+      <ManualVeto key={`${v.vetoManual}-${v.vetoMaps.join(",")}`} v={v} onSaved={load} />
+
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
           <span className="ap-card-title">Kartor</span>
-          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>{v.vetoKnown ? "Vetot klart" : "Sannolikhet per position ur vetot"}</span>
+          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>{v.vetoManual ? "Kartorna inmatade för hand" : v.vetoKnown ? "Vetot klart" : "Sannolikhet per position ur vetot"}</span>
         </div>
         <div className="ap-cs2-scroll">
           <div className="ap-table" style={{ minWidth: 760 }}>

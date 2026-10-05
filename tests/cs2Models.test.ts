@@ -356,6 +356,7 @@ describe("matchup utan databas", () => {
     pool,
     veto,
     vetoKnown: true,
+    vetoManual: false,
     dists,
     series,
     pistolCt1: 0.55,
