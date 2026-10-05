@@ -7,7 +7,7 @@ import type { PrismaClient } from ".prisma/cs2-client";
 import type { HltvSession } from "../hltv/session";
 import { extractDemos } from "./archive";
 import type { DemoparserApi } from "./parseDemo";
-import { analyzeAndStore, loadNormalized, processDemoFile, type ProcessResult } from "./process";
+import { analyzeAndStore, loadNormalized, processDemoFiles, type ProcessResult } from "./process";
 import { AVG_SERIES_GB, buildDemoQueue, type QueuedSeries } from "./queue";
 import { DEMO_FACTS_VERSION } from "./types";
 
@@ -26,6 +26,8 @@ export interface DemoRunOptions {
   keepDemos: boolean;
   retryFailed: boolean;
   cacheDir: string;
+  /** Tolka om exakt dessa matcher, även om de redan är klara (--redo-match). */
+  redoMatches?: number[];
 }
 
 export interface DemoRunSummary {
@@ -57,6 +59,13 @@ async function teamsWithUpcoming(db: PrismaClient, days: number): Promise<number
 }
 
 export async function planDemoQueue(db: PrismaClient, opts: DemoRunOptions): Promise<QueuedSeries[]> {
+  if (opts.redoMatches?.length) {
+    const rows = await db.cs2Match.findMany({
+      where: { id: { in: opts.redoMatches }, demoUrl: { not: null } },
+      select: { id: true, demoUrl: true, startAt: true, maps: { select: { id: true } } },
+    });
+    return rows.map((r) => ({ matchId: r.id, demoUrl: r.demoUrl!, maps: r.maps.map((m) => m.id), priority: false, playedAt: r.startAt }));
+  }
   const upcoming = await teamsWithUpcoming(db, opts.days);
   let teams: number[];
   if (opts.teams.length > 0) teams = opts.teams;
@@ -132,23 +141,19 @@ export async function runDemoQueue(
       const size = (await fs.stat(archive)).size;
       summary.downloadedGb += size / 1e9;
       const demos = await extractDemos(archive, dir);
-      let done = 0;
-      for (const file of demos) {
-        try {
-          const res = await processDemoFile(db, api, file, series.matchId, opts.cacheDir);
-          if (!res) continue;
-          done++;
-          summary.processedMaps++;
-          summary.results.push(res);
-          const flags = [
-            res.killDiffs.length ? `${res.killDiffs.length} kill-avvikelser` : "kills stämmer",
-            res.roundsOk === false ? "rundor STÄMMER INTE" : res.roundsOk ? "rundor stämmer" : "",
-            res.missingFields.length ? `saknade fält: ${res.missingFields.join(", ")}` : "",
-          ].filter(Boolean);
-          log(`    ✓ ${res.mapName}: ${res.rounds} rundor, ${res.linkedPlayers}/10 spelare länkade · ${flags.join(" · ")}`);
-        } catch (err) {
-          summary.errors.push(`${path.basename(file)}: ${err instanceof Error ? err.message : String(err)}`);
-        }
+      const { results, errors } = await processDemoFiles(db, api, demos, series.matchId, opts.cacheDir);
+      summary.errors.push(...errors);
+      const done = results.length;
+      for (const res of results) {
+        summary.processedMaps++;
+        summary.results.push(res);
+        const flags = [
+          res.parts && res.parts > 1 ? `${res.parts} delar ihopfogade` : "",
+          res.killDiffs.length ? `${res.killDiffs.length} kill-avvikelser` : "kills stämmer",
+          res.roundsOk === false ? "rundor STÄMMER INTE" : res.roundsOk ? "rundor stämmer" : "",
+          res.missingFields.length ? `saknade fält: ${res.missingFields.join(", ")}` : "",
+        ].filter(Boolean);
+        log(`    ✓ ${res.mapName}: ${res.rounds} rundor, ${res.linkedPlayers}/10 spelare länkade · ${flags.join(" · ")}`);
       }
       await db.cs2Match.update({
         where: { id: series.matchId },

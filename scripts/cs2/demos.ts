@@ -8,6 +8,7 @@
  *   npm run cs2:demos -- --confirm --team 9565 --maps-per-team-map 10 --months 4
  *   npm run cs2:demos -- --confirm --file C:\demos\x.dem --match 2380001
  *   npm run cs2:demos -- --confirm --reanalyze         # räkna om ur lokala cachen
+ *   npm run cs2:demos -- --confirm --redo-match 2398725,2398730   # ladda ner och tolka om just dessa
  *
  * Arkiven raderas efter tolkning (--keep-demos behåller dem). Kvar blir en
  * komprimerad, normaliserad kopia per karta i .cache/cs2/demos/norm.
@@ -79,6 +80,7 @@ async function main() {
     keepDemos: process.argv.includes("--keep-demos"),
     retryFailed: process.argv.includes("--retry-failed"),
     cacheDir,
+    redoMatches: listArg("--redo-match"),
   };
   console.log(`Läge: ${confirm ? "CONFIRM" : "DRY-RUN"} · ${opts.upcomingOnly ? "lag med kommande match" : "bevakade lag"} · ${opts.perTeamMap} kartor per lag och karta, ${opts.months} mån`);
 
