@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 import { cs2Prisma, hasCs2Db } from "@/lib/cs2Db";
 import { extractPropsFromScreenshot, PropsParseFailedError } from "@/lib/cs2/propsExtract";
-import { nameScore } from "@/lib/cs2/demo/link";
+import { matchPlayer, matchTeams, skipReason } from "@/lib/cs2/propsMatch";
 import { noCs2Db } from "@/lib/cs2/api";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +13,9 @@ const MAX_BASE64_CHARS = 7_000_000;
 const TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 
 // POST /api/cs2/lines/parse-screenshot { matchId, imageBase64, mediaType }
-// Tolkar bokens props-lista till linjer och föreslår spelare ur matchens
-// trupper. Inget sparas — klienten bekräftar och skickar till /api/cs2/lines.
+// Tolkar bokens marknader (spelarprops och lagmarknader) till linjer och
+// kopplar spelare och lag till matchens. Inget sparas — klienten bekräftar och
+// skickar till /api/cs2/lines. `skip` säger varför en rad inte kan sparas.
 export async function POST(req: Request) {
   if (!getSessionUserId()) return apiUnauthorized();
   if (!hasCs2Db()) return noCs2Db();
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
   if (body.imageBase64.length > MAX_BASE64_CHARS) return NextResponse.json({ error: "Bilden är för stor (max ~5 MB)" }, { status: 413 });
   if (!TYPES.includes(body.mediaType as (typeof TYPES)[number])) return NextResponse.json({ error: "Bildformatet stöds inte" }, { status: 400 });
 
-  const match = await cs2Prisma.cs2Match.findUnique({ where: { id: matchId }, select: { team1Id: true, team2Id: true } });
+  const match = await cs2Prisma.cs2Match.findUnique({ where: { id: matchId }, select: { team1Id: true, team2Id: true, team1Name: true, team2Name: true } });
   if (!match) return NextResponse.json({ error: "Matchen finns inte" }, { status: 404 });
   const players = await cs2Prisma.cs2Player.findMany({
     where: { teamId: { in: [match.team1Id, match.team2Id].filter((x): x is number => x != null) } },
@@ -36,13 +37,15 @@ export async function POST(req: Request) {
 
   try {
     const parsed = await extractPropsFromScreenshot(body.imageBase64, body.mediaType as (typeof TYPES)[number]);
+    const teams = [
+      ...(match.team1Id != null ? [{ id: match.team1Id, name: match.team1Name }] : []),
+      ...(match.team2Id != null ? [{ id: match.team2Id, name: match.team2Name }] : []),
+    ];
+    const teamOf = matchTeams(parsed.rows.map((r) => r.team), teams);
     const rows = parsed.rows.map((r) => {
-      let best: { id: number; score: number } | null = null;
-      for (const p of players) {
-        const s = nameScore(r.player, p.nickname);
-        if (s != null && (!best || s < best.score)) best = { id: p.id, score: s };
-      }
-      return { ...r, playerId: best?.id ?? null };
+      const playerId = matchPlayer(r.player, players);
+      const teamId = r.team ? teamOf.get(r.team) ?? null : null;
+      return { ...r, playerId, teamId, skip: skipReason({ ...r, playerId, teamId }) };
     });
     return NextResponse.json({ bookmaker: parsed.bookmaker, rows });
   } catch (e) {
