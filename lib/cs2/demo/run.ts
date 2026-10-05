@@ -4,7 +4,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { PrismaClient } from ".prisma/cs2-client";
-import type { HltvSession } from "../hltv/session";
+import { isClosedSessionError, type HltvSession } from "../hltv/session";
 import { extractDemos } from "./archive";
 import type { DemoparserApi } from "./parseDemo";
 import { analyzeAndStore, loadNormalized, processDemoFiles, type ProcessResult } from "./process";
@@ -137,7 +137,16 @@ export async function runDemoQueue(
     const dir = path.join(rawDir, String(series.matchId));
     try {
       log(`  ↓ match ${series.matchId} (${series.maps.length} kartor${series.priority ? ", kommande match" : ""})`);
-      const archive = await session.downloadDemo(series.demoUrl, dir);
+      let archive: string;
+      try {
+        archive = await session.downloadDemo(series.demoUrl, dir);
+      } catch (err) {
+        if (!isClosedSessionError(err)) throw err;
+        // Webbläsaren dog mitt i (t.ex. Edge som uppdaterar sig) — en ny chans.
+        log("    webbläsaren stängdes — startar om den och försöker igen …");
+        await session.restart();
+        archive = await session.downloadDemo(series.demoUrl, dir);
+      }
       const size = (await fs.stat(archive)).size;
       summary.downloadedGb += size / 1e9;
       const demos = await extractDemos(archive, dir);

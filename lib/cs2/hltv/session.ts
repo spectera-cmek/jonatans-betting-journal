@@ -18,8 +18,10 @@
 // i stället för att starta en egen.
 
 import { createHash } from "node:crypto";
-import { promises as fs } from "node:fs";
+import { createWriteStream, promises as fs } from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { Browser, BrowserContext, BrowserType, Page } from "playwright";
 
 type Chromium = BrowserType;
@@ -36,6 +38,39 @@ export const CS2_CACHE_DIR = process.env.CS2_CACHE_DIR || ".cache/cs2";
  */
 export function headedFromArgs(argv: string[] = process.argv): boolean {
   return !(argv.includes("--headless") || process.env.CS2_HEADLESS === "1");
+}
+
+/** Webbläsaren (eller fönstret) stängdes mitt i en nedladdning. */
+export class HltvBrowserClosedError extends Error {
+  constructor() {
+    super("Webbläsarfönstret stängdes under nedladdningen. Låt det vara öppet tills skriptet är klart — det stänger det själv.");
+  }
+}
+
+/** En flik/session som webbläsaren stängde — inte ett fel i skriptet. */
+export function isClosedSessionError(err: unknown): boolean {
+  if (err instanceof HltvBrowserClosedError) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /session closed|Target closed|has been closed|Target page, context or browser/i.test(msg);
+}
+
+let rejectionGuardInstalled = false;
+/**
+ * patchright kan kasta ett fel utanför vår kod när Edge stänger en intern
+ * flik mitt i en nedladdning (Network.setCacheDisabled: session closed).
+ * Det får inte krascha hela körningen — det felet loggas, allt annat
+ * kraschar som vanligt.
+ */
+function installRejectionGuard(): void {
+  if (rejectionGuardInstalled) return;
+  rejectionGuardInstalled = true;
+  process.on("unhandledRejection", (err) => {
+    if (isClosedSessionError(err)) {
+      console.log("    (webbläsaren stängde en intern flik — fortsätter)");
+      return;
+    }
+    throw err;
+  });
 }
 
 export class HltvBlockedError extends Error {
@@ -168,6 +203,7 @@ export class HltvSession {
     if (this.page) return this.page;
     const { chromium, stealth } = await this.loadChromium();
     console.log(`  (webbläsare: ${stealth ? "patchright" : "playwright"}${this.opts.headed ? ", synlig" : ""})`);
+    installRejectionGuard();
     this.context = await this.openContext(chromium, stealth);
     // Inga avlyssnade anrop (route): Cloudflare märker när de fångas upp.
     // I användarens egen Chrome: en egen flik, inte någon av de redan öppna.
@@ -323,10 +359,7 @@ export class HltvSession {
     if (this.opts.offline) throw new Error("Demos kan inte hämtas i offline-läge");
     const page = await this.ensurePage();
     await fs.mkdir(destDir, { recursive: true });
-    const closed = (err: unknown) =>
-      String(err).includes("has been closed")
-        ? new Error("Webbläsarfönstret stängdes under nedladdningen. Låt det vara öppet tills skriptet är klart — det stänger det själv.")
-        : err;
+    const closed = (err: unknown) => (isClosedSessionError(err) ? new HltvBrowserClosedError() : err);
     try {
       await this.ensureClearance(page);
       await this.throttle();
@@ -340,12 +373,18 @@ export class HltvSession {
         console.log("    Cloudflare-kontroll på demolänken: klicka i rutan i webbläsarfönstret …");
       }
       const download = await started;
-      console.log(`    laddar ner ${download.suggestedFilename() || "demo"} (kan ta några minuter) …`);
       const name = download.suggestedFilename() || `${path.basename(demoPath)}.bin`;
       const dest = path.join(destDir, name);
-      await download.saveAs(dest);
-      const failure = await download.failure();
-      if (failure) throw new Error(`Nedladdningen misslyckades: ${failure}`);
+      console.log(`    laddar ner ${name} (kan ta några minuter) …`);
+      // Filen ligger på HLTV:s fil-CDN. Node hämtar den direkt — då behöver
+      // webbläsaren inte hållas vid liv i flera minuter. Går det inte tar
+      // webbläsaren nedladdningen som förut.
+      // Webbläsarens egen nedladdning avbryts så fort Node har fått filen på väg.
+      if (!(await this.fetchDirect(page, download.url(), dest, () => download.cancel().catch(() => undefined)))) {
+        await download.saveAs(dest);
+        const failure = await download.failure();
+        if (failure) throw new Error(`Nedladdningen misslyckades: ${failure}`);
+      }
       this.fetched += 1;
       return dest;
     } catch (err) {
@@ -353,6 +392,48 @@ export class HltvSession {
       this.cleared = false;
       throw closed(err);
     }
+  }
+
+  /**
+   * Hämtar `url` med Node, med webbläsarens cookies och user agent. Sant om
+   * filen sparades; falskt (inget sparat) om servern svarade med något annat
+   * än en fil — t.ex. en Cloudflare-kontroll.
+   */
+  private async fetchDirect(page: Page, url: string, dest: string, onStarted: () => Promise<unknown>): Promise<boolean> {
+    try {
+      const cookies = await page.context().cookies([url]);
+      const ua = await page.evaluate(() => navigator.userAgent).catch(() => undefined);
+      const res = await fetch(url, {
+        headers: {
+          ...(cookies.length ? { cookie: cookies.map((c) => `${c.name}=${c.value}`).join("; ") } : {}),
+          ...(ua ? { "user-agent": ua } : {}),
+          referer: HLTV_ORIGIN + "/",
+        },
+        redirect: "follow",
+      });
+      const type = res.headers.get("content-type") ?? "";
+      if (!res.ok || !res.body || type.includes("text/html")) {
+        await res.body?.cancel().catch(() => undefined);
+        return false;
+      }
+      await onStarted();
+      await pipeline(Readable.fromWeb(res.body as never), createWriteStream(dest));
+      const { size } = await fs.stat(dest);
+      if (size === 0) {
+        await fs.rm(dest, { force: true });
+        return false;
+      }
+      return true;
+    } catch {
+      await fs.rm(dest, { force: true }).catch(() => undefined);
+      return false;
+    }
+  }
+
+  /** Stänger webbläsaren så att nästa anrop startar en ny (efter en krasch). */
+  async restart(): Promise<void> {
+    await this.close();
+    this.cleared = false;
   }
 
   async close(): Promise<void> {
