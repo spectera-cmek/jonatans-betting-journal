@@ -593,11 +593,79 @@ export interface MatchupView {
   angles: Angle[];
   warnings: string[];
   model: { version: string; blendW: number; phi: number; sigma: number; trainedMaps: number; leagueRounds: number };
+  /** Fair odds per spelare, karta och linje — snabbläget. */
+  ladder: PropLadder;
+  /** Förvald karta i snabbläget (gissad ur tiden sedan start). */
+  suggestedScope: LadderScope;
 }
 
 function summarize(pmf: number[]) {
   const line = medianLine(pmf);
   return { mean: pmfMean(pmf), line, pOver: lineProbs(pmf, line).pOverNoPush };
+}
+
+// ---------------------------------------------------------------------------
+// Odds-stege: fair odds för varje spelare på flera linjer, så att bokens
+// linjer kan jämföras direkt i kartpausen utan inmatning.
+// ---------------------------------------------------------------------------
+
+export type LadderScope = "map1" | "map2" | "map3" | "maps12";
+export type LadderMarket = "kills" | "headshots";
+export const LADDER_SCOPES: LadderScope[] = ["map1", "map2", "map3", "maps12"];
+/** Halvlinjer på var sida om medianlinjen. */
+export const LADDER_SPAN = 3;
+
+export interface LadderRow {
+  playerId: number;
+  /** Modellens linje (P(över) närmast 50 %). */
+  median: number;
+  /** P(över) per halvlinje, median − LADDER_SPAN … median + LADDER_SPAN. Övertid räknas. */
+  lines: Array<{ line: number; pOver: number }>;
+}
+
+export type PropLadder = Partial<Record<LadderScope, Record<LadderMarket, LadderRow[]>>>;
+
+/** Scopen som är meningsfulla för formatet (bo1 har bara karta 1). */
+export function ladderScopes(format: SeriesFormat): LadderScope[] {
+  return format === "bo1" ? ["map1"] : LADDER_SCOPES;
+}
+
+export function propLadder(ctx: MatchupContext): PropLadder {
+  const out: PropLadder = {};
+  for (const scope of ladderScopes(ctx.format)) {
+    const byMarket = {} as Record<LadderMarket, LadderRow[]>;
+    for (const market of ["kills", "headshots"] as const) {
+      const rows: LadderRow[] = [];
+      for (const p of ctx.players) {
+        const s = playerPmf(ctx, p.playerId, market, scope, true);
+        if (!s) continue;
+        const median = medianLine(s.pmf);
+        const lines: LadderRow["lines"] = [];
+        for (let k = -LADDER_SPAN; k <= LADDER_SPAN; k++) {
+          const line = median + k;
+          if (line < 0.5) continue;
+          lines.push({ line, pOver: lineProbs(s.pmf, line).pOverNoPush });
+        }
+        rows.push({ playerId: p.playerId, median, lines });
+      }
+      byMarket[market] = rows;
+    }
+    out[scope] = byMarket;
+  }
+  return out;
+}
+
+/**
+ * Gissad karta som spelas härnäst, ur tiden sedan start — bara ett förval
+ * i snabbläget. Före start: karta 1 (bo1) eller karta 1–2.
+ */
+export function suggestedScope(format: SeriesFormat, startAt: Date, now: Date = new Date()): LadderScope {
+  const min = (now.getTime() - startAt.getTime()) / 60_000;
+  if (format === "bo1") return "map1";
+  if (min < 0) return "maps12";
+  if (min < 50) return "map1";
+  if (min < 100) return "map2";
+  return "map3";
 }
 
 export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW = DEFAULT_CS2_BLEND_W): MatchupView {
@@ -701,6 +769,8 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
       trainedMaps: ctx.global.trainedMaps,
       leagueRounds: ctx.global.leagueRounds,
     },
+    ladder: propLadder(ctx),
+    suggestedScope: suggestedScope(ctx.format, ctx.match.startAt),
   };
 }
 
