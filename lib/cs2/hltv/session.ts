@@ -286,6 +286,35 @@ export class HltvSession {
   }
 
   /**
+   * Klarar Cloudflare-kontrollen en gång per körning, på HLTV:s startsida.
+   * Demolänken ger ingen sida att klicka på om kontrollen kommer där — då
+   * startar nedladdningen bara aldrig.
+   */
+  private cleared = false;
+  private async ensureClearance(page: Page): Promise<void> {
+    if (this.cleared) return;
+    await this.throttle();
+    await page.goto(HLTV_ORIGIN + "/", { waitUntil: "domcontentloaded" }).catch(() => null);
+    let html = await this.readPage(page);
+    if (!html || isChallengePage(html)) {
+      await this.saveDebug(page, html, "challenge");
+      console.log(
+        this.opts.headed
+          ? "    Cloudflare-kontroll: klicka i rutan i webbläsarfönstret och vänta (upp till 3 min) …"
+          : "    Cloudflare-kontroll — väntar 20 s. Fastnar den: kör igen utan --headless och klicka i rutan."
+      );
+      const deadline = Date.now() + (this.opts.headed ? 180_000 : 20_000);
+      while (Date.now() < deadline && (!html || isChallengePage(html))) {
+        await sleep(2000);
+        html = await this.readPage(page);
+      }
+      if (!html || isChallengePage(html)) throw new HltvBlockedError(HLTV_ORIGIN + "/");
+      console.log("    Kontrollen klarad.");
+    }
+    this.cleared = true;
+  }
+
+  /**
    * Laddar ner en demo (/download/demo/<id>) till `destDir`. HLTV
    * omdirigerar till sin fil-CDN; webbläsaren tar nedladdningen så samma
    * Cloudflare-session gäller.
@@ -294,19 +323,36 @@ export class HltvSession {
     if (this.opts.offline) throw new Error("Demos kan inte hämtas i offline-läge");
     const page = await this.ensurePage();
     await fs.mkdir(destDir, { recursive: true });
-    await this.throttle();
-    const [download] = await Promise.all([
-      page.waitForEvent("download", { timeout: 120_000 }),
+    const closed = (err: unknown) =>
+      String(err).includes("has been closed")
+        ? new Error("Webbläsarfönstret stängdes under nedladdningen. Låt det vara öppet tills skriptet är klart — det stänger det själv.")
+        : err;
+    try {
+      await this.ensureClearance(page);
+      await this.throttle();
+      const started = page.waitForEvent("download", { timeout: this.opts.headed ? 240_000 : 120_000 });
       // goto kastar "Download is starting" när svaret är en fil — förväntat.
-      page.goto(HLTV_ORIGIN + demoPath).catch(() => null),
-    ]);
-    const name = download.suggestedFilename() || `${path.basename(demoPath)}.bin`;
-    const dest = path.join(destDir, name);
-    await download.saveAs(dest);
-    const failure = await download.failure();
-    if (failure) throw new Error(`Nedladdningen misslyckades: ${failure}`);
-    this.fetched += 1;
-    return dest;
+      await page.goto(HLTV_ORIGIN + demoPath, { waitUntil: "domcontentloaded" }).catch(() => null);
+      // Kom en kontroll i stället för filen: efter klicket startar nedladdningen av sig själv.
+      const html = await this.readPage(page);
+      if (html && isChallengePage(html)) {
+        await this.saveDebug(page, html, "challenge");
+        console.log("    Cloudflare-kontroll på demolänken: klicka i rutan i webbläsarfönstret …");
+      }
+      const download = await started;
+      console.log(`    laddar ner ${download.suggestedFilename() || "demo"} (kan ta några minuter) …`);
+      const name = download.suggestedFilename() || `${path.basename(demoPath)}.bin`;
+      const dest = path.join(destDir, name);
+      await download.saveAs(dest);
+      const failure = await download.failure();
+      if (failure) throw new Error(`Nedladdningen misslyckades: ${failure}`);
+      this.fetched += 1;
+      return dest;
+    } catch (err) {
+      // Nästa demo får prova kontrollen igen.
+      this.cleared = false;
+      throw closed(err);
+    }
   }
 
   async close(): Promise<void> {
