@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Bokens linjer för en match: mata in för hand eller läs av en skärmdump av
- * props-listan, och se modellens fair odds, edge och ½ Kelly direkt. "Logga
+ * Bokens linjer för en match: mata in för hand eller läs av en eller flera
+ * skärmdumpar av bokens marknader (spelarprops och lagmarknader), och se
+ * modellens fair odds, edge och ½ Kelly direkt. "Logga
  * bet" öppnar bet-formuläret förifyllt med marknad, linje och odds.
  */
 
@@ -41,14 +42,18 @@ const BET_CATEGORY: Record<Cs2Market, string> = {
 };
 
 interface ParsedRow {
-  player: string;
   market: string;
   scope: Cs2Scope;
+  player: string | null;
+  team: string | null;
   line: number | null;
   overOdds: number | null;
   underOdds: number | null;
   includesOt: boolean | null;
   playerId: number | null;
+  teamId: number | null;
+  /** Varför raden inte kan sparas (null = den sparas). */
+  skip: string | null;
 }
 
 const num = (s: string) => {
@@ -78,6 +83,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [parsed, setParsed] = useState<{ bookmaker: string | null; rows: ParsedRow[] } | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<BetPrefill | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -126,36 +132,52 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
     }
   };
 
-  const onFile = async (file: File | undefined) => {
-    if (!file) return;
+  // En eller flera skärmdumpar läses i tur och ordning och samlas i en förhandsvisning.
+  const onFiles = async (list: FileList | null) => {
+    const files = list ? Array.from(list) : [];
+    if (files.length === 0) return;
     setBusy(true);
     setErr(null);
+    const rows: ParsedRow[] = [];
+    let bookmaker: string | null = null;
+    const failed: string[] = [];
     try {
-      const imageBase64 = await fileToJpegBase64(file);
-      const r = await api.post<{ bookmaker: string | null; rows: ParsedRow[] }>("/api/cs2/lines/parse-screenshot", {
-        matchId: view.match.id,
-        imageBase64,
-        mediaType: "image/jpeg",
-      });
-      setParsed(r);
-      if (r.bookmaker) setBook(r.bookmaker);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Kunde inte tolka skärmdumpen");
+      for (let i = 0; i < files.length; i++) {
+        setProgress(files.length > 1 ? `Läser bild ${i + 1} av ${files.length} …` : "Läser bilden …");
+        try {
+          const imageBase64 = await fileToJpegBase64(files[i]);
+          const r = await api.post<{ bookmaker: string | null; rows: ParsedRow[] }>("/api/cs2/lines/parse-screenshot", {
+            matchId: view.match.id,
+            imageBase64,
+            mediaType: "image/jpeg",
+          });
+          rows.push(...r.rows);
+          bookmaker ??= r.bookmaker;
+        } catch (e) {
+          failed.push(`bild ${i + 1}: ${e instanceof Error ? e.message : "kunde inte tolkas"}`);
+        }
+      }
+      if (rows.length > 0) setParsed({ bookmaker, rows });
+      if (bookmaker) setBook(bookmaker);
+      if (failed.length) setErr(failed.join(" · "));
+      else if (rows.length === 0) setErr("Inga CS2-marknader hittades på bilden.");
     } finally {
       setBusy(false);
+      setProgress(null);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
 
   const saveParsed = async () => {
     if (!parsed) return;
-    const rows = parsed.rows.filter((r) => r.playerId != null && (r.market === "kills" || r.market === "headshots" || r.market === "player_first_kill"));
+    const rows = parsed.rows.filter((r) => !r.skip);
     const ok = await save(
       rows.map((r) => ({
         matchId: view.match.id,
         market: r.market,
         scope: r.scope,
-        playerId: r.playerId,
+        playerId: PLAYER_MARKETS.has(r.market as Cs2Market) ? r.playerId : null,
+        teamId: TEAM_MARKETS.has(r.market as Cs2Market) ? r.teamId : null,
         line: r.line,
         overOdds: r.overOdds,
         underOdds: r.underOdds,
@@ -165,6 +187,15 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
       }))
     );
     if (ok) setParsed(null);
+  };
+
+  const parsedWho = (r: ParsedRow) => {
+    if (PLAYER_MARKETS.has(r.market as Cs2Market)) return r.player ?? "?";
+    if (TEAM_MARKETS.has(r.market as Cs2Market)) {
+      const t = r.teamId === view.team1.id ? view.team1.name : r.teamId === view.team2.id ? view.team2.name : r.team;
+      return t ?? "?";
+    }
+    return "";
   };
 
   const remove = async (id: number | undefined) => {
@@ -289,28 +320,31 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
             <I p={IC.plus} size={14} /> Lägg till
           </button>
           <button className="ap-btn ghost" disabled={busy} onClick={() => fileRef.current?.click()}>
-            <I p={IC.upload} size={14} /> Skärmdump av props
+            <I p={IC.upload} size={14} /> Skärmdumpar av marknader
           </button>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
         </div>
         {err && <div className="neg" style={{ fontSize: 12.5, marginTop: 8 }}>{err}</div>}
-        {busy && <div style={{ fontSize: 12.5, marginTop: 8, color: "var(--dim)" }}>Arbetar…</div>}
+        {busy && <div style={{ fontSize: 12.5, marginTop: 8, color: "var(--dim)" }}>{progress ?? "Arbetar…"}</div>}
 
         {parsed && (
           <div className="ap-cs2-warn" style={{ marginTop: 12 }}>
             <b>
-              {parsed.rows.length} linjer lästa{parsed.bookmaker ? ` från ${parsed.bookmaker}` : ""} — kontrollera innan du sparar
+              {parsed.rows.length} linjer lästa{parsed.bookmaker ? ` från ${parsed.bookmaker}` : ""}
+              {parsed.rows.some((r) => r.skip) ? `, ${parsed.rows.filter((r) => !r.skip).length} kan sparas` : ""} — kontrollera innan du sparar
             </b>
             <ul style={{ margin: "6px 0", paddingLeft: 18 }}>
               {parsed.rows.map((r, i) => (
-                <li key={i}>
-                  {r.player}
-                  {r.playerId == null ? " (hittades inte i trupperna — hoppas över)" : ""} · {r.market} · {CS2_SCOPE_LABEL[r.scope]} · {r.line ?? "—"} · Ö {r.overOdds ?? "—"} / U {r.underOdds ?? "—"}
+                <li key={i} style={r.skip ? { color: "var(--dim2)" } : undefined}>
+                  {CS2_MARKET_LABEL[r.market as Cs2Market] ?? "Annan marknad"} · {CS2_SCOPE_LABEL[r.scope]}
+                  {parsedWho(r) ? ` · ${parsedWho(r)}` : ""}
+                  {r.line != null ? ` · ${String(r.line).replace(".", ",")}` : ""} · {r.overOdds ?? "—"} / {r.underOdds ?? "—"}
+                  {r.skip ? ` (hoppas över: ${r.skip})` : ""}
                 </li>
               ))}
             </ul>
-            <button className="ap-btn" disabled={busy} onClick={saveParsed}>
-              Spara linjerna
+            <button className="ap-btn" disabled={busy || parsed.rows.every((r) => r.skip)} onClick={saveParsed}>
+              Spara {parsed.rows.filter((r) => !r.skip).length} linjer
             </button>{" "}
             <button className="ap-btn ghost" onClick={() => setParsed(null)}>
               Avbryt
