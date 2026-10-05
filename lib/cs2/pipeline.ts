@@ -117,7 +117,7 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
     summary.trackedTeams = teamIds.length;
 
     // 2) Lagsidor: trupp + kommande matcher.
-    const upcoming = new Map<number, string | null>();
+    const upcoming = new Map<number, { slug: string | null; startAt: Date | null }>();
     const horizon = Date.now() + opts.upcomingDays * DAY;
     for (const teamId of teamIds) {
       const team = await db.cs2Team.findUnique({ where: { id: teamId }, select: { slug: true, name: true } });
@@ -129,7 +129,7 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
       }
       for (const u of page.upcoming) {
         if (u.startAt && u.startAt.getTime() > horizon) continue;
-        upcoming.set(u.matchId, u.slug);
+        upcoming.set(u.matchId, { slug: u.slug, startAt: u.startAt });
       }
     }
     summary.upcomingMatches = upcoming.size;
@@ -143,8 +143,10 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
 
     // 4) Kommande matcher först — de avgör vilka motståndare som behövs.
     const opponents = new Set<number>();
-    for (const [matchId, slug] of upcoming) {
-      const html = await session.getHtml(hltvUrls.match(matchId, slug ?? "x"), { maxAgeMs: 2 * HOUR });
+    for (const [matchId, { slug, startAt }] of upcoming) {
+      // Vetot publiceras strax före start — då får sidan bara vara 10 min gammal.
+      const startsSoon = startAt != null && startAt.getTime() - Date.now() < 3 * HOUR;
+      const html = await session.getHtml(hltvUrls.match(matchId, slug ?? "x"), { maxAgeMs: startsSoon ? 10 * 60_000 : 2 * HOUR });
       const page = parseMatchPage(html);
       if (opts.confirm) await applyMatchPage(db, matchId, slug, page);
       for (const t of [page.team1, page.team2]) if (t && !teamIds.includes(t.id)) opponents.add(t.id);
