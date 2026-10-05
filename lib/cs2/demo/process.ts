@@ -7,6 +7,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import type { PrismaClient } from ".prisma/cs2-client";
 import { canonicalMap } from "../maps";
 import { analyzeDemo } from "./analyze";
+import { mergeDemoParts } from "./merge";
 import { linkPlayers, linkTeams, type LineupPlayer } from "./link";
 import { normalizeRaw, readRawDemo, type DemoparserApi } from "./parseDemo";
 import { placeAt } from "./places";
@@ -21,6 +22,8 @@ export interface ProcessResult {
   killDiffs: KillCheck[];
   roundsOk: boolean | null;
   missingFields: string[];
+  /** Antal demofiler kartan bestod av (fler än 1 efter en omstart). */
+  parts?: number;
 }
 
 export function normCacheFile(cacheDir: string, mapId: number): string {
@@ -82,10 +85,57 @@ export async function analyzeAndStore(
   };
 }
 
+/** Delnumret i ett filnamn ("…-inferno-p2.dem" → 2, utan nummer → 0), för spelordningen. */
+export function partNumber(file: string): number {
+  const m = path.basename(file).match(/[-_. ]p?(\d{1,2})\.dem$/i);
+  return m ? Number(m[1]) : 0;
+}
+
 /**
- * Tolka en .dem som hör till matchen `matchId`. Kartan hittas via demons
- * header (de_nuke → nuke). Returnerar null om kartan inte finns i matchen.
+ * Tolka demofilerna ur en matchs arkiv. Kartan hittas via varje fils header
+ * (de_nuke → nuke). Flera filer för samma karta (omstart) fogas ihop i
+ * delnummerordning. Kartor som inte finns i matchen hoppas över.
  */
+export async function processDemoFiles(
+  db: PrismaClient,
+  api: DemoparserApi,
+  files: string[],
+  matchId: number,
+  cacheDir: string
+): Promise<{ results: ProcessResult[]; errors: string[] }> {
+  const errors: string[] = [];
+  const byMap = new Map<string, string[]>();
+  for (const file of files) {
+    try {
+      const header = api.parseHeader(file) ?? {};
+      const mapName = canonicalMap(String(header.map_name ?? header.mapname ?? ""));
+      if (!mapName) throw new Error("kartnamn saknas i demons header");
+      byMap.set(mapName, [...(byMap.get(mapName) ?? []), file]);
+    } catch (err) {
+      errors.push(`${path.basename(file)}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const results: ProcessResult[] = [];
+  for (const [mapName, group] of byMap) {
+    try {
+      const map = await db.cs2Map.findFirst({ where: { matchId, mapName } });
+      if (!map) continue;
+      const expectedRounds = map.team1Rounds + map.team2Rounds;
+      const ordered = [...group].sort((a, b) => partNumber(a) - partNumber(b) || a.localeCompare(b));
+      const parts = ordered.map((file) => normalizeRaw(readRawDemo(api, file, { expectedRounds }), { expectedRounds }));
+      const demo = parts.length === 1 ? parts[0] : mergeDemoParts(parts, expectedRounds);
+      await saveNormalized(cacheDir, map.id, demo);
+      const res = await analyzeAndStore(db, map.id, demo, { mergeGrid: true });
+      results.push({ ...res, parts: parts.length });
+    } catch (err) {
+      errors.push(`${mapName} (${group.map((f) => path.basename(f)).join(", ")}): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return { results, errors };
+}
+
+/** En enskild .dem (scripts/cs2/demos.ts --file). Null om kartan inte finns i matchen. */
 export async function processDemoFile(
   db: PrismaClient,
   api: DemoparserApi,
@@ -93,15 +143,7 @@ export async function processDemoFile(
   matchId: number,
   cacheDir: string
 ): Promise<ProcessResult | null> {
-  const header = api.parseHeader(file) ?? {};
-  const mapName = canonicalMap(String(header.map_name ?? header.mapname ?? ""));
-  if (!mapName) throw new Error(`${path.basename(file)}: kartnamn saknas i demons header`);
-  const map = await db.cs2Map.findFirst({ where: { matchId, mapName } });
-  if (!map) return null;
-
-  const expectedRounds = map.team1Rounds + map.team2Rounds;
-  const raw = readRawDemo(api, file, { expectedRounds });
-  const demo = normalizeRaw(raw, { expectedRounds });
-  await saveNormalized(cacheDir, map.id, demo);
-  return analyzeAndStore(db, map.id, demo, { mergeGrid: true });
+  const { results, errors } = await processDemoFiles(db, api, [file], matchId, cacheDir);
+  if (errors.length) throw new Error(errors.join("; "));
+  return results[0] ?? null;
 }
