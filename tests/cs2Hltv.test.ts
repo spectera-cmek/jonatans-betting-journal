@@ -18,6 +18,7 @@ import { idFromHref, slugFromHref, hltvUrls } from "../lib/cs2/hltv/urls";
 import { sideRoundsFromHalves } from "../lib/cs2/ingest";
 import { canonicalMap, activeMapPool, mapLabel } from "../lib/cs2/maps";
 import { cacheFileFor } from "../lib/cs2/hltv/session";
+import { playedMatchPage } from "../lib/cs2/pipeline";
 
 const FIX = path.join(__dirname, "fixtures", "cs2", "hltv");
 const read = (name: string) => readFileSync(path.join(FIX, name), "utf8");
@@ -172,6 +173,23 @@ describe("parseMatchPage", () => {
       .replace("Match over", "1d : 03h : 12m")
       .replace(/results-team-score">\d+/g, 'results-team-score">-');
     expect(parseMatchPage(html).status).toBe("scheduled");
+  });
+  it("spelad match: en cachad sida från före start hämtas om", async () => {
+    const upcoming = read("match.html")
+      .replace("Match over", "1d : 03h : 12m")
+      .replace(/results-team-score">\d+/g, 'results-team-score">-');
+    const calls: Array<number | undefined> = [];
+    const session = (cached: string) => ({
+      getHtml: async (_url: string, o?: { maxAgeMs?: number }) => {
+        calls.push(o?.maxAgeMs);
+        return o?.maxAgeMs === 0 ? read("match.html") : cached;
+      },
+    });
+    expect((await playedMatchPage(session(upcoming), "/matches/1/x")).status).toBe("finished");
+    expect(calls).toEqual([Infinity, 0]);
+    calls.length = 0;
+    expect((await playedMatchPage(session(read("match.html")), "/matches/1/x")).status).toBe("finished");
+    expect(calls).toEqual([Infinity]);
   });
 });
 

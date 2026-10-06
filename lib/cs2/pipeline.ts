@@ -58,6 +58,17 @@ async function trackedTeamIds(db: PrismaClient): Promise<number[]> {
 }
 
 /** Matchid:n i ett lags resultatlista sedan `since`, sida för sida. */
+/**
+ * Matchsida för en match som resultatlistan säger är spelad. Sidan cachades
+ * kanske medan matchen var kommande eller live — då står den kvar som
+ * scheduled för alltid, så en sådan sida hämtas om.
+ */
+export async function playedMatchPage(session: Pick<HltvSession, "getHtml">, urlPath: string) {
+  const page = parseMatchPage(await session.getHtml(urlPath, { maxAgeMs: Infinity }));
+  if (page.status === "finished" || page.status === "cancelled") return page;
+  return parseMatchPage(await session.getHtml(urlPath, { maxAgeMs: 0 }));
+}
+
 async function resultMatchIds(
   session: HltvSession,
   teamId: number,
@@ -67,9 +78,9 @@ async function resultMatchIds(
   const out: Array<{ id: number; slug: string | null }> = [];
   const now = new Date();
   for (let offset = 0; offset < 1000; offset += 100) {
-    // Första sidan ändras när laget spelar; äldre sidor är i praktiken fasta.
+    // Första sidan ändras när laget spelar (dagens matcher ska med); äldre sidor är i praktiken fasta.
     const html = await session.getHtml(hltvUrls.teamResults(teamId, since, now, offset), {
-      maxAgeMs: offset === 0 ? 12 * HOUR : 7 * DAY,
+      maxAgeMs: offset === 0 ? 3 * HOUR : 7 * DAY,
     });
     const items = parseResults(html);
     for (const it of items) out.push({ id: it.matchId, slug: it.slug });
@@ -183,7 +194,7 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
     for (const [matchId, slug] of toFetch) {
       i++;
       try {
-        const page = parseMatchPage(await session.getHtml(hltvUrls.match(matchId, slug ?? "x"), { maxAgeMs: Infinity }));
+        const page = await playedMatchPage(session, hltvUrls.match(matchId, slug ?? "x"));
         if (!page.team1 || !page.team2) {
           summary.errors.push(`Match ${matchId}: lagen gick inte att läsa`);
           continue;
