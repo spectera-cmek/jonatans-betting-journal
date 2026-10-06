@@ -12,6 +12,7 @@ import { ROLE_LABEL, type Role } from "@/lib/cs2/roles";
 import { GameplanView } from "@/components/cs2/GameplanView";
 import { LinesPanel } from "@/components/cs2/LinesPanel";
 import { ManualVeto } from "@/components/cs2/ManualVeto";
+import { QuickProps } from "@/components/cs2/QuickProps";
 import { Cs2Empty, Cs2NoDb, TeamLink, dateLabel, dec, pct } from "@/components/cs2/common";
 
 type Resp =
@@ -207,6 +208,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
         </div>
       </Card>
 
+      <QuickProps view={v} onChanged={load} />
       <LinesPanel view={v} onChanged={load} />
 
       <Card style={{ marginBottom: 16 }}>

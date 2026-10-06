@@ -15,7 +15,7 @@ import { headshotPmf, killPmfForMap, killRates, medianLine, pmfMean, seriesPmf, 
 import { firstKillProb, log5, openingRates, playerFirstKillProb } from "../lib/cs2/openingModel";
 import { priceTwoWay } from "../lib/cs2/pricing";
 import { buildAngles } from "../lib/cs2/angles";
-import { buildMatchupView, modelProb, priceLine, type MatchupContext } from "../lib/cs2/matchup";
+import { buildMatchupView, modelProb, priceLine, propLadder, suggestedScope, type MatchupContext } from "../lib/cs2/matchup";
 import type { RoundOutcome } from "../lib/cs2/types";
 
 const even: MapInputs = { pCtA: 0.53, pCtB: 0.53, pistolCtA: 0.5, pistolCtB: 0.5, conv2: 0.8, conv3: 0.7, pAStartsCt: 0.5, sigma: 0.3 };
@@ -415,5 +415,40 @@ describe("matchup utan databas", () => {
     expect(view.maps).toHaveLength(3);
     expect(view.series.pMap3).toBeCloseTo(series.pMapPlayed[2]);
     expect(view.lines[0].price).not.toBeNull();
+  });
+
+  it("odds-stegen: alla kartor och marknader, P(över) avtar med linjen", () => {
+    const ladder = propLadder(ctx);
+    for (const scope of ["map1", "map2", "map3", "maps12"] as const) {
+      for (const market of ["kills", "headshots"] as const) {
+        const rows = ladder[scope]![market];
+        expect(rows).toHaveLength(10);
+        for (const r of rows) {
+          expect(r.lines.length).toBeGreaterThanOrEqual(5);
+          for (let i = 1; i < r.lines.length; i++) expect(r.lines[i].pOver).toBeLessThan(r.lines[i - 1].pOver);
+          const mid = r.lines.find((x) => x.line === r.median)!;
+          expect(Math.abs(mid.pOver - 0.5)).toBeLessThan(0.15);
+        }
+      }
+    }
+    // Karta 1–2 är summan av två kartor — högre linje än en karta.
+    const k1 = ladder.map1!.kills[0].median;
+    expect(ladder.maps12!.kills.find((r) => r.playerId === ladder.map1!.kills[0].playerId)!.median).toBeGreaterThan(k1);
+    // Stegen ger samma P(över) som en prissatt linje på samma linje.
+    const row = ladder.map2!.kills[0];
+    const p = modelProb(ctx, { market: "kills", scope: "map2", playerId: row.playerId, line: row.median })!;
+    expect(row.lines.find((x) => x.line === row.median)!.pOver).toBeCloseTo(p.p, 9);
+    expect(buildMatchupView(ctx, []).ladder.map2!.kills).toHaveLength(10);
+    expect(Object.keys(propLadder({ ...ctx, format: "bo1" }))).toEqual(["map1"]);
+  });
+
+  it("gissar aktuell karta ur tiden sedan start", () => {
+    const start = new Date("2026-10-10T18:00:00Z");
+    const at = (min: number) => new Date(start.getTime() + min * 60_000);
+    expect(suggestedScope("bo3", start, at(-30))).toBe("maps12");
+    expect(suggestedScope("bo3", start, at(20))).toBe("map1");
+    expect(suggestedScope("bo3", start, at(70))).toBe("map2");
+    expect(suggestedScope("bo3", start, at(130))).toBe("map3");
+    expect(suggestedScope("bo1", start, at(70))).toBe("map1");
   });
 });

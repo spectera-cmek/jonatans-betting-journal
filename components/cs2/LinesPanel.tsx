@@ -61,12 +61,71 @@ const num = (s: string) => {
   return s.trim() && Number.isFinite(n) ? n : null;
 };
 
-function sideLabel(l: PricedLine, side: "over" | "under", view: MatchupView): string {
+export function sideLabel(l: PricedLine, side: "over" | "under", view: MatchupView): string {
   if (TOTAL_MARKETS.has(l.market)) return side === "over" ? "Över" : "Under";
   if (l.market === "player_first_kill") return side === "over" ? "Ja" : "Nej";
   const t1 = l.teamId === view.team2.id ? view.team2.name : view.team1.name;
   const t2 = l.teamId === view.team2.id ? view.team1.name : view.team2.name;
   return side === "over" ? t1 : t2;
+}
+
+/**
+ * "Logga bet" för en prissatt linje: öppnar bet-formuläret förifyllt med
+ * marknad, linje, odds och ½ Kelly. Delas av linjetabellen och snabbläget.
+ */
+export function useLogBet(view: MatchupView, defaultBook: string) {
+  const [prefill, setPrefill] = useState<BetPrefill | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const { data: metrics } = useMetrics();
+  const { data: settings } = useSettings();
+  const bankroll = (metrics?.settings.startingBankrollUnits ?? 100) + (metrics?.metrics?.profitUnits ?? 0);
+  const book = defaultBook;
+
+  const logBet = (l: PricedLine) => {
+    if (!l.price?.bestSide || !l.price.bestOdds) return;
+    const side = l.price.bestSide;
+    const p = side === "over" ? l.price.pFinal * (1 - l.price.pPush) : (1 - l.price.pFinal) * (1 - l.price.pPush);
+    const k = kellyAdvice(l.price.bestOdds, p, bankroll);
+    const isPlayer = l.playerId != null;
+    const pick = sideLabel(l, side, view);
+    const lineTxt = l.line != null ? ` ${String(l.line).replace(".", ",")}` : "";
+    setPrefill({
+      form: {
+        eventAt: view.match.startAt.slice(0, 10),
+        sport: "Esports",
+        league: view.match.eventName ?? "",
+        event: `${view.team1.name} vs ${view.team2.name}`,
+        homeTeam: view.team1.name,
+        awayTeam: view.team2.name,
+        market: l.market === "match_winner" ? "h2h" : "other",
+        marketCategory: BET_CATEGORY[l.market],
+        marketScope: isPlayer ? "player" : l.teamId != null ? "team" : "match",
+        selection: `${l.label.split(" · ")[0]} ${pick}${lineTxt} (${CS2_SCOPE_LABEL[l.scope]})`.replace(/\s+/g, " "),
+        selectionSide: TOTAL_MARKETS.has(l.market) ? side : l.market === "match_winner" ? (l.teamId === view.team2.id) === (side === "over") ? "away" : "home" : "home",
+        line: l.line != null ? String(l.line) : "",
+        odds: String(l.price.bestOdds),
+        stakeUnits: k.halfUnits > 0 ? String(Math.max(0.25, Math.round(k.halfUnits * 4) / 4)) : "1",
+        bookmaker: l.bookmaker ?? book,
+        notes: `CS2-modell ${view.model.version}: fair ${dec(side === "over" ? l.price.fairOver : l.price.fairUnder)}, edge ${pct(l.price.edge, 1)}`,
+      },
+    });
+    setModalOpen(true);
+  };
+
+  const betModal = (
+    <AddBetModal
+      open={modalOpen}
+      onClose={() => setModalOpen(false)}
+      onSaved={() => {
+        setModalOpen(false);
+        revalidateAll();
+      }}
+      hasOddsApiKey={settings?.hasOddsApiKey ?? false}
+      prefill={prefill}
+      unit={settings?.unitValue || 100}
+    />
+  );
+  return { logBet, betModal, bankroll };
 }
 
 export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: () => void }) {
@@ -84,13 +143,8 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
   const [err, setErr] = useState<string | null>(null);
   const [parsed, setParsed] = useState<{ bookmaker: string | null; rows: ParsedRow[] } | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
-  const [prefill, setPrefill] = useState<BetPrefill | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const { data: metrics } = useMetrics();
-  const { data: settings } = useSettings();
-  const bankroll = (metrics?.settings.startingBankrollUnits ?? 100) + (metrics?.metrics?.profitUnits ?? 0);
+  const { logBet, betModal, bankroll } = useLogBet(view, book);
 
   const needsPlayer = PLAYER_MARKETS.has(market);
   const needsTeam = TEAM_MARKETS.has(market);
@@ -132,31 +186,41 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
     }
   };
 
-  // En eller flera skärmdumpar läses i tur och ordning och samlas i en förhandsvisning.
+  // En eller flera skärmdumpar läses — upp till tre åt gången — och samlas i
+  // en förhandsvisning, i bildernas ordning.
   const onFiles = async (list: FileList | null) => {
     const files = list ? Array.from(list) : [];
     if (files.length === 0) return;
     setBusy(true);
     setErr(null);
-    const rows: ParsedRow[] = [];
-    let bookmaker: string | null = null;
+    const results: Array<{ bookmaker: string | null; rows: ParsedRow[] } | null> = files.map(() => null);
     const failed: string[] = [];
-    try {
-      for (let i = 0; i < files.length; i++) {
-        setProgress(files.length > 1 ? `Läser bild ${i + 1} av ${files.length} …` : "Läser bilden …");
-        try {
-          const imageBase64 = await fileToJpegBase64(files[i]);
-          const r = await api.post<{ bookmaker: string | null; rows: ParsedRow[] }>("/api/cs2/lines/parse-screenshot", {
-            matchId: view.match.id,
-            imageBase64,
-            mediaType: "image/jpeg",
-          });
-          rows.push(...r.rows);
-          bookmaker ??= r.bookmaker;
-        } catch (e) {
-          failed.push(`bild ${i + 1}: ${e instanceof Error ? e.message : "kunde inte tolkas"}`);
-        }
+    let done = 0;
+    const show = () => setProgress(files.length > 1 ? `Läser ${files.length} bilder … ${done} klara` : "Läser bilden …");
+    show();
+    const readOne = async (i: number) => {
+      try {
+        const imageBase64 = await fileToJpegBase64(files[i]);
+        results[i] = await api.post<{ bookmaker: string | null; rows: ParsedRow[] }>("/api/cs2/lines/parse-screenshot", {
+          matchId: view.match.id,
+          imageBase64,
+          mediaType: "image/jpeg",
+        });
+      } catch (e) {
+        failed.push(`bild ${i + 1}: ${e instanceof Error ? e.message : "kunde inte tolkas"}`);
+      } finally {
+        done++;
+        show();
       }
+    };
+    try {
+      let next = 0;
+      const worker = async () => {
+        while (next < files.length) await readOne(next++);
+      };
+      await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker));
+      const rows = results.flatMap((r) => r?.rows ?? []);
+      const bookmaker = results.find((r) => r?.bookmaker)?.bookmaker ?? null;
       if (rows.length > 0) setParsed({ bookmaker, rows });
       if (bookmaker) setBook(bookmaker);
       if (failed.length) setErr(failed.join(" · "));
@@ -202,37 +266,6 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
     if (!id) return;
     await api.del(`/api/cs2/lines?id=${id}`);
     onChanged();
-  };
-
-  const logBet = (l: PricedLine) => {
-    if (!l.price?.bestSide || !l.price.bestOdds) return;
-    const side = l.price.bestSide;
-    const p = side === "over" ? l.price.pFinal * (1 - l.price.pPush) : (1 - l.price.pFinal) * (1 - l.price.pPush);
-    const k = kellyAdvice(l.price.bestOdds, p, bankroll);
-    const isPlayer = l.playerId != null;
-    const pick = sideLabel(l, side, view);
-    const lineTxt = l.line != null ? ` ${String(l.line).replace(".", ",")}` : "";
-    setPrefill({
-      form: {
-        eventAt: view.match.startAt.slice(0, 10),
-        sport: "Esports",
-        league: view.match.eventName ?? "",
-        event: `${view.team1.name} vs ${view.team2.name}`,
-        homeTeam: view.team1.name,
-        awayTeam: view.team2.name,
-        market: l.market === "match_winner" ? "h2h" : "other",
-        marketCategory: BET_CATEGORY[l.market],
-        marketScope: isPlayer ? "player" : l.teamId != null ? "team" : "match",
-        selection: `${l.label.split(" · ")[0]} ${pick}${lineTxt} (${CS2_SCOPE_LABEL[l.scope]})`.replace(/\s+/g, " "),
-        selectionSide: TOTAL_MARKETS.has(l.market) ? side : l.market === "match_winner" ? (l.teamId === view.team2.id) === (side === "over") ? "away" : "home" : "home",
-        line: l.line != null ? String(l.line) : "",
-        odds: String(l.price.bestOdds),
-        stakeUnits: k.halfUnits > 0 ? String(Math.max(0.25, Math.round(k.halfUnits * 4) / 4)) : "1",
-        bookmaker: l.bookmaker ?? book,
-        notes: `CS2-modell ${view.model.version}: fair ${dec(side === "over" ? l.price.fairOver : l.price.fairUnder)}, edge ${pct(l.price.edge, 1)}`,
-      },
-    });
-    setModalOpen(true);
   };
 
   const sorted = useMemo(() => [...view.lines].sort((a, b) => (b.price?.edge ?? -1) - (a.price?.edge ?? -1)), [view.lines]);
@@ -412,17 +445,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
         </div>
       )}
 
-      <AddBetModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSaved={() => {
-          setModalOpen(false);
-          revalidateAll();
-        }}
-        hasOddsApiKey={settings?.hasOddsApiKey ?? false}
-        prefill={prefill}
-        unit={settings?.unitValue || 100}
-      />
+      {betModal}
     </Card>
   );
 }

@@ -8,7 +8,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
-export const PROPS_PARSE_MODEL = process.env.CS2_PROPS_PARSE_MODEL ?? "claude-opus-5-5";
+// Ren avläsning av namn och tal i kartpausen — snabbhet går före. Sonnet 5.5
+// på låg effort räcker; CS2_PROPS_PARSE_MODEL kan sätta en annan modell.
+export const PROPS_PARSE_MODEL = process.env.CS2_PROPS_PARSE_MODEL ?? "claude-sonnet-5-5";
 
 /** Marknaderna modellen kan prissätta (Cs2Market) + "other" för resten. */
 export const PROP_MARKETS = [
