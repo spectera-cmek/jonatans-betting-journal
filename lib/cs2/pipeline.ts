@@ -127,12 +127,13 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
     for (const id of opts.extraTeams) if (!teamIds.includes(id)) teamIds.push(id);
     summary.trackedTeams = teamIds.length;
 
-    // 2) Lagsidor: trupp + kommande matcher.
+    // 2) Lagsidor: trupp + kommande matcher. Turneringar lägger ut nästa
+    //    omgång först när förra är spelad, så sidan får bara vara 3 timmar gammal.
     const upcoming = new Map<number, { slug: string | null; startAt: Date | null }>();
     const horizon = Date.now() + opts.upcomingDays * DAY;
     for (const teamId of teamIds) {
       const team = await db.cs2Team.findUnique({ where: { id: teamId }, select: { slug: true, name: true } });
-      const page = parseTeamPage(await session.getHtml(hltvUrls.team(teamId, team?.slug ?? "x"), { maxAgeMs: 12 * HOUR }));
+      const page = parseTeamPage(await session.getHtml(hltvUrls.team(teamId, team?.slug ?? "x"), { maxAgeMs: 3 * HOUR }));
       if (opts.confirm) {
         // Lag som bara kommer via --team blir "vid behov", inte bevakade.
         if (!team) await db.cs2Team.create({ data: { id: teamId, name: page.name ?? `team-${teamId}`, tracked: false } });
