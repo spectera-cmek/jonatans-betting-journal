@@ -14,6 +14,7 @@ import {
   pistolWinProb,
   ratingSample,
   roundWinProb,
+  matchSpread,
   sideObsFromMap,
   timeWeight,
   type RatingModel,
@@ -116,6 +117,7 @@ interface TeamInfo {
   id: number;
   name: string;
   rank: number | null;
+  tracked: boolean;
 }
 
 interface PlayerCtx {
@@ -153,6 +155,8 @@ export interface MatchupContext {
   opening: { team1: OpeningRates; team2: OpeningRates };
   players: PlayerCtx[];
   global: GlobalModel;
+  /** Skala på lagskillnaden (matchSpread): dämpad mellan två topplag. */
+  spread: number;
   teamAngles: Array<{ teamId: number; name: string; pistolWinRate: number | null; pistolN: number; antiEcoLossRate: number | null; antiEcoN: number; mapsInWindow: number }>;
   warnings: string[];
 }
@@ -173,7 +177,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   const teams = await db.cs2Team.findMany({ where: { id: { in: [m.team1Id, m.team2Id] } } });
   const tInfo = (id: number, name: string): TeamInfo => {
     const t = teams.find((x) => x.id === id);
-    return { id, name: t?.name ?? name, rank: t?.rank ?? null };
+    return { id, name: t?.name ?? name, rank: t?.rank ?? null, tracked: t?.tracked ?? false };
   };
   const team1 = tInfo(m.team1Id, m.team1Name);
   const team2 = tInfo(m.team2Id, m.team2Name);
@@ -213,13 +217,14 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   }
 
   const r = global.ratings;
+  const spread = matchSpread(team1.tracked, team2.tracked);
   const pistolCt1 = pistolWinProb(r, team1.id, team2.id);
   const pistolCt2 = pistolWinProb(r, team2.id, team1.id);
   const dists: Record<string, MapDistribution> = {};
   for (const map of new Set([...pool, ...veto.paths.flatMap((p) => p.maps)])) {
     dists[map] = mapDistribution({
-      pCtA: roundWinProb(r, map, team1.id, team2.id, team1.id),
-      pCtB: roundWinProb(r, map, team2.id, team1.id, team1.id),
+      pCtA: roundWinProb(r, map, team1.id, team2.id, team1.id, spread),
+      pCtB: roundWinProb(r, map, team2.id, team1.id, team1.id, spread),
       pistolCtA: pistolCt1,
       pistolCtB: pistolCt2,
       conv2: r.conv2,
@@ -374,6 +379,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
     opening,
     players,
     global,
+    spread,
     teamAngles,
     warnings,
   };
@@ -682,8 +688,8 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
         pTeam1Win: d.pAWin,
         expRounds: d.expRounds,
         pOt: d.pOt,
-        team1Ct: roundWinProb(ctx.global.ratings, map, ctx.team1.id, ctx.team2.id, ctx.team1.id),
-        team2Ct: roundWinProb(ctx.global.ratings, map, ctx.team2.id, ctx.team1.id, ctx.team1.id),
+        team1Ct: roundWinProb(ctx.global.ratings, map, ctx.team1.id, ctx.team2.id, ctx.team1.id, ctx.spread),
+        team2Ct: roundWinProb(ctx.global.ratings, map, ctx.team2.id, ctx.team1.id, ctx.team1.id, ctx.spread),
         roundsLine: medianLine(d.roundsPmf),
         sample1: ratingSample(ctx.global.ratings, ctx.team1.id, map),
         sample2: ratingSample(ctx.global.ratings, ctx.team2.id, map),
