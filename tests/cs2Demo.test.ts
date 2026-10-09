@@ -13,6 +13,7 @@ import { addToGrid, placeAt, prettyPlace, cellKey } from "../lib/cs2/demo/places
 import { editDistance, linkPlayers, linkTeams, nameScore } from "../lib/cs2/demo/link";
 import { detectArchive } from "../lib/cs2/demo/archive";
 import { buildDemoQueue, type QueueMapRow } from "../lib/cs2/demo/queue";
+import { demoTeamTiers } from "../lib/cs2/demo/run";
 import { deriveRoles, type RoleInput } from "../lib/cs2/roles";
 import { WINNERS, buildEvents, buildRaw, roundTicks } from "./helpers/cs2Synthetic";
 
@@ -254,6 +255,44 @@ describe("arkiv och kö", () => {
     const q = buildDemoQueue(rows, { teams: [1, 5], priorityTeams: new Set([5]), perTeamMap: 2, since: d(1) });
     expect(q.map((s) => s.matchId)).toEqual([103, 100, 101]);
     expect(q[0].priority).toBe(true);
+
+    // Nivåer går före datum: lag 1 i en kommande toppmatch (nivå 0) slår lag 5.
+    const tiered = buildDemoQueue(rows, {
+      teams: [1, 5],
+      priorityTeams: new Set([5]),
+      perTeamMap: 2,
+      since: d(1),
+      teamTier: new Map([
+        [1, 0],
+        [5, 1],
+      ]),
+    });
+    expect(tiered.map((s) => [s.matchId, s.tier])).toEqual([
+      [100, 0],
+      [101, 0],
+      [103, 1],
+    ]);
+  });
+
+  it("lagens nivå: toppmatch, kommande match, topp 16, övriga", () => {
+    const tracked = [
+      { id: 1, rank: 3 },
+      { id: 2, rank: 10 },
+      { id: 3, rank: 30 },
+      { id: 4, rank: 5 },
+    ];
+    const tiers = demoTeamTiers(
+      [
+        { team1Id: 1, team2Id: 2 }, // båda bevakade → toppmatch
+        { team1Id: 3, team2Id: 99 }, // motståndaren är inte bevakad
+      ],
+      tracked
+    );
+    expect(tiers.get(1)).toBe(0);
+    expect(tiers.get(2)).toBe(0);
+    expect(tiers.get(3)).toBe(1);
+    expect(tiers.get(99)).toBe(1);
+    expect(tiers.get(4)).toBe(2);
   });
 });
 

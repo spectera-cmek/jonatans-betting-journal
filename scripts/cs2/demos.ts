@@ -9,6 +9,11 @@
  *   npm run cs2:demos -- --confirm --file C:\demos\x.dem --match 2380001
  *   npm run cs2:demos -- --confirm --reanalyze         # räkna om ur lokala cachen
  *   npm run cs2:demos -- --confirm --redo-match 2398725,2398730   # ladda ner och tolka om just dessa
+ *   npm run cs2:demos:batch                            # några timmar: --confirm --max-hours 3 --max-gb 10
+ *
+ * Kön går i nivåer: lag i kommande toppmatcher (båda topp 50) först, sedan
+ * övriga lag med kommande match, topp 16 och resten — nyast först. En
+ * avbruten eller tidsbegränsad körning fortsätter där den slutade nästa gång.
  *
  * Arkiven raderas efter tolkning (--keep-demos behåller dem). Kvar blir en
  * komprimerad, normaliserad kopia per karta i .cache/cs2/demos/norm.
@@ -23,6 +28,7 @@ import { HltvSession, CS2_CACHE_DIR, headedFromArgs } from "../../lib/cs2/hltv/s
 import { loadDemoparser } from "../../lib/cs2/demo/parseDemo";
 import { processDemoFile } from "../../lib/cs2/demo/process";
 import { reanalyzeCached, runDemoQueue } from "../../lib/cs2/demo/run";
+import { AVG_SERIES_GB, DEMO_TIER_LABEL } from "../../lib/cs2/demo/queue";
 import { updateDerivedRoles } from "../../lib/cs2/roles";
 
 function argValue(flag: string): string | undefined {
@@ -81,6 +87,7 @@ async function main() {
     retryFailed: process.argv.includes("--retry-failed"),
     cacheDir,
     redoMatches: listArg("--redo-match"),
+    maxMinutes: argValue("--max-hours") ? numberArg("--max-hours", 3) * 60 : undefined,
   };
   console.log(`Läge: ${confirm ? "CONFIRM" : "DRY-RUN"} · ${opts.upcomingOnly ? "lag med kommande match" : "bevakade lag"} · ${opts.perTeamMap} kartor per lag och karta, ${opts.months} mån`);
 
@@ -91,6 +98,7 @@ async function main() {
     console.log("");
     if (!confirm) {
       console.log(`Kö: ${s.queued} serier ≈ ${s.estimatedGb} GB nedladdning (raderas efter tolkning).`);
+      s.byTier.forEach((n, i) => n > 0 && console.log(`  ${DEMO_TIER_LABEL[i]}: ${n} serier ≈ ${Math.round(n * AVG_SERIES_GB * 10) / 10} GB`));
       console.log(`Med --max-gb ${opts.maxGb} och --max-series ${opts.maxSeries} tas de första i kön. Kör om med --confirm.`);
       return;
     }
@@ -103,7 +111,10 @@ async function main() {
     }
     const missing = new Set(s.results.flatMap((r) => r.missingFields));
     if (missing.size > 0) console.log(`\nFält som demoparsern inte gav: ${[...missing].join(", ")} — rapportera så kan normaliseringen anpassas.`);
-    if (s.stoppedBy) console.log(`\nStoppad av ${s.stoppedBy === "gb" ? "GB-taket" : "serietaket"} — kör igen för att fortsätta.`);
+    if (s.stoppedBy)
+      console.log(`\nStoppad av ${s.stoppedBy === "gb" ? "GB-taket" : s.stoppedBy === "time" ? "tidsgränsen" : "serietaket"} — kör igen för att fortsätta.`);
+    const left = s.queued - s.processedSeries;
+    if (left > 0) console.log(`Kvar i kön: ${left} serier ≈ ${Math.round(left * AVG_SERIES_GB * 10) / 10} GB.`);
     if (s.errors.length > 0) {
       console.log(`\n${s.errors.length} fel:`);
       for (const e of s.errors.slice(0, 20)) console.log(`  ✗ ${e}`);

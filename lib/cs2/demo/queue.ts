@@ -2,8 +2,12 @@
 // arkiv), så urvalet görs per karta men laddas per match.
 //
 // Regeln följer docens SAMPLE SIZE: för varje lag och karta räcker de senaste
-// K officiella kartorna inom M månader. Lag med en kommande match går först
-// ("vid behov"), sedan resten — nyast först.
+// K officiella kartorna inom M månader. Ordningen går efter lagens nivå
+// (DEMO_TIER_LABEL): lag i kommande toppmatcher först, sedan övriga lag med
+// kommande match, topp 16, resten — nyast först inom varje nivå.
+
+/** Nivåer i demokön, lägst först. */
+export const DEMO_TIER_LABEL = ["kommande toppmatch", "kommande match", "topp 16", "övriga bevakade"] as const;
 
 export interface QueueMapRow {
   mapId: number;
@@ -23,6 +27,8 @@ export interface QueueOptions {
   perTeamMap: number;
   since: Date;
   retryFailed?: boolean;
+  /** Lagets nivå (index i DEMO_TIER_LABEL). Saknas: 1 för priorityTeams, annars 3. */
+  teamTier?: Map<number, number>;
 }
 
 export interface QueuedSeries {
@@ -31,6 +37,8 @@ export interface QueuedSeries {
   /** Kartor i serien som behövs och saknar demofakta. */
   maps: number[];
   priority: boolean;
+  /** Bästa (lägsta) nivån bland seriens två lag. */
+  tier: number;
   playedAt: Date;
 }
 
@@ -51,6 +59,7 @@ export function buildDemoQueue(rows: QueueMapRow[], opts: QueueOptions): QueuedS
     }
   }
 
+  const tierOf = (teamId: number) => opts.teamTier?.get(teamId) ?? (opts.priorityTeams.has(teamId) ? 1 : 3);
   const series = new Map<number, QueuedSeries>();
   for (const r of needed.values()) {
     if (!r.demoUrl) continue;
@@ -58,14 +67,15 @@ export function buildDemoQueue(rows: QueueMapRow[], opts: QueueOptions): QueuedS
     if (r.demoStatus === "failed" && !opts.retryFailed) continue;
     let s = series.get(r.matchId);
     if (!s) {
-      s = { matchId: r.matchId, demoUrl: r.demoUrl, maps: [], priority: false, playedAt: r.playedAt };
+      s = { matchId: r.matchId, demoUrl: r.demoUrl, maps: [], priority: false, tier: 3, playedAt: r.playedAt };
       series.set(r.matchId, s);
     }
     s.maps.push(r.mapId);
     if (opts.priorityTeams.has(r.team1Id) || opts.priorityTeams.has(r.team2Id)) s.priority = true;
+    s.tier = Math.min(s.tier, tierOf(r.team1Id), tierOf(r.team2Id));
   }
   return [...series.values()].sort(
-    (a, b) => Number(b.priority) - Number(a.priority) || b.playedAt.getTime() - a.playedAt.getTime()
+    (a, b) => a.tier - b.tier || Number(b.priority) - Number(a.priority) || b.playedAt.getTime() - a.playedAt.getTime()
   );
 }
 
