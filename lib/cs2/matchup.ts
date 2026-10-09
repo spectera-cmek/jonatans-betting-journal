@@ -29,9 +29,14 @@ import { knownVeto, seriesProbs, vetoDistribution, vetoProfile, type VetoDistrib
 import {
   DEFAULT_KILL_PHI,
   DEFAULT_LEAGUE_PRIOR,
+  KILL_HALF_LIFE_DAYS,
   headshotPmf,
+  killHistory,
   killPmfForMap,
   killRates,
+  teamConcession,
+  vsOpponent,
+  type RateInputs,
   medianLine,
   pmfMean,
   seriesPmf,
@@ -56,6 +61,8 @@ const sinceOf = (months: number) => new Date(Date.now() - months * 30 * DAY);
 
 export interface GlobalModel {
   ratings: RatingModel;
+  /** Släppta kills per runda relativt ligan, per lag (senaste 6 mån). */
+  concession: Record<number, number>;
   league: LeagueKillPrior;
   leagueRounds: number;
   trainedMaps: number;
@@ -85,7 +92,7 @@ export async function globalModel(db: PrismaClient): Promise<GlobalModel> {
       team2Rounds: true,
       roundHistory: true,
       playedAt: true,
-      playerStats: { where: { side: "all" }, select: { playerId: true, teamId: true } },
+      playerStats: { where: { side: "all" }, select: { playerId: true, teamId: true, kills: true } },
     },
   });
   const obs = maps.flatMap((m) => sideObsFromMap(m, timeWeight(m.playedAt, now), lineupsFromPlayers(m.playerStats)));
@@ -115,7 +122,17 @@ export async function globalModel(db: PrismaClient): Promise<GlobalModel> {
   const recent = maps.filter((m) => m.playedAt >= sinceOf(6));
   const leagueRounds = recent.length ? recent.reduce((a, m) => a + m.team1Rounds + m.team2Rounds, 0) / recent.length : 21.5;
 
-  cache = { ratings, league, leagueRounds, trainedMaps: maps.length, key, at: Date.now() };
+  const concession = teamConcession(
+    recent.map((m) => ({
+      team1Id: m.team1Id,
+      team2Id: m.team2Id,
+      rounds: m.team1Rounds + m.team2Rounds,
+      kills1: m.playerStats.filter((p) => p.teamId === m.team1Id).reduce((a, p) => a + p.kills, 0),
+      kills2: m.playerStats.filter((p) => p.teamId === m.team2Id).reduce((a, p) => a + p.kills, 0),
+    }))
+  ).byTeam;
+
+  cache = { ratings, concession, league, leagueRounds, trainedMaps: maps.length, key, at: Date.now() };
   return cache;
 }
 
@@ -291,41 +308,64 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
       teamId: true,
       kills: true,
       headshots: true,
-      map: { select: { mapName: true, team1Id: true, team1Rounds: true, team2Rounds: true } },
+      map: { select: { mapName: true, playedAt: true, team1Id: true, team2Id: true, team1Rounds: true, team2Rounds: true } },
     },
   });
   const demoRows = await db.cs2DemoPlayerMap.findMany({
     where: { playerId: { in: ids }, map: { playedAt: { gte: sinceP } } },
-    select: { playerId: true, side: true, teamId: true, facts: true, mapId: true, map: { select: { mapName: true } } },
+    select: {
+      playerId: true,
+      side: true,
+      teamId: true,
+      facts: true,
+      mapId: true,
+      map: { select: { mapName: true, playedAt: true, team1Id: true, team2Id: true } },
+    },
   });
 
+  const now = new Date();
   const players: PlayerCtx[] = roster.map((p) => {
     const hl = hltvRows.filter((h) => h.playerId === p.id);
-    const hltv: Record<string, { kills: number; headshots: number | null; roundsWon: number; roundsLost: number }> = {};
+    const conc = global.concession;
+    const oppOf = (mp: { team1Id: number; team2Id: number }, teamId: number | null) => (mp.team1Id === teamId ? mp.team2Id : mp.team1Id);
+    // Viktad efter ålder och normerad för motståndet (se killHistory).
+    const hltv = killHistory(
+      hl.map((h) => ({
+        playedAt: h.map.playedAt,
+        mapName: h.map.mapName,
+        kills: h.kills,
+        headshots: h.headshots,
+        won: h.map.team1Id === h.teamId ? h.map.team1Rounds : h.map.team2Rounds,
+        lost: h.map.team1Id === h.teamId ? h.map.team2Rounds : h.map.team1Rounds,
+        opp: oppOf(h.map, h.teamId),
+      })),
+      now,
+      conc
+    );
     const kprAcc: Record<string, { k: number; r: number; maps: number }> = {};
     for (const h of hl) {
       const won = h.map.team1Id === h.teamId ? h.map.team1Rounds : h.map.team2Rounds;
       const lost = h.map.team1Id === h.teamId ? h.map.team2Rounds : h.map.team1Rounds;
-      const e = (hltv[h.map.mapName] ??= { kills: 0, headshots: 0, roundsWon: 0, roundsLost: 0 });
-      e.kills += h.kills;
-      e.headshots = e.headshots != null && h.headshots != null ? e.headshots + h.headshots : null;
-      e.roundsWon += won;
-      e.roundsLost += lost;
       const k = (kprAcc[h.map.mapName] ??= { k: 0, r: 0, maps: 0 });
       k.k += h.kills;
       k.r += won + lost;
       k.maps += 1;
     }
     const dr = demoRows.filter((d) => d.playerId === p.id);
-    const byMap = new Map<string, PlayerSideFacts[]>();
+    // Demofakta till kill-raterna: samma ålders- och motståndsvikt som HLTV.
+    const demo: RateInputs["demo"] = {};
     for (const d of dr) {
-      const list = byMap.get(d.map.mapName);
       const f = d.facts as unknown as PlayerSideFacts;
-      if (list) list.push(f);
-      else byMap.set(d.map.mapName, [f]);
+      const w = Math.pow(0.5, Math.max(0, (now.getTime() - d.map.playedAt.getTime()) / 86_400_000) / KILL_HALF_LIFE_DAYS);
+      const c = conc[oppOf(d.map, d.teamId)] ?? 1;
+      const e = (demo[d.map.mapName] ??= { killsWon: 0, killsLost: 0, roundsWon: 0, rounds: 0, headshots: 0, kills: 0 });
+      e.killsWon += (w * (f.killsWon ?? 0)) / c;
+      e.killsLost += (w * (f.killsLost ?? 0)) / c;
+      e.headshots += (w * (f.headshots ?? 0)) / c;
+      e.kills += (w * (f.kills ?? 0)) / c;
+      e.roundsWon += w * (f.roundsWon ?? 0);
+      e.rounds += w * (f.rounds ?? 0);
     }
-    const demo: Record<string, PlayerSideFacts> = {};
-    for (const [map, list] of byMap) demo[map] = sumFacts(list)!;
     const all = sumFacts(dr.map((d) => d.facts as unknown as PlayerSideFacts));
     const teamId = p.teamId!;
     const totalK = Object.values(kprAcc).reduce((a, x) => a + x.k, 0);
@@ -336,7 +376,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
       teamId,
       side: teamId === team1.id ? 1 : 2,
       role: p.roleManual ?? p.roleDerived,
-      rates: killRates({ demo, hltv }, global.league, pool),
+      rates: vsOpponent(killRates({ demo, hltv }, global.league, pool), conc[teamId === team1.id ? team2.id : team1.id] ?? 1),
       kprByMap: Object.fromEntries(Object.entries(kprAcc).map(([k, v]) => [k, { kpr: v.r > 0 ? v.k / v.r : 0, maps: v.maps }])),
       kprAll: totalR > 0 ? totalK / totalR : null,
       mapsAll: hl.length,

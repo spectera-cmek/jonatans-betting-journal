@@ -428,6 +428,7 @@ describe("matchup utan databas", () => {
     fives: {},
     global: {
       ratings: { mapBias: {}, ct: {}, t: {}, pistolBias: 0, pistol: {}, team1Bias: 0, conv2: 0.8, conv3: 0.7, rounds: {} },
+      concession: {},
       league: DEFAULT_LEAGUE_PRIOR,
       leagueRounds: 21.5,
       trainedMaps: 100,
