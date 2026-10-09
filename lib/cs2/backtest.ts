@@ -15,6 +15,9 @@ import { flipDistribution, mapDistribution, DEFAULT_SIGMA, type MapDistribution 
 import {
   conversionRates,
   fitRatings,
+  lineupsFromPlayers,
+  DEFAULT_TAU_PLAYER,
+  DEFAULT_TAU_TEAM_WITH_PLAYERS,
   pistolObsFromMap,
   pistolWinProb,
   roundWinProb,
@@ -138,16 +141,16 @@ export function runBacktest(mapsIn: BacktestMap[], opts: BacktestOptions = {}): 
       if (!model || t - fittedAt >= refitMs) {
         const past = maps.slice(0, i);
         model = fitRatings(
-          past.flatMap((x) => sideObsFromMap(x, timeWeight(x.playedAt, m.playedAt))),
+          past.flatMap((x) => sideObsFromMap(x, timeWeight(x.playedAt, m.playedAt), lineupsFromPlayers(x.players))),
           past.flatMap((x) => pistolObsFromMap(x, timeWeight(x.playedAt, m.playedAt))),
           conversionRates(past.map((x) => x.roundHistory)),
-          { iterations: 40, ...opts.rating }
+          { iterations: 40, tauPlayer: DEFAULT_TAU_PLAYER, tauTeam: DEFAULT_TAU_TEAM_WITH_PLAYERS, ...opts.rating }
         );
         fittedAt = t;
       }
       const dist: MapDistribution = mapDistribution({
-        pCtA: roundWinProb(model, m.mapName, m.team1Id, m.team2Id, m.team1Id),
-        pCtB: roundWinProb(model, m.mapName, m.team2Id, m.team1Id, m.team1Id),
+        pCtA: roundWinProb(model, m.mapName, m.team1Id, m.team2Id, m.team1Id, 1, lineupsFromPlayers(m.players)),
+        pCtB: roundWinProb(model, m.mapName, m.team2Id, m.team1Id, m.team1Id, 1, lineupsFromPlayers(m.players)),
         pistolCtA: pistolWinProb(model, m.team1Id, m.team2Id),
         pistolCtB: pistolWinProb(model, m.team2Id, m.team1Id),
         conv2: model.conv2,

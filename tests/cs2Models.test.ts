@@ -5,6 +5,7 @@ import {
   pistolObsFromMap,
   pistolWinProb,
   roundWinProb,
+  lineupsFromPlayers,
   matchSpread,
   TOP_TIER_SPREAD,
   sideObsFromMap,
@@ -84,6 +85,33 @@ describe("ratings", () => {
     expect(damped).toBeLessThan(full);
     expect(damped).toBeGreaterThan(roundWinProb(model, "nuke", 1, 2, undefined, 0));
     expect(roundWinProb(model, "nuke", 1, 2, undefined, 0)).toBeCloseTo(roundWinProb(model, "nuke", 2, 1, undefined, 0), 1);
+  });
+  it("spelarläge: en spelare tar med sig sin nivå till ett nytt lag", () => {
+    // Lag 1 (spelare 1–5) och lag 3 (11–15) möter lag 2 (6–10). I lag 1 och
+    // lag 3 spelar varannan karta en stjärna (1) resp. en svag (11) som femte man.
+    const obs = [];
+    for (let i = 0; i < 40; i++) {
+      const star = i % 2 === 0;
+      const l1 = star ? [1, 2, 3, 4, 5] : [16, 2, 3, 4, 5];
+      const l3 = star ? [11, 12, 13, 14, 15] : [17, 12, 13, 14, 15];
+      const l2 = [6, 7, 8, 9, 10];
+      const lu = (a: number[], b: number[], ta: number, tb: number) => lineupsFromPlayers([...a.map((p) => ({ playerId: p, teamId: ta })), ...b.map((p) => ({ playerId: p, teamId: tb }))]);
+      const m = (ta: number, tb: number, a: number, d: number, c: number, b: number) => ({ mapName: "nuke", team1Id: ta, team2Id: tb, team1CtRounds: a, team1TRounds: b, team2CtRounds: c, team2TRounds: d });
+      // Med stjärnan vinner laget klart, utan är det jämnt.
+      obs.push(...sideObsFromMap(m(1, 2, star ? 9 : 6, star ? 3 : 6, star ? 3 : 6, star ? 8 : 6), 1, lu(l1, l2, 1, 2)));
+      obs.push(...sideObsFromMap(m(3, 2, 6, 6, 6, 6), 1, lu(l3, l2, 3, 2)));
+    }
+    const model = fitRatings(obs, [], { conv2: 0.8, conv3: 0.7 }, { tauPlayer: 1.2, tauTeam: 0.3, iterations: 60 });
+    expect(model.playerCt![1]).toBeGreaterThan(model.playerCt![16]);
+    const withStar = roundWinProb(model, "nuke", 3, 2, undefined, 1, { 3: [1, 12, 13, 14, 15], 2: [6, 7, 8, 9, 10] });
+    const usual = roundWinProb(model, "nuke", 3, 2, undefined, 1, { 3: [11, 12, 13, 14, 15], 2: [6, 7, 8, 9, 10] });
+    const unknown = roundWinProb(model, "nuke", 3, 2, undefined, 1, { 3: [99, 12, 13, 14, 15], 2: [6, 7, 8, 9, 10] });
+    expect(withStar).toBeGreaterThan(usual + 0.01);
+    expect(Math.abs(unknown - usual)).toBeLessThan(withStar - usual);
+    // Utan uppgivna femmor används lagets senaste.
+    expect(model.lineups![2]).toEqual([6, 7, 8, 9, 10]);
+    // Lagläget (utan tauPlayer) har inga spelarvärden.
+    expect(fitRatings(obs, [], { conv2: 0.8, conv3: 0.7 }).playerCt).toBeUndefined();
   });
   it("dämpar bara när båda lagen är topplag", () => {
     expect(matchSpread(true, true)).toBe(TOP_TIER_SPREAD);
@@ -397,6 +425,7 @@ describe("matchup utan databas", () => {
     spread: 0.8,
     lineupChanges: [],
     lineupKnown: false,
+    fives: {},
     global: {
       ratings: { mapBias: {}, ct: {}, t: {}, pistolBias: 0, pistol: {}, team1Bias: 0, conv2: 0.8, conv3: 0.7, rounds: {} },
       league: DEFAULT_LEAGUE_PRIOR,
