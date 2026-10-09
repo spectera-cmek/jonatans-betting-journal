@@ -134,6 +134,10 @@ export async function applyMatchPage(
     lan: page.lan,
     vetoText: page.vetoLines.length ? page.vetoLines.join("\n") : null,
     demoUrl: page.demoUrl,
+    // En sida utan uppställningar (trasig eller TBD) skriver inte över en känd.
+    ...(page.lineups.some((l) => l.teamId != null && l.players.length >= 5)
+      ? { lineups: page.lineups.map((l) => ({ teamId: l.teamId, players: l.players })) }
+      : {}),
     pageFetchedAt: new Date(),
   };
   const existing = await db.cs2Match.findUnique({ where: { id: matchId }, select: { demoStatus: true } });

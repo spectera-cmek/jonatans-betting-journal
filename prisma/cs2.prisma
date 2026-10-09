@@ -90,6 +90,8 @@ model Cs2Match {
   /// none | done | failed | unavailable
   demoStatus    String    @default("none")
   demoError     String?
+  /// Uppställningar från matchsidan: [{ teamId, players: [{ id, nickname }] }].
+  lineups       Json?
   pageFetchedAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
