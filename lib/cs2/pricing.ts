@@ -8,7 +8,7 @@ import { blendProb, marketProbOver } from "../shotModel";
 
 /** Modellvikt mot bokens avviggade pris. 1 = ren modell. */
 export const DEFAULT_CS2_BLEND_W = 0.5;
-export const CS2_MODEL_VERSION = "cs2-v4";
+export const CS2_MODEL_VERSION = "cs2-v5";
 
 export interface Price {
   /** P(över / sida 1) ur modellen, betingat på ingen push. */

@@ -11,14 +11,24 @@
 // (w, l) kommer ur kartmodellen och fördelningen av kartor ur vetot — så
 // "karta 1–2" blir en blandning över kartpar och slutresultat, inte ett snitt.
 // Böckernas regler skiljer sig om övertid räknas; båda varianterna stöds.
+//
+// Historiken vägs med halveringstid (KILL_HALF_LIFE_DAYS) och justeras för
+// motståndet: kills mot ett lag som släpper till många kills räknas ner, och
+// raten skalas upp eller ner efter kommande motståndares släppta kills
+// (teamConcession). Allt valt med walk-forward-backtest på 33 674
+// spelare-kartor: log-score 3,0874 → 3,0749, MAE 4,26 → 4,20 kills.
 
 import { convolvePmf, negBinPmfVector, lineProbs } from "../shotModel";
 import type { PlayerSideFacts } from "./demo/types";
 import type { MapDistribution } from "./mapModel";
 import type { VetoDistribution } from "./veto";
 
-/** Dispersion för kills givet rundorna. Satt nära Poisson; justeras av backtestet. */
-export const DEFAULT_KILL_PHI = 40;
+/** Dispersion för kills givet rundorna (log-score-optimum i backtestet). */
+export const DEFAULT_KILL_PHI = 60;
+/** Halveringstid för spelarens kill-historik. */
+export const KILL_HALF_LIFE_DAYS = 60;
+/** Krympning (rundor) av ett lags släppta kills mot ligan. */
+export const CONCESSION_SHRINK_ROUNDS = 300;
 export const MAX_KILLS_MAP = 70;
 export const MAX_KILLS_SERIES = 140;
 
@@ -41,6 +51,68 @@ export const DEFAULT_LEAGUE_PRIOR: LeagueKillPrior = { kw: 0.88, kl: 0.42, hs: 0
 
 const shrink = (num: number, den: number, prior: number, k: number) => (num + k * prior) / (den + k);
 
+/**
+ * Krympning i rundor (kw/kl). Kartnivån krymps hårt: en spelares kills på en
+ * enskild karta är mest brus, hans totala nivå säger mer (backtest: 30 → 200).
+ */
+export const KILL_SHRINK = { all: 60, map: 200 };
+
+/**
+ * Hur många kills ett lag släpper till per runda, relativt ligan (1 = snitt).
+ * `kills` = kills av lag 1:s respektive lag 2:s spelare på kartan.
+ */
+export function teamConcession(
+  maps: Array<{ team1Id: number; team2Id: number; rounds: number; kills1: number; kills2: number }>,
+  k = CONCESSION_SHRINK_ROUNDS
+): { byTeam: Record<number, number>; league: number } {
+  const acc: Record<number, { k: number; r: number }> = {};
+  let K = 0;
+  let R = 0;
+  for (const m of maps) {
+    if (m.rounds <= 0) continue;
+    (acc[m.team1Id] ??= { k: 0, r: 0 }).k += m.kills2;
+    acc[m.team1Id].r += m.rounds;
+    (acc[m.team2Id] ??= { k: 0, r: 0 }).k += m.kills1;
+    acc[m.team2Id].r += m.rounds;
+    K += m.kills1 + m.kills2;
+    R += 2 * m.rounds;
+  }
+  const league = R > 0 ? K / R : 0.66;
+  const byTeam: Record<number, number> = {};
+  for (const [team, a] of Object.entries(acc)) byTeam[Number(team)] = (a.k + k * league) / (a.r + k) / league;
+  return { byTeam, league };
+}
+
+/**
+ * HLTV-historik per karta, viktad efter ålder och normerad för motståndet
+ * (kills delas med motståndarens släppta-kills-faktor).
+ */
+export function killHistory(
+  rows: Array<{ playedAt: Date; mapName: string; kills: number; headshots: number | null; won: number; lost: number; opp: number | null }>,
+  now: Date,
+  concession: Record<number, number> = {},
+  halfLifeDays = KILL_HALF_LIFE_DAYS
+): RateInputs["hltv"] {
+  const out: RateInputs["hltv"] = {};
+  for (const r of rows) {
+    const age = Math.max(0, (now.getTime() - r.playedAt.getTime()) / 86_400_000);
+    const w = Math.pow(0.5, age / halfLifeDays);
+    const f = r.opp != null ? concession[r.opp] ?? 1 : 1;
+    const e = (out[r.mapName] ??= { kills: 0, headshots: 0, roundsWon: 0, roundsLost: 0 });
+    e.kills += (w * r.kills) / f;
+    e.headshots = e.headshots != null && r.headshots != null ? e.headshots + (w * r.headshots) / f : null;
+    e.roundsWon += w * r.won;
+    e.roundsLost += w * r.lost;
+  }
+  return out;
+}
+
+/** Kill-raterna skalade efter kommande motståndares släppta kills. */
+export function vsOpponent<T extends Record<string, KillRates>>(rates: T, factor: number): T {
+  if (factor === 1) return rates;
+  return Object.fromEntries(Object.entries(rates).map(([k, r]) => [k, { ...r, kw: r.kw * factor, kl: r.kl * factor }])) as T;
+}
+
 export interface RateInputs {
   /** Demofakta per karta (båda sidor summerade). */
   demo: Record<string, Pick<PlayerSideFacts, "killsWon" | "killsLost" | "roundsWon" | "rounds" | "headshots" | "kills">>;
@@ -52,7 +124,13 @@ export interface RateInputs {
  * Kill-rater per karta. Demofakta ger kw/kl direkt; finns bara HLTV-siffror
  * delas kills upp med ligans kvot kw/kl.
  */
-export function killRates(inp: RateInputs, league: LeagueKillPrior, maps: string[]): Record<string, KillRates> & { all: KillRates } {
+export function killRates(
+  inp: RateInputs,
+  league: LeagueKillPrior,
+  maps: string[],
+  /** Krympning i rundor: spelarens nivå mot ligan och kartan mot spelarens nivå. */
+  shrinkRounds: { all: number; map: number } = KILL_SHRINK
+): Record<string, KillRates> & { all: KillRates } {
   const ratio = league.kw / league.kl;
   const obs = new Map<string, { kwN: number; kwD: number; klN: number; klD: number; hsN: number; hsD: number; rounds: number }>();
   const allMaps = new Set([...Object.keys(inp.demo), ...Object.keys(inp.hltv), ...maps]);
@@ -85,8 +163,8 @@ export function killRates(inp: RateInputs, league: LeagueKillPrior, maps: string
   const sum = { kwN: 0, kwD: 0, klN: 0, klD: 0, hsN: 0, hsD: 0, rounds: 0 };
   for (const o of obs.values()) for (const k of Object.keys(sum) as Array<keyof typeof sum>) sum[k] += o[k];
   const all: KillRates = {
-    kw: shrink(sum.kwN, sum.kwD, league.kw, 40),
-    kl: shrink(sum.klN, sum.klD, league.kl, 40),
+    kw: shrink(sum.kwN, sum.kwD, league.kw, shrinkRounds.all),
+    kl: shrink(sum.klN, sum.klD, league.kl, shrinkRounds.all),
     hs: shrink(sum.hsN, sum.hsD, league.hs, 80),
     rounds: sum.rounds,
   };
@@ -94,8 +172,8 @@ export function killRates(inp: RateInputs, league: LeagueKillPrior, maps: string
   for (const m of allMaps) {
     const o = obs.get(m)!;
     out[m] = {
-      kw: shrink(o.kwN, o.kwD, all.kw, 30),
-      kl: shrink(o.klN, o.klD, all.kl, 30),
+      kw: shrink(o.kwN, o.kwD, all.kw, shrinkRounds.map),
+      kl: shrink(o.klN, o.klD, all.kl, shrinkRounds.map),
       hs: shrink(o.hsN, o.hsD, all.hs, 60),
       rounds: o.rounds,
     };
