@@ -15,6 +15,10 @@ import {
   ratingSample,
   roundWinProb,
   matchSpread,
+  lineupsFromPlayers,
+  DEFAULT_TAU_PLAYER,
+  DEFAULT_TAU_TEAM_WITH_PLAYERS,
+  PLAYER_MODE_ITERATIONS,
   sideObsFromMap,
   timeWeight,
   type RatingModel,
@@ -81,11 +85,16 @@ export async function globalModel(db: PrismaClient): Promise<GlobalModel> {
       team2Rounds: true,
       roundHistory: true,
       playedAt: true,
+      playerStats: { where: { side: "all" }, select: { playerId: true, teamId: true } },
     },
   });
-  const obs = maps.flatMap((m) => sideObsFromMap(m, timeWeight(m.playedAt, now)));
+  const obs = maps.flatMap((m) => sideObsFromMap(m, timeWeight(m.playedAt, now), lineupsFromPlayers(m.playerStats)));
   const pistols = maps.flatMap((m) => pistolObsFromMap(m, timeWeight(m.playedAt, now)));
-  const ratings = fitRatings(obs, pistols, conversionRates(maps.map((m) => m.roundHistory)));
+  const ratings = fitRatings(obs, pistols, conversionRates(maps.map((m) => m.roundHistory)), {
+    tauPlayer: DEFAULT_TAU_PLAYER,
+    tauTeam: DEFAULT_TAU_TEAM_WITH_PLAYERS,
+    iterations: PLAYER_MODE_ITERATIONS,
+  });
 
   // Ligans kill-nivå ur ett urval demofakta (de senaste raderna räcker gott).
   const sample = await db.cs2DemoPlayerMap.findMany({ orderBy: { id: "desc" }, take: 3000, select: { facts: true } });
@@ -162,6 +171,8 @@ export interface MatchupContext {
   lineupChanges: LineupChange[];
   /** Spelarna kommer från matchsidans uppställning (inte lagens trupper). */
   lineupKnown: boolean;
+  /** Femmorna i prissättningen (tom = lagens senaste). */
+  fives: Record<number, number[]>;
   teamAngles: Array<{ teamId: number; name: string; pistolWinRate: number | null; pistolN: number; antiEcoLossRate: number | null; antiEcoN: number; mapsInWindow: number }>;
   warnings: string[];
 }
@@ -238,13 +249,16 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
 
   const r = global.ratings;
   const spread = matchSpread(team1.tracked, team2.tracked);
+  // Femmorna som prissätts: matchsidans uppställning, annars lagens senaste.
+  const known = matchLineups(m.lineups, [team1.id, team2.id]);
+  const fives: Record<number, number[]> = known ? Object.fromEntries(known.map((l) => [l.teamId, l.players.map((p) => p.id)])) : {};
   const pistolCt1 = pistolWinProb(r, team1.id, team2.id);
   const pistolCt2 = pistolWinProb(r, team2.id, team1.id);
   const dists: Record<string, MapDistribution> = {};
   for (const map of new Set([...pool, ...veto.paths.flatMap((p) => p.maps)])) {
     dists[map] = mapDistribution({
-      pCtA: roundWinProb(r, map, team1.id, team2.id, team1.id, spread),
-      pCtB: roundWinProb(r, map, team2.id, team1.id, team1.id, spread),
+      pCtA: roundWinProb(r, map, team1.id, team2.id, team1.id, spread, fives),
+      pCtB: roundWinProb(r, map, team2.id, team1.id, team1.id, spread, fives),
       pistolCtA: pistolCt1,
       pistolCtB: pistolCt2,
       conv2: r.conv2,
@@ -258,7 +272,6 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   // Spelare: matchens uppställning när HLTV visar den (stand-ins med),
   // annars lagens trupper.
   const sinceP = sinceOf(6);
-  const known = matchLineups(m.lineups, [team1.id, team2.id]);
   const rosterRows = known
     ? await db.cs2Player.findMany({ where: { id: { in: known.flatMap((l) => l.players.map((p) => p.id)) } } })
     : await db.cs2Player.findMany({ where: { teamId: { in: [team1.id, team2.id] } } });
@@ -429,6 +442,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
     spread,
     lineupChanges,
     lineupKnown: known != null,
+    fives,
     teamAngles,
     warnings,
   };
@@ -739,8 +753,8 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
         pTeam1Win: d.pAWin,
         expRounds: d.expRounds,
         pOt: d.pOt,
-        team1Ct: roundWinProb(ctx.global.ratings, map, ctx.team1.id, ctx.team2.id, ctx.team1.id, ctx.spread),
-        team2Ct: roundWinProb(ctx.global.ratings, map, ctx.team2.id, ctx.team1.id, ctx.team1.id, ctx.spread),
+        team1Ct: roundWinProb(ctx.global.ratings, map, ctx.team1.id, ctx.team2.id, ctx.team1.id, ctx.spread, ctx.fives),
+        team2Ct: roundWinProb(ctx.global.ratings, map, ctx.team2.id, ctx.team1.id, ctx.team1.id, ctx.spread, ctx.fives),
         roundsLine: medianLine(d.roundsPmf),
         sample1: ratingSample(ctx.global.ratings, ctx.team1.id, map),
         sample2: ratingSample(ctx.global.ratings, ctx.team2.id, map),
