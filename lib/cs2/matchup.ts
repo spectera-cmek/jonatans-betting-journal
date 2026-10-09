@@ -14,6 +14,7 @@ import {
   pistolWinProb,
   ratingSample,
   roundWinProb,
+  matchSpread,
   sideObsFromMap,
   timeWeight,
   type RatingModel,
@@ -38,6 +39,7 @@ import { CS2_MODEL_VERSION, DEFAULT_CS2_BLEND_W, priceTwoWay, type Price } from 
 import { buildAngles, type Angle } from "./angles";
 import { lineProbs } from "../shotModel";
 import { sumFacts } from "./profiles";
+import { lineupChange, LINEUP_RECENT_MAPS, type LineupChange } from "./lineup";
 import { CS2_MARKET_LABEL, CS2_SCOPE_LABEL, PLAYER_MARKETS, type Cs2Market, type Cs2Scope, type SeriesFormat, type Side } from "./types";
 import { DEFAULT_SIGMA } from "./mapModel";
 
@@ -116,6 +118,7 @@ interface TeamInfo {
   id: number;
   name: string;
   rank: number | null;
+  tracked: boolean;
 }
 
 interface PlayerCtx {
@@ -153,8 +156,29 @@ export interface MatchupContext {
   opening: { team1: OpeningRates; team2: OpeningRates };
   players: PlayerCtx[];
   global: GlobalModel;
+  /** Skala på lagskillnaden (matchSpread): dämpad mellan två topplag. */
+  spread: number;
+  /** Matchens uppställning jämfört med lagens vanliga femma. */
+  lineupChanges: LineupChange[];
+  /** Spelarna kommer från matchsidans uppställning (inte lagens trupper). */
+  lineupKnown: boolean;
   teamAngles: Array<{ teamId: number; name: string; pistolWinRate: number | null; pistolN: number; antiEcoLossRate: number | null; antiEcoN: number; mapsInWindow: number }>;
   warnings: string[];
+}
+
+/**
+ * Matchsidans uppställningar för de två lagen, eller null om någon saknas
+ * eller har färre än fem spelare (sidan visar då inget säkert).
+ */
+export function matchLineups(raw: unknown, teamIds: number[]): Array<{ teamId: number; players: Array<{ id: number; nickname: string }> }> | null {
+  if (!Array.isArray(raw)) return null;
+  const out = teamIds.map((id) => {
+    const l = raw.find((x) => x && typeof x === "object" && (x as { teamId?: unknown }).teamId === id) as
+      | { teamId: number; players?: Array<{ id: number; nickname: string }> }
+      | undefined;
+    return l && Array.isArray(l.players) && l.players.length >= 5 ? { teamId: id, players: l.players.slice(0, 5) } : null;
+  });
+  return out.every((x) => x != null) ? (out as Array<{ teamId: number; players: Array<{ id: number; nickname: string }> }>) : null;
 }
 
 async function teamOpening(db: PrismaClient, teamId: number, since: Date) {
@@ -173,7 +197,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   const teams = await db.cs2Team.findMany({ where: { id: { in: [m.team1Id, m.team2Id] } } });
   const tInfo = (id: number, name: string): TeamInfo => {
     const t = teams.find((x) => x.id === id);
-    return { id, name: t?.name ?? name, rank: t?.rank ?? null };
+    return { id, name: t?.name ?? name, rank: t?.rank ?? null, tracked: t?.tracked ?? false };
   };
   const team1 = tInfo(m.team1Id, m.team1Name);
   const team2 = tInfo(m.team2Id, m.team2Name);
@@ -213,13 +237,14 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   }
 
   const r = global.ratings;
+  const spread = matchSpread(team1.tracked, team2.tracked);
   const pistolCt1 = pistolWinProb(r, team1.id, team2.id);
   const pistolCt2 = pistolWinProb(r, team2.id, team1.id);
   const dists: Record<string, MapDistribution> = {};
   for (const map of new Set([...pool, ...veto.paths.flatMap((p) => p.maps)])) {
     dists[map] = mapDistribution({
-      pCtA: roundWinProb(r, map, team1.id, team2.id, team1.id),
-      pCtB: roundWinProb(r, map, team2.id, team1.id, team1.id),
+      pCtA: roundWinProb(r, map, team1.id, team2.id, team1.id, spread),
+      pCtB: roundWinProb(r, map, team2.id, team1.id, team1.id, spread),
       pistolCtA: pistolCt1,
       pistolCtB: pistolCt2,
       conv2: r.conv2,
@@ -230,9 +255,21 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   }
   const series = seriesProbs(format, veto, (map) => dists[map]?.pAWin ?? 0.5);
 
-  // Spelare: nuvarande trupper.
+  // Spelare: matchens uppställning när HLTV visar den (stand-ins med),
+  // annars lagens trupper.
   const sinceP = sinceOf(6);
-  const roster = await db.cs2Player.findMany({ where: { teamId: { in: [team1.id, team2.id] } } });
+  const known = matchLineups(m.lineups, [team1.id, team2.id]);
+  const rosterRows = known
+    ? await db.cs2Player.findMany({ where: { id: { in: known.flatMap((l) => l.players.map((p) => p.id)) } } })
+    : await db.cs2Player.findMany({ where: { teamId: { in: [team1.id, team2.id] } } });
+  const roster = known
+    ? known.flatMap((l) =>
+        l.players.map((lp) => {
+          const row = rosterRows.find((r) => r.id === lp.id);
+          return { id: lp.id, nickname: row?.nickname ?? lp.nickname, teamId: l.teamId, roleManual: row?.roleManual ?? null, roleDerived: row?.roleDerived ?? null };
+        })
+      )
+    : rosterRows;
   const ids = roster.map((p) => p.id);
   const hltvRows = await db.cs2PlayerMap.findMany({
     where: { playerId: { in: ids }, side: "all", map: { playedAt: { gte: sinceP } } },
@@ -301,6 +338,21 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
   for (const t of [team1, team2]) {
     const n = players.filter((p) => p.teamId === t.id).length;
     if (n < 5) warnings.push(`${t.name}: ${n} spelare i truppen i databasen — kör cs2:ingest så att truppen läses in.`);
+  }
+
+  // Uppställningen mot lagens vanliga femma (senaste kartorna).
+  const lineupChanges: LineupChange[] = [];
+  for (const t of [team1, team2]) {
+    const recentMaps = await db.cs2Map.findMany({
+      where: { OR: [{ team1Id: t.id }, { team2Id: t.id }], playedAt: { gte: sinceOf(3) }, statsFetchedAt: { not: null } },
+      orderBy: { playedAt: "desc" },
+      take: LINEUP_RECENT_MAPS,
+      select: { id: true, playedAt: true, playerStats: { where: { side: "all", teamId: t.id }, select: { playerId: true, nickname: true, kills: true } } },
+    });
+    const rows = recentMaps.flatMap((mp) => mp.playerStats.map((ps) => ({ mapId: mp.id, playedAt: mp.playedAt, ...ps })));
+    const current = players.filter((p) => p.teamId === t.id).map((p) => ({ playerId: p.playerId, nickname: p.nickname }));
+    const change = lineupChange(t.id, rows, current, { reportNew: known != null });
+    if (change) lineupChanges.push(change);
   }
 
   // Öppningar och lagets demofakta.
@@ -374,6 +426,9 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
     opening,
     players,
     global,
+    spread,
+    lineupChanges,
+    lineupKnown: known != null,
     teamAngles,
     warnings,
   };
@@ -592,6 +647,8 @@ export interface MatchupView {
   lines: PricedLine[];
   angles: Angle[];
   warnings: string[];
+  lineupChanges: Array<LineupChange & { teamName: string }>;
+  lineupKnown: boolean;
   model: { version: string; blendW: number; phi: number; sigma: number; trainedMaps: number; leagueRounds: number };
   /** Fair odds per spelare, karta och linje — snabbläget. */
   ladder: PropLadder;
@@ -682,8 +739,8 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
         pTeam1Win: d.pAWin,
         expRounds: d.expRounds,
         pOt: d.pOt,
-        team1Ct: roundWinProb(ctx.global.ratings, map, ctx.team1.id, ctx.team2.id, ctx.team1.id),
-        team2Ct: roundWinProb(ctx.global.ratings, map, ctx.team2.id, ctx.team1.id, ctx.team1.id),
+        team1Ct: roundWinProb(ctx.global.ratings, map, ctx.team1.id, ctx.team2.id, ctx.team1.id, ctx.spread),
+        team2Ct: roundWinProb(ctx.global.ratings, map, ctx.team2.id, ctx.team1.id, ctx.team1.id, ctx.spread),
         roundsLine: medianLine(d.roundsPmf),
         sample1: ratingSample(ctx.global.ratings, ctx.team1.id, map),
         sample2: ratingSample(ctx.global.ratings, ctx.team2.id, map),
@@ -761,6 +818,8 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
     lines: priced,
     angles,
     warnings: ctx.warnings,
+    lineupChanges: ctx.lineupChanges.map((c) => ({ ...c, teamName: c.teamId === ctx.team1.id ? ctx.team1.name : ctx.team2.name })),
+    lineupKnown: ctx.lineupKnown,
     model: {
       version: CS2_MODEL_VERSION,
       blendW,

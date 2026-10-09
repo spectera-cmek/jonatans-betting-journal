@@ -56,6 +56,19 @@ export interface RatingOptions {
 /** Standard, valda med walk-forward-backtest på HLTV-data (se backtest.ts). */
 export const DEFAULT_ROUND_DISPERSION = 4;
 export const DEFAULT_TAU_TEAM1 = 0.2;
+/**
+ * Mellan två topplag (båda bevakade, topp 50) är skillnaderna i förmåga
+ * mindre än modellen skattar: i walk-forward-backtest vann en favorit på
+ * 67 % bara 60 % av kartorna. Lagskillnaden skalas därför ner där. Värdet
+ * valdes på första halvan av datan och höll på andra (log-loss topp mot
+ * topp 0,6897 → 0,6883). För övriga matcher gav ingen skala stabil vinst.
+ */
+export const TOP_TIER_SPREAD = 0.8;
+
+/** Skalan på lagskillnaden för en match (se TOP_TIER_SPREAD). */
+export function matchSpread(team1Tracked: boolean, team2Tracked: boolean): number {
+  return team1Tracked && team2Tracked ? TOP_TIER_SPREAD : 1;
+}
 
 export interface RatingModel {
   mapBias: Record<string, number>;
@@ -309,13 +322,14 @@ function ability(store: Record<string, number>, team: number, map: string): numb
 
 /**
  * P(CT-laget vinner en köprunda mot T-laget på kartan). `team1` = HLTV:s
- * lag 1 i matchen, för lag 1-fördelen (utelämnad = ingen fördel).
+ * lag 1 i matchen, för lag 1-fördelen (utelämnad = ingen fördel). `spread`
+ * skalar lagskillnaden (se matchSpread); kartans CT-fördel och lag 1-fördelen
+ * påverkas inte.
  */
-export function roundWinProb(model: RatingModel, map: string, ctTeam: number, tTeam: number, team1?: number): number {
+export function roundWinProb(model: RatingModel, map: string, ctTeam: number, tTeam: number, team1?: number, spread = 1): number {
   return sigmoid(
     (model.mapBias[map] ?? 0) +
-      ability(model.ct, ctTeam, map) -
-      ability(model.t, tTeam, map) +
+      spread * (ability(model.ct, ctTeam, map) - ability(model.t, tTeam, map)) +
       (model.team1Bias ?? 0) * team1Sign(ctTeam, tTeam, team1)
   );
 }

@@ -13,6 +13,7 @@ import { GameplanView } from "@/components/cs2/GameplanView";
 import { LinesPanel } from "@/components/cs2/LinesPanel";
 import { ManualVeto } from "@/components/cs2/ManualVeto";
 import { QuickProps } from "@/components/cs2/QuickProps";
+import { LineupChanges } from "@/components/cs2/LineupChanges";
 import { Cs2Empty, Cs2NoDb, TeamLink, dateLabel, dec, pct } from "@/components/cs2/common";
 
 type Resp =
@@ -86,6 +87,8 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
           ))}
         </div>
       )}
+
+      <LineupChanges v={v} />
 
       <Card style={{ marginBottom: 16 }}>
         <div className="ap-shot-summary" style={{ flexWrap: "wrap", gap: 22 }}>

@@ -5,6 +5,8 @@ import {
   pistolObsFromMap,
   pistolWinProb,
   roundWinProb,
+  matchSpread,
+  TOP_TIER_SPREAD,
   sideObsFromMap,
   timeWeight,
   DEFAULT_CONV2,
@@ -76,6 +78,17 @@ describe("ratings", () => {
     // Okänt lag och okänd karta faller tillbaka mot neutralt.
     expect(roundWinProb(model, "inferno", 9, 8)).toBeCloseTo(0.5, 5);
     expect(pistolWinProb(model, 1, 2)).toBeGreaterThan(0.55);
+    // Dämpad lagskillnad mellan topplag: närmare mitten, samma favorit.
+    const full = roundWinProb(model, "nuke", 1, 2);
+    const damped = roundWinProb(model, "nuke", 1, 2, undefined, TOP_TIER_SPREAD);
+    expect(damped).toBeLessThan(full);
+    expect(damped).toBeGreaterThan(roundWinProb(model, "nuke", 1, 2, undefined, 0));
+    expect(roundWinProb(model, "nuke", 1, 2, undefined, 0)).toBeCloseTo(roundWinProb(model, "nuke", 2, 1, undefined, 0), 1);
+  });
+  it("dämpar bara när båda lagen är topplag", () => {
+    expect(matchSpread(true, true)).toBe(TOP_TIER_SPREAD);
+    expect(matchSpread(true, false)).toBe(1);
+    expect(matchSpread(false, false)).toBe(1);
   });
 });
 
@@ -350,8 +363,8 @@ describe("matchup utan databas", () => {
   const neutral = openingRates([], []);
   const ctx: MatchupContext = {
     match: { id: 1, startAt: new Date("2026-10-10T18:00:00Z"), status: "scheduled", eventName: "Test", lan: true },
-    team1: { id: 10, name: "Alpha", rank: 1 },
-    team2: { id: 20, name: "Beta", rank: 9 },
+    team1: { id: 10, name: "Alpha", rank: 1, tracked: true },
+    team2: { id: 20, name: "Beta", rank: 9, tracked: true },
     format: "bo3",
     pool,
     veto,
@@ -381,6 +394,9 @@ describe("matchup utan databas", () => {
         openingRounds: 0,
       }))
     ),
+    spread: 0.8,
+    lineupChanges: [],
+    lineupKnown: false,
     global: {
       ratings: { mapBias: {}, ct: {}, t: {}, pistolBias: 0, pistol: {}, team1Bias: 0, conv2: 0.8, conv3: 0.7, rounds: {} },
       league: DEFAULT_LEAGUE_PRIOR,
