@@ -8,7 +8,7 @@ import { isClosedSessionError, type HltvSession } from "../hltv/session";
 import { extractDemos } from "./archive";
 import type { DemoparserApi } from "./parseDemo";
 import { analyzeAndStore, loadNormalized, processDemoFiles, type ProcessResult } from "./process";
-import { AVG_SERIES_GB, buildDemoQueue, type QueuedSeries } from "./queue";
+import { AVG_SERIES_GB, DEMO_TIER_LABEL, buildDemoQueue, type QueuedSeries } from "./queue";
 import { DEMO_FACTS_VERSION } from "./types";
 
 const DAY = 86_400_000;
@@ -28,6 +28,8 @@ export interface DemoRunOptions {
   cacheDir: string;
   /** Tolka om exakt dessa matcher, även om de redan är klara (--redo-match). */
   redoMatches?: number[];
+  /** Sluta påbörja nya serier efter så här många minuter (--max-hours). */
+  maxMinutes?: number;
 }
 
 export interface DemoRunSummary {
@@ -38,24 +40,39 @@ export interface DemoRunSummary {
   downloadedGb: number;
   results: ProcessResult[];
   errors: string[];
-  stoppedBy: "gb" | "series" | null;
+  stoppedBy: "gb" | "series" | "time" | null;
+  /** Serier i kön per nivå (DEMO_TIER_LABEL). */
+  byTier: number[];
 }
 
 type Log = (msg: string) => void;
 
-async function teamsWithUpcoming(db: PrismaClient, days: number): Promise<number[]> {
+async function upcomingMatches(db: PrismaClient, days: number): Promise<Array<{ team1Id: number | null; team2Id: number | null }>> {
   const now = new Date();
   const until = new Date(now.getTime() + days * DAY);
-  const rows = await db.cs2Match.findMany({
+  return db.cs2Match.findMany({
     where: { status: { in: ["scheduled", "live"] }, startAt: { gte: new Date(now.getTime() - 6 * 3_600_000), lte: until } },
     select: { team1Id: true, team2Id: true },
   });
-  const ids = new Set<number>();
-  for (const r of rows) {
-    if (r.team1Id) ids.add(r.team1Id);
-    if (r.team2Id) ids.add(r.team2Id);
+}
+
+/**
+ * Lagens nivå i demokön: 0 = i en kommande match mellan två bevakade lag
+ * (ESL och liknande), 1 = annan kommande match, 2 = topp 16, 3 = övriga.
+ */
+export function demoTeamTiers(
+  upcoming: Array<{ team1Id: number | null; team2Id: number | null }>,
+  tracked: Array<{ id: number; rank: number | null }>
+): Map<number, number> {
+  const trackedIds = new Set(tracked.map((t) => t.id));
+  const tiers = new Map<number, number>();
+  const set = (id: number, tier: number) => tiers.set(id, Math.min(tiers.get(id) ?? 9, tier));
+  for (const t of tracked) set(t.id, t.rank != null && t.rank <= 16 ? 2 : 3);
+  for (const m of upcoming) {
+    const top = m.team1Id != null && m.team2Id != null && trackedIds.has(m.team1Id) && trackedIds.has(m.team2Id);
+    for (const id of [m.team1Id, m.team2Id]) if (id != null) set(id, top ? 0 : 1);
   }
-  return [...ids];
+  return tiers;
 }
 
 export async function planDemoQueue(db: PrismaClient, opts: DemoRunOptions): Promise<QueuedSeries[]> {
@@ -64,16 +81,16 @@ export async function planDemoQueue(db: PrismaClient, opts: DemoRunOptions): Pro
       where: { id: { in: opts.redoMatches }, demoUrl: { not: null } },
       select: { id: true, demoUrl: true, startAt: true, maps: { select: { id: true } } },
     });
-    return rows.map((r) => ({ matchId: r.id, demoUrl: r.demoUrl!, maps: r.maps.map((m) => m.id), priority: false, playedAt: r.startAt }));
+    return rows.map((r) => ({ matchId: r.id, demoUrl: r.demoUrl!, maps: r.maps.map((m) => m.id), priority: false, tier: 0, playedAt: r.startAt }));
   }
-  const upcoming = await teamsWithUpcoming(db, opts.days);
+  const upcomingRows = await upcomingMatches(db, opts.days);
+  const upcoming = [...new Set(upcomingRows.flatMap((r) => [r.team1Id, r.team2Id]).filter((x): x is number => x != null))];
+  const tracked = await db.cs2Team.findMany({ where: { tracked: true }, select: { id: true, rank: true } });
+  const teamTier = demoTeamTiers(upcomingRows, tracked);
   let teams: number[];
   if (opts.teams.length > 0) teams = opts.teams;
   else if (opts.upcomingOnly) teams = upcoming;
-  else {
-    const tracked = await db.cs2Team.findMany({ where: { tracked: true }, select: { id: true } });
-    teams = [...new Set([...upcoming, ...tracked.map((t) => t.id)])];
-  }
+  else teams = [...new Set([...upcoming, ...tracked.map((t) => t.id)])];
   const since = new Date(Date.now() - opts.months * 30 * DAY);
   const rows = await db.cs2Map.findMany({
     where: { playedAt: { gte: since }, OR: [{ team1Id: { in: teams } }, { team2Id: { in: teams } }] },
@@ -100,7 +117,7 @@ export async function planDemoQueue(db: PrismaClient, opts: DemoRunOptions): Pro
       demoUrl: r.match.demoUrl,
       demoStatus: r.match.demoStatus,
     })),
-    { teams, priorityTeams: new Set(upcoming), perTeamMap: opts.perTeamMap, since, retryFailed: opts.retryFailed }
+    { teams, priorityTeams: new Set(upcoming), perTeamMap: opts.perTeamMap, since, retryFailed: opts.retryFailed, teamTier }
   );
 }
 
@@ -121,8 +138,10 @@ export async function runDemoQueue(
     results: [],
     errors: [],
     stoppedBy: null,
+    byTier: DEMO_TIER_LABEL.map((_, i) => queue.filter((s) => s.tier === i).length),
   };
   if (!opts.confirm || !api) return summary;
+  const started = Date.now();
 
   const rawDir = path.join(opts.cacheDir, "demos", "raw");
   for (const series of queue) {
@@ -134,9 +153,13 @@ export async function runDemoQueue(
       summary.stoppedBy = "gb";
       break;
     }
+    if (opts.maxMinutes != null && (Date.now() - started) / 60_000 >= opts.maxMinutes) {
+      summary.stoppedBy = "time";
+      break;
+    }
     const dir = path.join(rawDir, String(series.matchId));
     try {
-      log(`  ↓ match ${series.matchId} (${series.maps.length} kartor${series.priority ? ", kommande match" : ""})`);
+      log(`  ↓ match ${series.matchId} (${series.maps.length} kartor · ${DEMO_TIER_LABEL[series.tier] ?? "övrigt"})`);
       let archive: string;
       try {
         archive = await session.downloadDemo(series.demoUrl, dir);

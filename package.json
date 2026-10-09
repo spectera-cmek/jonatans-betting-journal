@@ -65,6 +65,7 @@
     "backfill:clv-scrape": "tsx scripts/scrapeClv.ts --confirm --since-days 90",
     "cs2:ingest": "tsx scripts/cs2/ingest.ts",
     "cs2:demos": "tsx scripts/cs2/demos.ts",
+    "cs2:demos:batch": "tsx scripts/cs2/demos.ts --confirm --max-hours 3 --max-gb 10",
     "cs2:update": "tsx scripts/cs2/update.ts",
     "cs2:backtest": "tsx scripts/cs2/backtest.ts",
     "cs2:capture": "tsx scripts/cs2/capture.ts"
