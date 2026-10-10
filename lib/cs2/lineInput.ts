@@ -65,6 +65,6 @@ export function validateLine(body: Record<string, unknown>): ValidLine | string 
     underOdds,
     includesOt: body.includesOt === false ? false : true,
     bookmaker: body.bookmaker ? String(body.bookmaker).slice(0, 60) : null,
-    source: body.source === "screenshot" ? "screenshot" : "manual",
+    source: body.source === "screenshot" || body.source === "kambi" ? body.source : "manual",
   };
 }

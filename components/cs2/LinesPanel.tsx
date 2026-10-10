@@ -141,7 +141,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
   const [includesOt, setIncludesOt] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<{ bookmaker: string | null; rows: ParsedRow[] } | null>(null);
+  const [parsed, setParsed] = useState<{ bookmaker: string | null; rows: ParsedRow[]; source: "screenshot" | "kambi" } | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { logBet, betModal, bankroll } = useLogBet(view, book);
@@ -221,7 +221,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
       await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker));
       const rows = results.flatMap((r) => r?.rows ?? []);
       const bookmaker = results.find((r) => r?.bookmaker)?.bookmaker ?? null;
-      if (rows.length > 0) setParsed({ bookmaker, rows });
+      if (rows.length > 0) setParsed({ bookmaker, rows, source: "screenshot" });
       if (bookmaker) setBook(bookmaker);
       if (failed.length) setErr(failed.join(" · "));
       else if (rows.length === 0) setErr("Inga CS2-marknader hittades på bilden.");
@@ -229,6 +229,26 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
       setBusy(false);
       setProgress(null);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  // Bokens marknader direkt från Kambi (Unibet) — samma förhandsvisning som skärmdumpen.
+  const fetchKambi = async () => {
+    setBusy(true);
+    setErr(null);
+    setProgress("Hämtar från Unibet …");
+    try {
+      const res = await api.post<{ bookmaker: string; rows: ParsedRow[] }>("/api/cs2/lines/fetch-kambi", { matchId: view.match.id });
+      if (res.rows.length === 0) setErr("Unibet har inga CS2-marknader på matchen just nu.");
+      else {
+        setParsed({ bookmaker: res.bookmaker, rows: res.rows, source: "kambi" });
+        setBook(res.bookmaker);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Kunde inte hämta från Unibet");
+    } finally {
+      setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -247,7 +267,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
         underOdds: r.underOdds,
         includesOt: r.includesOt ?? includesOt,
         bookmaker: parsed.bookmaker ?? book,
-        source: "screenshot",
+        source: parsed.source,
       }))
     );
     if (ok) setParsed(null);
@@ -354,6 +374,9 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
           </button>
           <button className="ap-btn ghost" disabled={busy} onClick={() => fileRef.current?.click()}>
             <I p={IC.upload} size={14} /> Skärmdumpar av marknader
+          </button>
+          <button className="ap-btn ghost" disabled={busy} onClick={fetchKambi}>
+            <I p={IC.download} size={14} /> Hämta från Unibet
           </button>
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
         </div>
