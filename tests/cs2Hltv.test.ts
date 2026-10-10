@@ -168,6 +168,19 @@ describe("parseMatchPage", () => {
     expect(m.lineups[0].players.map((p) => p.nickname)).toEqual(["ZywOo", "apEX", "mezii", "flameZ", "ropz"]);
     expect(m.lineups[1].players).toHaveLength(5);
   });
+  it("kommande match: uppställningar utan spelarlänkar (data-player-id)", () => {
+    const m = parseMatchPage(read("match-upcoming.html"));
+    expect(m.status).toBe("scheduled");
+    expect(m.lineups.map((l) => l.teamId)).toEqual([11861, 9565]);
+    expect(m.lineups[0].players.map((p) => p.nickname)).toEqual(["woxic", "XANTARES", "Wicadia", "Jimpphat", "kyxsan"]);
+    expect(m.lineups[1].players.map((p) => [p.id, p.nickname])).toEqual([
+      [18462, "mezii"],
+      [7322, "apEX"],
+      [11816, "ropz"],
+      [11893, "ZywOo"],
+      [16693, "flameZ"],
+    ]);
+  });
   it("kommande match är scheduled", () => {
     const html = read("match.html")
       .replace("Match over", "1d : 03h : 12m")
