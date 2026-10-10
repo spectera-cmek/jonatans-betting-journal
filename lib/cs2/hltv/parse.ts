@@ -426,6 +426,19 @@ export function parseMatchPage(html: string): HltvMatchPage {
         "";
       players.push({ id, nickname: nick });
     });
+    // Kommande matcher: inga spelarlänkar, bara data-player-id med smeknamnet
+    // i .text-ellipsis (raden under bilderna) eller 'nick' i bildens titel.
+    lu.find("[data-player-id]").each((_, el) => {
+      const node = $(el);
+      const id = Number(node.attr("data-player-id"));
+      if (!Number.isInteger(id) || id <= 0 || seen.has(id)) return;
+      const nick =
+        clean(lu.find(`[data-player-id="${id}"] .text-ellipsis`).first().text()) ||
+        (clean(node.find("img").first().attr("title")).match(/'([^']+)'/)?.[1] ?? "");
+      if (!nick) return;
+      seen.add(id);
+      players.push({ id, nickname: nick });
+    });
     lineups.push({ teamId: idFromHref(ta.attr("href"), "team"), teamName: clean(ta.text()) || null, players });
   });
 
