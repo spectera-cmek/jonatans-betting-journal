@@ -4,6 +4,7 @@ import { mapDistribution, type MapInputs } from "../lib/cs2/mapModel";
 import { projectionActual, overResult } from "../lib/cs2/settle";
 import { validateLine } from "../lib/cs2/lineInput";
 import { matchPlayer, skipReason } from "../lib/cs2/propsMatch";
+import { rolePairs } from "../lib/cs2/duelPairs";
 
 const even: MapInputs = { pCtA: 0.53, pCtB: 0.53, pistolCtA: 0.5, pistolCtB: 0.5, conv2: 0.8, conv3: 0.7, pAStartsCt: 0.5, sigma: 0.3 };
 const rates = (kw: number, kl: number) => ({ kw, kl, hs: 0.45, rounds: 500 });
@@ -107,5 +108,46 @@ describe("killduell: validering och skärmdump", () => {
     expect(skipReason({ ...row, player2Id: null })).toBe("spelare 2 hittades inte i trupperna");
     expect(skipReason({ ...row, player2Id: 1 })).toBe("samma spelare på båda sidor");
     expect(skipReason({ ...row, scope: "match" })).toBe("duellen gäller bara en karta");
+  });
+});
+
+describe("snabblägets par: roll mot roll", () => {
+  const p = (playerId: number, side: 1 | 2, role: string | null, kills: number) => ({ playerId, side, role, kills });
+
+  it("samma roll paras, resten bäst mot bäst efter kills", () => {
+    const pairs = rolePairs([
+      p(1, 1, "awper", 18),
+      p(2, 1, "entry", 16),
+      p(3, 1, "rifler", 15),
+      p(4, 1, null, 14),
+      p(5, 1, "support", 12),
+      p(11, 2, "support", 11),
+      p(12, 2, "awper", 17),
+      p(13, 2, "lurker", 13),
+      p(14, 2, "entry", 15),
+      p(15, 2, null, 16),
+    ]);
+    expect(pairs).toEqual([
+      { a: 1, b: 12 }, // AWP mot AWP
+      { a: 2, b: 14 }, // entry mot entry
+      { a: 3, b: 15 }, // ingen rifler hos lag 2: bästa kvar
+      { a: 4, b: 13 },
+      { a: 5, b: 11 }, // support mot support
+    ]);
+  });
+
+  it("två med samma roll: bäst mot bäst", () => {
+    const pairs = rolePairs([p(1, 1, "rifler", 14), p(2, 1, "rifler", 18), p(11, 2, "Rifler", 12), p(12, 2, "rifler", 16)]);
+    expect(pairs).toEqual([
+      { a: 2, b: 12 },
+      { a: 1, b: 11 },
+    ]);
+  });
+
+  it("utan roller: ren kills-ordning, och udda antal lämnar ingen dubblett", () => {
+    expect(rolePairs([p(1, 1, null, 10), p(2, 1, null, 20), p(3, 1, null, 5), p(11, 2, null, 9), p(12, 2, null, 19)])).toEqual([
+      { a: 2, b: 12 },
+      { a: 1, b: 11 },
+    ]);
   });
 });

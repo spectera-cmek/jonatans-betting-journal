@@ -7,17 +7,21 @@
  *    och få edge + "Logga bet".
  *  - Snabbformulär: alla spelare på en skärm, linjen förifylld med modellens,
  *    bara odds att skriva — "Spara alla" i ett anrop.
+ *  - Duell: killduellerna på kartan, paren förvalda roll mot roll, med
+ *    modellens fair odds för båda — bara bokens odds att skriva.
  */
 
 import { useMemo, useState } from "react";
 import { api } from "@/lib/fetcher";
 import { Card } from "@/components/ui";
-import type { LadderScope, MatchupView, PricedLine } from "@/lib/cs2/matchup";
+import type { DuelScope, LadderScope, MatchupView, PricedLine } from "@/lib/cs2/matchup";
 import { CS2_SCOPE_LABEL } from "@/lib/cs2/types";
+import { rolePairs } from "@/lib/cs2/duelPairs";
+import { ROLE_LABEL, type Role } from "@/lib/cs2/roles";
 import { useLogBet } from "./LinesPanel";
 
-type Market = "kills" | "headshots";
-const MARKET_LABEL: Record<Market, string> = { kills: "Kills", headshots: "HS" };
+type Market = "kills" | "headshots" | "duel";
+const MARKET_LABEL: Record<Market, string> = { kills: "Kills", headshots: "HS", duel: "Duell" };
 
 const num = (s: string) => {
   const n = Number(s.replace(",", "."));
@@ -29,6 +33,8 @@ const lineTxt = (x: number) => String(x).replace(".", ",");
 // Spelare, linje, över, under — badge och "Logga bet" på egen rad under.
 const FORM_COLS = "minmax(0,1fr) minmax(0,64px) minmax(0,64px) minmax(0,64px)";
 const CELL = { padding: "8px 6px", minWidth: 0, width: "100%" } as const;
+// Spelare lag 1, spelare lag 2, odds 1, odds 2.
+const DUEL_COLS = "minmax(0,1fr) minmax(0,1fr) minmax(0,64px) minmax(0,64px)";
 
 export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: () => void }) {
   const scopes = Object.keys(view.ladder) as LadderScope[];
@@ -45,7 +51,8 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
   const [err, setErr] = useState<string | null>(null);
   const { logBet, betModal } = useLogBet(view, book);
 
-  const rows = view.ladder[scope]?.[market] ?? [];
+  const isDuel = market === "duel";
+  const rows = isDuel ? [] : view.ladder[scope]?.[market] ?? [];
   const byPlayer = useMemo(() => new Map(rows.map((r) => [r.playerId, r])), [rows]);
   const players = view.players.filter((p) => byPlayer.has(p.playerId));
 
@@ -110,18 +117,61 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
   };
 
   const switchTo = (s: LadderScope, m: Market) => {
-    setScope(s);
+    // Duellen gäller en karta.
+    setScope(m === "duel" && s === "maps12" ? scopes.find((x) => x !== "maps12") ?? s : s);
     setMarket(m);
     setActive(null);
     setForm({});
+    setDuelOdds({});
+  };
+
+  // --- Duell ---------------------------------------------------------------
+  const [duelPairs, setDuelPairs] = useState<Partial<Record<LadderScope, Array<{ a: number; b: number }>>>>({});
+  const [duelOdds, setDuelOdds] = useState<Record<number, { a: string; b: string }>>({});
+  const nick = (id: number) => view.players.find((p) => p.playerId === id)?.nickname ?? "?";
+  const t1 = view.players.filter((p) => p.side === 1);
+  const t2 = view.players.filter((p) => p.side === 2);
+  const defaultPairs = useMemo(() => {
+    const kills = new Map((view.ladder[scope]?.kills ?? []).map((r) => [r.playerId, r.median]));
+    return rolePairs(view.players.map((p) => ({ playerId: p.playerId, side: p.side, role: p.role, kills: kills.get(p.playerId) ?? p.kprAll ?? 0 })));
+  }, [view.players, view.ladder, scope]);
+  const pairs = duelPairs[scope] ?? defaultPairs;
+  const setPair = (i: number, key: "a" | "b", id: number) => {
+    setDuelPairs((d) => ({ ...d, [scope]: pairs.map((p, j) => (j === i ? { ...p, [key]: id } : p)) }));
+    setDuelOdds((o) => ({ ...o, [i]: { a: "", b: "" } }));
+  };
+  const duelModel = (a: number, b: number) => view.duels[scope as DuelScope]?.find((r) => r.a === a && r.b === b) ?? null;
+  const duelSaved = (a: number, b: number): PricedLine | null =>
+    view.lines.find((l) => l.market === "kill_duel" && l.scope === scope && l.playerId === a && l.player2Id === b) ?? null;
+  const duelReady = pairs
+    .map((p, i) => ({ p, o: duelOdds[i] ?? { a: "", b: "" } }))
+    .filter(({ p, o }) => p.a !== p.b && (num(o.a) != null || num(o.b) != null));
+  const saveDuels = async () => {
+    if (duelReady.length === 0) return setErr("Fyll i odds för minst ett par");
+    const ok = await post(
+      duelReady.map(({ p, o }) => ({
+        matchId: view.match.id,
+        market: "kill_duel",
+        scope,
+        playerId: p.a,
+        player2Id: p.b,
+        line: null,
+        overOdds: num(o.a),
+        underOdds: num(o.b),
+        bookmaker: book || null,
+        includesOt,
+      }))
+    );
+    if (ok) setDuelOdds({});
   };
 
   const edgeBadge = (l: PricedLine | null) => {
     const pr = l?.price;
-    if (!pr || pr.edge == null || !pr.bestSide) return null;
+    if (!l || !pr || pr.edge == null || !pr.bestSide) return null;
+    const side = l.market === "kill_duel" ? nick((pr.bestSide === "over" ? l.playerId : l.player2Id) ?? -1) : pr.bestSide === "over" ? "Ö" : "U";
     return (
       <span className={pr.edge > 0 ? "pos" : "neg"} style={{ fontWeight: 700 }}>
-        {pr.bestSide === "over" ? "Ö" : "U"} {pr.edge >= 0 ? "+" : ""}
+        {side} {pr.edge >= 0 ? "+" : ""}
         {(pr.edge * 100).toFixed(1)} %
       </span>
     );
@@ -136,27 +186,29 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0" }}>
         <div className="ap-seg">
-          {scopes.map((s) => (
+          {scopes.filter((s) => !isDuel || s !== "maps12").map((s) => (
             <button key={s} className={s === scope ? "is-active" : ""} onClick={() => switchTo(s, market)}>
               {CS2_SCOPE_LABEL[s]}
             </button>
           ))}
         </div>
         <div className="ap-seg">
-          {(["kills", "headshots"] as const).map((m) => (
+          {(["kills", "headshots", "duel"] as const).map((m) => (
             <button key={m} className={m === market ? "is-active" : ""} onClick={() => switchTo(scope, m)}>
               {MARKET_LABEL[m]}
             </button>
           ))}
         </div>
-        <div className="ap-seg">
-          <button className={tab === "ladder" ? "is-active" : ""} onClick={() => setTab("ladder")}>
-            Stege
-          </button>
-          <button className={tab === "form" ? "is-active" : ""} onClick={() => setTab("form")}>
-            Snabbformulär
-          </button>
-        </div>
+        {!isDuel && (
+          <div className="ap-seg">
+            <button className={tab === "ladder" ? "is-active" : ""} onClick={() => setTab("ladder")}>
+              Stege
+            </button>
+            <button className={tab === "form" ? "is-active" : ""} onClick={() => setTab("form")}>
+              Snabbformulär
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10, fontSize: 12.5 }}>
@@ -171,7 +223,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
 
       {err && <div className="neg" style={{ fontSize: 12.5, marginBottom: 8 }}>{err}</div>}
 
-      {tab === "ladder" && (
+      {!isDuel && tab === "ladder" && (
         <div style={{ display: "grid", gap: 10 }}>
           {players.map((p) => {
             const r = byPlayer.get(p.playerId)!;
@@ -261,7 +313,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
         </div>
       )}
 
-      {tab === "form" && (
+      {!isDuel && tab === "form" && (
         <div>
           <div style={{ display: "grid", gridTemplateColumns: FORM_COLS, gap: 6, fontSize: 11.5, color: "var(--dim2)", marginBottom: 4 }}>
             <span>Spelare</span>
@@ -295,6 +347,72 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
           })}
           <button className="ap-btn" disabled={busy || formReady.length === 0} onClick={saveForm} style={{ marginTop: 6 }}>
             {busy ? "Sparar…" : `Spara alla (${formReady.length})`}
+          </button>
+        </div>
+      )}
+      {isDuel && (
+        <div>
+          <div style={{ fontSize: 11.5, color: "var(--dim2)", marginBottom: 6 }}>
+            Flest kills på kartan, lika = void. Paren är förvalda roll mot roll — byt spelare om boken parar annorlunda.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: DUEL_COLS, gap: 6, fontSize: 11.5, color: "var(--dim2)", marginBottom: 4 }}>
+            <span>{view.team1.name}</span>
+            <span>{view.team2.name}</span>
+            <span>Odds 1</span>
+            <span>Odds 2</span>
+          </div>
+          {pairs.map((p, i) => {
+            const m = duelModel(p.a, p.b);
+            const o = duelOdds[i] ?? { a: "", b: "" };
+            const s = duelSaved(p.a, p.b);
+            const setOdds = (key: "a" | "b", v: string) => setDuelOdds((d) => ({ ...d, [i]: { ...o, [key]: v } }));
+            return (
+              <div key={i} style={{ marginBottom: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: DUEL_COLS, gap: 6, alignItems: "center" }}>
+                  <div className="ap-select">
+                    <select aria-label={`Par ${i + 1} spelare 1`} value={p.a} onChange={(e) => setPair(i, "a", Number(e.target.value))} style={CELL}>
+                      {t1.map((x) => (
+                        <option key={x.playerId} value={x.playerId}>
+                          {x.nickname}
+                          {x.role ? ` · ${ROLE_LABEL[x.role as Role] ?? x.role}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="ap-select">
+                    <select aria-label={`Par ${i + 1} spelare 2`} value={p.b} onChange={(e) => setPair(i, "b", Number(e.target.value))} style={CELL}>
+                      {t2.map((x) => (
+                        <option key={x.playerId} value={x.playerId}>
+                          {x.nickname}
+                          {x.role ? ` · ${ROLE_LABEL[x.role as Role] ?? x.role}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <input className="ap-input ap-num" style={CELL} inputMode="decimal" aria-label={`${nick(p.a)} odds`} placeholder={m ? fair(m.pA) : ""} value={o.a} onChange={(e) => setOdds("a", e.target.value)} />
+                  <input className="ap-input ap-num" style={CELL} inputMode="decimal" aria-label={`${nick(p.b)} odds`} placeholder={m ? fair(1 - m.pA) : ""} value={o.b} onChange={(e) => setOdds("b", e.target.value)} />
+                </div>
+                <div style={{ fontSize: 11.5, display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginTop: 2, minWidth: 0 }}>
+                  {m ? (
+                    <span className="ap-num" style={{ color: "var(--dim)" }}>
+                      fair {nick(p.a)} {fair(m.pA)} · {nick(p.b)} {fair(1 - m.pA)}
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--dim2)" }}>ingen modell för paret</span>
+                  )}
+                  {edgeBadge(s)}
+                  {s?.price?.edge != null && s.price.edge > 0 && (
+                    <button className="ap-btn" style={{ padding: "3px 9px", fontSize: 11 }} onClick={() => logBet(s)}>
+                      Logga bet
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {pairs.length === 0 && <div style={{ fontSize: 12.5, color: "var(--dim2)" }}>Inga spelare med modell för den här kartan.</div>}
+          <button className="ap-btn" disabled={busy || duelReady.length === 0} onClick={saveDuels} style={{ marginTop: 6 }}>
+            {busy ? "Sparar…" : `Spara alla (${duelReady.length})`}
           </button>
         </div>
       )}
