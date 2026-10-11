@@ -728,6 +728,8 @@ export interface MatchupView {
   model: { version: string; blendW: number; phi: number; sigma: number; trainedMaps: number; leagueRounds: number };
   /** Fair odds per spelare, karta och linje — snabbläget. */
   ladder: PropLadder;
+  /** Killduell per karta för varje par mellan lagen — snabbläget. */
+  duels: DuelLadder;
   /** Förvald karta i snabbläget (gissad ur tiden sedan start). */
   suggestedScope: LadderScope;
 }
@@ -784,6 +786,50 @@ export function propLadder(ctx: MatchupContext): PropLadder {
       byMarket[market] = rows;
     }
     out[scope] = byMarket;
+  }
+  return out;
+}
+
+export type DuelScope = "map1" | "map2" | "map3";
+
+export interface DuelRow {
+  /** Spelare 1 (lag 1) och spelare 2 (lag 2). */
+  a: number;
+  b: number;
+  /** P(a tar fler kills), betingat på att det inte blir lika (lika = void). Övertid räknas. */
+  pA: number;
+  pPush: number;
+}
+
+export type DuelLadder = Partial<Record<DuelScope, DuelRow[]>>;
+
+/**
+ * Killduell för alla par lag 1 × lag 2 på varje karta. Samma som modelProb
+ * för "kill_duel", men varje par och karta räknas en gång och delas mellan
+ * karta 1, 2 och 3 (med okänt veto kan varje position vara flera kartor).
+ */
+export function duelLadder(ctx: MatchupContext): DuelLadder {
+  const out: DuelLadder = {};
+  const t1 = ctx.players.filter((p) => p.side === 1);
+  const t2 = ctx.players.filter((p) => p.side === 2);
+  const memo = new Map<string, { pWin: number; pPush: number }>();
+  for (const scope of ladderScopes(ctx.format).filter((s): s is DuelScope => s !== "maps12")) {
+    const weights = mapWeights(ctx, scope);
+    const rows: DuelRow[] = [];
+    for (const a of t1)
+      for (const b of t2) {
+        let win = 0,
+          push = 0;
+        for (const { map, w } of weights) {
+          const key = `${a.playerId}|${b.playerId}|${map}`;
+          let d = memo.get(key);
+          if (!d) memo.set(key, (d = killDuelProbs({ rates: a.rates[map] ?? a.rates.all, side: a.side }, { rates: b.rates[map] ?? b.rates.all, side: b.side }, ctx.dists[map], true)));
+          win += w * d.pWin;
+          push += w * d.pPush;
+        }
+        rows.push({ a: a.playerId, b: b.playerId, pA: push < 1 ? win / (1 - push) : 0.5, pPush: push });
+      }
+    out[scope] = rows;
   }
   return out;
 }
@@ -905,6 +951,7 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
       leagueRounds: ctx.global.leagueRounds,
     },
     ladder: propLadder(ctx),
+    duels: duelLadder(ctx),
     suggestedScope: suggestedScope(ctx.format, ctx.match.startAt),
   };
 }

@@ -469,6 +469,18 @@ describe("matchup utan databas", () => {
     expect(priced.price?.pPush).toBeGreaterThan(0);
   });
 
+  it("duelltabellen i vyn: alla par lag 1 × lag 2 per karta", () => {
+    const t0 = Date.now();
+    const duels = buildMatchupView(ctx, []).duels;
+    // Byggs vid varje sidladdning — ska gå fort.
+    expect(Date.now() - t0).toBeLessThan(3000);
+    expect(Object.keys(duels).sort()).toEqual(["map1", "map2", "map3"]);
+    expect(duels.map1).toHaveLength(25);
+    const row = duels.map1!.find((r) => r.a === 101 && r.b === 201)!;
+    expect(row.pA).toBeCloseTo(modelProb(ctx, { market: "kill_duel", scope: "map1", playerId: 101, player2Id: 201 })!.p, 9);
+    expect(row.pA).toBeGreaterThan(0.5);
+  });
+
   it("prissätter spelarlinjer och bygger vyn", () => {
     const priced = priceLine(ctx, { market: "kills", scope: "maps12", playerId: 101, line: 30.5, overOdds: 1.85, underOdds: 1.85 });
     expect(priced.label).toContain("p101");
