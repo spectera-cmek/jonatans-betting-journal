@@ -1,0 +1,1058 @@
+{
+ "event": {
+  "id": 1029450350,
+  "homeName": "Aurora Gaming",
+  "awayName": "Team Spirit",
+  "start": "2026-10-11T11:30:00Z",
+  "sport": "COUNTER_STRIKE"
+ },
+ "betOffers": [
+  {
+   "criterion": {
+    "label": "Karta 1 - Rundhandikapp",
+    "englishLabel": "Map 1 - Round Handicap"
+   },
+   "betOfferType": {
+    "englishName": "Handicap"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 4600,
+     "line": -3500,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1170,
+     "line": 3500,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal rundor",
+    "englishLabel": "Map 1 - Total Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1070,
+     "line": 16500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 7000,
+     "line": 16500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal kills",
+    "englishLabel": "Map 1 - Total Kills"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1490,
+     "line": 130500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 2450,
+     "line": 130500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal kills av Aurora Gaming",
+    "englishLabel": "Map 1 - Total Kills by Aurora Gaming"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1480,
+     "line": 60500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 2480,
+     "line": 60500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Först till 12 rundor",
+    "englishLabel": "Map 1 - First to 12 Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "1",
+     "type": "OT_ONE",
+     "odds": 2630,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2",
+     "type": "OT_TWO",
+     "odds": 1440,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal kills av Team Spirit",
+    "englishLabel": "Map 1 - Total Kills by Team Spirit"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 5000,
+     "line": 90500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 1140,
+     "line": 90500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Rundhandikapp",
+    "englishLabel": "Map 2 - Round Handicap"
+   },
+   "betOfferType": {
+    "englishName": "Handicap"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 2880,
+     "line": -2500,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1380,
+     "line": 2500,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal rundor",
+    "englishLabel": "Map 2 - Total Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1060,
+     "line": 16500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 7500,
+     "line": 16500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Först till 3 rundor",
+    "englishLabel": "Map 2 - First to 3 Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "1",
+     "type": "OT_ONE",
+     "odds": 2040,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2",
+     "type": "OT_TWO",
+     "odds": 1700,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2",
+    "englishLabel": "Map 2"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1560,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 2380,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Runda 1",
+    "englishLabel": "Map 2 - Round 1"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1760,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 1940,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal kills",
+    "englishLabel": "Map 2 - Total Kills"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1470,
+     "line": 130500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 2500,
+     "line": 130500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Först till 6 rundor",
+    "englishLabel": "Map 2 - First to 6 Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "1",
+     "type": "OT_ONE",
+     "odds": 2140,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2",
+     "type": "OT_TWO",
+     "odds": 1620,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal kills av Team Spirit",
+    "englishLabel": "Map 2 - Total Kills by Team Spirit"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1540,
+     "line": 70500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 2320,
+     "line": 70500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal kills av Aurora Gaming",
+    "englishLabel": "Map 2 - Total Kills by Aurora Gaming"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 6100,
+     "line": 90500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 1100,
+     "line": 90500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karthandikapp",
+    "englishLabel": "Map Handicap"
+   },
+   "betOfferType": {
+    "englishName": "Handicap"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 1640,
+     "line": 1500,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 2140,
+     "line": -1500,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Korrekt kartresultat",
+    "englishLabel": "Correct Map Score"
+   },
+   "betOfferType": {
+    "englishName": "Correct Score"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "0-2",
+     "type": "OT_UNTYPED",
+     "odds": 2180,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "1-2",
+     "type": "OT_UNTYPED",
+     "odds": 3100,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2-0",
+     "type": "OT_UNTYPED",
+     "odds": 6100,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2-1",
+     "type": "OT_UNTYPED",
+     "odds": 4400,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal kills (Udda/Jämnt)",
+    "englishLabel": "Map 1 - Total Kills (Odd/Even)"
+   },
+   "betOfferType": {
+    "englishName": "Odd/Even"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Even",
+     "type": "OT_EVEN",
+     "odds": 1850,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Odd",
+     "type": "OT_ODD",
+     "odds": 1840,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Först till 9 rundor",
+    "englishLabel": "Map 1 - First to 9 Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "1",
+     "type": "OT_ONE",
+     "odds": 2480,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2",
+     "type": "OT_TWO",
+     "odds": 1480,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Först till 3 rundor",
+    "englishLabel": "Map 1 - First to 3 Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "1",
+     "type": "OT_ONE",
+     "odds": 2170,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2",
+     "type": "OT_TWO",
+     "odds": 1610,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Först till 6 rundor",
+    "englishLabel": "Map 1 - First to 6 Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "1",
+     "type": "OT_ONE",
+     "odds": 2330,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2",
+     "type": "OT_TWO",
+     "odds": 1540,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - går till förlängning",
+    "englishLabel": "Map 1  - To go into overtime"
+   },
+   "betOfferType": {
+    "englishName": "Yes/No"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Yes",
+     "type": "OT_YES",
+     "odds": 5000,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "No",
+     "type": "OT_NO",
+     "odds": 1140,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal kills (Udda/Jämnt)",
+    "englishLabel": "Map 2 - Total Kills (Odd/Even)"
+   },
+   "betOfferType": {
+    "englishName": "Odd/Even"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Even",
+     "type": "OT_EVEN",
+     "odds": 1850,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Odd",
+     "type": "OT_ODD",
+     "odds": 1850,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - går till förlängning",
+    "englishLabel": "Map 2  - To go into overtime"
+   },
+   "betOfferType": {
+    "englishName": "Yes/No"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Yes",
+     "type": "OT_YES",
+     "odds": 5400,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "No",
+     "type": "OT_NO",
+     "odds": 1120,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Först till 9 rundor",
+    "englishLabel": "Map 2 - First to 9 Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "1",
+     "type": "OT_ONE",
+     "odds": 2200,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2",
+     "type": "OT_TWO",
+     "odds": 1580,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Antal kartor (Udda/Jämnt)",
+    "englishLabel": "Total Maps (Odd/Even)"
+   },
+   "betOfferType": {
+    "englishName": "Odd/Even"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Even",
+     "type": "OT_EVEN",
+     "odds": 1730,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Odd",
+     "type": "OT_ODD",
+     "odds": 2000,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Antal kartor",
+    "englishLabel": "Total Maps"
+   },
+   "betOfferType": {
+    "englishName": "Over/Under"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 2000,
+     "line": 2500,
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 1730,
+     "line": 2500,
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal huvudskott",
+    "englishLabel": "Map 1 - Total Headshots by the Player"
+   },
+   "betOfferType": {
+    "englishName": "Player Occurrence Line"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 2380,
+     "line": 13500,
+     "participant": "donk",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 1520,
+     "line": 13500,
+     "participant": "donk",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal huvudskott",
+    "englishLabel": "Map 1 - Total Headshots by the Player"
+   },
+   "betOfferType": {
+    "englishName": "Player Occurrence Line"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1580,
+     "line": 7500,
+     "participant": "tN1R",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 2230,
+     "line": 7500,
+     "participant": "tN1R",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal Kills av spelaren",
+    "englishLabel": "Map 1 - Total Kills by the Player"
+   },
+   "betOfferType": {
+    "englishName": "Player Occurrence Line"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1900,
+     "line": 13500,
+     "participant": "XANTARES",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 1800,
+     "line": 13500,
+     "participant": "XANTARES",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Antal Kills av spelaren",
+    "englishLabel": "Map 1 - Total Kills by the Player"
+   },
+   "betOfferType": {
+    "englishName": "Player Occurrence Line"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 2150,
+     "line": 14500,
+     "participant": "XANTARES",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 1620,
+     "line": 14500,
+     "participant": "XANTARES",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal Kills av spelaren",
+    "englishLabel": "Map 2 - Total Kills by the Player"
+   },
+   "betOfferType": {
+    "englishName": "Player Occurrence Line"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1810,
+     "line": 13500,
+     "participant": "XANTARES",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 1890,
+     "line": 13500,
+     "participant": "XANTARES",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal Kills av spelaren",
+    "englishLabel": "Map 2 - Total Kills by the Player"
+   },
+   "betOfferType": {
+    "englishName": "Player Occurrence Line"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1650,
+     "line": 13500,
+     "participant": "Wicadia",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 2100,
+     "line": 13500,
+     "participant": "Wicadia",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal huvudskott",
+    "englishLabel": "Map 2 - Total Headshots by the Player"
+   },
+   "betOfferType": {
+    "englishName": "Player Occurrence Line"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 1610,
+     "line": 6500,
+     "participant": "XANTARES",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 2170,
+     "line": 6500,
+     "participant": "XANTARES",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Antal huvudskott",
+    "englishLabel": "Map 2 - Total Headshots by the Player"
+   },
+   "betOfferType": {
+    "englishName": "Player Occurrence Line"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Over",
+     "type": "OT_OVER",
+     "odds": 2080,
+     "line": 12500,
+     "participant": "donk",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Under",
+     "type": "OT_UNDER",
+     "odds": 1660,
+     "line": 12500,
+     "participant": "donk",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1",
+    "englishLabel": "Map 1"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1430,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 2750,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Runda 1",
+    "englishLabel": "Map 1 - Round 1"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1720,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 2000,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 1 - Runda 13",
+    "englishLabel": "Map 1 - Round 13"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1710,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 2020,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Runda 13",
+    "englishLabel": "Map 2 - Round 13"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1760,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 1950,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Karta 2 - Först till 12 rundor",
+    "englishLabel": "Map 2 - First to 12 Rounds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "1",
+     "type": "OT_ONE",
+     "odds": 2320,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "2",
+     "type": "OT_TWO",
+     "odds": 1540,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    }
+   ]
+  },
+  {
+   "criterion": {
+    "label": "Matchodds",
+    "englishLabel": "Match Odds"
+   },
+   "betOfferType": {
+    "englishName": "Match"
+   },
+   "outcomes": [
+    {
+     "englishLabel": "Team Spirit",
+     "type": "OT_TWO",
+     "odds": 1380,
+     "participant": "Team Spirit",
+     "status": "OPEN"
+    },
+    {
+     "englishLabel": "Aurora Gaming",
+     "type": "OT_ONE",
+     "odds": 2900,
+     "participant": "Aurora Gaming",
+     "status": "OPEN"
+    }
+   ]
+  }
+ ]
+}
