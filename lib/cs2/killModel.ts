@@ -201,6 +201,55 @@ export function killPmfForMap(rates: KillRates, dist: MapDistribution, includeOt
   return out;
 }
 
+/**
+ * Spelarduell på en karta: P(A tar fler kills än B) och P(lika). Båda
+ * spelarnas kills hänger på samma slutresultat, så sannolikheten räknas per
+ * utfall (w, l) och vägs ihop — oberoende bara givet rundorna. `dist` är ur
+ * lag 1:s perspektiv; `side` säger vilket lag spelaren tillhör. `line` är A:s
+ * handikapp (0 = ren duell, lika = push).
+ */
+export function killDuelProbs(
+  a: { rates: KillRates; side: 1 | 2 },
+  b: { rates: KillRates; side: 1 | 2 },
+  dist: MapDistribution,
+  includeOt: boolean,
+  line = 0,
+  phi = DEFAULT_KILL_PHI,
+  maxK = MAX_KILLS_MAP
+): { pWin: number; pPush: number } {
+  const mean = (p: { rates: KillRates; side: 1 | 2 }, t1: number, t2: number) => (p.side === 1 ? t1 * p.rates.kw + t2 * p.rates.kl : t2 * p.rates.kw + t1 * p.rates.kl);
+  const vecs = new Map<number, number[]>();
+  const vec = (m: number) => {
+    const key = Math.round(m * 1000) / 1000;
+    let v = vecs.get(key);
+    if (!v) vecs.set(key, (v = negBinPmfVector(key, phi, maxK)));
+    return v;
+  };
+  let win = 0,
+    push = 0;
+  for (const o of dist.outcomes) {
+    const t1 = o.aReg + (includeOt ? o.aOt : 0);
+    const t2 = o.bReg + (includeOt ? o.bOt : 0);
+    const va = vec(mean(a, t1, t2));
+    const vb = vec(mean(b, t1, t2));
+    // P(A + line > B) och P(A + line = B) via B:s kumulativa fördelning.
+    let cumB = 0;
+    const cdfB = vb.map((p) => (cumB += p));
+    let w = 0,
+      eq = 0;
+    for (let k = 0; k < va.length; k++) {
+      if (va[k] < 1e-12) continue;
+      const x = k + line;
+      const below = Math.ceil(x) - 1; // största B < x
+      w += va[k] * (below < 0 ? 0 : cdfB[Math.min(below, cdfB.length - 1)]);
+      if (Number.isInteger(x) && x >= 0 && x < vb.length) eq += va[k] * vb[x];
+    }
+    win += o.p * w;
+    push += o.p * eq;
+  }
+  return { pWin: win, pPush: push };
+}
+
 /** Headshots ur kills: HS | K ~ Binomial(K, hs). */
 export function headshotPmf(killPmf: number[], hs: number): number[] {
   const out = new Array<number>(killPmf.length).fill(0);

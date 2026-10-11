@@ -44,8 +44,9 @@ export async function POST(req: Request) {
     const teamOf = matchTeams(parsed.rows.map((r) => r.team), teams);
     const rows = parsed.rows.map((r) => {
       const playerId = matchPlayer(r.player, players);
+      const player2Id = matchPlayer(r.player2, players);
       const teamId = r.team ? teamOf.get(r.team) ?? null : null;
-      return { ...r, playerId, teamId, skip: skipReason({ ...r, playerId, teamId }) };
+      return { ...r, playerId, player2Id, teamId, skip: skipReason({ ...r, playerId, player2Id, teamId }) };
     });
     return NextResponse.json({ bookmaker: parsed.bookmaker, rows });
   } catch (e) {

@@ -35,7 +35,8 @@ export type Cs2Market =
   | "total_maps" // antal kartor (Ö/U 2.5)
   | "pistol" // vinnare av första pistolrundan på en karta
   | "first_kill" // laget som tar kartans första kill
-  | "player_first_kill"; // spelaren som tar kartans första kill (ja/nej)
+  | "player_first_kill" // spelaren som tar kartans första kill (ja/nej)
+  | "kill_duel"; // flest kills på en karta, spelare mot spelare (player2Id = sida 2, lika = void)
 
 export type Cs2Scope = "map1" | "map2" | "map3" | "maps12" | "match";
 
@@ -51,6 +52,7 @@ export const CS2_MARKET_LABEL: Record<Cs2Market, string> = {
   pistol: "Pistolrunda",
   first_kill: "Första kill (lag)",
   player_first_kill: "Första kill (spelare)",
+  kill_duel: "Killduell",
 };
 
 export const CS2_SCOPE_LABEL: Record<Cs2Scope, string> = {
@@ -62,7 +64,11 @@ export const CS2_SCOPE_LABEL: Record<Cs2Scope, string> = {
 };
 
 /** Marknader som gäller en spelare (kräver playerId). */
-export const PLAYER_MARKETS: ReadonlySet<Cs2Market> = new Set(["kills", "headshots", "player_first_kill"]);
+export const PLAYER_MARKETS: ReadonlySet<Cs2Market> = new Set(["kills", "headshots", "player_first_kill", "kill_duel"]);
+
+/** Spelare mot spelare (kräver även player2Id). Bara per karta. */
+export const DUEL_MARKETS: ReadonlySet<Cs2Market> = new Set(["kill_duel"]);
+export const DUEL_SCOPES: ReadonlySet<Cs2Scope> = new Set(["map1", "map2", "map3"]);
 
 /** Marknader med en Ö/U-linje (övriga är tvåvägs utan linje eller handikapp). */
 export const TOTAL_MARKETS: ReadonlySet<Cs2Market> = new Set(["kills", "headshots", "rounds", "total_maps"]);

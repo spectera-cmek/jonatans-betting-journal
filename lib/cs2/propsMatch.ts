@@ -5,7 +5,7 @@
 import { nameScore, normName } from "./demo/link";
 
 /** Marknader som kräver en spelare / ett lag ("sida 1") för att kunna sparas. */
-export const PLAYER_PROP_MARKETS = new Set<string>(["kills", "headshots", "player_first_kill"]);
+export const PLAYER_PROP_MARKETS = new Set<string>(["kills", "headshots", "player_first_kill", "kill_duel"]);
 export const TEAM_PROP_MARKETS = new Set<string>(["map_winner", "map_handicap", "match_winner", "match_handicap", "pistol", "first_kill"]);
 const TOTAL_ONLY = new Set<string>(["rounds", "total_maps"]);
 
@@ -69,9 +69,23 @@ export function matchPlayer(name: string | null | undefined, players: Array<{ id
 }
 
 /** Varför en rad inte kan sparas, eller null om den kan det. */
-export function skipReason(row: { market: string; playerId: number | null; teamId: number | null; line: number | null; overOdds: number | null; underOdds: number | null }): string | null {
+export function skipReason(row: {
+  market: string;
+  scope?: string;
+  playerId: number | null;
+  player2Id?: number | null;
+  teamId: number | null;
+  line: number | null;
+  overOdds: number | null;
+  underOdds: number | null;
+}): string | null {
   if (row.market === "other") return "marknaden finns inte i modellen";
   if (PLAYER_PROP_MARKETS.has(row.market) && row.playerId == null) return "spelaren hittades inte i trupperna";
+  if (row.market === "kill_duel") {
+    if (row.player2Id == null) return "spelare 2 hittades inte i trupperna";
+    if (row.player2Id === row.playerId) return "samma spelare på båda sidor";
+    if (row.scope != null && !["map1", "map2", "map3"].includes(row.scope)) return "duellen gäller bara en karta";
+  }
   if (TEAM_PROP_MARKETS.has(row.market) && row.teamId == null) return "laget kändes inte igen";
   const needsLine = row.market === "kills" || row.market === "headshots" || TOTAL_ONLY.has(row.market) || row.market.endsWith("_handicap");
   if (needsLine && row.line == null) return "linje saknas";

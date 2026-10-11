@@ -1,7 +1,7 @@
 // Validering av en inmatad bokmakarlinje (POST /api/cs2/lines).
 
 import type { Cs2Market, Cs2Scope } from "./types";
-import { PLAYER_MARKETS, TOTAL_MARKETS } from "./types";
+import { DUEL_MARKETS, DUEL_SCOPES, PLAYER_MARKETS, TOTAL_MARKETS } from "./types";
 
 export const MARKETS: Cs2Market[] = [
   "kills",
@@ -15,6 +15,7 @@ export const MARKETS: Cs2Market[] = [
   "pistol",
   "first_kill",
   "player_first_kill",
+  "kill_duel",
 ];
 export const SCOPES: Cs2Scope[] = ["map1", "map2", "map3", "maps12", "match"];
 
@@ -23,6 +24,7 @@ export interface ValidLine {
   market: Cs2Market;
   scope: Cs2Scope;
   playerId: number | null;
+  player2Id: number | null;
   teamId: number | null;
   line: number | null;
   overOdds: number | null;
@@ -48,6 +50,12 @@ export function validateLine(body: Record<string, unknown>): ValidLine | string 
   const playerId = num(body.playerId);
   const teamId = num(body.teamId);
   if (PLAYER_MARKETS.has(market) && playerId == null) return "Marknaden kräver en spelare";
+  const player2Id = DUEL_MARKETS.has(market) ? num(body.player2Id) : null;
+  if (DUEL_MARKETS.has(market)) {
+    if (player2Id == null) return "Duellen kräver två spelare";
+    if (player2Id === playerId) return "Duellen kräver två olika spelare";
+    if (!DUEL_SCOPES.has(scope)) return "Duellen gäller en karta";
+  }
   const line = num(body.line);
   if ((TOTAL_MARKETS.has(market) || market === "map_handicap" || market === "match_handicap") && line == null) return "Marknaden kräver en linje";
   const overOdds = num(body.overOdds);
@@ -59,6 +67,7 @@ export function validateLine(body: Record<string, unknown>): ValidLine | string 
     market,
     scope,
     playerId,
+    player2Id,
     teamId,
     line,
     overOdds,

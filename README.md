@@ -191,8 +191,9 @@ need manual closing odds.
 
 A separate CS2 database (teams, players, matches, vetoes, per-map scoreboards and
 facts parsed from demos), a per-map **GAMEPLAN** view per team and side, and a model
-that prices map/match winner, handicaps, total rounds, total maps, pistol, first kill
-and player kills/headshots against the lines you enter (by hand or from a screenshot).
+that prices map/match winner, handicaps, total rounds, total maps, pistol, first kill,
+player kills/headshots and per-map kill duels (player vs player, tie = void) against
+the lines you enter (by hand, from a screenshot, or fetched from Unibet/Kambi).
 
 **Data flow**
 

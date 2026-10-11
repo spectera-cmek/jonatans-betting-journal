@@ -45,6 +45,7 @@ export async function POST(req: Request) {
           market: v.market,
           scope: v.scope,
           playerId: v.playerId,
+          player2Id: v.player2Id,
           teamId: v.teamId,
           line: v.line,
           includesOt: v.includesOt,
