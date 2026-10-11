@@ -34,7 +34,8 @@ export async function POST(req: Request) {
   try {
     const event = findKambiEvent({ startAt: match.startAt, teams }, await fetchCs2Events());
     if (!event) return NextResponse.json({ error: `${KAMBI_BOOKMAKER} har inte matchen i sitt utbud` }, { status: 404 });
-    const parsed = mapBetOffers(await fetchBetOffers(event.id), event);
+    // Marknader utanför modellen (udda/jämnt, övertid, exakt resultat …) är bara brus här.
+    const parsed = mapBetOffers(await fetchBetOffers(event.id), event).filter((r) => r.market !== "other");
     const teamOf = matchTeams(parsed.map((r) => r.team), teams);
     const rows = parsed.map((r) => {
       const playerId = matchPlayer(r.player, players);
