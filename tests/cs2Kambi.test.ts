@@ -68,15 +68,15 @@ describe("Kambis marknader → linjer", () => {
 
   it("spelarkills per spelare och linje, i decimalodds", () => {
     expect(pick("kills", "map1", "XANTARES")).toEqual([
-      { market: "kills", scope: "map1", player: "XANTARES", team: null, line: 13.5, overOdds: 1.9, underOdds: 1.8, includesOt: null },
-      { market: "kills", scope: "map1", player: "XANTARES", team: null, line: 14.5, overOdds: 2.15, underOdds: 1.62, includesOt: null },
+      { market: "kills", scope: "map1", player: "XANTARES", team: null, line: 13.5, overOdds: 1.9, underOdds: 1.8, includesOt: null, player2: null },
+      { market: "kills", scope: "map1", player: "XANTARES", team: null, line: 14.5, overOdds: 2.15, underOdds: 1.62, includesOt: null, player2: null },
     ]);
     expect(pick("headshots", "map1", "donk")[0]).toMatchObject({ line: 13.5, overOdds: 2.38, underOdds: 1.52 });
   });
 
   it("lagmarknader från lag 1:s sida", () => {
     expect(pick("match_winner", "match")).toEqual([
-      { market: "match_winner", scope: "match", player: null, team: "Aurora Gaming", line: null, overOdds: 2.9, underOdds: 1.38, includesOt: null },
+      { market: "match_winner", scope: "match", player: null, team: "Aurora Gaming", line: null, overOdds: 2.9, underOdds: 1.38, includesOt: null, player2: null },
     ]);
     expect(pick("map_handicap", "map1")[0]).toMatchObject({ team: "Aurora Gaming", line: -3.5, overOdds: 4.6, underOdds: 1.17 });
     expect(pick("match_handicap", "match")[0]).toMatchObject({ team: "Aurora Gaming", line: 1.5, overOdds: 1.64, underOdds: 2.14 });
@@ -101,7 +101,7 @@ describe("Kambis marknader → linjer", () => {
       },
     ];
     expect(mapBetOffers(offers, fixture.event)).toEqual([
-      { market: "kills", scope: "map1", player: "ropz", team: null, line: 15.5, overOdds: 1.8, underOdds: null, includesOt: null },
+      { market: "kills", scope: "map1", player: "ropz", team: null, line: 15.5, overOdds: 1.8, underOdds: null, includesOt: null, player2: null },
     ]);
   });
 });

@@ -17,7 +17,7 @@ import type { BetPrefill } from "@/components/AddBetModal";
 import { revalidateAll, useMetrics, useSettings } from "@/lib/useData";
 import { kellyAdvice } from "@/lib/staking";
 import type { MatchupView, PricedLine } from "@/lib/cs2/matchup";
-import { CS2_MARKET_LABEL, CS2_SCOPE_LABEL, PLAYER_MARKETS, TOTAL_MARKETS, type Cs2Market, type Cs2Scope } from "@/lib/cs2/types";
+import { CS2_MARKET_LABEL, CS2_SCOPE_LABEL, DUEL_MARKETS, DUEL_SCOPES, PLAYER_MARKETS, TOTAL_MARKETS, type Cs2Market, type Cs2Scope } from "@/lib/cs2/types";
 import { dec, pct } from "./common";
 
 const AddBetModal = dynamic(() => import("@/components/AddBetModal").then((m) => m.AddBetModal), { ssr: false });
@@ -39,6 +39,7 @@ const BET_CATEGORY: Record<Cs2Market, string> = {
   pistol: "Pistolrunda",
   first_kill: "Första kill",
   player_first_kill: "Första kill",
+  kill_duel: "Kills",
 };
 
 interface ParsedRow {
@@ -51,6 +52,9 @@ interface ParsedRow {
   underOdds: number | null;
   includesOt: boolean | null;
   playerId: number | null;
+  /** Spelare 2 i en killduell. */
+  player2?: string | null;
+  player2Id?: number | null;
   teamId: number | null;
   /** Varför raden inte kan sparas (null = den sparas). */
   skip: string | null;
@@ -64,6 +68,10 @@ const num = (s: string) => {
 export function sideLabel(l: PricedLine, side: "over" | "under", view: MatchupView): string {
   if (TOTAL_MARKETS.has(l.market)) return side === "over" ? "Över" : "Under";
   if (l.market === "player_first_kill") return side === "over" ? "Ja" : "Nej";
+  if (l.market === "kill_duel") {
+    const id = side === "over" ? l.playerId : l.player2Id;
+    return view.players.find((p) => p.playerId === id)?.nickname ?? "?";
+  }
   const t1 = l.teamId === view.team2.id ? view.team2.name : view.team1.name;
   const t2 = l.teamId === view.team2.id ? view.team1.name : view.team2.name;
   return side === "over" ? t1 : t2;
@@ -100,7 +108,10 @@ export function useLogBet(view: MatchupView, defaultBook: string) {
         market: l.market === "match_winner" ? "h2h" : "other",
         marketCategory: BET_CATEGORY[l.market],
         marketScope: isPlayer ? "player" : l.teamId != null ? "team" : "match",
-        selection: `${l.label.split(" · ")[0]} ${pick}${lineTxt} (${CS2_SCOPE_LABEL[l.scope]})`.replace(/\s+/g, " "),
+        selection:
+          l.market === "kill_duel"
+            ? `${pick}${lineTxt} flest kills vs ${sideLabel(l, side === "over" ? "under" : "over", view)} (${CS2_SCOPE_LABEL[l.scope]})`
+            : `${l.label.split(" · ")[0]} ${pick}${lineTxt} (${CS2_SCOPE_LABEL[l.scope]})`.replace(/\s+/g, " "),
         selectionSide: TOTAL_MARKETS.has(l.market) ? side : l.market === "match_winner" ? (l.teamId === view.team2.id) === (side === "over") ? "away" : "home" : "home",
         line: l.line != null ? String(l.line) : "",
         odds: String(l.price.bestOdds),
@@ -133,6 +144,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
   const [market, setMarket] = useState<Cs2Market>("kills");
   const [scope, setScope] = useState<Cs2Scope>(view.match.format === "bo1" ? "map1" : "maps12");
   const [playerId, setPlayerId] = useState<number | null>(players[0]?.playerId ?? null);
+  const [player2Id, setPlayer2Id] = useState<number | null>(players.find((p) => p.side !== players[0]?.side)?.playerId ?? players[1]?.playerId ?? null);
   const [teamId, setTeamId] = useState<number>(view.team1.id);
   const [line, setLine] = useState("");
   const [over, setOver] = useState("");
@@ -147,6 +159,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
   const { logBet, betModal, bankroll } = useLogBet(view, book);
 
   const needsPlayer = PLAYER_MARKETS.has(market);
+  const isDuel = DUEL_MARKETS.has(market);
   const needsTeam = TEAM_MARKETS.has(market);
   const needsLine = TOTAL_MARKETS.has(market) || HANDICAP.has(market);
 
@@ -172,6 +185,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
         market,
         scope,
         playerId: needsPlayer ? playerId : null,
+        player2Id: isDuel ? player2Id : null,
         teamId: needsTeam ? teamId : null,
         line: needsLine ? num(line) : null,
         overOdds: num(over),
@@ -261,6 +275,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
         market: r.market,
         scope: r.scope,
         playerId: PLAYER_MARKETS.has(r.market as Cs2Market) ? r.playerId : null,
+        player2Id: DUEL_MARKETS.has(r.market as Cs2Market) ? r.player2Id ?? null : null,
         teamId: TEAM_MARKETS.has(r.market as Cs2Market) ? r.teamId : null,
         line: r.line,
         overOdds: r.overOdds,
@@ -274,6 +289,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
   };
 
   const parsedWho = (r: ParsedRow) => {
+    if (DUEL_MARKETS.has(r.market as Cs2Market)) return `${r.player ?? "?"} vs ${r.player2 ?? "?"}`;
     if (PLAYER_MARKETS.has(r.market as Cs2Market)) return r.player ?? "?";
     if (TEAM_MARKETS.has(r.market as Cs2Market)) {
       const t = r.teamId === view.team1.id ? view.team1.name : r.teamId === view.team2.id ? view.team2.name : r.team;
@@ -302,7 +318,16 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
           <div className="ap-field">
             <label htmlFor="ln-market">Marknad</label>
             <div className="ap-select">
-              <select id="ln-market" value={market} onChange={(e) => setMarket(e.target.value as Cs2Market)}>
+              <select
+                id="ln-market"
+                value={market}
+                onChange={(e) => {
+                  const m = e.target.value as Cs2Market;
+                  setMarket(m);
+                  // Duellen gäller en karta.
+                  if (DUEL_MARKETS.has(m) && !DUEL_SCOPES.has(scope)) setScope("map1");
+                }}
+              >
                 {MARKETS.map((m) => (
                   <option key={m} value={m}>
                     {CS2_MARKET_LABEL[m]}
@@ -315,7 +340,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
             <label htmlFor="ln-scope">Avser</label>
             <div className="ap-select">
               <select id="ln-scope" value={scope} onChange={(e) => setScope(e.target.value as Cs2Scope)}>
-                {SCOPES.map((s) => (
+                {SCOPES.filter((s) => !isDuel || DUEL_SCOPES.has(s)).map((s) => (
                   <option key={s} value={s}>
                     {CS2_SCOPE_LABEL[s]}
                   </option>
@@ -325,9 +350,23 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
           </div>
           {needsPlayer && (
             <div className="ap-field">
-              <label htmlFor="ln-player">Spelare</label>
+              <label htmlFor="ln-player">{isDuel ? "Spelare 1" : "Spelare"}</label>
               <div className="ap-select">
                 <select id="ln-player" value={playerId ?? ""} onChange={(e) => setPlayerId(Number(e.target.value))}>
+                  {players.map((p) => (
+                    <option key={p.playerId} value={p.playerId}>
+                      {p.nickname} ({p.side === 1 ? view.team1.name : view.team2.name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+          {isDuel && (
+            <div className="ap-field">
+              <label htmlFor="ln-player2">Spelare 2</label>
+              <div className="ap-select">
+                <select id="ln-player2" value={player2Id ?? ""} onChange={(e) => setPlayer2Id(Number(e.target.value))}>
                   {players.map((p) => (
                     <option key={p.playerId} value={p.playerId}>
                       {p.nickname} ({p.side === 1 ? view.team1.name : view.team2.name})
@@ -355,11 +394,11 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
             </div>
           )}
           <div className="ap-field" style={{ width: 90 }}>
-            <label htmlFor="ln-over">{TOTAL_MARKETS.has(market) ? "Över" : market === "player_first_kill" ? "Ja" : "Sida 1"}</label>
+            <label htmlFor="ln-over">{TOTAL_MARKETS.has(market) ? "Över" : market === "player_first_kill" ? "Ja" : isDuel ? "Spelare 1" : "Sida 1"}</label>
             <input id="ln-over" className="ap-input ap-num" inputMode="decimal" value={over} onChange={(e) => setOver(e.target.value)} placeholder="1.85" />
           </div>
           <div className="ap-field" style={{ width: 90 }}>
-            <label htmlFor="ln-under">{TOTAL_MARKETS.has(market) ? "Under" : market === "player_first_kill" ? "Nej" : "Sida 2"}</label>
+            <label htmlFor="ln-under">{TOTAL_MARKETS.has(market) ? "Under" : market === "player_first_kill" ? "Nej" : isDuel ? "Spelare 2" : "Sida 2"}</label>
             <input id="ln-under" className="ap-input ap-num" inputMode="decimal" value={under} onChange={(e) => setUnder(e.target.value)} placeholder="1.85" />
           </div>
           <div className="ap-field" style={{ width: 120 }}>

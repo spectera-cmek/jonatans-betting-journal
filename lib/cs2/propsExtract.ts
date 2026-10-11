@@ -25,6 +25,7 @@ export const PROP_MARKETS = [
   "total_maps",
   "pistol",
   "first_kill",
+  "kill_duel",
   "other",
 ] as const;
 
@@ -33,6 +34,8 @@ const PropRow = z.object({
   scope: z.enum(["map1", "map2", "map3", "maps12", "match"]),
   /** Spelarens nick för spelarmarknader, annars null. */
   player: z.string().nullable(),
+  /** Spelare 2 (motspelaren) i en killduell, annars null. */
+  player2: z.string().nullable(),
   /** Laget som "overOdds" och linjen gäller för lagmarknader, annars null. */
   team: z.string().nullable(),
   line: z.number().nullable(),
@@ -56,6 +59,7 @@ Fält:
 - "market": se listan nedan. Marknader som inte passar → "other".
 - "scope": "map1"/"map2"/"map3" för en enskild karta ("Karta 1", "Map 1"), "maps12" för summan av karta 1 och 2 ("Kartor 1-2", "Maps 1-2"), "match" för hela matchen.
 - "player": spelarens nick exakt som det står, för spelarmarknader. Annars null.
+- "player2": bara för "kill_duel": den andra spelarens nick exakt som det står. Annars null.
 - "team": lagnamnet exakt som det står, för lagmarknader (se nedan vilket lag). Annars null.
 - "line": linjen som tal (Över/Under 38.5 → 38.5, handikapp -1.5 → -1.5). Ingen linje → null.
 - "overOdds"/"underOdds": decimalodds. Oläsbart → null. HITTA ALDRIG PÅ odds.
@@ -73,6 +77,7 @@ Marknader:
 - "total_maps": totalt antal kartor i matchen, Över/Under (t.ex. 2.5). scope = "match", team = null.
 - "pistol": vem vinner FÖRSTA pistolrundan på kartan. team = laget som står först, overOdds = dess odds, underOdds = det andra lagets. Andra pistolrundan → "other".
 - "first_kill": vilket lag tar första kill i första rundan på kartan. Som pistol.
+- "kill_duel": spelarduell — vilken av två spelare tar flest kills på en karta ("Spelarduell", "Player Duel", "Head to Head", "Flest kills", "Most Kills", "Spelare A vs Spelare B"). player = spelaren som står FÖRST, player2 = den andra, overOdds = första spelarens odds, underOdds = den andras. line = handikappet om det står ett vid första spelaren (t.ex. -1.5), annars null. scope = kartan (map1/map2/map3); gäller duellen flera kartor eller hela matchen → "other". Finns ett tredje utfall "Oavgjort"/"Lika" → "other".
 
 Hittar du inga CS2-marknader: returnera en tom lista.`;
 

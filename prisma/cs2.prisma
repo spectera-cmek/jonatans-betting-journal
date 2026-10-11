@@ -270,6 +270,8 @@ model Cs2Line {
   /// map1 | map2 | map3 | maps12 | match
   scope      String
   playerId   Int?
+  /// Spelare 2 i en killduell (sida 2). Annars null.
+  player2Id  Int?
   teamId     Int?
   line       Float?
   /// Över / lag 1 / ja.
@@ -296,6 +298,8 @@ model Cs2Projection {
   market       String
   scope        String
   playerId     Int?
+  /// Spelare 2 i en killduell.
+  player2Id    Int?
   teamId       Int?
   line         Float?
   includesOt   Boolean   @default(true)

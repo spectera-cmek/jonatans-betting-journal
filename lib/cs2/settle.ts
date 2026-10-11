@@ -14,7 +14,7 @@ const SCOPE_MAPS: Record<string, number[] | null> = { map1: [1], map2: [2], map3
 
 /** Utfallet för en projektion, eller undefined om det inte går att avgöra (än). null = void. */
 export function projectionActual(
-  p: { market: string; scope: string; playerId: number | null; teamId: number | null; line: number | null },
+  p: { market: string; scope: string; playerId: number | null; player2Id?: number | null; teamId: number | null; line: number | null },
   match: {
     status: string;
     team1Id: number | null;
@@ -83,6 +83,14 @@ export function projectionActual(
       return maps.length === 1 && maps[0].firstKillTeam != null ? (maps[0].firstKillTeam === team ? 1 : 0) : undefined;
     case "player_first_kill":
       return maps.length === 1 && maps[0].firstKillPlayer !== undefined ? (maps[0].firstKillPlayer === p.playerId ? 1 : 0) : undefined;
+    case "kill_duel": {
+      // Spelare 1:s kills minus spelare 2:s plus handikappet; 0 = lika = void.
+      if (maps.length !== 1) return undefined;
+      const k = (id: number | null | undefined) => maps[0].stats.find((s) => s.playerId === id && s.side === "all")?.kills;
+      const a = k(p.playerId);
+      const b = k(p.player2Id);
+      return a == null || b == null ? undefined : a - b + (p.line ?? 0);
+    }
   }
 }
 
@@ -92,7 +100,7 @@ export function overResult(market: string, line: number | null, actual: number):
     if (line == null) return actual > 0 ? 1 : 0;
     return actual > line ? 1 : actual === line ? 0.5 : 0;
   }
-  if (market === "map_handicap" || market === "match_handicap") return actual > 0 ? 1 : actual === 0 ? 0.5 : 0;
+  if (market === "map_handicap" || market === "match_handicap" || market === "kill_duel") return actual > 0 ? 1 : actual === 0 ? 0.5 : 0;
   return actual;
 }
 
@@ -163,7 +171,7 @@ export function summarizeFacit(rows: FacitRow[]): FacitSummary {
 
 /** Fyller i `actual` på projektioner vars match är spelad. Returnerar antal avgjorda. */
 export async function settleProjections(db: PrismaClient): Promise<number> {
-  const open = await db.cs2Projection.findMany({ where: { settledAt: null }, select: { id: true, matchId: true, market: true, scope: true, playerId: true, teamId: true, line: true } });
+  const open = await db.cs2Projection.findMany({ where: { settledAt: null }, select: { id: true, matchId: true, market: true, scope: true, playerId: true, player2Id: true, teamId: true, line: true } });
   const matchIds = [...new Set(open.map((o) => o.matchId))];
   let settled = 0;
   for (const matchId of matchIds) {

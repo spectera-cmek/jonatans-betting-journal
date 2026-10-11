@@ -31,6 +31,7 @@ import {
   DEFAULT_LEAGUE_PRIOR,
   KILL_HALF_LIFE_DAYS,
   headshotPmf,
+  killDuelProbs,
   killHistory,
   killPmfForMap,
   killRates,
@@ -49,7 +50,7 @@ import { buildAngles, type Angle } from "./angles";
 import { lineProbs } from "../shotModel";
 import { sumFacts } from "./profiles";
 import { lineupChange, LINEUP_RECENT_MAPS, type LineupChange } from "./lineup";
-import { CS2_MARKET_LABEL, CS2_SCOPE_LABEL, PLAYER_MARKETS, type Cs2Market, type Cs2Scope, type SeriesFormat, type Side } from "./types";
+import { CS2_MARKET_LABEL, CS2_SCOPE_LABEL, DUEL_SCOPES, PLAYER_MARKETS, type Cs2Market, type Cs2Scope, type SeriesFormat, type Side } from "./types";
 import { DEFAULT_SIGMA } from "./mapModel";
 
 const DAY = 86_400_000;
@@ -536,7 +537,7 @@ export function playerPmf(ctx: MatchupContext, playerId: number, market: "kills"
 /** Sannolikhet för "över / laget / ja" och push, för en linje. */
 export function modelProb(
   ctx: MatchupContext,
-  l: { market: Cs2Market; scope: Cs2Scope; playerId?: number | null; teamId?: number | null; line?: number | null; includesOt?: boolean }
+  l: { market: Cs2Market; scope: Cs2Scope; playerId?: number | null; player2Id?: number | null; teamId?: number | null; line?: number | null; includesOt?: boolean }
 ): { p: number; pPush: number; mean: number | null; pPlayed: number } | null {
   const includeOt = l.includesOt ?? true;
   const teamSide: 1 | 2 = l.teamId === ctx.team2.id ? 2 : 1;
@@ -609,6 +610,20 @@ export function modelProb(
       const opp = pl.side === 1 ? ctx.opening.team2 : ctx.opening.team1;
       return { p: playerFirstKillProb(own, opp, String(pl.playerId), 0.5), pPush: 0, mean: null, pPlayed: 1 };
     }
+    case "kill_duel": {
+      // Spelare 1 (playerId) mot spelare 2 (player2Id) på en karta; lika = void.
+      const a = ctx.players.find((x) => x.playerId === l.playerId);
+      const b = ctx.players.find((x) => x.playerId === l.player2Id);
+      if (!a || !b || a === b || !DUEL_SCOPES.has(l.scope)) return null;
+      let win = 0,
+        push = 0;
+      for (const { map, w } of mapWeights(ctx, l.scope)) {
+        const d = killDuelProbs({ rates: a.rates[map] ?? a.rates.all, side: a.side }, { rates: b.rates[map] ?? b.rates.all, side: b.side }, ctx.dists[map], includeOt, line);
+        win += w * d.pWin;
+        push += w * d.pPush;
+      }
+      return { p: push < 1 ? win / (1 - push) : 0.5, pPush: push, mean: null, pPlayed: ctx.series.pMapPlayed[mapIndex[l.scope] ?? 0] ?? 1 };
+    }
   }
 }
 
@@ -621,6 +636,8 @@ export interface LineInput {
   market: Cs2Market;
   scope: Cs2Scope;
   playerId?: number | null;
+  /** Spelare 2 i en killduell. */
+  player2Id?: number | null;
   teamId?: number | null;
   line?: number | null;
   overOdds?: number | null;
@@ -639,6 +656,11 @@ export interface PricedLine extends LineInput {
 }
 
 export function lineLabel(ctx: MatchupContext, l: LineInput): string {
+  const nick = (id: number) => ctx.players.find((p) => p.playerId === id)?.nickname ?? `spelare ${id}`;
+  if (l.market === "kill_duel" && l.playerId != null && l.player2Id != null) {
+    const hc = l.line ? ` ${l.line > 0 ? "+" : ""}${String(l.line).replace(".", ",")}` : "";
+    return `${nick(l.playerId)}${hc} vs ${nick(l.player2Id)} · ${CS2_MARKET_LABEL[l.market]} · ${CS2_SCOPE_LABEL[l.scope]}`;
+  }
   const who = l.playerId != null ? ctx.players.find((p) => p.playerId === l.playerId)?.nickname ?? `spelare ${l.playerId}` : l.teamId != null ? (l.teamId === ctx.team2.id ? ctx.team2.name : ctx.team1.name) : null;
   const lineTxt = l.line != null ? ` ${l.line > 0 && (l.market === "map_handicap" || l.market === "match_handicap") ? "+" : ""}${String(l.line).replace(".", ",")}` : "";
   return [who, CS2_MARKET_LABEL[l.market], CS2_SCOPE_LABEL[l.scope]].filter(Boolean).join(" · ") + lineTxt;

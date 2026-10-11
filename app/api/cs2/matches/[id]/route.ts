@@ -30,6 +30,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     market: r.market as Cs2Market,
     scope: r.scope as Cs2Scope,
     playerId: r.playerId,
+    player2Id: r.player2Id,
     teamId: r.teamId,
     line: r.line,
     overOdds: r.overOdds,

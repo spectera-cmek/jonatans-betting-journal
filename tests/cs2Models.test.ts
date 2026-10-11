@@ -450,6 +450,25 @@ describe("matchup utan databas", () => {
     expect(h.p).toBeCloseTo(series.scores["2,0"], 9);
   });
 
+  it("killduell: lagkamrater lika, starkare lagets spelare favorit", () => {
+    // Samma rater: inom laget är duellen symmetrisk.
+    const same = modelProb(ctx, { market: "kill_duel", scope: "map1", playerId: 101, player2Id: 102 })!;
+    expect(same.p).toBeCloseTo(0.5, 5);
+    expect(same.pPush).toBeGreaterThan(0.03);
+    // Alpha vinner fler rundor → fler kills för dess spelare.
+    const cross = modelProb(ctx, { market: "kill_duel", scope: "map1", playerId: 101, player2Id: 201 })!;
+    const back = modelProb(ctx, { market: "kill_duel", scope: "map1", playerId: 201, player2Id: 101 })!;
+    expect(cross.p).toBeGreaterThan(0.5);
+    expect(cross.p + back.p).toBeCloseTo(1, 5);
+    expect(cross.pPush).toBeCloseTo(back.pPush, 5);
+    // Bara per karta, och två olika spelare.
+    expect(modelProb(ctx, { market: "kill_duel", scope: "maps12", playerId: 101, player2Id: 201 })).toBeNull();
+    expect(modelProb(ctx, { market: "kill_duel", scope: "map1", playerId: 101, player2Id: 101 })).toBeNull();
+    const priced = priceLine(ctx, { market: "kill_duel", scope: "map2", playerId: 101, player2Id: 201, overOdds: 1.8, underOdds: 2.0 });
+    expect(priced.label).toBe("p101 vs p201 · Killduell · Karta 2");
+    expect(priced.price?.pPush).toBeGreaterThan(0);
+  });
+
   it("prissätter spelarlinjer och bygger vyn", () => {
     const priced = priceLine(ctx, { market: "kills", scope: "maps12", playerId: 101, line: 30.5, overOdds: 1.85, underOdds: 1.85 });
     expect(priced.label).toContain("p101");

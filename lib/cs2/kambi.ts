@@ -190,12 +190,12 @@ export function mapBetOffers(offers: KambiBetOffer[], event: Pick<KambiEvent, "h
         const one = find("OT_ONE");
         const two = find("OT_TWO");
         const line = one?.line ?? (two?.line != null ? -two.line : undefined);
-        row = { market, scope, player: null, team: one?.participant ?? event.homeName ?? null, line: milli(line), overOdds: odds(one?.odds), underOdds: odds(two?.odds), includesOt: null };
+        row = { market, scope, player: null, player2: null, team: one?.participant ?? event.homeName ?? null, line: milli(line), overOdds: odds(one?.odds), underOdds: odds(two?.odds), includesOt: null };
       } else {
         const over = group.find((o) => o.type && OVER.has(o.type));
         const under = group.find((o) => o.type && UNDER.has(o.type));
         const player = isPlayer ? group[0].participant ?? null : null;
-        row = { market, scope, player, team: null, line: milli((over ?? under)?.line), overOdds: odds(over?.odds), underOdds: odds(under?.odds), includesOt: null };
+        row = { market, scope, player, player2: null, team: null, line: milli((over ?? under)?.line), overOdds: odds(over?.odds), underOdds: odds(under?.odds), includesOt: null };
       }
       if (row.overOdds == null && row.underOdds == null) continue;
       rows.push(row);
