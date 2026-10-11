@@ -3,7 +3,7 @@ import { killDuelProbs } from "../lib/cs2/killModel";
 import { mapDistribution, type MapInputs } from "../lib/cs2/mapModel";
 import { projectionActual, overResult } from "../lib/cs2/settle";
 import { validateLine } from "../lib/cs2/lineInput";
-import { skipReason } from "../lib/cs2/propsMatch";
+import { matchPlayer, skipReason } from "../lib/cs2/propsMatch";
 
 const even: MapInputs = { pCtA: 0.53, pCtB: 0.53, pistolCtA: 0.5, pistolCtB: 0.5, conv2: 0.8, conv3: 0.7, pAStartsCt: 0.5, sigma: 0.3 };
 const rates = (kw: number, kl: number) => ({ kw, kl, hs: 0.45, rounds: 500 });
@@ -91,6 +91,14 @@ describe("killduell: validering och skärmdump", () => {
     // Andra marknader sparar aldrig spelare 2.
     const kills = validateLine({ ...base, market: "kills", line: 18.5 });
     expect(typeof kills === "string" ? kills : kills.player2Id).toBeNull();
+  });
+
+  it("nickarna från Betssons och Coolbets duellrutor kopplas till trupperna", () => {
+    const squad = ["donk", "zont1x", "sh1ro", "magixx", "tN1R", "XANTARES", "woxic", "Wicadia", "Jimpphat", "kyxsan"].map((nickname, i) => ({ id: i + 1, nickname }));
+    expect(matchPlayer("Zont1X", squad)).toBe(2);
+    expect(matchPlayer("tN1R", squad)).toBe(5);
+    expect(matchPlayer("Wicadia", squad)).toBe(8);
+    expect(matchPlayer("sh1ro", squad)).toBe(3);
   });
 
   it("skärmdumpsraden kräver båda spelarna", () => {

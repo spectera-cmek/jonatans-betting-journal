@@ -77,7 +77,12 @@ Marknader:
 - "total_maps": totalt antal kartor i matchen, Över/Under (t.ex. 2.5). scope = "match", team = null.
 - "pistol": vem vinner FÖRSTA pistolrundan på kartan. team = laget som står först, overOdds = dess odds, underOdds = det andra lagets. Andra pistolrundan → "other".
 - "first_kill": vilket lag tar första kill i första rundan på kartan. Som pistol.
-- "kill_duel": spelarduell — vilken av två spelare tar flest kills på en karta ("Spelarduell", "Player Duel", "Head to Head", "Flest kills", "Most Kills", "Spelare A vs Spelare B"). player = spelaren som står FÖRST, player2 = den andra, overOdds = första spelarens odds, underOdds = den andras. line = handikappet om det står ett vid första spelaren (t.ex. -1.5), annars null. scope = kartan (map1/map2/map3); gäller duellen flera kartor eller hela matchen → "other". Finns ett tredje utfall "Oavgjort"/"Lika" → "other".
+- "kill_duel": spelarduell — vilken av två spelare tar flest kills på en karta. En rad per spelarpar. player = spelaren som står FÖRST (till vänster), player2 = den andra, overOdds = första spelarens odds, underOdds = den andras. line = handikappet om det står ett vid första spelaren (t.ex. -1.5), annars null. scope = kartan (map1/map2/map3); gäller duellen flera kartor eller hela matchen → "other".
+  Kända format:
+  · Betsson/Betsafe/NordicBet: en ruta per par med rubriken "Map 1 - Duel of Player Kills Draw No Bet (donk vs Wicadia)" och två knappar, nick ovanför oddset. "Draw No Bet" betyder att insatsen återbetalas vid lika — det ÄR en kill_duel, inte "other".
+  · Coolbet: rubriken "Karta 1 - Kills-duell" och sedan en rad per par: "Wicadia 3.40 | donk 1.26" (vänster spelare och odds, höger spelare och odds).
+  · Även "Spelarduell", "Player Duel", "Head to Head", "Flest kills", "Most Kills".
+  Bara om det finns en egen tredje knapp med odds för "Oavgjort"/"Draw"/"X" är det en trevägsmarknad → "other".
 
 Hittar du inga CS2-marknader: returnera en tom lista.`;
 
