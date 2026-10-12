@@ -31,7 +31,10 @@ async function main() {
   const since = new Date(Date.now() - numberArg("--months", 12) * 30 * 86_400_000);
   const rows = await prisma.cs2Map.findMany({
     where: { playedAt: { gte: since }, statsFetchedAt: { not: null } },
-    include: { playerStats: { where: { side: "all" }, select: { playerId: true, teamId: true, kills: true, headshots: true } } },
+    include: {
+      playerStats: { where: { side: "all" }, select: { playerId: true, teamId: true, kills: true, headshots: true } },
+      demoPlayers: { select: { playerId: true, teamId: true, facts: true } },
+    },
     orderBy: { playedAt: "asc" },
   });
   const maps: BacktestMap[] = rows.map((r) => ({ ...r, players: r.playerStats }));
@@ -40,7 +43,11 @@ async function main() {
 
   console.log(`\nKartvinnare (n=${s.mapWinner.n}): log-loss ${s.mapWinner.logLoss.toFixed(4)} mot myntkast ${s.mapWinner.baselineLogLoss.toFixed(4)} · Brier ${s.mapWinner.brier.toFixed(4)} · träff ${pct(s.mapWinner.accuracy)}`);
   console.log(`Rundor (n=${s.rounds.n}): medelfel ${s.rounds.meanError.toFixed(2)} · MAE ${s.rounds.mae.toFixed(2)} · log-loss Ö${s.rounds.overLine} ${s.rounds.logLoss.toFixed(4)}`);
-  console.log(`Kills (n=${s.kills.n}): medelfel ${s.kills.meanError.toFixed(2)} · MAE ${s.kills.mae.toFixed(2)} · över fair line ${pct(s.kills.overRate)} (kalibrerat ≈ 50 %) · skattat φ ${s.kills.phi?.toFixed(1) ?? "∞ (Poisson)"}`);
+  console.log(`Kills (n=${s.kills.n}): medelfel ${s.kills.meanError.toFixed(2)} · MAE ${s.kills.mae.toFixed(2)} · över fair line ${pct(s.kills.overRate)} (kalibrerat ≈ 50 %) · log-score ${s.kills.logScore.toFixed(4)} · skattat φ ${s.kills.phi?.toFixed(1) ?? "∞ (Poisson)"}`);
+  if (s.killsSimple) {
+    const k = s.killsSimple;
+    console.log(`  förenklad modell: medelfel ${k.meanError.toFixed(2)} · MAE ${k.mae.toFixed(2)} · över fair line ${pct(k.overRate)} · log-score ${k.logScore.toFixed(4)}`);
+  }
   for (const [name, cal] of [["Kartvinnare", s.mapWinner.calibration], ["Kills över", s.kills.calibration]] as const) {
     console.log(`\n${name} — kalibrering (predikterat → utfall, n):`);
     for (const b of cal) console.log(`  ${pct(b.predicted).padStart(7)} → ${pct(b.observed).padStart(7)}  (${b.n})`);

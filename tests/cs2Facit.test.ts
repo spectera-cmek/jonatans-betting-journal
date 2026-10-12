@@ -274,6 +274,26 @@ describe("runBacktest", () => {
     expect(s.kills.logScore).toBeGreaterThan(0);
   });
 
+  it("mäter den förenklade kills-modellen på samma spelare-kartor", () => {
+    expect(s.killsSimple?.n).toBe(s.kills.n);
+    expect(Math.abs(s.killsSimple!.meanError)).toBeLessThan(2);
+  });
+
+  it("använder demofakta när kartorna har dem", () => {
+    // Demon säger att alla tar dubbelt så många kills i vunna rundor som HLTV-snittet antyder.
+    const withDemo = maps.map((m) => ({
+      ...m,
+      demoPlayers: m.players.map((p) => {
+        const won = p.teamId === m.team1Id ? m.team1Rounds : m.team2Rounds;
+        const rounds = m.team1Rounds + m.team2Rounds;
+        return { playerId: p.playerId, teamId: p.teamId, facts: { killsWon: 2 * won, killsLost: 0, roundsWon: won, rounds, headshots: 0, kills: 2 * won } };
+      }),
+    }));
+    const d = runBacktest(withDemo, { warmupMaps: 120 });
+    expect(d.kills.n).toBe(s.kills.n);
+    expect(d.kills.meanError).not.toBeCloseTo(s.kills.meanError, 2);
+  });
+
   it("varnar för litet underlag", () => {
     const small = runBacktest(maps.slice(0, 140), { warmupMaps: 120 });
     expect(small.notes.some((n) => n.includes("för lite"))).toBe(true);
