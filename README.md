@@ -101,6 +101,7 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run cs2:demos` | Download + parse HLTV demos → demo facts (local, `--confirm`) |
 | `npm run cs2:update` | Daily run: ingest + demos for upcoming matches + settle lines |
 | `npm run cs2:backtest` | Walk-forward backtest of the CS2 model (`--save` → Facit tab) |
+| `npm run backfill:bookmakers` | Fold bookmaker spelling variants onto one name (`--confirm`) |
 
 ## 🗂️ Pages
 
