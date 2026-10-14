@@ -30,6 +30,7 @@ I Vercel: **Settings → Environment Variables**. Lägg till (Environment: *Prod
 | `INVITE_CODE` | Koden som krävs för att skapa konto — dela bara med folk du vill ha in |
 | `DIRECT_URL` | Samma som `DATABASE_URL` men **utan** `-pooler` i hostnamnet *(se nedan)* |
 | `ODDS_API_KEY` | (valfritt) din The Odds API-nyckel |
+| `ANTHROPIC_API_KEY` | (valfritt) driver **Från kvitto** — läser spelkvitto-skärmdumpar och förifyller bet-formuläret |
 
 Generera `AUTH_SECRET` lokalt:
 ```bash
@@ -76,6 +77,17 @@ Tryck **Deploy** (eller **Redeploy**) i Vercel. När det är klart får du en UR
    - Android (Chrome): meny (⋮) → *Lägg till på startskärmen / Installera appen*.
 
 Nu startar den som en egen app-ikon, i helskärm.
+
+### Logga bets från spelkvitton på telefonen
+
+Med `ANTHROPIC_API_KEY` satt (steg 2) finns knappen **Från kvitto** på Bets-sidan: välj
+skärmdumpen på spelkvittot, så läser Claude av bookmaker, match, spel, odds, insats och
+avspark och förifyller formuläret — du kontrollerar och sparar. Flera bets i samma bild
+köas en och en. Kunde varumärket inte läsas lämnas bookmakern **tom och markerad** i
+stället för att gissa, eftersom fel bookmaker ger fel stängningsodds vid CLV-hämtning.
+
+Utan nyckeln svarar knappen att tolkningstjänsten inte är konfigurerad; manuell loggning
+påverkas inte.
 
 ---
 

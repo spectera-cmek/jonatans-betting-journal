@@ -6,7 +6,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { SPORTS, GENERIC_MARKET_CATEGORIES, MARKET_CATEGORIES_BY_SPORT } from "./constants";
+import {
+  BOOKMAKERS,
+  GENERIC_MARKET_CATEGORIES,
+  MARKET_CATEGORIES_BY_SPORT,
+  SPORTS,
+  normalizeBookmaker,
+} from "./constants";
 
 // Haiku är billigast (~5 öre/bild) och räcker för kvittoläsning; byt via env
 // till t.ex. "claude-sonnet-5" om tolkningskvaliteten inte håller.
@@ -61,11 +67,16 @@ const CATEGORIES = Array.from(
   new Set([...GENERIC_MARKET_CATEGORIES, ...Object.values(MARKET_CATEGORIES_BY_SPORT).flat()])
 );
 
+// Bookmaker-namnen appen filtrerar och räknar på. "Other" är ingen bookmaker —
+// kan kvittot inte identifieras ska fältet vara null, inte en uppsamlingsetikett.
+const BOOKMAKER_NAMES = BOOKMAKERS.filter((b) => b !== "Other");
+
 const EXTRACTION_PROMPT = `Du läser skärmdumpar av spelkvitton från svenska bettingappar och returnerar strukturerad JSON. En skärmdump kan innehålla FLERA bets — returnera ett element i "bets" per bet. Hittar du inget spelkvitto alls: returnera en tom lista.
 
 ## Odds och insats
 - "odds" är decimalodds (t.ex. 2.50). Går oddset inte att läsa → null. HITTA ALDRIG PÅ ett odds.
 - "stakeKr" är insatsen i kronor ("Insats 150,00 kr" → 150). "Utbetalning"/"Potentiell vinst" är INTE insatsen. Oläsbar insats → null.
+- Börskvitton (Smarkets m.fl.): "PRIS" är oddset och "INSATS" är insatsen. "MATCHAT" (hur mycket som gått igenom) och "V&F" (vinst/förlust) är varken odds eller insats. SIDA "BUY" är ett vanligt spel; SIDA "SELL" är ett spel emot (lay) → inled då selection med "Lay: " så det inte läses som ett vanligt spel.
 
 ## Event och lag
 - Amerikansk notation "PHI Phillies @ CIN Reds" betyder PHI borta, CIN hemma → event: "CIN Reds vs PHI Phillies", homeTeam: "CIN Reds", awayTeam: "PHI Phillies".
@@ -83,7 +94,21 @@ const EXTRACTION_PROMPT = `Du läser skärmdumpar av spelkvitton från svenska b
 ## Kvittoreferens
 - "importRef" = kvittots id utan etikett: "Ref XP7687095241I" → "XP7687095241I". Leta efter "Ref", "Kupong-Id", "SpelID", "Kvitto #", "ID:". Ingen referens → null.
 
-## Bookmaker — identifiera via kvittots utseende
+## Bookmaker — läs varumärket, gissa aldrig
+Fältet styr både filter och vilken bookmakers stängningsodds som hämtas för CLV, så ett
+felaktigt namn är sämre än inget namn.
+1. Står namnet i klartext på kvittot (logga, sidhuvud, "Utgivare", app-namn, webbadress) →
+   använd det. Det slår alltid utseende-ledtrådarna nedan.
+2. Svara med EXAKT ett av dessa namn när kvittot är någon av dem: ${BOOKMAKER_NAMES.join(", ")}.
+   Ser du en bookmaker som inte finns i listan → skriv namnet som det står på kvittot.
+3. Går varumärket inte att läsa → null. Skriv ALDRIG "Bet365" (eller något annat namn) som
+   gissning bara för att kvittot ser typiskt ut — null är rätt svar när du är osäker.
+
+Utseende-ledtrådar (bara som stöd när namnet inte syns i klartext):
+- Paf: VITT kvitto med mörkgrön text, rubriken "Ditt spel har lagts!", "Kvitto #" + ~11 siffror, kryssrutan "Återanvänd val", marknadsrubriker som "Asian totalt"/"Asian handikapp" → "Paf"
+- HappyCasino: LILA app med ordet "happy" i regnbågsfärgade gemener uppe till vänster → "HappyCasino"
+- VARNING om plattformskvitton: Paf, HappyCasino, LuckyCasino, SpeedyBet och veraochjohn kör SAMMA kvittomall — rubriken "Ditt spel har lagts!", "Kvitto #" + ~11 siffror som börjar på 130…, gul CASH OUT-etikett och en kryssruta längst ner. Varken mallen, kvittonumret eller kryssrutans text ("Behåll valet på kupongen" / "Återanvänd val") avgör vilket bolag det är — bara logotypen eller ett utskrivet namn gör det. Syns ingen logga i skärmdumpen → null.
+- Smarkets: svart börs-app — flikarna "MATCHAT"/"OMATCHAT", kolumnerna "SIDA" (BUY/SELL), "INSATS" och "PRIS", knappen "HANDEL", vinst/förlust som "V&F", bottenmeny "HEM · BLÄDDRA · SPEL · KONTO" → "Smarkets"
 - bet365: grön header, texten "Spel placerat", referens som börjar på "Ref XP…" → "Bet365"
 - Unibet: grönt kvitto, "Kupong-Id", boostar kallas "Uniboost" → "Unibet"
 - Betsson: vitt kvitto med "SINGEL ×1", eller lila "Superboost", referens "SpelID" → "Betsson"
@@ -97,7 +122,7 @@ const EXTRACTION_PROMPT = `Du läser skärmdumpar av spelkvitton från svenska b
 - Campobet: "RE USE SELECTIONS" → "Campobet"
 - Interwetten: gul app, "Tips" → "Interwetten"
 - Marinblå appar med referens "ID:": Betinia, Onerush eller 888sport — avgör via logotypen; syns ingen logga → null
-- Happy: lila app → "Happy". Flax: lila app → "Flax"
+- Flax: lila app → "Flax"
 - Mr Green → "Mr Green". LeoVegas → "LeoVegas". BetMGM → "BetMGM". Betfair → "Betfair". Pinnacle → "Pinnacle". Lucky → "Lucky"
 - Osäker → null. Gissa inte.
 
@@ -143,5 +168,11 @@ export async function extractBetsFromScreenshot(
   });
 
   if (!response.parsed_output) throw new ParseFailedError();
-  return response.parsed_output.bets;
+  // Kanonisera bookmakern direkt vid källan ("bet 365" → "Bet365") så kvitto-
+  // loggade bets hamnar på samma namn som resten av loggen — annars splittras
+  // filter, analys och CLV-uppslag på stavningsvarianter.
+  return response.parsed_output.bets.map((bet) => ({
+    ...bet,
+    bookmaker: normalizeBookmaker(bet.bookmaker),
+  }));
 }

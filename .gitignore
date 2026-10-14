@@ -25,7 +25,9 @@ next-env.d.ts
 .env*.local
 
 # local tooling / notes (Claude Code plans, memory, local settings)
-/.claude/
+# ...but keep committed skills so they survive fresh cloud-session clones
+/.claude/*
+!/.claude/skills/
 
 # bet365 account statement (personal data — keep local)
 /statement.pdf
