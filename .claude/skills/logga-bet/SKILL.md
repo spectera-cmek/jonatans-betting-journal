@@ -37,9 +37,16 @@ på `importRef` (annars event+selection+odds inom 2 dygn), och sätter ett cuid-
 Rör aldrig redan loggade rader.
 
 **Molnsession:** skriptet går via Neons HTTP-endpoint (port 5432 är blockad).
-Det kräver den riktiga `DATABASE_URL` — den i containern är en maskerad
-platshållare (innehåller `…`). Be användaren om strängen eller sätt den i
-miljökonfigurationen; kör sedan `DATABASE_URL='postgres://…' npx tsx …`.
+Tre saker måste stämma:
+- `DATABASE_URL` ska vara den riktiga strängen. Innehåller den `…` är den en
+  maskerad platshållare: sätt secreten i miljökonfigurationen. Ändringen syns
+  först i en **ny** session.
+- Miljöns nätverkspolicy ska släppa igenom `*.neon.tech`. Ett 403 från proxyn
+  betyder att den inte gör det: be användaren lägga till domänen under Network
+  access → Allowed domains.
+- Nodes `fetch` ignorerar proxyn som standard, så kör med
+  `NODE_USE_ENV_PROXY=1 npx tsx scripts/agent/logBetHttp.ts …`. Utan den blir
+  felet bara `fetch failed`.
 
 ## Fält per bet (JSON)
 Kärnfält: `event` ("Hemma vs Borta"), `homeTeam`, `awayTeam`, `sport`, `league`,
@@ -73,7 +80,9 @@ stavning; ditt jobb är att läsa rätt varumärke.
 
 - **Plattformskvitton — SAMMA mall, olika bolag:** Paf, HappyCasino, LuckyCasino,
   SpeedyBet, veraochjohn kör alla "Ditt spel har lagts!", "Kvitto #" + ~11 siffror
-  (börjar 130…), gul CASH OUT, kryssruta längst ner. **Varken mallen, numret
+  (börjar 130…), gul CASH OUT, kryssruta längst ner. ATG har också visat
+  "Kvitto #132…" (både ljust lila "SPEL LAGT" och mörkt "Ditt spel har lagts!"),
+  `importRef: "atg-<kvittonummer>"`. **Varken mallen, numret
   eller kryssrutans text avgör bolaget — bara loggan.** Paf = vit/grön, "Återanvänd
   val". HappyCasino = lila, "happy" i regnbågsgemener. Syns ingen logga → **fråga
   användaren** (AskUserQuestion), sätt inte ett namn.
