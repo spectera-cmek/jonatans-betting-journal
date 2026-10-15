@@ -77,3 +77,10 @@ export function validateLine(body: Record<string, unknown>): ValidLine | string 
     source: body.source === "screenshot" || body.source === "kambi" ? body.source : "manual",
   };
 }
+
+export type LineIdentity = { market: string; scope: string; playerId: number | null; player2Id: number | null; teamId: number | null; line: number | null };
+
+/** Samma marknad, karta, spelare/lag och linje — oddsen räknas inte. */
+export function lineKey(l: LineIdentity): string {
+  return [l.market, l.scope, l.playerId ?? "", l.player2Id ?? "", l.teamId ?? "", l.line ?? ""].join("|");
+}

@@ -1,9 +1,16 @@
 /**
  * Den dagliga körningen: HLTV-inläsning, demos för lag med kommande matcher,
- * facit för sparade linjer och roller. Tänkt för Schemaläggaren i Windows.
+ * Unibets linjer för kommande matcher, facit för sparade linjer och roller.
+ * Tänkt för Schemaläggaren i Windows.
  *
  *   npm run cs2:update                     # allt, med försiktiga tak
  *   npm run cs2:update -- --max-gb 10 --no-demos
+ *   npm run cs2:update -- --no-lines       # utan Unibet-linjerna
+ *   npm run cs2:update -- --all-lines      # linjer även för matcher utan bevakat lag
+ *
+ * Linjerna hämtas vid varje körning och sparas i en ny version bara när
+ * oddsen ändrats. Kör oftare än en gång om dagen för att få oddsen närmare
+ * matchstart — det är den senaste versionen som räknas i facit.
  *
  * Inget skrivs i dry-run-läge här — update kör alltid skarpt, men med samma
  * sidtak och GB-tak som de enskilda skripten.
@@ -17,6 +24,8 @@ import { runIngest } from "../../lib/cs2/pipeline";
 import { runDemoQueue } from "../../lib/cs2/demo/run";
 import { loadDemoparser } from "../../lib/cs2/demo/parseDemo";
 import { settleProjections } from "../../lib/cs2/settle";
+import { captureKambiLines } from "../../lib/cs2/lineStore";
+import { KAMBI_BOOKMAKER } from "../../lib/cs2/kambi";
 import { updateDerivedRoles } from "../../lib/cs2/roles";
 
 function numberArg(flag: string, fallback: number): number {
@@ -32,7 +41,7 @@ async function main() {
   }
   const session = new HltvSession({ headed: headedFromArgs(), maxPages: numberArg("--max-pages", 600) });
   try {
-    console.log("1/4 HLTV");
+    console.log("1/5 HLTV");
     const s = await runIngest(
       prisma,
       session,
@@ -43,7 +52,7 @@ async function main() {
     if (s.errors.length) console.log(`   ${s.errors.length} fel, första: ${s.errors[0]}`);
 
     if (!process.argv.includes("--no-demos")) {
-      console.log("2/4 Demos för lag med kommande matcher");
+      console.log("2/5 Demos för lag med kommande matcher");
       const api = await loadDemoparser().catch((e) => {
         console.log(`   hoppar över demos: ${e instanceof Error ? e.message : e}`);
         return null;
@@ -59,9 +68,24 @@ async function main() {
         console.log(`   ${d.processedSeries}/${d.queued} serier, ${d.processedMaps} kartor, ${d.downloadedGb} GB`);
       }
     }
-    console.log("3/4 Facit för sparade linjer");
+    if (!process.argv.includes("--no-lines")) {
+      console.log(`3/5 ${KAMBI_BOOKMAKER}-linjer för kommande matcher`);
+      try {
+        const l = await captureKambiLines(
+          prisma,
+          { days: numberArg("--days", 7), trackedOnly: !process.argv.includes("--all-lines"), delayMs: 1000 },
+          (m) => console.log(`    ${m}`)
+        );
+        console.log(`   ${l.found}/${l.matches} matcher hos ${KAMBI_BOOKMAKER}, ${l.saved} linjer sparade, ${l.unchanged} oförändrade, ${l.skipped} hoppade över`);
+        if (l.errors.length) console.log(`   ${l.errors.length} fel, första: ${l.errors[0]}`);
+      } catch (e) {
+        // Kambi är inget officiellt API — ett fel här ska inte stoppa facit och roller.
+        console.log(`   hoppar över linjerna: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    console.log("4/5 Facit för sparade linjer");
     console.log(`   ${await settleProjections(prisma)} linjer avgjorda`);
-    console.log("4/4 Roller");
+    console.log("5/5 Roller");
     console.log(`   ${await updateDerivedRoles(prisma)} spelare`);
   } finally {
     await session.close();

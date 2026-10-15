@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionUser, getSessionUserId, apiUnauthorized } from "@/lib/auth";
 import { cs2Prisma, hasCs2Db } from "@/lib/cs2Db";
-import { loadMatchupContext, priceLine } from "@/lib/cs2/matchup";
-import { CS2_MODEL_VERSION, DEFAULT_CS2_BLEND_W } from "@/lib/cs2/pricing";
+import { loadMatchupContext } from "@/lib/cs2/matchup";
+import { saveLines } from "@/lib/cs2/lineStore";
 import { validateLine } from "@/lib/cs2/lineInput";
 import { noCs2Db } from "@/lib/cs2/api";
 
@@ -31,39 +31,7 @@ export async function POST(req: Request) {
   const ctx = await loadMatchupContext(cs2Prisma, matchId);
   if (!ctx) return NextResponse.json({ error: "Matchen saknar lag eller data" }, { status: 404 });
 
-  const out = [];
-  for (const v of valid) {
-    const { matchId: _m, ...rest } = v;
-    void _m;
-    const line = await cs2Prisma.cs2Line.create({ data: { ...v, createdBy: user.username } });
-    const priced = priceLine(ctx, { ...rest, id: line.id }, DEFAULT_CS2_BLEND_W);
-    if (priced.price) {
-      await cs2Prisma.cs2Projection.create({
-        data: {
-          matchId,
-          lineId: line.id,
-          market: v.market,
-          scope: v.scope,
-          playerId: v.playerId,
-          player2Id: v.player2Id,
-          teamId: v.teamId,
-          line: v.line,
-          includesOt: v.includesOt,
-          mean: priced.mean,
-          pModel: priced.price.pModel,
-          pMarket: priced.price.pMarket,
-          pFinal: priced.price.pFinal,
-          fairOver: priced.price.fairOver,
-          fairUnder: priced.price.fairUnder,
-          bestSide: priced.price.bestSide,
-          bestOdds: priced.price.bestOdds,
-          edgePct: priced.price.edge != null ? priced.price.edge * 100 : null,
-          modelVersion: CS2_MODEL_VERSION,
-        },
-      });
-    }
-    out.push(priced);
-  }
+  const out = await saveLines(cs2Prisma, ctx, valid, user.username);
   return NextResponse.json({ ok: true, lines: out });
 }
 
