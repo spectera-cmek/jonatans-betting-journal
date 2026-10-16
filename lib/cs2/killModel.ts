@@ -107,6 +107,47 @@ export function killHistory(
   return out;
 }
 
+type DemoKillFacts = Partial<Pick<PlayerSideFacts, "killsWon" | "killsLost" | "roundsWon" | "rounds" | "headshots" | "kills">>;
+
+/** Demofakta per karta med samma ålders- och motståndsvikt som killHistory. */
+export function demoHistory(
+  rows: Array<{ playedAt: Date; mapName: string; opp: number | null; facts: DemoKillFacts }>,
+  now: Date,
+  concession: Record<number, number> = {},
+  halfLifeDays = KILL_HALF_LIFE_DAYS
+): RateInputs["demo"] {
+  const out: RateInputs["demo"] = {};
+  for (const r of rows) {
+    const w = Math.pow(0.5, Math.max(0, (now.getTime() - r.playedAt.getTime()) / 86_400_000) / halfLifeDays);
+    const c = r.opp != null ? concession[r.opp] ?? 1 : 1;
+    const f = r.facts;
+    const e = (out[r.mapName] ??= { killsWon: 0, killsLost: 0, roundsWon: 0, rounds: 0, headshots: 0, kills: 0 });
+    e.killsWon += (w * (f.killsWon ?? 0)) / c;
+    e.killsLost += (w * (f.killsLost ?? 0)) / c;
+    e.headshots += (w * (f.headshots ?? 0)) / c;
+    e.kills += (w * (f.kills ?? 0)) / c;
+    e.roundsWon += w * (f.roundsWon ?? 0);
+    e.rounds += w * (f.rounds ?? 0);
+  }
+  return out;
+}
+
+/** Ligans kill-nivå ur demofakta. För lite underlag ger DEFAULT_LEAGUE_PRIOR. */
+export function leaguePriorFromFacts(facts: DemoKillFacts[]): LeagueKillPrior {
+  const s = { kw: 0, rw: 0, kl: 0, rl: 0, hs: 0, k: 0 };
+  for (const f of facts) {
+    s.kw += f.killsWon ?? 0;
+    s.rw += f.roundsWon ?? 0;
+    s.kl += f.killsLost ?? 0;
+    s.rl += (f.rounds ?? 0) - (f.roundsWon ?? 0);
+    s.hs += f.headshots ?? 0;
+    s.k += f.kills ?? 0;
+  }
+  return s.rw > 2000 && s.rl > 2000
+    ? { kw: s.kw / s.rw, kl: s.kl / s.rl, hs: s.k > 0 ? s.hs / s.k : DEFAULT_LEAGUE_PRIOR.hs }
+    : DEFAULT_LEAGUE_PRIOR;
+}
+
 /** Kill-raterna skalade efter kommande motståndares släppta kills. */
 export function vsOpponent<T extends Record<string, KillRates>>(rates: T, factor: number): T {
   if (factor === 1) return rates;

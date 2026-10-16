@@ -28,16 +28,15 @@ import { isManualVetoStep } from "./manualVeto";
 import { knownVeto, seriesProbs, vetoDistribution, vetoProfile, type VetoDistribution } from "./veto";
 import {
   DEFAULT_KILL_PHI,
-  DEFAULT_LEAGUE_PRIOR,
-  KILL_HALF_LIFE_DAYS,
+  demoHistory,
   headshotPmf,
   killDuelProbs,
   killHistory,
   killPmfForMap,
   killRates,
+  leaguePriorFromFacts,
   teamConcession,
   vsOpponent,
-  type RateInputs,
   medianLine,
   pmfMean,
   seriesPmf,
@@ -106,20 +105,7 @@ export async function globalModel(db: PrismaClient): Promise<GlobalModel> {
 
   // Ligans kill-nivå ur ett urval demofakta (de senaste raderna räcker gott).
   const sample = await db.cs2DemoPlayerMap.findMany({ orderBy: { id: "desc" }, take: 3000, select: { facts: true } });
-  const s = { kw: 0, rw: 0, kl: 0, rl: 0, hs: 0, k: 0 };
-  for (const row of sample) {
-    const f = row.facts as unknown as PlayerSideFacts;
-    s.kw += f.killsWon ?? 0;
-    s.rw += f.roundsWon ?? 0;
-    s.kl += f.killsLost ?? 0;
-    s.rl += (f.rounds ?? 0) - (f.roundsWon ?? 0);
-    s.hs += f.headshots ?? 0;
-    s.k += f.kills ?? 0;
-  }
-  const league: LeagueKillPrior =
-    s.rw > 2000 && s.rl > 2000
-      ? { kw: s.kw / s.rw, kl: s.kl / s.rl, hs: s.k > 0 ? s.hs / s.k : DEFAULT_LEAGUE_PRIOR.hs }
-      : DEFAULT_LEAGUE_PRIOR;
+  const league = leaguePriorFromFacts(sample.map((row) => row.facts as unknown as PlayerSideFacts));
   const recent = maps.filter((m) => m.playedAt >= sinceOf(6));
   const leagueRounds = recent.length ? recent.reduce((a, m) => a + m.team1Rounds + m.team2Rounds, 0) / recent.length : 21.5;
 
@@ -354,19 +340,11 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
     }
     const dr = demoRows.filter((d) => d.playerId === p.id);
     // Demofakta till kill-raterna: samma ålders- och motståndsvikt som HLTV.
-    const demo: RateInputs["demo"] = {};
-    for (const d of dr) {
-      const f = d.facts as unknown as PlayerSideFacts;
-      const w = Math.pow(0.5, Math.max(0, (now.getTime() - d.map.playedAt.getTime()) / 86_400_000) / KILL_HALF_LIFE_DAYS);
-      const c = conc[oppOf(d.map, d.teamId)] ?? 1;
-      const e = (demo[d.map.mapName] ??= { killsWon: 0, killsLost: 0, roundsWon: 0, rounds: 0, headshots: 0, kills: 0 });
-      e.killsWon += (w * (f.killsWon ?? 0)) / c;
-      e.killsLost += (w * (f.killsLost ?? 0)) / c;
-      e.headshots += (w * (f.headshots ?? 0)) / c;
-      e.kills += (w * (f.kills ?? 0)) / c;
-      e.roundsWon += w * (f.roundsWon ?? 0);
-      e.rounds += w * (f.rounds ?? 0);
-    }
+    const demo = demoHistory(
+      dr.map((d) => ({ playedAt: d.map.playedAt, mapName: d.map.mapName, opp: oppOf(d.map, d.teamId), facts: d.facts as unknown as PlayerSideFacts })),
+      now,
+      conc
+    );
     const all = sumFacts(dr.map((d) => d.facts as unknown as PlayerSideFacts));
     const teamId = p.teamId!;
     const totalK = Object.values(kprAcc).reduce((a, x) => a + x.k, 0);
