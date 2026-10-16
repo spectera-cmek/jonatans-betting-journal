@@ -9,6 +9,7 @@ import type { PrismaClient } from ".prisma/cs2-client";
 import type { RoundFact } from "./demo/types";
 import type { RoundOutcome } from "./types";
 import { TOTAL_MARKETS, type Cs2Market } from "./types";
+import { lineKey, type LineIdentity } from "./lineInput";
 
 const SCOPE_MAPS: Record<string, number[] | null> = { map1: [1], map2: [2], map3: [3], maps12: [1, 2], match: null };
 
@@ -129,6 +130,22 @@ const ll = (p: number, y: number) => {
   const q = Math.min(1 - 1e-6, Math.max(1e-6, p));
   return -(y * Math.log(q) + (1 - y) * Math.log(1 - q));
 };
+
+/**
+ * En projektion per linje och bok: den senast sparade, alltså oddsen närmast
+ * start. Den automatiska Unibet-hämtningen sparar en ny version när oddsen
+ * ändras — utan det här skulle samma linje räknas en gång per version.
+ * Projektioner utan linje räknas var för sig.
+ */
+export function latestPerLine<T extends LineIdentity & { id: number; matchId: number; lineId: number | null; bookmaker: string | null }>(rows: T[]): T[] {
+  const best = new Map<string, T>();
+  for (const r of rows) {
+    const k = r.lineId == null ? `id:${r.id}` : `${r.matchId}|${(r.bookmaker ?? "").trim().toLowerCase()}|${lineKey(r)}`;
+    const prev = best.get(k);
+    if (!prev || r.id > prev.id) best.set(k, r);
+  }
+  return [...best.values()];
+}
 
 export function summarizeFacit(rows: FacitRow[]): FacitSummary {
   const both = rows.filter((r) => r.pMarket != null);
