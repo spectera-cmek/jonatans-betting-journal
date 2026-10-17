@@ -69,6 +69,7 @@
     "cs2:demos": "tsx scripts/cs2/demos.ts",
     "cs2:demos:batch": "tsx scripts/cs2/demos.ts --confirm --max-hours 3 --max-gb 10",
     "cs2:update": "tsx scripts/cs2/update.ts",
+    "cs2:lines": "tsx scripts/cs2/update.ts --only-lines",
     "cs2:backtest": "tsx scripts/cs2/backtest.ts",
     "cs2:capture": "tsx scripts/cs2/capture.ts"
   },

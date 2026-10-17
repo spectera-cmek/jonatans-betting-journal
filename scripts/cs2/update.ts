@@ -7,6 +7,7 @@
  *   npm run cs2:update -- --max-gb 10 --no-demos
  *   npm run cs2:update -- --no-lines       # utan Unibet-linjerna
  *   npm run cs2:update -- --all-lines      # linjer även för matcher utan bevakat lag
+ *   npm run cs2:lines                      # bara Unibet-linjerna (= --only-lines), utan webbläsare
  *
  * Linjerna hämtas vid varje körning och sparas i en ny version bara när
  * oddsen ändrats. Kör oftare än en gång om dagen för att få oddsen närmare
@@ -34,10 +35,32 @@ function numberArg(flag: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/** Unibets linjer för kommande matcher. Ett fel här ska inte stoppa resten av körningen. */
+async function captureLines(step: string) {
+  console.log(`${step}${KAMBI_BOOKMAKER}-linjer för kommande matcher`);
+  try {
+    const l = await captureKambiLines(
+      prisma,
+      { days: numberArg("--days", 7), trackedOnly: !process.argv.includes("--all-lines"), delayMs: 1000 },
+      (m) => console.log(`    ${m}`)
+    );
+    console.log(`   ${l.found}/${l.matches} matcher hos ${KAMBI_BOOKMAKER}, ${l.saved} linjer sparade, ${l.unchanged} oförändrade, ${l.skipped} hoppade över`);
+    if (l.errors.length) console.log(`   ${l.errors.length} fel, första: ${l.errors[0]}`);
+  } catch (e) {
+    // Kambi är inget officiellt API — ett fel här ska inte stoppa facit och roller.
+    console.log(`   hoppar över linjerna: ${e instanceof Error ? e.message : e}`);
+  }
+}
+
 async function main() {
   if (!hasCs2Db()) {
     console.error("CS2_DATABASE_URL saknas i .env.local");
     process.exit(1);
+  }
+  // Snabbläget: bara linjerna, utan HLTV-webbläsaren — tänkt att köras nära matchstart.
+  if (process.argv.includes("--only-lines")) {
+    await captureLines("");
+    return;
   }
   const session = new HltvSession({ headed: headedFromArgs(), maxPages: numberArg("--max-pages", 600) });
   try {
@@ -68,21 +91,7 @@ async function main() {
         console.log(`   ${d.processedSeries}/${d.queued} serier, ${d.processedMaps} kartor, ${d.downloadedGb} GB`);
       }
     }
-    if (!process.argv.includes("--no-lines")) {
-      console.log(`3/5 ${KAMBI_BOOKMAKER}-linjer för kommande matcher`);
-      try {
-        const l = await captureKambiLines(
-          prisma,
-          { days: numberArg("--days", 7), trackedOnly: !process.argv.includes("--all-lines"), delayMs: 1000 },
-          (m) => console.log(`    ${m}`)
-        );
-        console.log(`   ${l.found}/${l.matches} matcher hos ${KAMBI_BOOKMAKER}, ${l.saved} linjer sparade, ${l.unchanged} oförändrade, ${l.skipped} hoppade över`);
-        if (l.errors.length) console.log(`   ${l.errors.length} fel, första: ${l.errors[0]}`);
-      } catch (e) {
-        // Kambi är inget officiellt API — ett fel här ska inte stoppa facit och roller.
-        console.log(`   hoppar över linjerna: ${e instanceof Error ? e.message : e}`);
-      }
-    }
+    if (!process.argv.includes("--no-lines")) await captureLines("3/5 ");
     console.log("4/5 Facit för sparade linjer");
     console.log(`   ${await settleProjections(prisma)} linjer avgjorda`);
     console.log("5/5 Roller");
