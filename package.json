@@ -64,6 +64,7 @@
     "shots:odds": "tsx scripts/shots/ingestOdds.ts",
     "shots:backtest": "tsx scripts/shots/backtest.ts",
     "shots:tune": "tsx scripts/shots/tune.ts",
+    "shots:ingest:sofascore": "tsx scripts/shots/ingestSofascore.ts",
     "backfill:clv-scrape": "tsx scripts/scrapeClv.ts --confirm --since-days 90",
     "cs2:ingest": "tsx scripts/cs2/ingest.ts",
     "cs2:demos": "tsx scripts/cs2/demos.ts",
@@ -73,7 +74,9 @@
     "cs2:backtest": "tsx scripts/cs2/backtest.ts",
     "cs2:capture": "tsx scripts/cs2/capture.ts",
     "scrapling:setup": "tsx scripts/scrapling/setup.ts",
-    "scrapling:check": "tsx scripts/scrapling/check.ts"
+    "scrapling:check": "tsx scripts/scrapling/check.ts",
+    "sofascore:capture": "tsx scripts/sofascore/capture.ts",
+    "props:grade": "tsx scripts/results/gradeProps.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

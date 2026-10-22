@@ -104,6 +104,9 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run backfill:bookmakers` | Fold bookmaker spelling variants onto one name (`--confirm`) |
 | `npm run scrapling:setup` | Install the Scrapling fetcher into `.venv` (Python 3.10+) |
 | `npm run scrapling:check` | Check the Scrapling chain against a harmless page |
+| `npm run shots:ingest:sofascore` | Shot-model fixtures + team stats from Sofascore (`--confirm`) |
+| `npm run props:grade` | Grade props/stat totals from Sofascore (`--confirm` settles) |
+| `npm run sofascore:capture` | Check the Sofascore parsers against live data (local) |
 
 ## 🗂️ Pages
 
@@ -272,6 +275,26 @@ npm run scrapling:check     # fetch a harmless page in HTTP and browser mode
 | Uses Scrapling | How |
 |----------------|-----|
 | HLTV (CS2) | `--scrapling` on `cs2:capture` / `cs2:ingest` / `cs2:update`, or `CS2_FETCHER=scrapling` |
+| Shot model data (Sofascore) | `npm run shots:ingest:sofascore` — fixtures + shots/SoT/corners/xG, no API key |
+| Props grading (Sofascore) | `npm run props:grade` — player props, corner/shot totals, BTTS in football, basketball, hockey |
+| Parser check (Sofascore) | `npm run sofascore:capture` — saves live fixtures and reports missing fields |
+
+**Sofascore as shot-model source.** Rows get their own ids (`ss_<eventId>`, teams
+`ss_t_<id>`), so they never collide with TheStatsAPI's `mt_…`. One league, one source:
+the script stops if a league already has TheStatsAPI rows, since the model would count
+those matches twice. Odds still come from TheStatsAPI or manual entry.
+
+```bash
+npm run shots:ingest:sofascore -- --league allsvenskan            # dry-run: listing + budget
+npm run shots:ingest:sofascore -- --league allsvenskan --confirm  # write fixtures + stats
+```
+
+**Props grading.** `npm run props:grade` finds each open bet's match on Sofascore,
+reads the team or player statistic and grades over/under with the app's own rules. It
+writes `.claude/tmp/results-props-<date>.json` (the format `scripts/agent/settleBets.ts`
+reads) and touches nothing until `--confirm`. Cards, combos, quarter lines, players who
+did not play and fields not seen in the match's data are listed and left for manual
+settling. Sofascore blocks most cloud and VPN addresses — run it from home.
 
 The scripts find `.venv` on their own; `SCRAPLING_PYTHON` points them at another Python.
 Same rules as the other scrapers: local only, slow pace, cache everything, personal use.

@@ -93,6 +93,16 @@ motsäger sig själv, eller saknar den marknad du behöver.
    ```
    npx tsx scripts/agent/openBets.ts > .claude/tmp/open-bets.json
    ```
+   **Först, när rutinen kör på datorn:** låt Sofascore-rättningen ta det den kan
+   (props, lag-/matchtotaler för hörnor och skott, BTTS i fotboll, basket och
+   hockey). Den skriver förslag med källa och lämnar allt osäkert:
+   ```
+   npm run props:grade
+   ```
+   Granska `.claude/tmp/results-props-YYYY-MM-DD.json` och kör den som i steg 5–6
+   (eller `npm run props:grade -- --confirm`). Lägg bara research på det som står
+   under "Lämnas åt handen". Sofascore spärrar molnadresser, så i en molnkörning
+   hoppar du över det här steget.
 2. Dela upp i:
    - **(A) kandidater** — match/event verkar avgjort eller kan verifieras nu
    - **(B) vänta** — framtida `eventAt`, live, futures ej klara
