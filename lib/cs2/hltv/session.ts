@@ -16,6 +16,11 @@
 // Räcker inte det: starta en vanlig Chrome med
 // fjärrfelsökning och sätt CS2_CDP_URL — då kopplar skripten upp sig mot den
 // i stället för att starta en egen.
+//
+// Alternativ hämtare: Scrapling (`--scrapling` eller CS2_FETCHER=scrapling).
+// Den löser Cloudflare-kontrollen själv, så fönstret kan vara dolt och ingen
+// behöver klicka. Cache, takt och sidtak är desamma. Demos laddas fortfarande
+// ner med patchright.
 
 import { createHash } from "node:crypto";
 import { createWriteStream, promises as fs } from "node:fs";
@@ -27,8 +32,17 @@ import type { Browser, BrowserContext, BrowserType, Page } from "playwright";
 type Chromium = BrowserType;
 import { HLTV_ORIGIN } from "./urls";
 import { isChallengePage } from "./parse";
+import { ScraplingWorker } from "../../scrapling";
 
 export const CS2_CACHE_DIR = process.env.CS2_CACHE_DIR || ".cache/cs2";
+
+/** Vem som hämtar sidorna: patchright ("browser") eller Scrapling. */
+export type HltvFetcher = "browser" | "scrapling";
+
+/** `--scrapling` (eller CS2_FETCHER=scrapling) väljer Scrapling. */
+export function fetcherFromArgs(argv: string[] = process.argv): HltvFetcher {
+  return argv.includes("--scrapling") || process.env.CS2_FETCHER === "scrapling" ? "scrapling" : "browser";
+}
 
 /**
  * Synligt fönster som standard: Cloudflare släpper nästan aldrig igenom en
@@ -96,6 +110,14 @@ export interface HltvSessionOptions {
   /** Läs bara från cachen — kasta om en sida saknas. Används av --reparse. */
   offline?: boolean;
   cacheDir?: string;
+  /** Standard: patchright. Se fetcherFromArgs(). */
+  fetcher?: HltvFetcher;
+  /**
+   * Scraplings fönster. Standard: dolt (Scrapling klarar Cloudflare utan klick),
+   * synligt bara med `--headed`. `headed` ovan gäller patchright, som demos
+   * fortfarande använder.
+   */
+  scraplingHeaded?: boolean;
 }
 
 export interface GetOptions {
@@ -125,6 +147,7 @@ export class HltvSession {
   private readonly maxPages: number;
 
   private browser: Browser | null = null;
+  private scrapling: ScraplingWorker | null = null;
 
   constructor(private readonly opts: HltvSessionOptions = {}) {
     this.cacheDir = opts.cacheDir ?? CS2_CACHE_DIR;
@@ -269,10 +292,78 @@ export class HltvSession {
     }
     if (this.fetched >= this.maxPages) throw new HltvBudgetError(this.maxPages);
 
-    const page = await this.ensurePage();
     const url = HLTV_ORIGIN + urlPath;
-    let html = "";
     console.log(`  → ${urlPath}`);
+    const html = this.opts.fetcher === "scrapling" ? await this.fetchViaScrapling(url) : await this.fetchViaBrowser(url);
+    this.fetched += 1;
+    const file = cacheFileFor(this.cacheDir, urlPath);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, html, "utf8");
+    return html;
+  }
+
+  private scraplingWorker(): ScraplingWorker {
+    if (!this.scrapling) {
+      const headed = this.opts.scraplingHeaded ?? process.argv.includes("--headed");
+      this.scrapling = new ScraplingWorker({
+        headed,
+        // Egen profil: patchrights profil kan vara låst av en demonedladdning.
+        profileDir: path.join(this.cacheDir, "scrapling-profile"),
+        cdpUrl: process.env.CS2_CDP_URL || undefined,
+        realChrome: process.env.CS2_BROWSER_CHANNEL === "chrome",
+        onLog: (line) => {
+          // Bara det som säger något om Cloudflare eller fel — inte varje hämtning.
+          if (/No Cloudflare challenge found/i.test(line)) return;
+          if (/error|warn|cloudflare|turnstile|captcha/i.test(line)) console.log(`    ${line}`);
+        },
+      });
+      console.log(`  (hämtare: Scrapling${headed ? ", synlig" : ""})`);
+    }
+    return this.scrapling;
+  }
+
+  /** Sparar en sida som inte gick att använda — för felsökning, som saveDebug. */
+  private async saveDebugHtml(html: string, label: string): Promise<void> {
+    const file = path.join(this.cacheDir, "debug", `${label}-${Date.now()}.html`);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, html, "utf8");
+      console.log(`    [${label}] → ${file}`);
+    } catch {
+      // Felsökningen får aldrig stoppa körningen.
+    }
+  }
+
+  private async fetchViaScrapling(url: string): Promise<string> {
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this.throttle();
+      const res = await this.scraplingWorker().fetch({ mode: "browser", url });
+      const html = res.body;
+      lastStatus = res.status;
+      if (!html || isChallengePage(html)) {
+        await this.saveDebugHtml(html, "challenge");
+        if (attempt === 2) throw new HltvBlockedError(url);
+        console.log(`    Scrapling klarade inte Cloudflare-kontrollen — försöker igen (${attempt + 2}/3).`);
+        await sleep(15_000 * (attempt + 1));
+        continue;
+      }
+      if (res.status === 404) throw new Error(`404 från HLTV: ${url}`);
+      // En klarad kontroll kan lämna kontrollsidans 403/503 som status fast
+      // HLTV-sidan visas. Riktiga HLTV-sidor är hundratals kB; felsidor är små.
+      if ((res.status >= 500 || res.status === 429) && html.length < 20_000) {
+        console.log(`    HLTV svarade ${res.status} — väntar och försöker igen.`);
+        await sleep(10_000 * (attempt + 1));
+        continue;
+      }
+      return html;
+    }
+    throw new Error(`HLTV svarade ${lastStatus} tre gånger i rad: ${url}`);
+  }
+
+  private async fetchViaBrowser(url: string): Promise<string> {
+    const page = await this.ensurePage();
+    let html = "";
     for (let attempt = 0; attempt < 3; attempt++) {
       await this.throttle();
       const res = await page.goto(url, { waitUntil: "domcontentloaded" }).catch((err: unknown) => {
@@ -314,10 +405,6 @@ export class HltvSession {
       }
       break;
     }
-    this.fetched += 1;
-    const file = cacheFileFor(this.cacheDir, urlPath);
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, html, "utf8");
     return html;
   }
 
@@ -437,6 +524,8 @@ export class HltvSession {
   }
 
   async close(): Promise<void> {
+    await this.scrapling?.close().catch(() => undefined);
+    this.scrapling = null;
     if (this.browser) {
       // Användarens egen Chrome stängs inte — bara vår flik och kopplingen.
       await this.page?.close().catch(() => undefined);

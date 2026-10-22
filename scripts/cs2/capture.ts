@@ -20,7 +20,7 @@ import {
   parseResults,
   parseTeamPage,
 } from "../../lib/cs2/hltv/parse";
-import { HltvSession, headedFromArgs } from "../../lib/cs2/hltv/session";
+import { HltvSession, headedFromArgs, fetcherFromArgs } from "../../lib/cs2/hltv/session";
 import { trimHltvPage, type HltvPageKind } from "../../lib/cs2/hltv/trim";
 import { hltvUrls } from "../../lib/cs2/hltv/urls";
 
@@ -44,7 +44,7 @@ async function save(kind: HltvPageKind, html: string) {
 }
 
 async function main() {
-  const session = new HltvSession({ headed: headedFromArgs(), maxPages: 20 });
+  const session = new HltvSession({ headed: headedFromArgs(), fetcher: fetcherFromArgs(), maxPages: 20 });
   try {
     console.log("Ranking (VRS)");
     const rankingHtml = await session.getHtml(hltvUrls.vrsRanking(), { maxAgeMs: 86_400_000 });

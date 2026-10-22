@@ -243,6 +243,10 @@ metrics can be computed with `cs2:demos -- --confirm --reanalyze`.
   looks for) and your installed Chrome or Edge when available.
 - The scripts open a visible browser window by default, because Cloudflare rarely lets a
   hidden one through. Click the check when it appears; `--headless` hides the window.
+- **No clicking:** add `--scrapling` (or set `CS2_FETCHER=scrapling`) and the pages are
+  fetched through [Scrapling](#️-scrapling-fetcher-local), which solves the Cloudflare
+  check by itself in a hidden window (`--headed` shows it). Same cache, pace and page
+  budget. Demo downloads still use patchright.
 - If the Cloudflare check keeps coming back after a click, start your own Chrome or Edge
   with `--remote-debugging-port=9222` and set `CS2_CDP_URL=http://localhost:9222`
   (see `.env.local.example`).
