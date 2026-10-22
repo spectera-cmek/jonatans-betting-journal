@@ -71,7 +71,9 @@
     "cs2:update": "tsx scripts/cs2/update.ts",
     "cs2:lines": "tsx scripts/cs2/update.ts --only-lines",
     "cs2:backtest": "tsx scripts/cs2/backtest.ts",
-    "cs2:capture": "tsx scripts/cs2/capture.ts"
+    "cs2:capture": "tsx scripts/cs2/capture.ts",
+    "scrapling:setup": "tsx scripts/scrapling/setup.ts",
+    "scrapling:check": "tsx scripts/scrapling/check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

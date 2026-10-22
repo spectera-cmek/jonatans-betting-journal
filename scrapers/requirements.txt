@@ -1,0 +1,4 @@
+# Scrapling-hämtaren (scrapers/worker.py). Installeras med: npm run scrapling:setup
+# Pinnad version: workern använder StealthySession/FetcherSession och page_action,
+# verifierade mot just den här versionen.
+scrapling[fetchers]==0.4.15

@@ -102,6 +102,8 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run cs2:update` | Daily run: ingest + demos for upcoming matches + settle lines |
 | `npm run cs2:backtest` | Walk-forward backtest of the CS2 model (`--save` → Facit tab) |
 | `npm run backfill:bookmakers` | Fold bookmaker spelling variants onto one name (`--confirm`) |
+| `npm run scrapling:setup` | Install the Scrapling fetcher into `.venv` (Python 3.10+) |
+| `npm run scrapling:check` | Check the Scrapling chain against a harmless page |
 
 ## 🗂️ Pages
 
@@ -249,6 +251,26 @@ metrics can be computed with `cs2:demos -- --confirm --reanalyze`.
   and check the Facit tab. Until the map-winner log-loss beats 0.693 (coin flip) on a
   few hundred maps, treat the edges as hints, not bets.
 - Books differ on overtime and on maps 1–2 rules. Set "inkl. OT" per line.
+
+## 🕷️ Scrapling fetcher (local)
+
+The local scrapers can fetch pages through [Scrapling](https://github.com/D4Vinci/Scrapling),
+a Python library that drives a stealth Chromium and solves Cloudflare checks by itself.
+**Python fetches, TypeScript parses:** a small long-lived worker (`scrapers/worker.py`)
+hands raw HTML/JSON back to the TS scripts (`lib/scrapling.ts`), so all parsers, models
+and database writes stay where they were.
+
+```bash
+npm run scrapling:setup     # once: .venv + scrapling (pinned) + its Chromium. Needs Python 3.10+
+npm run scrapling:check     # fetch a harmless page in HTTP and browser mode
+```
+
+| Uses Scrapling | How |
+|----------------|-----|
+| HLTV (CS2) | `--scrapling` on `cs2:capture` / `cs2:ingest` / `cs2:update`, or `CS2_FETCHER=scrapling` |
+
+The scripts find `.venv` on their own; `SCRAPLING_PYTHON` points them at another Python.
+Same rules as the other scrapers: local only, slow pace, cache everything, personal use.
 
 ## 🧪 Testing
 

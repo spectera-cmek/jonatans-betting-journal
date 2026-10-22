@@ -59,3 +59,7 @@ _tmp_*
 
 # CS2-modulen: HLTV-sidcache, webbläsarprofil, demos och råfakta (kan bli många GB)
 /.cache/
+
+# Scrapling: projektets egen Python-miljö (npm run scrapling:setup)
+/.venv/
+__pycache__/

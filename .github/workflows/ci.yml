@@ -37,5 +37,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      # Scrapling-workern körs bara lokalt, men ett syntaxfel ska fångas här.
+      - name: Check Python worker syntax
+        run: python3 -m py_compile scrapers/*.py
+
       - name: Build
         run: npm run build
