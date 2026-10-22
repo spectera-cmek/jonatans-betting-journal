@@ -176,7 +176,7 @@ describe("SofascoreClient", () => {
     expect(await c.get("/event/1/statistics")).toEqual({ a: 1 });
     expect(await c.get("/event/1/statistics")).toEqual({ a: 1 });
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ mode: "http", url: "https://api.sofascore.com/api/v1/event/1/statistics" });
+    expect(calls[0]).toMatchObject({ mode: "http", url: "https://www.sofascore.com/api/v1/event/1/statistics" });
     expect(c.fetched).toBe(1);
     expect(c.cacheHits).toBe(1);
   });
@@ -188,15 +188,37 @@ describe("SofascoreClient", () => {
     expect(calls).toHaveLength(2);
   });
 
-  it("403 → webbläsarläget en gång, sedan spärrfel", async () => {
+  it("403 → nästa väg (www, api, sedan webbläsaren via startsidan), och vägen som fungerar sitter kvar", async () => {
     const { c, calls } = client([
-      { status: 403 },
-      { body: '<html><body><pre>{"x":"a &amp; b"}</pre></body></html>' },
-      { status: 403 },
+      { status: 403, body: '{"error":{"code":403}}' }, // HTTP www
+      { status: 403 }, // HTTP api
+      { body: "<html>sofascore.com</html>" }, // webbläsaren besöker startsidan
+      { body: '<html><body><pre>{"x":"a &amp; b"}</pre></body></html>' }, // webbläsare www
+      { body: '<pre>{"y":2}</pre>' }, // nästa anrop: samma väg direkt
     ]);
     expect(await c.get("/event/3")).toEqual({ x: "a & b" });
-    expect(calls.map((r) => r.mode)).toEqual(["http", "browser"]);
-    await expect(c.get("/event/4")).rejects.toBeInstanceOf(SofascoreBlockedError);
+    expect(await c.get("/event/4")).toEqual({ y: 2 });
+    expect(calls.map((r) => `${r.mode} ${new URL(r.url).host}${new URL(r.url).pathname}`)).toEqual([
+      "http www.sofascore.com/api/v1/event/3",
+      "http api.sofascore.com/api/v1/event/3",
+      "browser www.sofascore.com/",
+      "browser www.sofascore.com/api/v1/event/3",
+      "browser www.sofascore.com/api/v1/event/4",
+    ]);
+  });
+
+  it("403 på alla vägar ger spärrfel med Sofascores svar", async () => {
+    const { c } = client([
+      { status: 403 },
+      { status: 403 },
+      { body: "" },
+      { status: 403 },
+      { status: 403, body: '{"error":{"code":403,"reason":"Forbidden"}}' },
+    ]);
+    const err = (await c.get("/event/5").catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(SofascoreBlockedError);
+    expect(err.message).toMatch(/Forbidden/);
+    expect(err.message).toMatch(/webbläsare api\.sofascore\.com/);
   });
 
   it("taket per körning", async () => {

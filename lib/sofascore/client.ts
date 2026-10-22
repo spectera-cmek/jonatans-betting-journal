@@ -5,24 +5,40 @@
 //  1. Varje svar sparas på disk (.cache/sofascore). Färdiga matcher hämtas
 //     aldrig om; listor får en maxålder.
 //  2. Långsam takt med slump (standard 1,5–3 s) och ett tak per körning.
-//  3. HTTP-läget (TLS-fingeravtryck som en riktig Chrome) först. Svarar
-//     Sofascore 403 provas webbläsarläget en gång innan vi ger upp.
+//  3. Flera vägar in, billigast först: HTTP-läget (TLS-fingeravtryck som en
+//     riktig Chrome) mot www- och api-adressen, sedan webbläsaren (som först
+//     besöker sofascore.com för cookies). Svarar en väg 403 provas nästa; den
+//     som fungerar används resten av körningen.
 
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { ScraplingWorker } from "../scrapling";
-import { SOFASCORE_API } from "./api";
+import { SOFASCORE_API_BASES, SOFASCORE_SITE } from "./api";
 
 export const SOFASCORE_CACHE_DIR = process.env.SOFASCORE_CACHE_DIR || ".cache/sofascore";
 
 export class SofascoreBlockedError extends Error {
-  constructor(url: string) {
+  constructor(apiPath: string, tried: string[], lastBody: string) {
     super(
-      `Sofascore svarade 403 på ${url}. IP-adressen är spärrad (vanligt från molnet/VPN). Kör från din vanliga uppkoppling, eller vänta en stund.`
+      `Sofascore svarade 403 på ${apiPath} på alla vägar (${tried.join(", ")}). ` +
+        `Senaste svaret: ${lastBody.replace(/\s+/g, " ").slice(0, 160) || "(tomt)"}\n` +
+        `Vanliga orsaker: VPN/moln-IP, eller att adressen spärrats en stund efter många anrop. ` +
+        `Öppna ${SOFASCORE_API_BASES[0]}/sport/football/scheduled-events/${new Date().toISOString().slice(0, 10)} i din vanliga webbläsare — syns JSON där men inte här, säg till.`
     );
   }
 }
+
+/** En väg in till API:et. */
+export interface SofaRoute {
+  mode: "http" | "browser";
+  base: string;
+}
+
+export const SOFA_ROUTES: SofaRoute[] = [
+  ...SOFASCORE_API_BASES.map((base) => ({ mode: "http" as const, base })),
+  ...SOFASCORE_API_BASES.map((base) => ({ mode: "browser" as const, base })),
+];
 
 export class SofascoreBudgetError extends Error {
   constructor(max: number) {
@@ -63,6 +79,10 @@ export function jsonFromBrowserPage(html: string): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function describeRoute(r: SofaRoute): string {
+  return `${r.mode === "http" ? "HTTP" : "webbläsare"} ${new URL(r.base).host}`;
+}
+
 export class SofascoreClient {
   /** Anrop mot nätet i den här körningen. */
   fetched = 0;
@@ -74,7 +94,9 @@ export class SofascoreClient {
   private readonly ownsWorker: boolean;
   private readonly worker: ScraplingWorker;
   private lastCall = 0;
-  private useBrowser = false;
+  /** Index i SOFA_ROUTES för vägen som används just nu. */
+  private route = 0;
+  private warmedUp = false;
 
   constructor(private readonly opts: SofascoreClientOptions = {}) {
     this.cacheDir = opts.cacheDir ?? SOFASCORE_CACHE_DIR;
@@ -130,35 +152,46 @@ export class SofascoreClient {
     }
     if (this.fetched >= this.maxRequests) throw new SofascoreBudgetError(this.maxRequests);
 
-    const url = SOFASCORE_API + apiPath;
     let body: string | null = null;
-    for (let attempt = 0; attempt < 3 && body === null; attempt++) {
+    let lastUrl = "";
+    let last403 = "";
+    for (let attempt = 0; attempt < 3 && body === null; ) {
+      const route = SOFA_ROUTES[this.route];
+      if (!route) throw new SofascoreBlockedError(apiPath, SOFA_ROUTES.map(describeRoute), last403);
+      if (route.mode === "browser" && !this.warmedUp) {
+        // En riktig besökare kommer via startsidan — det ger cookies.
+        this.warmedUp = true;
+        await this.throttle();
+        await this.worker.fetch({ mode: "browser", url: SOFASCORE_SITE }).catch(() => undefined);
+      }
+      lastUrl = route.base + apiPath;
       await this.throttle();
       const res = await this.worker.fetch({
-        mode: this.useBrowser ? "browser" : "http",
-        url,
-        headers: { Referer: "https://www.sofascore.com/" },
+        mode: route.mode,
+        url: lastUrl,
+        headers: { Referer: SOFASCORE_SITE, Origin: SOFASCORE_SITE.replace(/\/$/, "") },
       });
       this.fetched += 1;
       // Inte cachad: lineups och statistik kan dyka upp en stund efter matchen.
       if (res.status === 404) return null;
       if (res.status === 403) {
-        if (!this.useBrowser) {
-          this.log("    Sofascore svarade 403 på HTTP-läget — provar webbläsaren.");
-          this.useBrowser = true;
-          continue;
-        }
-        throw new SofascoreBlockedError(url);
-      }
-      if (res.status === 429 || res.status >= 500) {
-        this.log(`    Sofascore svarade ${res.status} — väntar och försöker igen.`);
-        await sleep(10_000 * (attempt + 1));
+        last403 = res.body;
+        this.route += 1;
+        const next = SOFA_ROUTES[this.route];
+        if (next) this.log(`    Sofascore svarade 403 (${describeRoute(route)}) — provar ${describeRoute(next)}.`);
         continue;
       }
-      if (res.status < 200 || res.status >= 300) throw new Error(`Sofascore svarade ${res.status} på ${url}`);
-      body = this.useBrowser ? jsonFromBrowserPage(res.body) : res.body;
+      attempt += 1;
+      if (res.status === 429 || res.status >= 500) {
+        this.log(`    Sofascore svarade ${res.status} — väntar och försöker igen.`);
+        await sleep(10_000 * attempt);
+        continue;
+      }
+      if (res.status < 200 || res.status >= 300) throw new Error(`Sofascore svarade ${res.status} på ${lastUrl}`);
+      body = route.mode === "browser" ? jsonFromBrowserPage(res.body) : res.body;
     }
-    if (body === null) throw new Error(`Sofascore svarade inte på ${url} efter tre försök`);
+    if (body === null) throw new Error(`Sofascore svarade inte på ${lastUrl} efter tre försök`);
+    const url = lastUrl;
 
     let parsed: unknown;
     try {

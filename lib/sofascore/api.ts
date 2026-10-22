@@ -3,10 +3,19 @@
 // tillåter inte skrapning. Därför: låg takt, allt cachat, bara personligt bruk.
 //
 // Hämtas via Scrapling (lib/sofascore/client.ts) och tolkas i
-// lib/sofascore/parse.ts. Sökvägarna nedan är relativa SOFASCORE_API och
+// lib/sofascore/parse.ts. Sökvägarna nedan är relativa API-basen och
 // används också som cachenycklar.
 
-export const SOFASCORE_API = "https://api.sofascore.com/api/v1";
+/**
+ * Samma API på två adresser. Webbplatsen själv läser från www-adressen;
+ * api.-adressen spärrar fler klienter. Klienten provar dem i den här
+ * ordningen. SOFASCORE_API_BASE tvingar en enda.
+ */
+export const SOFASCORE_API_BASES = process.env.SOFASCORE_API_BASE
+  ? [process.env.SOFASCORE_API_BASE.replace(/\/+$/, "")]
+  : ["https://www.sofascore.com/api/v1", "https://api.sofascore.com/api/v1"];
+
+export const SOFASCORE_SITE = "https://www.sofascore.com/";
 
 export type SofaSport = "football" | "basketball" | "ice-hockey";
 

@@ -1,6 +1,7 @@
 /**
  * Kontrollerar att Scrapling-kedjan fungerar: TS → Python-workern → nätet.
- * Hämtar en ofarlig sida, först med HTTP-läget och sedan med webbläsaren.
+ * Hämtar en ofarlig sida (wikipedia.org), först med HTTP-läget och sedan med
+ * webbläsaren. Blockerar ditt nät den: --url <annan sida>.
  * Rör ingen databas och ingen av sajterna som skrapas.
  *
  *   npm run scrapling:check
@@ -15,7 +16,7 @@ function argValue(flag: string): string | undefined {
 }
 
 async function main() {
-  const url = argValue("--url") ?? "https://example.com/";
+  const url = argValue("--url") ?? "https://www.wikipedia.org/";
   const worker = new ScraplingWorker({
     headed: process.argv.includes("--headed"),
     onLog: (line) => console.log(`    ${line}`),
