@@ -1,0 +1,47 @@
+{
+  "statistics": [
+    {
+      "period": "ALL",
+      "groups": [
+        {
+          "groupName": "Match overview",
+          "statisticsItems": [
+            { "name": "Ball possession", "home": "58%", "away": "42%", "compareCode": 1, "statisticsType": "positive", "valueType": "event", "homeValue": 58, "awayValue": 42, "renderType": 2, "key": "ballPossession" },
+            { "name": "Expected goals", "home": "1.84", "away": "0.92", "homeValue": 1.84, "awayValue": 0.92, "renderType": 1, "key": "expectedGoals" },
+            { "name": "Total shots", "home": "15", "away": "9", "homeValue": 15, "awayValue": 9, "renderType": 1, "key": "totalShotsOnGoal" },
+            { "name": "Goalkeeper saves", "home": "2", "away": "4", "homeValue": 2, "awayValue": 4, "renderType": 1, "key": "goalkeeperSaves" },
+            { "name": "Corner kicks", "home": "7", "away": "4", "homeValue": 7, "awayValue": 4, "renderType": 1, "key": "cornerKicks" },
+            { "name": "Fouls", "home": "11", "away": "14", "homeValue": 11, "awayValue": 14, "renderType": 1, "key": "fouls" },
+            { "name": "Yellow cards", "home": "2", "away": "3", "homeValue": 2, "awayValue": 3, "renderType": 1, "key": "yellowCards" }
+          ]
+        },
+        {
+          "groupName": "Shots",
+          "statisticsItems": [
+            { "name": "Total shots", "home": "15", "away": "9", "homeValue": 15, "awayValue": 9, "key": "totalShotsOnGoal" },
+            { "name": "Shots on target", "home": "6", "away": "3", "homeValue": 6, "awayValue": 3, "key": "shotsOnGoal" },
+            { "name": "Shots off target", "home": "5", "away": "4", "homeValue": 5, "awayValue": 4, "key": "shotsOffGoal" },
+            { "name": "Blocked shots", "home": "4", "away": "2", "homeValue": 4, "awayValue": 2, "key": "blockedScoringAttempt" }
+          ]
+        },
+        {
+          "groupName": "Attack",
+          "statisticsItems": [
+            { "name": "Offsides", "home": "1", "away": "3", "homeValue": 1, "awayValue": 3, "key": "offsides" }
+          ]
+        }
+      ]
+    },
+    {
+      "period": "1ST",
+      "groups": [
+        {
+          "groupName": "Match overview",
+          "statisticsItems": [
+            { "name": "Corner kicks", "home": "3", "away": "1", "homeValue": 3, "awayValue": 1, "key": "cornerKicks" }
+          ]
+        }
+      ]
+    }
+  ]
+}

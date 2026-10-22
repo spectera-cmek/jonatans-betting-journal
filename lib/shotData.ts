@@ -39,12 +39,17 @@ export interface ShotLeague {
   competitionId?: string;
   /** Ungefärligt antal matcher per säsong, för anropsbudgeten. */
   matchesPerSeason: number;
+  /**
+   * Sofascores unique-tournament-id, för `shots:ingest:sofascore`.
+   * `npm run sofascore:capture` skriver ut ligans namn för varje id.
+   */
+  sofascoreId?: number;
 }
 
 export const SHOT_LEAGUES: ShotLeague[] = [
-  { key: "allsvenskan", label: "Allsvenskan", search: ["Allsvenskan"], country: "Sweden", matchesPerSeason: 240 },
-  { key: "premier-league", label: "Premier League", search: ["Premier League"], country: "England", matchesPerSeason: 380 },
-  { key: "laliga", label: "LaLiga", search: ["LaLiga", "La Liga", "Primera División"], country: "Spain", matchesPerSeason: 380 },
+  { key: "allsvenskan", label: "Allsvenskan", search: ["Allsvenskan"], country: "Sweden", matchesPerSeason: 240, sofascoreId: 40 },
+  { key: "premier-league", label: "Premier League", search: ["Premier League"], country: "England", matchesPerSeason: 380, sofascoreId: 17 },
+  { key: "laliga", label: "LaLiga", search: ["LaLiga", "La Liga", "Primera División"], country: "Spain", matchesPerSeason: 380, sofascoreId: 8 },
   // Europacuperna saknar land i API:et, så de slås upp på id i stället för
   // sökning + landsmatchning. Champions League är comp_3498 och Conference
   // League comp_408698 om registret ska breddas.
@@ -55,6 +60,7 @@ export const SHOT_LEAGUES: ShotLeague[] = [
     country: "",
     competitionId: "comp_7739",
     matchesPerSeason: 200,
+    sofascoreId: 679,
   },
 ];
 
