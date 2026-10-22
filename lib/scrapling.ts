@@ -15,6 +15,8 @@ import { createInterface } from "node:readline";
 
 export type ScraplingAction =
   | { clickText: string; exact?: boolean; timeoutMs?: number }
+  /** Klickar den första texten i listan som finns och syns. */
+  | { clickFirst: string[]; exact?: boolean; timeoutMs?: number }
   | { waitMs: number }
   | { waitSelector: string; timeoutMs?: number };
 
@@ -94,6 +96,14 @@ export function resolvePython(
 }
 
 export const WORKER_SCRIPT = path.join("scrapers", "worker.py");
+
+/** Ett steg i workerns format (snake_case). */
+function toWireAction(a: ScraplingAction): Record<string, unknown> {
+  if ("clickText" in a) return { click_text: a.clickText, exact: a.exact ?? true, timeout_ms: a.timeoutMs };
+  if ("clickFirst" in a) return { click_first: a.clickFirst, exact: a.exact ?? true, timeout_ms: a.timeoutMs };
+  if ("waitMs" in a) return { wait_ms: a.waitMs };
+  return { wait_selector: a.waitSelector, timeout_ms: a.timeoutMs };
+}
 
 type Pending = {
   resolve: (r: ScraplingResponse) => void;
@@ -247,13 +257,7 @@ export class ScraplingWorker {
       // Workern får lite kortare tid än vi väntar, så den hinner svara med sitt eget fel.
       timeout_ms: Math.max(5_000, timeoutMs - 5_000),
       headers: req.headers,
-      actions: req.actions?.map((a) =>
-        "clickText" in a
-          ? { click_text: a.clickText, exact: a.exact ?? true, timeout_ms: a.timeoutMs }
-          : "waitMs" in a
-            ? { wait_ms: a.waitMs }
-            : { wait_selector: a.waitSelector, timeout_ms: a.timeoutMs }
-      ),
+      actions: req.actions?.map(toWireAction),
     };
     return new Promise<ScraplingResponse>((resolve, reject) => {
       const timer = setTimeout(() => {

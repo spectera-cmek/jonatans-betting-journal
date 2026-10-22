@@ -1,5 +1,9 @@
 // Batch OddsPortal CLV capture for featured markets (h2h / totals / spreads).
 // Local/CLI only — Playwright is not suited for serverless.
+//
+// Two fetchers: Playwright (default) and Scrapling (`fetcher: "scrapling"`, the
+// experiment behind `scrape:clv -- --scrapling`). compareOddsPortalFetchers runs
+// both on the same bets and writes nothing.
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./db";
@@ -41,7 +45,23 @@ export interface OddsPortalClvOptions {
   graceMinutes?: number;
   /** Pause between OddsPortal searches (default 1200). */
   pauseMs?: number;
+  /** Who fetches the pages (default Playwright). */
+  fetcher?: OddsPortalFetcher;
   prisma?: PrismaClient;
+}
+
+export type OddsPortalFetcher = "playwright" | "scrapling";
+
+async function scrapeWith(
+  fetcher: OddsPortalFetcher | undefined,
+  items: { id: string; input: ScrapeBetInput }[],
+  pauseMs: number | undefined
+) {
+  if (fetcher !== "scrapling") return scrapeClosingBatch(items, { pauseMs });
+  // Laddas bara här: /api/sync importerar den här filen och ska inte dra in
+  // cheerio och child_process för en väg som bara körs från skripten.
+  const { scrapeClosingBatchScrapling } = await import("./oddsPortal/scraplingScrape");
+  return scrapeClosingBatchScrapling(items, { pauseMs });
 }
 
 export interface OddsPortalClvResult {
@@ -215,9 +235,10 @@ export async function captureClosingFromOddsPortal(
     };
   }
 
-  const scraped = await scrapeClosingBatch(
+  const scraped = await scrapeWith(
+    opts.fetcher,
     batchItems.map(({ id, input }) => ({ id, input })),
-    { pauseMs: opts.pauseMs }
+    opts.pauseMs
   );
 
   const byId = new Map(batchItems.map((b) => [b.id, b.bet]));
@@ -257,4 +278,30 @@ export async function captureClosingFromOddsPortal(
     failed,
     details,
   };
+}
+
+export interface FetcherComparisonRow {
+  bet: CandidateBet;
+  playwright: ScrapeClosingResult;
+  scrapling: ScrapeClosingResult;
+}
+
+/**
+ * Runs both fetchers on the same candidates — Playwright first, then
+ * Scrapling — and returns the results side by side. Never writes to the DB.
+ */
+export async function compareOddsPortalFetchers(
+  opts: OddsPortalClvOptions = {}
+): Promise<FetcherComparisonRow[]> {
+  const candidates = await listFeaturedClvCandidates(opts);
+  const items = candidates
+    .map((bet) => ({ bet, input: toScrapeInput(bet) }))
+    .filter((x): x is { bet: CandidateBet; input: ScrapeBetInput } => x.input !== null)
+    .map((x) => ({ id: x.bet.id, input: x.input, bet: x.bet }));
+  if (items.length === 0) return [];
+
+  const plain = items.map(({ id, input }) => ({ id, input }));
+  const pw = new Map((await scrapeWith("playwright", plain, opts.pauseMs)).map((r) => [r.id, r.result]));
+  const sc = new Map((await scrapeWith("scrapling", plain, opts.pauseMs)).map((r) => [r.id, r.result]));
+  return items.map(({ id, bet }) => ({ bet, playwright: pw.get(id)!, scrapling: sc.get(id)! }));
 }

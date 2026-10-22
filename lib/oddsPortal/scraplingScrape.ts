@@ -1,0 +1,200 @@
+// OddsPortal via Scrapling — experimentet bakom `scrape:clv -- --scrapling`.
+// Playwright-vägen (scrape.ts) är fortfarande standard; `--compare` kör båda
+// på samma bets så att de kan jämföras innan något byts.
+//
+// Samma flöde som scrapeClosingForBet: sök matchen, öppna rätt flik, klicka
+// fram linjen och välj bolag. Skillnaden är att Scrapling hämtar sidan (och
+// gör klicken) och att tolkningen sker på den sparade HTML:en (parseHtml.ts).
+// Klickar man fram en linje syns oddsen PER BOLAG, så O/U-closing kan tas från
+// bettets bolag/Pinnacle i stället för OddsPortals snitt.
+//
+// Hanterar h2h/1X2, Over/Under och Asian Handicap. Props, hörnor och kort
+// finns inte på OddsPortal på ett sätt som går att lita på — de svarar
+// market_not_found.
+
+import { ScraplingWorker } from "../scrapling";
+import { buildSearchQuery, oddsPortalSportSlug, pickBookmakerOdds, resolveMarketTarget } from "./mapping";
+import {
+  formatLine,
+  htmlToLines,
+  isBlockedHtml,
+  parseBookmakerTable,
+  parseLineSummary,
+  parseSearchCandidates,
+  tableToOddsRows,
+} from "./parseHtml";
+import {
+  pickColumnOdds,
+  pickOuLine,
+  pickSearchCandidate,
+  type BatchScrapeItem,
+  type BatchScrapeResult,
+  type ScrapeBetInput,
+  type ScrapeClosingResult,
+} from "./scrape";
+
+const BASE = "https://www.oddsportal.com";
+/** Väntan efter ett klick innan sidan läses — OddsPortal laddar oddsen i efterhand. */
+const SETTLE_MS = 2500;
+const TABS = { wait: { waitSelector: "li.tab-item, li.odds-item", timeoutMs: 15_000 } } as const;
+
+function fail(code: ScrapeClosingResult["code"], detail: string, matchUrl: string | null = null): ScrapeClosingResult {
+  return { ok: false, closingOdds: null, bookmakerUsed: null, matchUrl, provisional: false, code, detail };
+}
+
+/** Rätt flik och linje för betet — eller varför Scrapling-vägen inte tar det. */
+export function planMarket(input: ScrapeBetInput):
+  | { ok: true; kind: "1x2" | "ou" | "ah"; tabs: string[]; lineLabel: string | null; line: number | null; column: ReturnType<typeof resolveMarketTarget>["column"] }
+  | { ok: false; detail: string } {
+  const target = resolveMarketTarget(input);
+  if (target.isProp || input.marketScope === "player") {
+    return { ok: false, detail: "Props hanteras inte av Scrapling-vägen — ange closing manuellt." };
+  }
+  // resolveMarketTarget gör en "totals" om hörnor till mål-O/U; OddsPortals
+  // Over/Under-flik är MÅL, så statistikmarknader och lagtotaler tas inte här.
+  const what = `${input.marketCategory ?? ""} ${input.selection}`;
+  if (target.tabLabels.some((t) => /corner|card|booking/i.test(t)) || /hörn|horn|corner|kort|card|skott|shot|offside|frispark|räddning|save/i.test(what)) {
+    return { ok: false, detail: "Hörnor/kort/skott finns inte som egen marknad på OddsPortal — ange closing manuellt." };
+  }
+  if (input.marketScope === "team") {
+    return { ok: false, detail: "Lagtotaler finns inte på OddsPortals Over/Under-flik — ange closing manuellt." };
+  }
+  if (target.column === "over" || target.column === "under") {
+    const label = target.line != null ? `Over/Under ${formatLine(target.line, true)}` : null;
+    return { ok: true, kind: "ou", tabs: ["Over/Under", "Over Under", "Totals"], lineLabel: label, line: target.line, column: target.column };
+  }
+  if (target.tabLabels.includes("Asian Handicap")) {
+    if (target.line == null) return { ok: false, detail: "Handikapp utan linje." };
+    // OddsPortal anger linjen från hemmalagets håll.
+    const homeLine = target.column === "away" ? -target.line : target.line;
+    return {
+      ok: true,
+      kind: "ah",
+      tabs: target.tabLabels,
+      lineLabel: `Asian Handicap ${formatLine(homeLine, true)}`,
+      line: homeLine,
+      column: target.column,
+    };
+  }
+  return { ok: true, kind: "1x2", tabs: target.tabLabels, lineLabel: null, line: null, column: target.column };
+}
+
+/**
+ * Closing-oddset ur matchsidans text (efter att fliken och linjen klickats
+ * fram). Ren funktion — testas mot fångade sidor i tests/fixtures/oddsportal.
+ */
+export function closingFromLines(
+  lines: string[],
+  plan: Extract<ReturnType<typeof planMarket>, { ok: true }>,
+  input: ScrapeBetInput,
+  matchUrl: string
+): ScrapeClosingResult {
+  const provisional = input.eventAt != null ? input.eventAt.getTime() > Date.now() : false;
+  const table = parseBookmakerTable(lines);
+  let rows = table ? tableToOddsRows(table) : [];
+  // En linjemarknad: bara bolagens rader för just den linjen.
+  if (plan.kind !== "1x2" && plan.line != null) rows = rows.filter((r) => r.line === plan.line);
+
+  const flat = rows
+    .map((r) => {
+      const odds = pickColumnOdds(r, plan.column);
+      return odds != null ? { bookmaker: r.bookmaker, odds } : null;
+    })
+    .filter((r): r is { bookmaker: string; odds: number } => r != null);
+  const picked = pickBookmakerOdds(flat, input.bookmaker);
+  if (picked) {
+    const what = plan.kind === "1x2" ? "" : `${plan.kind === "ou" ? "OU" : "AH"} ${plan.line} ${plan.column} `;
+    return {
+      ok: true,
+      closingOdds: picked.row.odds,
+      bookmakerUsed: picked.matchedAs,
+      matchUrl,
+      provisional,
+      detail: provisional
+        ? `Live-odds ${what}${picked.row.odds.toFixed(2)} från ${picked.matchedAs} (match ej startad — ej slutgiltig closing).`
+        : `Closing ${what}${picked.row.odds.toFixed(2)} från ${picked.matchedAs} via OddsPortal (Scrapling).`,
+    };
+  }
+
+  // Ingen bolagsrad för linjen: OddsPortals snitt för linjen, som Playwright-vägen.
+  if (plan.kind === "ou") {
+    const summary = parseLineSummary(lines, "Over/Under").map((s) => ({ line: s.line, over: s.first, under: s.second }));
+    const line = pickOuLine(summary, plan.line);
+    if (line && (plan.line == null || line.line === plan.line)) {
+      const odds = plan.column === "under" ? line.under : line.over;
+      return {
+        ok: true,
+        closingOdds: odds,
+        bookmakerUsed: "OddsPortal avg",
+        matchUrl,
+        provisional,
+        detail: `${provisional ? "Live" : "Closing"} OU ${line.line} ${plan.column} ${odds.toFixed(2)} (OddsPortal-snitt, Scrapling).`,
+      };
+    }
+    return fail("odds_not_found", plan.line != null ? `Hittade Over/Under men inte linjen ${plan.line}.` : "Ingen Over/Under-tabell.", matchUrl);
+  }
+  return fail("odds_not_found", "Inga bookmaker-odds i sidans tabell.", matchUrl);
+}
+
+export async function scrapeClosingForBetScrapling(worker: ScraplingWorker, input: ScrapeBetInput): Promise<ScrapeClosingResult> {
+  const plan = planMarket(input);
+  if (!plan.ok) return fail("market_not_found", plan.detail);
+
+  const sport = oddsPortalSportSlug(input.sport, input.league);
+  const query = buildSearchQuery(input);
+  if (!query || query.length < 2) return fail("missing_fields", "Saknar lag/event för sök.");
+
+  // OddsPortals sök (okt 2026) svarar inte på två lagnamn i samma fråga —
+  // då provas hemmalaget och sedan bortalaget var för sig. Urvalet kräver
+  // fortfarande båda lagen i träffens titel.
+  const queries = [...new Set([query, buildSearchQuery({ homeTeam: input.homeTeam }), buildSearchQuery({ homeTeam: input.awayTeam })])].filter(
+    (q) => q.length >= 2
+  );
+  let found: ReturnType<typeof pickSearchCandidate> | null = null;
+  for (const q of queries) {
+    const search = await worker.fetch({
+      mode: "browser",
+      url: `${BASE}/search/${encodeURIComponent(q)}/`,
+      actions: [{ waitSelector: "a[href*='/h2h/'], .eventRow a[href]", timeoutMs: 12_000 }, { waitMs: 800 }],
+    });
+    if (isBlockedHtml(search.body)) return fail("blocked", "OddsPortal blockerade (Cloudflare).");
+    found = pickSearchCandidate(parseSearchCandidates(search.body, sport), input, q, sport);
+    if (found.ok && found.url) break;
+  }
+  if (!found?.ok || !found.url) return fail(found?.code ?? "match_not_found", found?.detail ?? "Ingen sökträff.");
+
+  const actions: NonNullable<Parameters<ScraplingWorker["fetch"]>[0]["actions"]> = [TABS.wait];
+  if (plan.kind !== "1x2" || input.sport?.toLowerCase() !== "football") {
+    actions.push({ clickFirst: plan.tabs }, { waitMs: SETTLE_MS });
+  }
+  if (plan.lineLabel) actions.push({ clickText: plan.lineLabel }, { waitMs: SETTLE_MS });
+  const page = await worker.fetch({ mode: "browser", url: found.url, actions });
+  if (isBlockedHtml(page.body)) return fail("blocked", "OddsPortal blockerade (Cloudflare).", found.url);
+  return closingFromLines(htmlToLines(page.body), plan, input, found.url);
+}
+
+/** Många bets med en och samma webbläsare, i tur och ordning. */
+export async function scrapeClosingBatchScrapling(
+  items: BatchScrapeItem[],
+  opts: { pauseMs?: number; worker?: ScraplingWorker } = {}
+): Promise<BatchScrapeResult[]> {
+  const worker = opts.worker ?? new ScraplingWorker({});
+  const pauseMs = opts.pauseMs ?? 1200;
+  const out: BatchScrapeResult[] = [];
+  try {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      let result: ScrapeClosingResult;
+      try {
+        result = await scrapeClosingForBetScrapling(worker, item.input);
+      } catch (e) {
+        result = fail("browser_error", e instanceof Error ? e.message : String(e));
+      }
+      out.push({ id: item.id, result });
+      if (i < items.length - 1 && pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
+    }
+  } finally {
+    if (!opts.worker) await worker.close();
+  }
+  return out;
+}

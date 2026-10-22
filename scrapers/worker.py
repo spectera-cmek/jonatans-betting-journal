@@ -8,8 +8,8 @@ Protokoll: en JSON per rad. stdin tar anrop, stdout ger svar.
 
   anrop:  {"id": 1, "mode": "browser" | "http", "url": "...",
            "wait_selector"?: "...", "network_idle"?: true, "timeout_ms"?: 60000,
-           "headers"?: {...}, "actions"?: [{"click_text": "..."} | {"wait_ms": 500}
-                                           | {"wait_selector": "..."}]}
+           "headers"?: {...}, "actions"?: [{"click_text": "..."} | {"click_first": ["...", "..."]}
+                                           | {"wait_ms": 500} | {"wait_selector": "..."}]}
   svar:   {"id": 1, "ok": true, "status": 200, "url": "...", "body": "...",
            "actions"?: [{"ok": true} | {"ok": false, "detail": "..."}]}
           {"id": 1, "ok": false, "error": "..."}
@@ -163,6 +163,16 @@ def run_actions(page, actions, results):
             if "click_text" in action:
                 exact = action.get("exact", True)
                 page.get_by_text(action["click_text"], exact=exact).first.click(timeout=action.get("timeout_ms", 8000))
+            elif "click_first" in action:
+                # Första texten som finns och syns klickas; resten provas inte.
+                exact = action.get("exact", True)
+                for text in action["click_first"]:
+                    loc = page.get_by_text(text, exact=exact).first
+                    if loc.count() and loc.is_visible():
+                        loc.click(timeout=action.get("timeout_ms", 8000))
+                        break
+                else:
+                    raise ValueError(f"ingen av {action['click_first']} finns på sidan")
             elif "wait_ms" in action:
                 page.wait_for_timeout(int(action["wait_ms"]))
             elif "wait_selector" in action:

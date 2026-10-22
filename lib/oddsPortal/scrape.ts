@@ -53,7 +53,7 @@ export interface SearchMatchResult {
   detail: string;
 }
 
-type OddsRow = {
+export type OddsRow = {
   bookmaker: string;
   home?: number;
   draw?: number;
@@ -114,7 +114,7 @@ function isBlocked(page: Page, bodyText: string): boolean {
   );
 }
 
-function pickColumnOdds(row: OddsRow, column: SelectionColumn): number | null {
+export function pickColumnOdds(row: OddsRow, column: SelectionColumn): number | null {
   if (column === "home") return row.home ?? row.odds ?? null;
   if (column === "draw") return row.draw ?? null;
   if (column === "away") return row.away ?? row.odds ?? null;
@@ -214,6 +214,25 @@ export async function searchMatch(
     return uniq;
   }, { sportSlug: sport, base: BASE });
 
+  return pickSearchCandidate(candidates, input, query, sport);
+}
+
+export interface SearchCandidate {
+  href: string;
+  title: string;
+  dateText: string;
+}
+
+/**
+ * Väljer matchen bland sökträffarna: båda lagen och datumet först, annars
+ * bästa träff på ett av lagen. Delas av Playwright- och Scrapling-vägen.
+ */
+export function pickSearchCandidate(
+  candidates: SearchCandidate[],
+  input: ScrapeBetInput,
+  query: string,
+  sport: string
+): SearchMatchResult {
   const home = input.homeTeam;
   const away = input.awayTeam;
   const scored = candidates
@@ -506,7 +525,7 @@ async function extractOuSummary(
   return parseOuSummaryText(text);
 }
 
-function pickOuLine(
+export function pickOuLine(
   lines: { line: number; over: number; under: number }[],
   want: number | null
 ): { line: number; over: number; under: number } | null {

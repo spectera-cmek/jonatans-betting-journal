@@ -278,6 +278,20 @@ npm run scrapling:check     # fetch a harmless page in HTTP and browser mode
 | Shot model data (Sofascore) | `npm run shots:ingest:sofascore` — fixtures + shots/SoT/corners/xG, no API key |
 | Props grading (Sofascore) | `npm run props:grade` — player props, corner/shot totals, BTTS in football, basketball, hockey |
 | Parser check (Sofascore) | `npm run sofascore:capture` — saves live fixtures and reports missing fields |
+| OddsPortal CLV (experiment) | `npm run scrape:clv -- --scrapling`; `--compare` runs Playwright and Scrapling side by side |
+
+**OddsPortal via Scrapling (experiment).** Same flow as the Playwright scraper (search,
+tab, line, bookmaker), but the odds tables are read as page text instead of CSS classes,
+which OddsPortal renames often. Clicking a line open ("Over/Under +2.5") shows odds per
+bookmaker, so O/U and Asian handicap closing comes from the bet's bookmaker or Pinnacle
+rather than the site average. 1X2/moneyline, Over/Under (goals) and Asian handicap only:
+props, corners, cards and team totals answer `market_not_found`. Playwright stays the
+default until `--compare` has shown the two agree:
+
+```bash
+npm run scrape:clv -- --compare --limit 10    # both fetchers, nothing written
+npm run scrape:clv -- --scrapling --confirm   # write closing odds fetched by Scrapling
+```
 
 **Sofascore as shot-model source.** Rows get their own ids (`ss_<eventId>`, teams
 `ss_t_<id>`), so they never collide with TheStatsAPI's `mt_…`. One league, one source:

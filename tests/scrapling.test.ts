@@ -36,7 +36,7 @@ describe("ScraplingWorker", () => {
       mode: "browser",
       url: "fake://ok",
       waitSelector: ".odds",
-      actions: [{ clickText: "Over/Under" }, { waitMs: 300 }, { waitSelector: ".row" }],
+      actions: [{ clickText: "Over/Under" }, { clickFirst: ["Corners", "Over/Under"] }, { waitMs: 300 }, { waitSelector: ".row" }],
       timeoutMs: 30_000,
     });
     expect(res.status).toBe(200);
@@ -46,7 +46,12 @@ describe("ScraplingWorker", () => {
       url: "fake://ok",
       wait_selector: ".odds",
       timeout_ms: 25_000,
-      actions: [{ click_text: "Over/Under", exact: true }, { wait_ms: 300 }, { wait_selector: ".row" }],
+      actions: [
+        { click_text: "Over/Under", exact: true },
+        { click_first: ["Corners", "Over/Under"], exact: true },
+        { wait_ms: 300 },
+        { wait_selector: ".row" },
+      ],
     });
     expect(argv).toEqual(["--headed", "--profile", ".cache/x", "--cdp-url", "http://localhost:9222"]);
   });
