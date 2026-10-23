@@ -76,9 +76,10 @@ const SPECS: Record<SofaSport, Record<string, StatSpec>> = {
     totalt: { score: "final" },
   },
   "ice-hockey": {
-    // Hockeyns "skott" är skott på mål (SOG) hos bolagen.
-    skott: { team: ["shotsOnGoal", "shots"], player: { sum: [["shotsOnGoal", "shots"]] } },
-    "skott på mål": { team: ["shotsOnGoal", "shots"], player: { sum: [["shotsOnGoal", "shots"]] } },
+    // Hockeyns "skott" är skott på mål (SOG) hos bolagen. NHL-källan kallar
+    // dem shotsOnGoal; Sofascore "shots" per spelare och "Shots" per lag.
+    skott: { team: ["shotsOnGoal", "Shots", "shots"], player: { sum: [["shotsOnGoal", "shots"]] } },
+    "skott på mål": { team: ["shotsOnGoal", "Shots", "shots"], player: { sum: [["shotsOnGoal", "shots"]] } },
     mål: { player: { sum: [["goals"]] } },
     assists: { player: { sum: [["assists"]] } },
     spelarpoäng: { player: { sum: [["points"]], fallback: [["goals"], ["assists"]] } },

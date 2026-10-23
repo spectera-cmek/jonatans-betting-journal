@@ -3,17 +3,17 @@
   "home": {
     "players": [
       { "player": { "id": 795001, "name": "Auston Matthews", "shortName": "A. Matthews", "position": "C" }, "position": "C", "substitute": false,
-        "statistics": { "timeOnIce": 1260, "goals": 1, "assists": 1, "shotsOnGoal": 5, "plusMinus": 1, "penaltyMinutes": 0, "faceOffWins": 11, "hits": 2 } },
+        "statistics": { "secondsPlayed": 1260, "goals": 1, "assists": 1, "shots": 5, "plusMinus": 1, "penaltyMinutes": 0, "faceOffWins": 11, "hits": 2 } },
       { "player": { "id": 795002, "name": "William Nylander", "shortName": "W. Nylander", "position": "RW" }, "position": "RW", "substitute": false,
-        "statistics": { "timeOnIce": 1180, "assists": 2, "shotsOnGoal": 3 } },
+        "statistics": { "secondsPlayed": 1180, "assists": 2, "shots": 3 } },
       { "player": { "id": 795003, "name": "Anthony Stolarz", "shortName": "A. Stolarz", "position": "G" }, "position": "G", "substitute": false,
-        "statistics": { "timeOnIce": 3600, "saves": 29, "goalsAgainst": 2 } }
+        "statistics": { "secondsPlayed": 3600, "saves": 29, "goalsAgainst": 2 } }
     ]
   },
   "away": {
     "players": [
       { "player": { "id": 795101, "name": "Brady Tkachuk", "shortName": "B. Tkachuk", "position": "LW" }, "position": "LW", "substitute": false,
-        "statistics": { "timeOnIce": 1200, "goals": 1, "shotsOnGoal": 6 } }
+        "statistics": { "secondsPlayed": 1200, "goals": 1, "shots": 6 } }
     ]
   }
 }

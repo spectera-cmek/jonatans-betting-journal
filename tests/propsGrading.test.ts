@@ -212,9 +212,14 @@ describe("gradeProp — basket och hockey", () => {
     expect(grade(player("Ice Hockey", "Räddningar", "Anthony Stolarz över 27.5", 27.5), hk)).toMatchObject({ outcome: "win", value: 29 });
   });
 
+  it("hockey: lagskott ur Sofascores \"Shots\"", () => {
+    const b = bet({ sport: "Ice Hockey", marketCategory: "Skott", marketScope: "match", selection: "Över 54.5 skott", line: 54.5 });
+    expect(grade(b, { ...hk, stats: { Shots: { home: 28, away: 27 } } })).toMatchObject({ ok: true, outcome: "win", value: 55 });
+  });
+
   it("ett fält som ingen spelare i matchen har rättas inte (kan vara fel nyckelnamn)", () => {
     const lineups = parseLineups(load("hockey-lineups.json"));
-    for (const p of lineups.players) delete p.stats.shotsOnGoal;
+    for (const p of lineups.players) delete p.stats.shots;
     expect(grade(player("Ice Hockey", "Skott", "Auston Matthews över 3.5", 3.5), { ...hk, lineups })).toMatchObject({
       ok: false,
       reason: /finns inte/,
