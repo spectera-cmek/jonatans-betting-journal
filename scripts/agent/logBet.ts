@@ -19,8 +19,6 @@ import { readFileSync } from "fs";
 import { PrismaClient } from "@prisma/client";
 import { buildBetData, ValidationError, type BetInput } from "../../lib/betInput";
 import { linkBetToOddsEvent } from "../../lib/eventLink";
-import { tryLinkSingleFootballBet, isFootballBet } from "../../lib/clvCapture";
-import { hasTheStatsApiKey, isStatsApiMatchRef } from "../../lib/theStatsApi";
 import { maybeCaptureKickoffClvForBet } from "../../lib/clvOddsApi";
 import { hasOddsApiKey } from "../../lib/oddsApi";
 
@@ -82,12 +80,8 @@ async function main() {
     const bet = await prisma.bet.create({
       data: { ...(data as object), userId: user.id } as never,
     });
-    if (!isStatsApiMatchRef(bet.externalRef)) {
-      if (isFootballBet(bet) && hasTheStatsApiKey()) {
-        await tryLinkSingleFootballBet(bet.id, prisma).catch(() => {});
-      } else if (!bet.externalRef) {
-        await linkBetToOddsEvent(prisma, bet).catch(() => {});
-      }
+    if (!bet.externalRef) {
+      await linkBetToOddsEvent(prisma, bet).catch(() => {});
     }
     if (hasOddsApiKey()) {
       const kickoff = await maybeCaptureKickoffClvForBet(bet.id, { prisma }).catch(() => null);
@@ -102,11 +96,9 @@ async function main() {
       `  ${out.event} — ${out.selection} @ ${out.odds} | ${out.stakeUnits}u | ${out.bookmaker ?? "okänd bookmaker"}`
     );
     if (out.externalRef) {
-      console.log(
-        `  Länk: ${out.sportKey} / ${out.externalRef}${isStatsApiMatchRef(out.externalRef) ? " (TheStatsAPI/CLV)" : ""}`
-      );
-    } else if (isFootballBet(out)) {
-      console.log("  CLV: ej länkad — sätt league (t.ex. Premier League) + home/away + eventAt");
+      console.log(`  Länk: ${out.sportKey} / ${out.externalRef}`);
+    } else if (out.market === "h2h" || out.market === "totals" || out.market === "spreads") {
+      console.log("  CLV: ej länkad — sätt league + home/away + eventAt, eller hämta closing med npm run scrape:clv");
     }
   } finally {
     await prisma.$disconnect();

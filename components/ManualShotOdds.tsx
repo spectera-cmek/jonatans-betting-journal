@@ -3,10 +3,10 @@
 /**
  * Prissätter skott- och hörnlinjer mot odds du matar in själv.
  *
- * TheStatsAPI täcker bara bet365 UK, BetMGM UK, Paddy Power, Pinnacle och
- * Betfair. Betsson, Bethard och NordicBet — som har skottlinjer på Allsvenskan
- * — finns inte där. Modellen har siffrorna ändå, så det som saknas är bara
- * priset: skriv in det och få fair odds, edge och insats.
+ * Ingen källa levererar bolagens skott- och hörnlinjer automatiskt (TheStatsAPI,
+ * som gjorde det för några brittiska böcker, är borttagen). Modellen har
+ * siffrorna ändå, så det som saknas är bara priset: skriv in det från Betsson,
+ * Bethard, NordicBet eller vilken bok som helst och få fair odds, edge och insats.
  *
  * Räknar lokalt ur λ och dispersion (lib/shotModel är rent räknande), så
  * siffrorna uppdateras medan du skriver utan ett anrop per tangenttryck.

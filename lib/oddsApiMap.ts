@@ -38,10 +38,8 @@ export interface OddsApiLeague {
 /**
  * Ligorna vi har en verifierad sport_key för.
  *
- * Registret ligger HÄR och inte i `SHOT_LEAGUES`. Skottmodellens register bär
- * söktermer och competition_id för TheStatsAPI, som inte längre är inkopplat,
- * och det tvingade varje ny liga att först finnas i skottmodellen. Nu räcker
- * en rad här.
+ * Registret ligger HÄR och inte i `SHOT_LEAGUES`, så att en ny liga inte
+ * först måste finnas i skottmodellen. En rad här räcker.
  *
  * Varje sport_key är kontrollerad mot deras /sports-lista, som är gratis.
  */

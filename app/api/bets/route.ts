@@ -6,15 +6,9 @@ import { getSessionUserId, apiUnauthorized } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import { settleBet } from "@/lib/settlement";
 import { linkBetToOddsEvent } from "@/lib/eventLink";
-import { tryLinkSingleFootballBet, isFootballBet } from "@/lib/clvCapture";
-import { hasTheStatsApiKey, isStatsApiMatchRef } from "@/lib/theStatsApi";
 import { maybeCaptureKickoffClvForBet } from "@/lib/clvOddsApi";
 import { hasOddsApiKey } from "@/lib/oddsApi";
 import type { Outcome } from "@/lib/betting";
-
-function isStatsLinked(ref: string | null | undefined): boolean {
-  return isStatsApiMatchRef(ref);
-}
 
 export const dynamic = "force-dynamic";
 
@@ -111,13 +105,9 @@ export async function POST(req: Request) {
       data.gradedAt = null;
     }
     let bet = await prisma.bet.create({ data: { ...(data as object), userId } as never });
-    // Football → TheStatsAPI (historical CLV). Other sports → Odds API if available.
-    if (!isStatsLinked(bet.externalRef)) {
-      if (isFootballBet(bet) && hasTheStatsApiKey()) {
-        await tryLinkSingleFootballBet(bet.id, prisma).catch(() => {});
-      } else if (!bet.externalRef) {
-        await linkBetToOddsEvent(prisma, bet).catch(() => {});
-      }
+    // Länka till The Odds API (resultat + kickoff-CLV) när nyckeln finns.
+    if (!bet.externalRef) {
+      await linkBetToOddsEvent(prisma, bet).catch(() => {});
       bet = (await prisma.bet.findUnique({ where: { id: bet.id } })) ?? bet;
     }
     // If kickoff is within ~30 min, snapshot closing odds immediately.

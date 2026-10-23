@@ -39,8 +39,8 @@
 - **Your own instance** — one Postgres database you control (Neon via Vercel, or any
   Postgres locally). Registration is gated behind an invite code and every query is
   scoped to the signed-in account, so accounts never see each other's bets.
-- **Optional third-party calls** — grading and CLV use The Odds API and TheStatsAPI, and
-  betslip screenshot import uses the Anthropic API. All three are opt-in: leave the key
+- **Optional third-party calls** — grading and CLV use The Odds API, and
+  betslip screenshot import uses the Anthropic API. Both are opt-in: leave the key
   unset and the app simply falls back to manual entry.
 
 ## 🖼️ Screenshots
@@ -104,7 +104,8 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run backfill:bookmakers` | Fold bookmaker spelling variants onto one name (`--confirm`) |
 | `npm run scrapling:setup` | Install the Scrapling fetcher into `.venv` (Python 3.10+) |
 | `npm run scrapling:check` | Check the Scrapling chain against a harmless page |
-| `npm run shots:ingest:sofascore` | Shot-model fixtures + team stats from Sofascore (`--confirm`) |
+| `npm run shots:ingest` | Shot-model fixtures + team stats from Sofascore (`--confirm`) |
+| `npm run purge:thestatsapi` | Remove leftover TheStatsAPI rows and bet links (`--confirm`) |
 | `npm run props:grade` | Grade props/stat totals from Sofascore (`--confirm` settles) |
 | `npm run sofascore:capture` | Check the Sofascore parsers against live data (local) |
 
@@ -164,8 +165,7 @@ inside the window are captured immediately on create.
 
 ### Automatic CLV via OddsPortal (local scrape batch)
 
-Primary free CLV path for featured markets after kickoff (replaces TheStatsAPI when
-you do not have that key):
+Primary free CLV path for featured markets after kickoff:
 
 ```bash
 npm i playwright
@@ -275,32 +275,20 @@ npm run scrapling:check     # fetch a harmless page in HTTP and browser mode
 | Uses Scrapling | How |
 |----------------|-----|
 | HLTV (CS2) | `--scrapling` on `cs2:capture` / `cs2:ingest` / `cs2:update`, or `CS2_FETCHER=scrapling` |
-| Shot model data (Sofascore) | `npm run shots:ingest:sofascore` — fixtures + shots/SoT/corners/xG, no API key |
+| Shot model data (Sofascore) | `npm run shots:ingest` — fixtures + shots/SoT/corners/xG, no API key |
 | Props grading (fallback source) | `npm run props:grade` uses ESPN and the NHL API first; Sofascore only for leagues they don't cover |
 | Parser check (Sofascore) | `npm run sofascore:capture` — saves live fixtures and reports missing fields |
 | OddsPortal CLV (experiment) | `npm run scrape:clv -- --scrapling`; `--compare` runs Playwright and Scrapling side by side |
 
-**OddsPortal via Scrapling (experiment).** Same flow as the Playwright scraper (search,
-tab, line, bookmaker), but the odds tables are read as page text instead of CSS classes,
-which OddsPortal renames often. Clicking a line open ("Over/Under +2.5") shows odds per
-bookmaker, so O/U and Asian handicap closing comes from the bet's bookmaker or Pinnacle
-rather than the site average. 1X2/moneyline, Over/Under (goals) and Asian handicap only:
-props, corners, cards and team totals answer `market_not_found`. Playwright stays the
-default until `--compare` has shown the two agree:
+**Shot model data from Sofascore.** Match rows get ids `ss_<eventId>` (teams
+`ss_t_<id>`). Rows from the removed TheStatsAPI (`mt_…`) would be counted twice, so the
+script skips a league that still has them; `npm run purge:thestatsapi` removes them
+(dry-run first). Bookmaker shot/corner lines are no longer fetched automatically — type
+a book's price under *Manuella odds* on the shot-model page to get fair odds and edge.
 
 ```bash
-npm run scrape:clv -- --compare --limit 10    # both fetchers, nothing written
-npm run scrape:clv -- --scrapling --confirm   # write closing odds fetched by Scrapling
-```
-
-**Sofascore as shot-model source.** Rows get their own ids (`ss_<eventId>`, teams
-`ss_t_<id>`), so they never collide with TheStatsAPI's `mt_…`. One league, one source:
-the script stops if a league already has TheStatsAPI rows, since the model would count
-those matches twice. Odds still come from TheStatsAPI or manual entry.
-
-```bash
-npm run shots:ingest:sofascore -- --league allsvenskan            # dry-run: listing + budget
-npm run shots:ingest:sofascore -- --league allsvenskan --confirm  # write fixtures + stats
+npm run shots:ingest -- --league allsvenskan            # dry-run: listing + budget
+npm run shots:ingest -- --league allsvenskan --confirm  # write fixtures + stats
 ```
 
 **Props grading.** `npm run props:grade` finds each open bet's match, reads the team or
@@ -325,23 +313,6 @@ default until `--compare` has shown the two agree:
 npm run scrape:clv -- --compare --limit 10    # both fetchers, nothing written
 npm run scrape:clv -- --scrapling --confirm   # write closing odds fetched by Scrapling
 ```
-
-**Sofascore as shot-model source.** Rows get their own ids (`ss_<eventId>`, teams
-`ss_t_<id>`), so they never collide with TheStatsAPI's `mt_…`. One league, one source:
-the script stops if a league already has TheStatsAPI rows, since the model would count
-those matches twice. Odds still come from TheStatsAPI or manual entry.
-
-```bash
-npm run shots:ingest:sofascore -- --league allsvenskan            # dry-run: listing + budget
-npm run shots:ingest:sofascore -- --league allsvenskan --confirm  # write fixtures + stats
-```
-
-**Props grading.** `npm run props:grade` finds each open bet's match on Sofascore,
-reads the team or player statistic and grades over/under with the app's own rules. It
-writes `.claude/tmp/results-props-<date>.json` (the format `scripts/agent/settleBets.ts`
-reads) and touches nothing until `--confirm`. Cards, combos, quarter lines, players who
-did not play and fields not seen in the match's data are listed and left for manual
-settling. Sofascore blocks most cloud and VPN addresses — run it from home.
 
 The scripts find `.venv` on their own; `SCRAPLING_PYTHON` points them at another Python.
 Same rules as the other scrapers: local only, slow pace, cache everything, personal use.

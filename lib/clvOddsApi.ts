@@ -10,8 +10,13 @@ import {
   preferredPriceFor,
   type OddsEvent,
 } from "./oddsApi";
-import { linkBetToOddsEvent, parseHomeAway, teamNameMatches } from "./eventLink";
-import { isStatsApiMatchRef } from "./theStatsApi";
+import {
+  isLegacyStatsApiRef,
+  isLegacyStatsApiSportKey,
+  linkBetToOddsEvent,
+  parseHomeAway,
+  teamNameMatches,
+} from "./eventLink";
 
 const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
 
@@ -133,7 +138,8 @@ function marketsParamForBets(bets: KickoffBet[]): string {
 
 /**
  * Link + capture live Odds API prices for featured bets near kickoff.
- * Writes closingOdds once; skips TheStatsAPI-linked (mt_*) refs.
+ * Writes closingOdds once. Bets still carrying an old TheStatsAPI link (mt_*)
+ * are re-linked to The Odds API like unlinked ones.
  */
 export async function captureClosingNearKickoff(
   opts: OddsApiKickoffClvOptions = {}
@@ -201,13 +207,9 @@ export async function captureClosingNearKickoff(
   const ready: KickoffBet[] = [];
 
   for (const bet of candidates) {
-    if (isStatsApiMatchRef(bet.externalRef)) {
-      details.push(`${bet.event}: skip — TheStatsAPI-länk (mt_*)`);
-      continue;
-    }
-
     let row: KickoffBet = bet;
-    if (!bet.externalRef || !bet.sportKey) {
+    const legacy = isLegacyStatsApiRef(bet.externalRef) || isLegacyStatsApiSportKey(bet.sportKey);
+    if (!bet.externalRef || !bet.sportKey || legacy) {
       const result = await linkBetToOddsEvent(prisma, bet);
       if (!result.linked) {
         details.push(`${bet.event}: kunde inte länka till Odds API`);

@@ -5,7 +5,7 @@
  *   npx tsx scripts/captureKickoffClv.ts --confirm    # write closingOdds
  *   npx tsx scripts/captureKickoffClv.ts --confirm --before 30 --after 15
  *
- * Also runs automatically from `npm run sync` / Synka when TheStatsAPI is absent.
+ * Also runs automatically from `npm run sync` / Synka.
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });

@@ -1,11 +1,10 @@
-// Kopplingen mellan lagrad matchdata och skottmodellen: ligaregister,
-// uppslagning av competition_id, och byggandet av en färdig ligamodell
-// (ligasnitt + ratings + dispersion) ur ShotMatch-rader.
+// Kopplingen mellan lagrad matchdata och skottmodellen: ligaregister och
+// byggandet av en färdig ligamodell (ligasnitt + ratings + dispersion) ur
+// ShotMatch-rader. Matchdatan kommer från Sofascore (shots:ingest).
 //
 // Delas av ingest-skripten, backtestet och /api/shots så att alla tre räknar
 // på exakt samma sätt.
 
-import { searchCompetitions, type StatsCompetition } from "./theStatsApi";
 import {
   computeRatings,
   correlatedTotalPmf,
@@ -28,82 +27,25 @@ export interface ShotLeague {
   /** Nyckel i CLI och URL:er. */
   key: string;
   label: string;
-  /** Söktermer mot /football/competitions, i fallande prioritet. */
-  search: string[];
-  /** Land att matcha på — namnen skiljer sig mellan källor, landet gör det inte. */
-  country: string;
-  /**
-   * Fast competition_id, när sökning inte duger. Europacuperna saknar land i
-   * API:et, så landsmatchningen nedan skulle förkasta varje träff.
-   */
-  competitionId?: string;
   /** Ungefärligt antal matcher per säsong, för anropsbudgeten. */
   matchesPerSeason: number;
   /**
-   * Sofascores unique-tournament-id, för `shots:ingest:sofascore`.
-   * `npm run sofascore:capture` skriver ut ligans namn för varje id.
+   * Sofascores unique-tournament-id. `npm run sofascore:capture` skriver ut
+   * ligans namn för varje id — kör den efter att ha lagt till en liga.
    */
-  sofascoreId?: number;
+  sofascoreId: number;
 }
 
 export const SHOT_LEAGUES: ShotLeague[] = [
-  { key: "allsvenskan", label: "Allsvenskan", search: ["Allsvenskan"], country: "Sweden", matchesPerSeason: 240, sofascoreId: 40 },
-  { key: "premier-league", label: "Premier League", search: ["Premier League"], country: "England", matchesPerSeason: 380, sofascoreId: 17 },
-  { key: "laliga", label: "LaLiga", search: ["LaLiga", "La Liga", "Primera División"], country: "Spain", matchesPerSeason: 380, sofascoreId: 8 },
-  // Europacuperna saknar land i API:et, så de slås upp på id i stället för
-  // sökning + landsmatchning. Champions League är comp_3498 och Conference
-  // League comp_408698 om registret ska breddas.
-  {
-    key: "europa-league",
-    label: "Europa League",
-    search: ["UEFA Europa League"],
-    country: "",
-    competitionId: "comp_7739",
-    matchesPerSeason: 200,
-    sofascoreId: 679,
-  },
+  { key: "allsvenskan", label: "Allsvenskan", matchesPerSeason: 240, sofascoreId: 40 },
+  { key: "premier-league", label: "Premier League", matchesPerSeason: 380, sofascoreId: 17 },
+  { key: "laliga", label: "LaLiga", matchesPerSeason: 380, sofascoreId: 8 },
+  { key: "europa-league", label: "Europa League", matchesPerSeason: 200, sofascoreId: 679 },
 ];
 
 export function findLeague(key: string): ShotLeague | null {
   const k = key.trim().toLowerCase();
   return SHOT_LEAGUES.find((l) => l.key === k) ?? null;
-}
-
-const competitionCache = new Map<string, StatsCompetition>();
-
-/**
- * Slår upp ligans competition_id.
- *
- * Två fällor: "Premier League" finns i ett dussin länder, så landet måste
- * stämma. Och en sökning på "LaLiga" träffar även "LaLiga 2" — därför vinner
- * exakt namnlikhet före ordningen i träfflistan. Utan det avgör API:ets
- * sorteringsordning vilken division modellen tränar på.
- */
-export async function resolveCompetition(league: ShotLeague): Promise<StatsCompetition | null> {
-  const cached = competitionCache.get(league.key);
-  if (cached) return cached;
-
-  // Fast id går före sökning — ingen tvetydighet att lösa.
-  if (league.competitionId) {
-    const hit = { id: league.competitionId, name: league.label };
-    competitionCache.set(league.key, hit);
-    return hit;
-  }
-
-  const wanted = league.country.toLowerCase();
-  for (const term of league.search) {
-    const hits = (await searchCompetitions(term)).filter(
-      (c) => (c.country ?? "").toLowerCase() === wanted
-    );
-    if (hits.length === 0) continue;
-    const exact = hits.find((c) => c.name.trim().toLowerCase() === term.trim().toLowerCase());
-    const hit = exact ?? (hits.length === 1 ? hits[0] : null);
-    if (hit) {
-      competitionCache.set(league.key, hit);
-      return hit;
-    }
-  }
-  return null;
 }
 
 // ---------------------------------------------------------------------------

@@ -190,15 +190,29 @@ export interface LinkResult {
 }
 
 /** Try to link one bet to an Odds API event. Updates the row on success. */
+/**
+ * TheStatsAPI togs bort i oktober 2026. Bets som länkades dit har kvar
+ * externalRef "mt_…" och sportKey "tsa:…" i databasen. De räknas som
+ * olänkade: de skickas aldrig till The Odds API som de är, men får länkas om.
+ */
+export function isLegacyStatsApiRef(ref: string | null | undefined): boolean {
+  return !!ref && ref.startsWith("mt_");
+}
+
+export function isLegacyStatsApiSportKey(sportKey: string | null | undefined): boolean {
+  return !!sportKey && sportKey.startsWith("tsa:");
+}
+
 export async function linkBetToOddsEvent(
   prisma: PrismaClient,
   bet: LinkableBet,
   eventsCache?: Map<string, OddsEvent[]>
 ): Promise<LinkResult> {
   if (!hasOddsApiKey()) return { linked: false };
-  if (bet.externalRef && bet.sportKey) return { linked: false };
+  const legacy = isLegacyStatsApiRef(bet.externalRef) || isLegacyStatsApiSportKey(bet.sportKey);
+  if (bet.externalRef && bet.sportKey && !legacy) return { linked: false };
 
-  const sportKey = bet.sportKey || inferSportKey(bet.sport, bet.league);
+  const sportKey = (!isLegacyStatsApiSportKey(bet.sportKey) && bet.sportKey) || inferSportKey(bet.sport, bet.league);
   if (!sportKey) return { linked: false };
 
   let events = eventsCache?.get(sportKey);

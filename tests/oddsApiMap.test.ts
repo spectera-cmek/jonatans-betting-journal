@@ -222,7 +222,7 @@ describe("bookmakerSlugFor", () => {
     expect(bookmakerSlugFor("leovegas")).toBeNull();
   });
 
-  it("mappar börsen och Pinnacle till samma slugs som TheStatsAPI", () => {
+  it("mappar börsen och Pinnacle till appens slugs", () => {
     expect(bookmakerSlugFor("betfair_ex_eu")).toBe("betfair-exchange");
     expect(bookmakerSlugFor("pinnacle")).toBe("pinnacle");
   });

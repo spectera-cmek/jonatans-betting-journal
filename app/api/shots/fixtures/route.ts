@@ -11,9 +11,9 @@ const LEAGUE_LIST = SHOT_LEAGUES.map((l) => ({ key: l.key, label: l.label }));
 /**
  * Kommande matcher med modellens väntevärden per mätetal.
  *
- * Finns för att kunna prissätta odds från böcker API:et inte täcker — Betsson,
- * Bethard och NordicBet har skottlinjer på Allsvenskan, men ingen av dem finns
- * i TheStatsAPI. Klienten räknar edgen lokalt ur λ och dispersion, så den kan
+ * Finns för att kunna prissätta odds som användaren skriver in — ingen källa
+ * levererar bolagens skott- och hörnlinjer automatiskt. Klienten räknar edgen
+ * lokalt ur λ och dispersion, så den kan
  * uppdatera medan man skriver utan ett anrop per tangenttryck.
  */
 export async function GET(req: Request) {

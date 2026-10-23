@@ -16,14 +16,15 @@ sammanfattning efteråt. Gäller **i varje chat** i det här projektet.
    `lib/betInput.ts` (`BetInput`) plus `stakeKr`, `importRef`, `placedAt`.
 3. Kör: `npx tsx scripts/agent/logBet.ts --file <bet.json> --user jonatan`
    - Skriptet konverterar `stakeKr` → units via användarens `unitValue` (100 kr/unit),
-     hoppar över dubbletter på `importRef`, och **länkar fotboll till TheStatsAPI**
-     (`mt_…`) för closing-odds/CLV när `THESTATSAPI_KEY` finns.
-4. Rapportera: event, selection, odds, insats (kr + units), bet-id, och om CLV-länk
-   lyckades (`TheStatsAPI/CLV`) eller vad som saknas.
+     hoppar över dubbletter på `importRef`, och **länkar betet till The Odds API**
+     för resultat och kickoff-CLV när `ODDS_API_KEY` finns.
+4. Rapportera: event, selection, odds, insats (kr + units), bet-id, och om länken
+   lyckades (`Länk: …`) eller vad som saknas.
 
-## Obligatoriskt för fotbolls-CLV
+## Obligatoriskt för CLV och automatisk rättning
 
-Utan dessa kan synken **inte** hämta closing-odds. Fyll i dem alltid när det går:
+Utan dessa kan synken, OddsPortal-skrapan och props-rättningen **inte** hitta matchen.
+Fyll i dem alltid när det går:
 
 | Fält | Krav |
 |------|------|
@@ -36,7 +37,8 @@ Utan dessa kan synken **inte** hämta closing-odds. Fyll i dem alltid när det g
 | `selection` | Tydlig text (t.ex. lagnamn eller "Over 2.5") |
 | `betType` | `"single"` för singlar (kombo = `"accumulator"` + `legs`) |
 
-Tennis/NBA/NHL/MLB m.m. får **ingen** TheStatsAPI-CLV — logga dem ändå med rätt `sport`/`league`.
+Tennis/NBA/NHL/MLB m.m.: logga med rätt `sport`/`league` — Odds API, OddsPortal och
+props-rättningen (ESPN/NHL) använder dem för att hitta matchen.
 
 ## Mappning
 

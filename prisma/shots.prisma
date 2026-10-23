@@ -22,7 +22,8 @@ datasource db {
 
 // ---------------------------------------------------------------------------
 // Skottmodellen — referensdata, inte användardata. Ingen userId, ingen relation
-// till Bet: samma matchrad gäller alla användare. Källa: TheStatsAPI.
+// till Bet: samma matchrad gäller alla användare. Källa: Sofascore (shots:ingest).
+// Äldre rader från TheStatsAPI (id "mt_…") tas bort med npm run purge:thestatsapi.
 //
 // De sex marknaderna normaliseras till (metric, side) i stället för API:ets
 // nycklar, så en linje alltid beskrivs likadant genom hela kedjan:
@@ -37,7 +38,7 @@ datasource db {
 /// En match med lagnivåutfall. Raden skapas när fixturen är känd och fylls på
 /// med statistik när matchen är färdigspelad.
 model ShotMatch {
-  id            String   @id // TheStatsAPI match id, "mt_…"
+  id            String   @id // Sofascore: "ss_<eventId>"
   /// Appens liganyckel (allsvenskan | premier-league | laliga). Gör att både
   /// backtest och /api/shots kan filtrera på liga utan att fråga API:et.
   leagueKey     String

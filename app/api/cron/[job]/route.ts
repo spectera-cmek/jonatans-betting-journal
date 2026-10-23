@@ -21,7 +21,7 @@ export const maxDuration = 60;
  * Jobs:
  *   clv     near-kickoff closing capture via The Odds API (the T-30…T+5 window)
  *   grade   settle finished events from the free ESPN scoreboard
- *   closing retroactive closing odds via TheStatsAPI (slower, wider net)
+ *   closing near-kickoff closing via The Odds API, batched like Synka's closing button
  */
 const JOBS: Record<string, () => Promise<SyncResult>> = {
   clv: () => runClosingNearKickoff(),

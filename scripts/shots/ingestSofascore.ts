@@ -1,17 +1,18 @@
 /**
- * Läser in fixtures och lagnivåstatistik från Sofascore till ShotMatch — samma
- * underlag som shots:ingest hämtar från TheStatsAPI, men utan nyckel.
- * Hämtas via Scrapling (npm run scrapling:setup en gång).
+ * Läser in fixtures och lagnivåstatistik från Sofascore till ShotMatch — det
+ * underlag skottmodellen tränar på. Ingen nyckel; hämtas via Scrapling
+ * (npm run scrapling:setup en gång). `shots:ingest` och
+ * `shots:ingest:sofascore` är samma skript.
  *
  *   npm run shots:ingest:sofascore -- --league allsvenskan
  *   npm run shots:ingest:sofascore -- --league allsvenskan --confirm
  *   npm run shots:ingest:sofascore -- --league all --seasons 2 --confirm
  *   npm run shots:ingest:sofascore -- --league laliga --limit 100 --confirm
  *
- * Raderna får egna id:n så de aldrig krockar med TheStatsAPI:s:
- *   match "ss_<eventId>", lag "ss_t_<teamId>", liga "ss_ut_<uniqueTournamentId>".
- * En liga ska ha EN källa — modellen räknar alla rader med samma leagueKey,
- * så finns TheStatsAPI-rader (mt_…) för ligan stannar skriptet där.
+ * Id:n: match "ss_<eventId>", lag "ss_t_<teamId>", liga "ss_ut_<uniqueTournamentId>".
+ * Finns gamla TheStatsAPI-rader (mt_…) kvar för ligan stannar skriptet där —
+ * modellen räknar alla rader med samma leagueKey, så de skulle räknas dubbelt.
+ * Ta bort dem med `npm run purge:thestatsapi`.
  *
  * Utan --confirm görs bara listningsanropen: skriptet skriver ut hur många
  * matcher som saknar statistik och stannar. Färdiga matcher hämtas aldrig om
@@ -100,14 +101,14 @@ async function ingestLeague(
   useDb: boolean
 ) {
   console.log(`\n=== ${league.label} ===`);
-  const ut = league.sofascoreId!;
+  const ut = league.sofascoreId;
 
   if (useDb) {
     const foreign = await prisma.shotMatch.count({ where: { leagueKey: league.key, id: { startsWith: "mt_" } } });
     if (foreign > 0) {
       console.log(
-        `  ✗ Ligan har redan ${foreign} matcher från TheStatsAPI (mt_…). Två källor i samma liga skulle räknas dubbelt i modellen,\n` +
-          `    så Sofascore hoppas över här. Fortsätt med shots:ingest för den här ligan, eller ta bort mt_-raderna först.`
+        `  ✗ Ligan har kvar ${foreign} gamla matcher från TheStatsAPI (mt_…). De skulle räknas dubbelt i modellen,\n` +
+          `    så ligan hoppas över. Ta bort dem först: npm run purge:thestatsapi (dry-run), sedan med --confirm.`
       );
       return { fetched: 0, failed: 0, budget: 0 };
     }
@@ -190,12 +191,10 @@ async function main() {
   const seasonCount = numberArg("--seasons", 2);
   const limit = numberArg("--limit", 10_000);
 
-  const candidates =
+  const leagues =
     leagueKey === "all" ? SHOT_LEAGUES : [findLeague(leagueKey)].filter((l): l is ShotLeague => l !== null);
-  const leagues = candidates.filter((l) => l.sofascoreId != null);
   if (leagues.length === 0) {
-    const known = SHOT_LEAGUES.filter((l) => l.sofascoreId != null).map((l) => l.key);
-    console.error(`Okänd liga (eller utan sofascoreId) "${leagueKey}". Välj bland: ${known.join(", ")}, all`);
+    console.error(`Okänd liga "${leagueKey}". Välj bland: ${SHOT_LEAGUES.map((l) => l.key).join(", ")}, all`);
     process.exit(1);
   }
 

@@ -297,8 +297,8 @@ export default function ShotsPage() {
         <Card>
           <Empty
             icon={IC.percent}
-            title="Inga odds lagrade för kommande matcher"
-            hint="Kör npm run shots:odds -- --upcoming --confirm. Modellen kan bara visa edge på linjer som böckerna faktiskt prissatt."
+            title="Inga bolagslinjer lagrade för kommande matcher"
+            hint="Linjerna kom från TheStatsAPI, som är borttagen. Skriv in bokens pris under Manuella odds så räknas fair odds och edge direkt."
           />
         </Card>
       )}

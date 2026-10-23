@@ -15,8 +15,16 @@ import {
 } from "./betTaxonomy";
 import { normalizeBookmaker } from "./constants";
 import { inferSportKey, parseHomeAway } from "./eventLink";
-import { LEAGUE_SEARCH } from "./clvCapture";
 import { inferSelection } from "./grading";
+
+/** Liganamn (gemener) som betyder fotboll när sporten saknas på betet. */
+const FOOTBALL_LEAGUES = [
+  "premier league", "epl", "la liga", "serie a", "bundesliga", "ligue 1",
+  "champions league", "europa league", "conference league", "allsvenskan", "superettan",
+  "vm 2026", "world cup", "mls", "championship", "fa cup", "efl cup", "league cup",
+  "copa del rey", "dfb pokal", "eredivisie", "primeira liga", "liga portugal",
+  "scottish premiership", "belgian pro league", "süper lig", "super lig", "saudi pro league",
+];
 
 const OUTCOMES: Outcome[] = [
   "pending",
@@ -217,10 +225,10 @@ export function buildBetData(
       }
     }
 
-    // Infer sport/league for CLV: TheStatsAPI needs Football + known league.
+    // Infer sport from a known football league (CLV, grading and props need it).
     if (!data.sport || data.sport === "Other") {
       const league = ((data.league as string | undefined) ?? input.league ?? "").toLowerCase().trim();
-      if (league && Object.keys(LEAGUE_SEARCH).some((k) => league === k || league.includes(k))) {
+      if (league && FOOTBALL_LEAGUES.some((k) => league === k || league.includes(k))) {
         data.sport = "Football";
       } else if (data.event) {
         const inferred = inferSport(

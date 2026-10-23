@@ -183,25 +183,17 @@ export default function SettingsPage() {
           <span className="ap-label">CLV &amp; synk (API-nycklar)</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13, marginTop: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: settings?.hasTheStatsApiKey ? "var(--pos)" : "var(--red)" }} />
-              <span>TheStatsAPI: {settings?.hasTheStatsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: settings?.hasOddsApiKey ? "var(--pos)" : "var(--red)" }} />
               <span>The Odds API: {settings?.hasOddsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}</span>
             </div>
           </div>
 
-          {settings?.hasTheStatsApiKey || settings?.hasOddsApiKey ? (
+          {settings?.hasOddsApiKey ? (
             <div style={{ marginTop: 14 }}>
               <p style={{ fontSize: 13, color: "var(--dim)", marginBottom: 12 }}>
-                {settings?.hasTheStatsApiKey
-                  ? "TheStatsAPI hämtar historiska stängningsodds (CLV) för fotboll — även retroaktivt. Synken kör i små batchar (undviker 504); kör igen för fler bets. "
-                  : ""}
-                {settings?.hasOddsApiKey
-                  ? "The Odds API länkar icke-fotboll och ger live-closing som fallback. "
-                  : ""}
-                ESPN-resultat rättar singlar utan API-länk.
+                The Odds API länkar bets och sparar closing-odds strax före avspark (kickoff-CLV).
+                Synken kör i små batchar (undviker 504); kör igen för fler bets. ESPN-resultat
+                rättar singlar utan API-länk.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -213,15 +205,14 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div style={{ marginTop: 14, fontSize: 13, color: "var(--dim)" }}>
-              <p style={{ marginBottom: 8 }}>Lägg till minst en API-nyckel i <code style={{ color: "var(--pos)" }}>.env.local</code>:</p>
+              <p style={{ marginBottom: 8 }}>Lägg till en API-nyckel i <code style={{ color: "var(--pos)" }}>.env.local</code>:</p>
               <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6, color: "var(--dim2)" }}>
-                <li><strong style={{ color: "var(--txt)" }}>THESTATSAPI_KEY</strong> — historisk CLV för fotboll (rekommenderas). thestatsapi.com</li>
-                <li><strong style={{ color: "var(--txt)" }}>ODDS_API_KEY</strong> — gratis tier för MLB/NBA/NHL m.fl. the-odds-api.com</li>
+                <li><strong style={{ color: "var(--txt)" }}>ODDS_API_KEY</strong> — gratis tier, kickoff-CLV för fotboll, MLB/NBA/NHL m.fl. the-odds-api.com</li>
               </ul>
               <p style={{ marginTop: 8, color: "var(--dim2)" }}>
                 Utan nycklar fungerar gratis ESPN-rättning ovan. CLV: använd refresh-knappen
-                bredvid varje bets CLV-cell (OddsPortal-scrape, kräver Playwright lokalt) eller
-                TheStatsAPI/Odds API.
+                bredvid varje bets CLV-cell (OddsPortal-scrape, kräver Playwright lokalt),
+                <code>npm run scrape:clv</code> eller Odds API.
               </p>
             </div>
           )}

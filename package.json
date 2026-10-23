@@ -59,9 +59,7 @@
     "backfill:bookmakers": "tsx scripts/backfillBookmakers.ts",
     "agent:log": "tsx scripts/agent/logBetHttp.ts",
     "backfill:vm-refs": "tsx scripts/backfillWorldCupRefs.ts",
-    "backfill:clv": "tsx scripts/backfillClv.ts",
-    "shots:ingest": "tsx scripts/shots/ingestMatches.ts",
-    "shots:odds": "tsx scripts/shots/ingestOdds.ts",
+    "shots:ingest": "tsx scripts/shots/ingestSofascore.ts",
     "shots:backtest": "tsx scripts/shots/backtest.ts",
     "shots:tune": "tsx scripts/shots/tune.ts",
     "shots:ingest:sofascore": "tsx scripts/shots/ingestSofascore.ts",
@@ -76,7 +74,8 @@
     "scrapling:setup": "tsx scripts/scrapling/setup.ts",
     "scrapling:check": "tsx scripts/scrapling/check.ts",
     "sofascore:capture": "tsx scripts/sofascore/capture.ts",
-    "props:grade": "tsx scripts/results/gradeProps.ts"
+    "props:grade": "tsx scripts/results/gradeProps.ts",
+    "purge:thestatsapi": "tsx scripts/purgeTheStatsApi.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -34,7 +34,7 @@ const OUT_DIR = path.join("tests", "fixtures", "sofascore", "live");
 
 /** Turneringar att föredra per sport — de vanligaste i bet-loggen. */
 const PREFERRED: Record<SofaSport, number[]> = {
-  football: SHOT_LEAGUES.map((l) => l.sofascoreId).filter((x): x is number => x != null),
+  football: SHOT_LEAGUES.map((l) => l.sofascoreId),
   basketball: [132], // NBA
   "ice-hockey": [234], // NHL
 };
@@ -147,8 +147,8 @@ async function main() {
   const client = new SofascoreClient({ maxRequests: 60 });
   try {
     console.log("Ligor i skottmodellen");
-    for (const league of SHOT_LEAGUES.filter((l) => l.sofascoreId != null)) {
-      const t = parseUniqueTournament(await client.get(sofaPaths.uniqueTournament(league.sofascoreId!), SOFA_MAX_AGE.seasons));
+    for (const league of SHOT_LEAGUES) {
+      const t = parseUniqueTournament(await client.get(sofaPaths.uniqueTournament(league.sofascoreId), SOFA_MAX_AGE.seasons));
       check(`${league.label} (${league.sofascoreId})`, !!t, t ? `${t.name}${t.category ? ` · ${t.category}` : ""}` : "okänt id");
     }
     for (const sport of ["football", "basketball", "ice-hockey"] as const) {
