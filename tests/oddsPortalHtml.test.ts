@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  featuredMatch,
   formatLine,
+  h2hKey,
   h2hPath,
   htmlToLines,
   meetingDate,
@@ -14,7 +16,7 @@ import {
   parseSearchCandidates,
   tableToOddsRows,
 } from "../lib/oddsPortal/parseHtml";
-import { closingFromLines, pickUpcoming, planMarket } from "../lib/oddsPortal/scraplingScrape";
+import { closingFromLines, leagueResultsPath, pickUpcoming, planMarket, searchVariants } from "../lib/oddsPortal/scraplingScrape";
 import { pickSearchCandidate, type ScrapeBetInput } from "../lib/oddsPortal/scrape";
 
 // Fångade via Scrapling från oddsportal.com i oktober 2026 (amerikansk IP,
@@ -214,6 +216,23 @@ describe("spelade matcher via h2h-sidan", () => {
     ]);
   });
 
+  it("möteslänkar matchas på lagens id, inte namnet eller språkprefixet", () => {
+    const page = `
+      <a href="/football/h2h/manchester-utd-ppjDR086/tottenham-UDg08Ohm/#hQ2NzTJb">23/May/2027Manchester Utd-Tottenham</a>
+      <a href="/pl/football/h2h/manchester-utd-ppjDR086/tottenham-UDg08Ohm/#aB3dE5gH">05/Jan/2027Manchester Utd-Tottenham</a>
+      <a href="/football/h2h/coventry-GOvB22xg/tottenham-UDg08Ohm/#0zSjbNHM">01/Feb/2027Coventry-Tottenham</a>`;
+    const m = parseH2hMeetings(page, h2hPath("football", "manchester-united-ppjDR086", "tottenham-UDg08Ohm"));
+    expect(m.map((x) => x.eventId)).toEqual(["hQ2NzTJb", "aB3dE5gH"]);
+    expect(h2hKey("/pl/football/h2h/b-12345678/a-ABCDEFGH/")).toBe("football/12345678/ABCDEFGH");
+  });
+
+  it("matchen överst på h2h-sidan: id ur adressen, datum ur rubriken", () => {
+    const f = featuredMatch(["Premier League", "23 May 2027,", "16:00"], "https://www.oddsportal.com/football/h2h/a/b/#O43pe4no:1X2;2");
+    expect(f?.eventId).toBe("O43pe4no");
+    expect(f?.date.toISOString().slice(0, 10)).toBe("2027-05-23");
+    expect(featuredMatch(["23 May 2027,"], "https://www.oddsportal.com/football/h2h/a/b/")).toBeNull();
+  });
+
   it("datum utan år: året närmast bettet", () => {
     expect(meetingDate("10/Oct", new Date("2026-10-11T00:00:00Z"))?.toISOString().slice(0, 10)).toBe("2026-10-10");
     // Bet i januari, möte i december: förra året, inte samma.
@@ -231,5 +250,22 @@ describe("spelade matcher via h2h-sidan", () => {
     expect(pickUpcoming(c, i({ awayTeam: "Everton" }))).toBe(c[0].href);
     // Rätt lag men fel datum (en annan omgång) väljs inte heller.
     expect(pickUpcoming(c, i({ awayTeam: "Everton", eventAt: new Date("2026-12-01T13:00:00Z") }))).toBeNull();
+  });
+});
+
+describe("vägar till en spelad match", () => {
+  it("ligans resultatsida ur bettets liga", () => {
+    expect(leagueResultsPath("Premier League")).toBe("/football/england/premier-league/results/");
+    expect(leagueResultsPath("Spain - LaLiga")).toBe("/football/spain/laliga/results/");
+    expect(leagueResultsPath("UFC")).toBeNull();
+    expect(leagueResultsPath(null)).toBeNull();
+  });
+
+  it("sökvarianter för kortare namn, längst först", () => {
+    expect(searchVariants("Ipswich Town")).toEqual(["Ipswich Town", "Ipswich"]);
+    expect(searchVariants("West Bromwich Albion")[0]).toBe("West Bromwich Albion");
+    expect(searchVariants("West Bromwich Albion")).toContain("West Brom");
+    // Varianter under fyra tecken söks inte — de träffar för brett.
+    expect(searchVariants("Man Utd").every((v) => v.length >= 4)).toBe(true);
   });
 });

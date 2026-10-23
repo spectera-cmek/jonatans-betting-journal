@@ -39,6 +39,16 @@ export const TEAM_ALIASES: Record<string, string> = {
   "sporting cp": "sporting lisbon",
 };
 
+/**
+ * Förkortade ord i lagnamn. OddsPortal skriver "Atl. Madrid" och
+ * "Manchester Utd", spelbolagen ofta "Man Utd".
+ */
+const TOKEN_ALIASES: Record<string, string> = {
+  atl: "atletico",
+  utd: "united",
+  man: "manchester",
+};
+
 const DIACRITICS = /[̀-ͯ]/g;
 
 /**
@@ -65,7 +75,10 @@ export function normalizeTeam(name: string): string {
 }
 
 export function teamTokens(name: string): string[] {
-  const tokens = normalizeTeam(name).split(" ").filter(Boolean);
+  const tokens = normalizeTeam(name)
+    .split(" ")
+    .filter(Boolean)
+    .map((t) => TOKEN_ALIASES[t] ?? t);
   const kept = tokens.filter((t) => !NOISE_TOKENS.has(t));
   // Rensa aldrig bort allt: "FC Thun" ska bli ["thun"], men ett lag vars hela
   // namn består av brusord måste behålla något att jämföra på.

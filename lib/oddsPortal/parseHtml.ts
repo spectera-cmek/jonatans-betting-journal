@@ -258,10 +258,23 @@ export interface H2hMeeting {
   title: string;
 }
 
+/**
+ * Lagparet en h2h-sökväg pekar på, oberoende av namnet i länken och av
+ * språkprefix: samma lag heter "manchester-united-ppjDR086" på ligasidan och
+ * "manchester-utd-ppjDR086" i möteslistan, och sidan kan ha /pl/ först.
+ */
+export function h2hKey(pathname: string): string | null {
+  const hit = pathname.match(H2H_PATH);
+  if (!hit) return null;
+  const ids = [hit[2], hit[3]].map((s) => s.slice(-8)).sort();
+  return `${hit[1]}/${ids[0]}/${ids[1]}`;
+}
+
 /** Tidigare (och kommande) möten på en h2h-sida, ett per eventId. */
 export function parseH2hMeetings(html: string, path: string): H2hMeeting[] {
   const $ = cheerio.load(html);
   const out = new Map<string, H2hMeeting>();
+  const key = h2hKey(path);
   $("a[href*='#']").each((_, el) => {
     const href = $(el).attr("href") ?? "";
     let url: URL;
@@ -270,7 +283,7 @@ export function parseH2hMeetings(html: string, path: string): H2hMeeting[] {
     } catch {
       return;
     }
-    if (url.pathname.replace(/\/?$/, "/") !== path) return;
+    if (!key || h2hKey(url.pathname) !== key) return;
     const eventId = url.hash.replace(/^#/, "").split(/[:;]/)[0];
     if (!/^[A-Za-z0-9]{8}$/.test(eventId) || out.has(eventId)) return;
     const title = $(el).text().replace(/\s+/g, " ").trim();
@@ -297,4 +310,23 @@ export function meetingDate(dateText: string, near: Date): Date | null {
   const y = near.getUTCFullYear();
   const options = [y - 1, y, y + 1].map((yy) => new Date(Date.UTC(yy, month, day, 12)));
   return options.sort((a, b) => Math.abs(a.getTime() - near.getTime()) - Math.abs(b.getTime() - near.getTime()))[0];
+}
+
+/**
+ * Matchen h2h-sidan visar överst. Den står inte i möteslistan (ingen länk);
+ * id:t finns i sidans adress efter laddning (#eventId:…) och datumet som
+ * "08 May 2027," under rubriken. Ibland är det just bettets match.
+ */
+export function featuredMatch(lines: string[], finalUrl: string): { eventId: string; date: Date } | null {
+  const hash = finalUrl.split("#")[1] ?? "";
+  const eventId = hash.split(/[:;]/)[0];
+  if (!/^[A-Za-z0-9]{8}$/.test(eventId)) return null;
+  for (const l of lines) {
+    const m = l.match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4}),?$/);
+    if (!m) continue;
+    const month = MONTHS.indexOf(m[2].toLowerCase());
+    if (month < 0) continue;
+    return { eventId, date: new Date(Date.UTC(Number(m[3]), month, Number(m[1]), 12)) };
+  }
+  return null;
 }

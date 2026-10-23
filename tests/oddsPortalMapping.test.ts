@@ -41,6 +41,14 @@ describe("resolveSelectionColumn / resolveMarketTarget", () => {
     ).toBe("home");
   });
 
+  it("hockey: vinnare inkl. förlängning är tvåväg, exkl. OT är 1X2", () => {
+    const base = { market: "h2h", selectionSide: "home", homeTeam: "Columbus", awayTeam: "Pittsburgh", sport: "Ice Hockey" };
+    expect(resolveMarketTarget({ ...base, selection: "Columbus" }).tabLabels[0]).toBe("Home/Away");
+    expect(resolveMarketTarget({ ...base, selection: "Columbus (exkl. OT)" }).tabLabels[0]).toBe("1X2");
+    expect(resolveMarketTarget({ ...base, marketCategory: "Matchvinnare 60 min", selection: "Columbus" }).tabLabels[0]).toBe("1X2");
+    expect(resolveMarketTarget({ ...base, selectionSide: "draw", selection: "Oavgjort" }).column).toBe("draw");
+  });
+
   it("resolves totals under", () => {
     const target = resolveMarketTarget({
       market: "totals",

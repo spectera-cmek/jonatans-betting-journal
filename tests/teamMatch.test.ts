@@ -64,6 +64,9 @@ describe("teamSimilarity", () => {
     ["Nott'm Forest", "Nottingham Forest"],
     ["Tottenham", "Tottenham Hotspur"],
     ["Malaga", "Málaga"],
+    ["Atletico Madrid", "Atl. Madrid"],
+    ["Manchester United", "Manchester Utd"],
+    ["Man Utd", "Manchester United"],
   ];
 
   it.each(samePairs)("kopplar ihop %s och %s", (a, b) => {
