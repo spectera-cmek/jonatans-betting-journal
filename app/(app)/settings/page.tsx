@@ -180,42 +180,12 @@ export default function SettingsPage() {
         <div style={{ height: 12 }} />
 
         <Card>
-          <span className="ap-label">CLV &amp; synk (API-nycklar)</span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13, marginTop: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: settings?.hasOddsApiKey ? "var(--pos)" : "var(--red)" }} />
-              <span>The Odds API: {settings?.hasOddsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}</span>
-            </div>
-          </div>
-
-          {settings?.hasOddsApiKey ? (
-            <div style={{ marginTop: 14 }}>
-              <p style={{ fontSize: 13, color: "var(--dim)", marginBottom: 12 }}>
-                The Odds API länkar bets och sparar closing-odds strax före avspark (kickoff-CLV).
-                Synken kör i små batchar (undviker 504); kör igen för fler bets. ESPN-resultat
-                rättar singlar utan API-länk.
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <SyncButton kind="closing" label="Hämta closing-odds" showResult />
-                  <SyncButton kind="all" label="Full synk" showResult />
-                  {settings?.hasOddsApiKey && <SyncButton kind="grade" label="Rätta via Odds API" showResult />}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginTop: 14, fontSize: 13, color: "var(--dim)" }}>
-              <p style={{ marginBottom: 8 }}>Lägg till en API-nyckel i <code style={{ color: "var(--pos)" }}>.env.local</code>:</p>
-              <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6, color: "var(--dim2)" }}>
-                <li><strong style={{ color: "var(--txt)" }}>ODDS_API_KEY</strong> — gratis tier, kickoff-CLV för fotboll, MLB/NBA/NHL m.fl. the-odds-api.com</li>
-              </ul>
-              <p style={{ marginTop: 8, color: "var(--dim2)" }}>
-                Utan nycklar fungerar gratis ESPN-rättning ovan. CLV: använd refresh-knappen
-                bredvid varje bets CLV-cell (OddsPortal-scrape, kräver Playwright lokalt),
-                <code>npm run scrape:clv</code> eller Odds API.
-              </p>
-            </div>
-          )}
+          <span className="ap-label">CLV (closing-odds)</span>
+          <p style={{ fontSize: 13, color: "var(--dim)", marginTop: 14, lineHeight: 1.55 }}>
+            Closing-odds hämtas från OddsPortal på datorn: refresh-knappen bredvid varje bets
+            CLV-cell, eller <code>npm run scrape:clv -- --confirm</code> för alla på en gång (kräver
+            Playwright lokalt). Props och udda marknader sätts för hand.
+          </p>
         </Card>
 
         <div style={{ height: 12 }} />

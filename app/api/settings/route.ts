@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma, getSettings } from "@/lib/db";
-import { hasOddsApiKey } from "@/lib/oddsApi";
 import { getSessionUser, getSessionUserId, apiUnauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +15,7 @@ export async function GET() {
     startingBankrollUnits: s.startingBankrollUnits,
     dailyStakeBudgetUnits: s.dailyStakeBudgetUnits,
     weeklyStakeBudgetUnits: s.weeklyStakeBudgetUnits,
-    hasOddsApiKey: hasOddsApiKey(),
-  });
+      });
 }
 
 export async function PUT(req: Request) {
@@ -69,8 +67,7 @@ export async function PUT(req: Request) {
       startingBankrollUnits: s.startingBankrollUnits,
       dailyStakeBudgetUnits: s.dailyStakeBudgetUnits,
       weeklyStakeBudgetUnits: s.weeklyStakeBudgetUnits,
-      hasOddsApiKey: hasOddsApiKey(),
-      });
+            });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });

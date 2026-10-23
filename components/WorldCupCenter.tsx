@@ -448,7 +448,6 @@ export function WorldCupCenter() {
           prefill={prefill}
           onClose={() => setPrefill(null)}
           onSaved={() => { reloadBets(); loadSuggestions(); }}
-          hasOddsApiKey={settings?.hasOddsApiKey ?? false}
         />
       )}
       {(settling || settleUsed) && (

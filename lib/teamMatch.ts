@@ -1,120 +1,10 @@
-// Översättning mellan The Odds API och projektets egna begrepp.
+// Lagnamnsmatchning: avgör om två källor menar samma lag och samma match.
 //
-// Rent räknande: inga Prisma-anrop, ingen fetch. Allt här går att testa utan
-// nyckel, vilket är hela poängen — matchkopplingen är den del som tyst kan bli
-// fel, och en tyst felkoppling sätter Arsenals pris på Aston Villas rad.
-//
-// Oddsjämförelsen som modulen skrevs för är borttagen 2026-08-22, och med den
-// prisuttaget som skrev MarketPrice-rader. Kvar står de lager som aldrig hörde
-// till den skärmen: liga- och bokmakarnycklar samt lagnamnsmatchning. De hör
-// hemma i CLV-kedjan, som kopplar ett spel till rätt Odds API-event i
-// lib/eventLink.ts med en betydligt trubbigare namnjämförelse än den här.
-
-// ---------------------------------------------------------------------------
-// Ligor
-// ---------------------------------------------------------------------------
-
-/**
- * Appens liganyckel → The Odds API:s sport_key.
- *
- * **Europa League saknas hos The Odds API** — kontrollerat mot deras
- * /sports-lista 2026-08-18, som är gratis. Varken `soccer_uefa_europa_league`
- * eller någon annan EL-nyckel finns, aktiv eller vilande; av europacuperna
- * fanns bara `soccer_uefa_champs_league_qualification` och
- * `soccer_uefa_nations_league`.
- *
- * Ligan står medvetet INTE med i registret. En nyckel som inte finns kostar en
- * kredit att få veta det, varje körning. Dyker EL upp när gruppspelet drar
- * igång lägger man till raden — deras /sports-lista är gratis att hämta.
- */
-export interface OddsApiLeague {
-  /** Appens egen liganyckel, samma som ShotMatch.leagueKey. */
-  key: string;
-  label: string;
-  /** The Odds API:s sport_key. */
-  sportKey: string;
-}
-
-/**
- * Ligorna vi har en verifierad sport_key för.
- *
- * Registret ligger HÄR och inte i `SHOT_LEAGUES`, så att en ny liga inte
- * först måste finnas i skottmodellen. En rad här räcker.
- *
- * Varje sport_key är kontrollerad mot deras /sports-lista, som är gratis.
- */
-export const ODDS_API_LEAGUES: OddsApiLeague[] = [
-  { key: "premier-league", label: "Premier League", sportKey: "soccer_epl" },
-  { key: "laliga", label: "LaLiga", sportKey: "soccer_spain_la_liga" },
-  { key: "serie-a", label: "Serie A", sportKey: "soccer_italy_serie_a" },
-  { key: "bundesliga", label: "Bundesliga", sportKey: "soccer_germany_bundesliga" },
-];
-
-/** Liganyckel → sport_key. Härledd, så registret ovan är enda stället att ändra. */
-export const ODDS_API_SPORT_KEY: Record<string, string> = Object.fromEntries(
-  ODDS_API_LEAGUES.map((l) => [l.key, l.sportKey])
-);
-
-export function sportKeyFor(leagueKey: string): string | null {
-  return ODDS_API_SPORT_KEY[leagueKey] ?? null;
-}
-
-// ---------------------------------------------------------------------------
-// Bokmakare
-// ---------------------------------------------------------------------------
-
-/**
- * The Odds API:s bookmaker-nyckel → projektets slug.
- *
- * Nycklarna är hämtade ur deras bokmakarlista 2026-08-18 och stavas EXAKT som
- * där. Flera skiljer sig från vad man skulle gissa: `expekt_se` (inte
- * "nyaexpekt_se"), `sport888_se` (inte "888sport_se"), `betclic_fr` (inte
- * "betclic").
- *
- * Medvetet en allowlist och inte en slugifiering. En härledd slug skulle tyst
- * släppa in vilken bok som helst och tillskriva ett pris en bok Jonatan inte
- * har konto hos. Okända nycklar ska RAPPORTERAS av den som läser dem i stället
- * för att slinka igenom — det är så listan ska växa.
- *
- * En bok per land, aldrig flera nycklar till samma slug. `unibet_se` och
- * `unibet_uk` är olika böcker med olika priser; att mappa båda till "unibet"
- * hade låtit dem skriva över varandra beroende på svarsordningen.
- */
-export const ODDS_API_BOOKMAKER_SLUG: Record<string, string> = {
-  // Skarpa referenser
-  pinnacle: "pinnacle",
-  betfair_ex_eu: "betfair-exchange",
-  betfair_ex_uk: "betfair-exchange",
-  matchbook: "matchbook",
-
-  // Svenska böcker — skälet till att API:et är värt att koppla in.
-  // Alla verifierade i ett verkligt svar för regions=eu,se 2026-08-18.
-  betsson: "betsson",
-  nordicbet: "nordicbet",
-  coolbet: "coolbet",
-  betinia_se: "betinia",
-  unibet_se: "unibet",
-  leovegas_se: "leovegas",
-  expekt_se: "expekt",
-  sport888_se: "888sport",
-  betmgm_se: "betmgm-se",
-  // Dök upp i svaret utan att stå i dokumentationens lista.
-  svenskaspel_se: "svenskaspel",
-  atg_se: "atg",
-  hajper_se: "hajper",
-  campobet_se: "campobet",
-  mrgreen_se: "mrgreen",
-
-  // Övriga EU/UK-böcker
-  betclic_fr: "betclic",
-  betfair_sb_uk: "betfair-sportsbook",
-  paddypower: "paddy-power",
-  williamhill: "william-hill",
-};
-
-export function bookmakerSlugFor(oddsApiKey: string): string | null {
-  return ODDS_API_BOOKMAKER_SLUG[oddsApiKey.trim().toLowerCase()] ?? null;
-}
+// Rent räknande: inga Prisma-anrop, ingen fetch. Matchkopplingen är den del
+// som tyst kan bli fel — en tyst felkoppling sätter fel lags statistik på ett
+// bet — så trösklarna nedan är uppmätta, inte gissade. Används av
+// props-rättningen (lib/propsGrading.ts) för att hitta ESPN-, NHL- och
+// Sofascore-matcher.
 
 // ---------------------------------------------------------------------------
 // Lagnamn
@@ -263,11 +153,7 @@ export const MIN_MATCH_MARGIN = 0.15;
 export const MAX_KICKOFF_DRIFT_HOURS = 6;
 
 /**
- * Kopplar en Odds API-match till en lagrad fixture.
- *
- * Ingen anropare i dag — CLV-kopplingen i lib/eventLink.ts gör sin egen,
- * trubbigare matchning. Behållen för att flytta dit: tröskelvärdena nedan är
- * uppmätta, inte gissade.
+ * Kopplar en match (lag + avsparkstid) till rätt fixture bland kandidaterna.
  *
  * Tid + liga snävar in fältet till en handfull kandidater; namnlikheten avgör
  * mellan dem. Ordningen spelar roll — att söka på namn globalt skulle behöva

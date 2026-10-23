@@ -26,7 +26,7 @@ model Bet {
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   placedAt        DateTime        @default(now())
   eventAt         DateTime?
-  sportKey        String? // The Odds API key, e.g. "soccer_epl"
+  sportKey        String? // legacy: The Odds API sport key (no longer set)
   sport           String? // display name
   league          String?
   event           String // "Team A vs Team B"
@@ -50,9 +50,9 @@ model Bet {
   stakeUnits      Float // e.g. 1.0, 2.5
   outcome         String          @default("pending") // pending|win|loss|push|half_win|half_loss|void
   profitUnits     Float? // computed at settlement
-  externalRef     String? // The Odds API event id (for auto-grading)
+  externalRef     String? // legacy: The Odds API / TheStatsAPI event id (no longer set)
   resultProvider  String? // score provider, e.g. "espn"
-  resultEventRef  String? // provider event id, separate from The Odds API externalRef
+  resultEventRef  String? // result provider event id (e.g. ESPN), separate from externalRef
   importRef       String? // Bet365 betslip reference — stable key for incremental re-import
   legs            String? // JSON-encoded accumulator legs
   bookmaker       String?

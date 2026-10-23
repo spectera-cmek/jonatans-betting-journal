@@ -37,7 +37,7 @@ export interface BetslipPrefill {
   importRef?: string | null;
   placedAt?: string | null;
   /** Matchstart med klockslag när kvittot visar den — datumfältet i formuläret
-   *  rymmer bara datum, men kickoff-CLV behöver tiden. */
+   *  rymmer bara datum, men CLV-skrapan och matchkopplingen behöver tiden. */
   eventAtIso?: string | null;
   legs?: unknown;
   duplicate?: { betId: string; event: string; selection: string } | null;
@@ -53,7 +53,7 @@ function swedishDay(iso: string | null | undefined): string | null {
   return Number.isNaN(d.getTime()) ? null : dayIso(d);
 }
 
-/** Avspark med klockslag — bara ett datum duger inte för kickoff-CLV. */
+/** Avspark med klockslag — bara ett datum gör matchkopplingen osäkrare. */
 function kickoffIso(iso: string | null | undefined): string | null {
   if (!iso || !/\d{1,2}:\d{2}/.test(iso)) return null;
   return Number.isNaN(new Date(iso).getTime()) ? null : iso;

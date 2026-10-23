@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  bookmakerSlugFor,
   matchFixture,
   MIN_TEAM_SIMILARITY,
   normalizeTeam,
-  sportKeyFor,
   teamSimilarity,
   teamTokens,
   type FixtureCandidate,
-} from "../lib/oddsApiMap";
+} from "../lib/teamMatch";
 
 // Lagnamnen nedan är de som faktiskt ligger i ShotMatch (hämtade 2026-08-18),
-// inte påhittade exempel. Motparten är hur The Odds API brukar stava dem.
+// inte påhittade exempel. Motparten är hur andra källor brukar stava dem.
 
 describe("normalizeTeam", () => {
   it("viker bort diakritiker källorna stavar olika", () => {
@@ -192,58 +190,5 @@ describe("matchFixture", () => {
         ambiguous
       )
     ).toBeNull();
-  });
-});
-
-describe("bookmakerSlugFor", () => {
-  // Nycklarna stavas som i deras bokmakarlista, inte som man skulle gissa.
-  it("mappar de svenska böckerna med API:ets egen stavning", () => {
-    expect(bookmakerSlugFor("betsson")).toBe("betsson");
-    expect(bookmakerSlugFor("nordicbet")).toBe("nordicbet");
-    expect(bookmakerSlugFor("coolbet")).toBe("coolbet");
-    expect(bookmakerSlugFor("betinia_se")).toBe("betinia");
-    expect(bookmakerSlugFor("unibet_se")).toBe("unibet");
-    expect(bookmakerSlugFor("leovegas_se")).toBe("leovegas");
-    expect(bookmakerSlugFor("expekt_se")).toBe("expekt");
-    expect(bookmakerSlugFor("sport888_se")).toBe("888sport");
-    expect(bookmakerSlugFor("betclic_fr")).toBe("betclic");
-  });
-
-  it("mappar inte gissade stavningar som inte finns i API:et", () => {
-    expect(bookmakerSlugFor("nyaexpekt_se")).toBeNull();
-    expect(bookmakerSlugFor("888sport_se")).toBeNull();
-    expect(bookmakerSlugFor("betclic")).toBeNull();
-  });
-
-  it("mappar aldrig två landsvarianter till samma slug", () => {
-    // unibet_se och unibet_uk är olika böcker med olika priser. Delade de slug
-    // skulle de skriva över varandra beroende på svarsordningen.
-    expect(bookmakerSlugFor("unibet_uk")).toBeNull();
-    expect(bookmakerSlugFor("leovegas")).toBeNull();
-  });
-
-  it("mappar börsen och Pinnacle till appens slugs", () => {
-    expect(bookmakerSlugFor("betfair_ex_eu")).toBe("betfair-exchange");
-    expect(bookmakerSlugFor("pinnacle")).toBe("pinnacle");
-  });
-
-  it("returnerar null för okända böcker i stället för att hitta på en slug", () => {
-    expect(bookmakerSlugFor("comeon")).toBeNull();
-    expect(bookmakerSlugFor("")).toBeNull();
-  });
-});
-
-describe("sportKeyFor", () => {
-  it("täcker de ligor The Odds API faktiskt har", () => {
-    expect(sportKeyFor("premier-league")).toBe("soccer_epl");
-    expect(sportKeyFor("laliga")).toBe("soccer_spain_la_liga");
-  });
-
-  // Kontrollerat mot deras gratis /sports-lista 2026-08-18: ingen EL-nyckel
-  // finns. Att ha kvar den hade kostat en kredit per körning för att få reda
-  // på samma sak igen.
-  it("har inte Europa League — den finns inte hos The Odds API", () => {
-    expect(sportKeyFor("europa-league")).toBeNull();
-    expect(sportKeyFor("allsvenskan")).toBeNull();
   });
 });

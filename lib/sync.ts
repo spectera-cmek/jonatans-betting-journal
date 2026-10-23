@@ -1,19 +1,11 @@
 // Shared sync logic used by both the API routes and the CLI script.
-// Grades finished bets and captures closing odds for CLV.
+// Grades finished bets from ESPN's free scoreboard; closing odds for CLV come
+// from the local OddsPortal scrape. No API keys needed.
 
 import { prisma } from "./db";
 import { gradeBet } from "./grading";
 import { espnPath, fetchFinalScore } from "./scores";
 import { settleBet } from "./settlement";
-import {
-  getScores,
-  getOdds,
-  parseScores,
-  hasOddsApiKey,
-  type ScoreEvent,
-} from "./oddsApi";
-import { isLegacyStatsApiRef, isLegacyStatsApiSportKey, linkBetToOddsEvent } from "./eventLink";
-import { captureClosingNearKickoff } from "./clvOddsApi";
 import { captureClosingFromOddsPortal } from "./clvOddsPortalBatch";
 
 export interface SyncResult {
@@ -27,174 +19,8 @@ export interface SyncResult {
 
 const CLV_WINDOW_DAYS = 90;
 /** Keep each serverless sync under Vercel’s timeout (504). */
-const SYNC_CLOSING_LIMIT = 10;
 const SYNC_GRADE_LIMIT = 25;
 const SYNC_DEADLINE_MS = 45_000;
-
-/** Auto-link unlinked match bets to Odds API events (enables grade + CLV). */
-export async function runLinkEvents(): Promise<SyncResult> {
-  const details: string[] = [];
-  if (!hasOddsApiKey()) {
-    return {
-      ok: false,
-      message: "No ODDS_API_KEY set — cannot auto-link events.",
-      linked: 0,
-      graded: 0,
-      closingUpdated: 0,
-      details,
-    };
-  }
-
-  const candidates = await prisma.bet.findMany({
-    where: {
-      externalRef: null,
-      eventKind: "match",
-      betType: "single",
-      OR: [{ homeTeam: { not: null } }, { awayTeam: { not: null } }, { event: { not: "" } }],
-    },
-    select: {
-      id: true,
-      event: true,
-      homeTeam: true,
-      awayTeam: true,
-      eventAt: true,
-      sport: true,
-      league: true,
-      sportKey: true,
-      externalRef: true,
-    },
-  });
-
-  if (candidates.length === 0) {
-    return {
-      ok: true,
-      message: "Inga bets behöver event-länkning.",
-      linked: 0,
-      graded: 0,
-      closingUpdated: 0,
-      details,
-    };
-  }
-
-  const cache = new Map<string, Awaited<ReturnType<typeof getOdds>>>();
-  let linked = 0;
-  for (const bet of candidates) {
-    const result = await linkBetToOddsEvent(prisma, bet, cache);
-    if (result.linked) {
-      linked += 1;
-      details.push(`${bet.event}: länkad → ${result.sportKey}`);
-    }
-  }
-
-  if (linked > 0) {
-    await prisma.syncLog.create({
-      data: { kind: "link", summary: `Linked ${linked} bet(s) to Odds API events.` },
-    });
-  }
-
-  return {
-    ok: true,
-    message: `Länkade ${linked} bet(s) till Odds API.`,
-    linked,
-    graded: 0,
-    closingUpdated: 0,
-    details,
-  };
-}
-
-/** Auto-grade all pending bets that are linked to a finished event. */
-export async function runGrade(): Promise<SyncResult> {
-  const details: string[] = [];
-  if (!hasOddsApiKey()) {
-    return {
-      ok: false,
-      message: "No ODDS_API_KEY set — add it to .env.local to enable auto-grading.",
-      linked: 0,
-      graded: 0,
-      closingUpdated: 0,
-      details,
-    };
-  }
-
-  // Only bets we can actually look up: pending + linked to an external event.
-  const pending = await prisma.bet.findMany({
-    where: {
-      outcome: "pending",
-      externalRef: { not: null },
-      sportKey: { not: null },
-      betType: "single",
-      eventKind: "match",
-    },
-  });
-
-  if (pending.length === 0) {
-    return { ok: true, message: "No pending linked bets to grade.", linked: 0, graded: 0, closingUpdated: 0, details };
-  }
-
-  // Group by sportKey so we make one scores call per sport.
-  const bySport = new Map<string, typeof pending>();
-  for (const b of pending) {
-    const arr = bySport.get(b.sportKey!);
-    if (arr) arr.push(b);
-    else bySport.set(b.sportKey!, [b]);
-  }
-
-  let graded = 0;
-  for (const [sportKey, bets] of bySport) {
-    if (isLegacyStatsApiSportKey(sportKey)) continue; // gamla TheStatsAPI-länkar
-    let scores: ScoreEvent[];
-    try {
-      scores = await getScores(sportKey, 3);
-    } catch (e) {
-      details.push(`scores ${sportKey}: ${(e as Error).message}`);
-      continue;
-    }
-    const scoreById = new Map(scores.map((s) => [s.id, s]));
-
-    for (const bet of bets) {
-      const ev = scoreById.get(bet.externalRef!);
-      if (!ev) continue;
-      if (isLegacyStatsApiRef(bet.externalRef)) continue;
-      const parsed = parseScores(ev);
-      if (!parsed) continue; // not finished yet
-
-      const outcome = gradeBet(
-        { market: bet.market, selectionSide: bet.selectionSide, line: bet.line },
-        parsed
-      );
-      if (!outcome) {
-        details.push(`${bet.event}: market not auto-gradable, settle manually`);
-        continue;
-      }
-
-      try {
-        const result = await settleBet(prisma, {
-          betId: bet.id,
-          outcome,
-          source: "odds_api",
-          reason: `${parsed.homeScore}-${parsed.awayScore} via The Odds API`,
-        });
-        if (result.changed) graded += 1;
-        details.push(`${bet.event}: ${parsed.homeScore}-${parsed.awayScore} -> ${outcome}`);
-      } catch (error) {
-        details.push(`${bet.event}: ${(error as Error).message}`);
-      }
-    }
-  }
-
-  await prisma.syncLog.create({
-    data: { kind: "grade", summary: `Graded ${graded} bet(s).` },
-  });
-
-  return {
-    ok: true,
-    message: `Graded ${graded} bet(s).`,
-    linked: 0,
-    graded,
-    closingUpdated: 0,
-    details,
-  };
-}
 
 /**
  * Auto-grade pending structured (h2h/totals/spreads) single bets from the real
@@ -304,47 +130,6 @@ export async function runGradeByScores(
 }
 
 /**
- * Near-kickoff CLV via The Odds API (live price ≈ closing). Free-tier friendly.
- */
-export async function runClosingNearKickoff(
-  opts: { limit?: number; dryRun?: boolean } = {}
-): Promise<SyncResult> {
-  if (!hasOddsApiKey()) {
-    return {
-      ok: false,
-      message: "No ODDS_API_KEY set — cannot capture kickoff CLV.",
-      linked: 0,
-      graded: 0,
-      closingUpdated: 0,
-      details: [],
-    };
-  }
-
-  const result = await captureClosingNearKickoff({
-    limit: opts.limit ?? SYNC_CLOSING_LIMIT,
-    dryRun: opts.dryRun,
-  });
-
-  if (result.closingUpdated > 0 && !opts.dryRun) {
-    await prisma.syncLog.create({
-      data: {
-        kind: "closing",
-        summary: `Odds API kickoff closing for ${result.closingUpdated} bet(s).`,
-      },
-    });
-  }
-
-  return {
-    ok: true,
-    message: `Odds API kickoff: länkade ${result.linked}, closing ${result.closingUpdated}.`,
-    linked: result.linked,
-    graded: 0,
-    closingUpdated: result.closingUpdated,
-    details: result.details,
-  };
-}
-
-/**
  * OddsPortal batch scrape for featured markets (local/CLI only — needs Playwright).
  */
 export async function runClosingFromOddsPortal(
@@ -381,84 +166,13 @@ export async function runClosingFromOddsPortal(
   };
 }
 
-/**
- * Closing odds near kickoff via The Odds API (batched for serverless).
- * Post-kickoff CLV for featured markets comes from the local OddsPortal scrape.
- */
-export async function runClosing(): Promise<SyncResult> {
-  if (!hasOddsApiKey()) {
-    return {
-      ok: false,
-      message: "Ingen ODDS_API_KEY — closing via OddsPortal-skrapan (npm run scrape:clv) eller för hand.",
-      linked: 0,
-      graded: 0,
-      closingUpdated: 0,
-      details: [],
-    };
-  }
-  const kickoff = await runClosingNearKickoff({ limit: SYNC_CLOSING_LIMIT });
-  const moreHint = kickoff.closingUpdated >= SYNC_CLOSING_LIMIT ? " Kör synk igen för nästa batch." : "";
-  return {
-    ...kickoff,
-    message: `Länkade ${kickoff.linked}, closing ${kickoff.closingUpdated}.${moreHint}`,
-  };
-}
-
+/** ESPN grading, batched for serverless. Same as the nightly cron job. */
 export async function runFullSync(): Promise<SyncResult> {
   const deadline = Date.now() + SYNC_DEADLINE_MS;
-
-  // Odds API kickoff CLV + ESPN grading. OddsPortal scrape stays CLI-only (Playwright).
-  const closingKickoff =
-    hasOddsApiKey() && Date.now() < deadline
-      ? await runClosingNearKickoff({ limit: SYNC_CLOSING_LIMIT })
-      : { ok: true, message: "", linked: 0, graded: 0, closingUpdated: 0, details: [] as string[] };
-
-  const scores =
-    Date.now() < deadline
-      ? await runGradeByScores({ limit: SYNC_GRADE_LIMIT, deadlineMs: deadline })
-      : {
-          ok: true,
-          message: "",
-          linked: 0,
-          graded: 0,
-          closingUpdated: 0,
-          details: ["Timeout-skydd: hoppade ESPN-rättning — kör synk igen."] as string[],
-        };
-
-  const linked = closingKickoff.linked;
-  const closingUpdated = closingKickoff.closingUpdated;
-  const details = [...closingKickoff.details, ...scores.details];
-  const ok = closingKickoff.ok || scores.ok;
-  const parts = [
-    linked ? `${linked} länkade` : null,
-    closingUpdated ? `${closingUpdated} closing` : null,
-    scores.graded ? `${scores.graded} rättade` : null,
-  ].filter(Boolean);
-
-  const batched =
-    closingKickoff.closingUpdated >= SYNC_CLOSING_LIMIT ||
-    scores.graded >= SYNC_GRADE_LIMIT;
-  const suffix = batched ? " Kör synk igen för nästa batch." : "";
-
-  if (!parts.length && details.length) {
-    return {
-      ok,
-      message: `Synk klar — ingen CLV ännu. ${details.slice(0, 3).join(" · ")}`,
-      linked,
-      graded: scores.graded,
-      closingUpdated,
-      details,
-    };
-  }
-
+  const scores = await runGradeByScores({ limit: SYNC_GRADE_LIMIT, deadlineMs: deadline });
+  const suffix = scores.graded >= SYNC_GRADE_LIMIT ? " Kör synk igen för nästa batch." : "";
   return {
-    ok,
-    message: parts.length
-      ? `Synk klar: ${parts.join(", ")}.${suffix}`
-      : "Synk klar — inget att uppdatera.",
-    linked,
-    graded: scores.graded,
-    closingUpdated,
-    details,
+    ...scores,
+    message: scores.graded ? `Synk klar: ${scores.graded} rättade.${suffix}` : "Synk klar — inget att rätta.",
   };
 }

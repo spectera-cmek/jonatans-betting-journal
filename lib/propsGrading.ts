@@ -15,7 +15,7 @@
 
 import type { Outcome } from "./betting";
 import { gradeBet } from "./grading";
-import { matchFixture, normalizeTeam, teamSimilarity, MIN_TEAM_SIMILARITY } from "./oddsApiMap";
+import { matchFixture, normalizeTeam, teamSimilarity, MIN_TEAM_SIMILARITY } from "./teamMatch";
 import { sofaSportFor, type SofaSport } from "./sofascore/api";
 import {
   hasStatKey,

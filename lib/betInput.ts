@@ -14,7 +14,7 @@ import {
   normalizeTournamentStage,
 } from "./betTaxonomy";
 import { normalizeBookmaker } from "./constants";
-import { inferSportKey, parseHomeAway } from "./eventLink";
+import { parseHomeAway } from "./eventLink";
 import { inferSelection } from "./grading";
 
 /** Liganamn (gemener) som betyder fotboll när sporten saknas på betet. */
@@ -250,14 +250,6 @@ export function buildBetData(
       if (inferred.side) data.selectionSide = inferred.side;
       if (inferred.market && (!data.market || data.market === "h2h")) data.market = inferred.market;
       if (inferred.line != null && data.line == null) data.line = inferred.line;
-    }
-
-    if (!data.sportKey) {
-      const key = inferSportKey(
-        (data.sport as string | undefined) ?? input.sport,
-        (data.league as string | undefined) ?? input.league
-      );
-      if (key) data.sportKey = key;
     }
 
     if (data.eventKind === undefined) {

@@ -16,8 +16,7 @@ sammanfattning efteråt. Gäller **i varje chat** i det här projektet.
    `lib/betInput.ts` (`BetInput`) plus `stakeKr`, `importRef`, `placedAt`.
 3. Kör: `npx tsx scripts/agent/logBet.ts --file <bet.json> --user jonatan`
    - Skriptet konverterar `stakeKr` → units via användarens `unitValue` (100 kr/unit),
-     hoppar över dubbletter på `importRef`, och **länkar betet till The Odds API**
-     för resultat och kickoff-CLV när `ODDS_API_KEY` finns.
+     och hoppar över dubbletter på `importRef`.
 4. Rapportera: event, selection, odds, insats (kr + units), bet-id, och om länken
    lyckades (`Länk: …`) eller vad som saknas.
 
@@ -37,8 +36,8 @@ Fyll i dem alltid när det går:
 | `selection` | Tydlig text (t.ex. lagnamn eller "Over 2.5") |
 | `betType` | `"single"` för singlar (kombo = `"accumulator"` + `legs`) |
 
-Tennis/NBA/NHL/MLB m.m.: logga med rätt `sport`/`league` — Odds API, OddsPortal och
-props-rättningen (ESPN/NHL) använder dem för att hitta matchen.
+Tennis/NBA/NHL/MLB m.m.: logga med rätt `sport`/`league` — OddsPortal-skrapan, ESPN-rättningen
+och props-rättningen (ESPN/NHL) använder dem för att hitta matchen.
 
 ## Mappning
 
@@ -52,7 +51,7 @@ props-rättningen (ESPN/NHL) använder dem för att hitta matchen.
   om marknaden är h2h/totals/spreads.
 - Sätt `sport`/`league` aggressivt från lag/liga-text på kvittot (Allsvenskan, EPL, La Liga …).
 - `eventAt`: matchstart om den syns/kan härledas (Europe/Stockholm om ingen zon syns) —
-  **med klockslag**, inte bara datum: kickoff-CLV fångas i fönstret T-30…T+5.
+  **med klockslag**, inte bara datum: då hittar CLV-skrapan och rättningen rätt match säkrare.
 - `bookmaker`: läs varumärket i klartext (logga, sidhuvud, webbadress) i första hand,
   utseendet först därefter (grönt Betsson-kvitto = "Betsson"). Skriv namnet som det står i
   `BOOKMAKERS` (lib/constants.ts) — `normalizeBookmaker` fångar stavningsvarianter, men

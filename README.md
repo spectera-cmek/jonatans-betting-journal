@@ -2,7 +2,7 @@
 
 > A personal sports betting journal. Log bets in **units**, track **ROI** and
 > **bankroll** over time, and **auto-settle** results from a bet365 account statement
-> or The Odds API. Runs locally, or deployed to Vercel + Postgres as an installable
+> or free score feeds (ESPN, NHL). Runs locally, or deployed to Vercel + Postgres as an installable
 > PWA with per-account login.
 
 <p align="left">
@@ -34,14 +34,15 @@
 - **Auto-settling, two ways:**
   - Import a **bet365 account-statement PDF** — parses every slip and settles from the
     *actual payout* (after tax), never recomputed.
-  - Optional **[The Odds API](https://the-odds-api.com/)** integration to grade finished
-    events and pull closing odds for CLV.
+  - Free, keyless **ESPN** scores grade finished singles; `props:grade` settles props
+    and stat totals from ESPN and the NHL API. Closing odds for CLV come from a local
+    OddsPortal scrape.
 - **Your own instance** — one Postgres database you control (Neon via Vercel, or any
   Postgres locally). Registration is gated behind an invite code and every query is
   scoped to the signed-in account, so accounts never see each other's bets.
-- **Optional third-party calls** — grading and CLV use The Odds API, and
-  betslip screenshot import uses the Anthropic API. Both are opt-in: leave the key
-  unset and the app simply falls back to manual entry.
+- **No paid data APIs** — grading uses ESPN and the NHL API (open, no key); only the
+  betslip screenshot import uses a key (Anthropic API), and it is opt-in: leave it unset
+  and the app falls back to manual entry.
 
 ## 🖼️ Screenshots
 
@@ -87,11 +88,8 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run db:push` | Create / sync the Postgres schema |
 | `npm run db:seed` | Insert demo bets |
 | `npm run db:studio` | Browse the database in Prisma Studio |
-| `npm run sync` | Auto-settle finished bets + near-kickoff CLV (Odds API) |
+| `npm run sync` | Auto-settle finished singles from ESPN scores |
 | `npm run scrape:clv` | Batch OddsPortal CLV for featured markets (local) |
-| `npm run capture:kickoff-clv` | Odds API near-kickoff closing capture |
-| `npm run watch:kickoff-clv` | Daemon: auto-capture CLV T-30…T+5 |
-| `npm run install:kickoff-clv-task` | Install Windows Task (every 10 min) |
 | `npm run backfill:clv-scrape` | 90d OddsPortal CLV backfill (`--confirm`) |
 | `npm run import:bet365` | Import / sync bets from a bet365 statement PDF |
 | `npm run import:unibet` | Import bets from a Unibet transaction-history CSV |
@@ -144,24 +142,11 @@ It matches on each slip's reference, so it never wipes manually-added bets and i
 to re-run. Profit comes from the **actual payout column**, after tax. Statement files
 are git-ignored — they never leave your machine.
 
-### From The Odds API (grading + near-kickoff CLV)
+### From final scores (ESPN, no key)
 
-1. Get a free key (~500 requests/month) at <https://the-odds-api.com/>.
-2. Copy `.env.local.example` → `.env.local` and set `ODDS_API_KEY=your_key`.
-3. Restart the dev server. Then **Synka** (or `npm run sync`) settles finished H2H /
-   totals / spreads bets and captures **near-kickoff** closing odds for linked events.
-
-**Automatic pre-kickoff CLV (recommended):** install a Windows task that runs every
-10 minutes and snapshots featured bets in the **T-30 … T+5** window:
-
-```bash
-npm run install:kickoff-clv-task
-# or keep a terminal open:
-npm run watch:kickoff-clv
-```
-
-Needs `ODDS_API_KEY`. Logs land in `.claude/logs/kickoff-clv.log`. New bets placed
-inside the window are captured immediately on create.
+**Synka** (or `npm run sync`, and the nightly `/api/cron/grade`) settles finished
+single H2H / totals / spreads bets from ESPN's free scoreboard. Props and stat markets
+are settled with `npm run props:grade` (ESPN + the NHL API, see below).
 
 ### Automatic CLV via OddsPortal (local scrape batch)
 
@@ -361,7 +346,7 @@ fun, seek help (in Sweden: [Stödlinjen](https://www.stodlinjen.se/), 020-81 91 
 
 En **lokal** betting-journal. Logga bets i **units** med decimalodds, följ **ROI** och
 **bankrulle** över tid, och **auto-rätta** resultat från ett bet365-kontoutdrag eller
-The Odds API — allt på din egen dator, ingen inloggning, ingen molntjänst.
+gratis resultatflöden (ESPN, NHL) — utan betalda API-nycklar.
 
 ### ✨ Funktioner
 
@@ -373,9 +358,9 @@ The Odds API — allt på din egen dator, ingen inloggning, ingen molntjänst.
   med CSV-export.
 - **Analys** — P/L per marknad, liga, sport och odds-band.
 - **Insikter & kalender** — svit, bästa/sämsta dag, snittinsats och kalender-heatmap.
-- **Auto-rättning på två sätt:** importera ett **bet365-kontoutdrag (PDF)** — vinst tas
-  från den *faktiska utbetalningen* efter skatt — eller koppla på
-  **[The Odds API](https://the-odds-api.com/)** för rättning + stängningsodds (CLV).
+- **Auto-rättning:** importera ett **bet365-kontoutdrag (PDF)** — vinst tas från den
+  *faktiska utbetalningen* efter skatt — eller låt ESPN och NHL:s API rätta singlar och
+  props. Stängningsodds (CLV) hämtas från OddsPortal på datorn.
 - **Din egen instans** — en Postgres-databas du äger. Registrering kräver inbjudningskod
   och varje konto ser bara sina egna bets.
 
@@ -406,12 +391,11 @@ npm run import:bet365 -- --confirm --user <användarnamn>    # inkrementellt in 
 Matchar på varje slips referens — rör aldrig manuellt tillagda bets och är säker att
 köra om. Kontoutdrag är git-ignorerade och lämnar aldrig din dator.
 
-### 🔄 Auto-rättning via The Odds API
+### 🔄 Auto-rättning via slutresultat (ESPN, ingen nyckel)
 
-1. Skaffa en gratis nyckel på <https://the-odds-api.com/> (~500 anrop/mån).
-2. Kopiera `.env.local.example` → `.env.local` och sätt `ODDS_API_KEY=din_nyckel`.
-3. Starta om. **Synka** (eller `npm run sync`) rättar färdigspelade bets och fångar
-   near-kickoff closing (`npm run capture:kickoff-clv -- --confirm`).
+**Synka** (eller `npm run sync`, och nattens `/api/cron/grade`) rättar färdigspelade
+singlar (1X2, över/under, handikapp) via ESPN. Props och statistikmarknader rättas med
+`npm run props:grade` (ESPN + NHL:s API).
 
 ### Automatisk CLV via OddsPortal (lokal batch)
 

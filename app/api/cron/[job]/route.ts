@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { runClosingNearKickoff, runGradeByScores, runClosing, type SyncResult } from "@/lib/sync";
+import { runGradeByScores, type SyncResult } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
 // Same ceiling as /api/sync. The runners batch their work to stay under it.
@@ -19,22 +19,18 @@ export const maxDuration = 60;
  * against objective final scores, exactly as /api/sync does.
  *
  * Jobs:
- *   clv     near-kickoff closing capture via The Odds API (the T-30…T+5 window)
  *   grade   settle finished events from the free ESPN scoreboard
- *   closing near-kickoff closing via The Odds API, batched like Synka's closing button
  */
 const JOBS: Record<string, () => Promise<SyncResult>> = {
-  clv: () => runClosingNearKickoff(),
   // Tagged "cron" so /rattning can show what the night settled on its own.
   grade: () => runGradeByScores({ source: "cron" }),
-  closing: () => runClosing(),
 };
 
 export async function GET(req: Request, { params }: { params: { job: string } }) {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     // Fail closed. Without a secret configured the endpoint would be an open
-    // trigger for third-party API spend.
+    // trigger for a global grading run.
     return NextResponse.json(
       { ok: false, message: "CRON_SECRET is not set — scheduled sync is disabled." },
       { status: 503 }

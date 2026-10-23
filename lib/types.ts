@@ -236,5 +236,4 @@ export interface SettingsDTO {
   startingBankrollUnits: number;
   dailyStakeBudgetUnits: number | null;
   weeklyStakeBudgetUnits: number | null;
-  hasOddsApiKey: boolean;
 }

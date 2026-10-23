@@ -65,7 +65,6 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
-  hasOddsApiKey: boolean;
   /** When set, the modal edits this bet (PATCH with only the changed fields). */
   bet?: BetDTO | null;
   /** When set (and not editing), the create form is prefilled from a parsed betslip. */
@@ -148,17 +147,6 @@ function formFromBet(b: BetDTO): Form {
   };
 }
 
-interface SearchEvent {
-  id: string;
-  sportKey: string;
-  commenceTime: string;
-  homeTeam: string;
-  awayTeam: string;
-  homePrice: number | null;
-  awayPrice: number | null;
-  drawPrice: number | null;
-}
-
 const RESULT_SEG: [string, string][] = [
   ["pending", "Öppen"],
   ["win", "Vunnen"],
@@ -166,7 +154,7 @@ const RESULT_SEG: [string, string][] = [
   ["push", "Push"],
 ];
 
-export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefill, unit = 100 }: Props) {
+export function AddBetModal({ open, onClose, onSaved, bet, prefill, unit = 100 }: Props) {
   const editing = !!bet;
   const [form, setForm] = useState<Form>(empty);
   const initial = useRef<Form>(empty);
@@ -174,11 +162,6 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
   const [error, setError] = useState<string | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
 
-  const [searchSport, setSearchSport] = useState("soccer_epl");
-  const [searchQ, setSearchQ] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchEvent[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
@@ -191,9 +174,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
       initial.current = f;
       setForm(f);
       setError(null);
-      setShowSearch(false);
       setShowAdvanced(false);
-      setSearchResults([]);
       setTimeout(() => firstField.current?.focus(), 50);
     }
   }, [open, bet, prefill]);
@@ -349,36 +330,6 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
     if (kind === "outright" && form.eventKind !== kind) set("eventKind", kind);
   };
 
-  const runSearch = async () => {
-    setSearching(true);
-    try {
-      const res = await api.get<{ events: SearchEvent[] }>(
-        `/api/odds/search?sport=${encodeURIComponent(searchSport)}&q=${encodeURIComponent(searchQ)}`
-      );
-      setSearchResults(res.events || []);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const pickEvent = (ev: SearchEvent) => {
-    setForm((f) => ({
-      ...f,
-      event: `${ev.homeTeam} – ${ev.awayTeam}`,
-      homeTeam: ev.homeTeam,
-      awayTeam: ev.awayTeam,
-      sportKey: ev.sportKey,
-      externalRef: ev.id,
-      eventAt: ev.commenceTime.slice(0, 10),
-      selection: ev.homeTeam,
-      selectionSide: "home",
-      odds: ev.homePrice ? String(ev.homePrice) : f.odds,
-    }));
-    setShowSearch(false);
-  };
-
   const submit = async () => {
     setSaving(true);
     setError(null);
@@ -469,35 +420,6 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
         </div>
 
         <div className="ap-modal-body">
-          {hasOddsApiKey && !editing && (
-            <div className="ap-field">
-              <button type="button" className="ap-link" style={{ textAlign: "left" }} onClick={() => setShowSearch((v) => !v)}>
-                {showSearch ? "▾ Dölj event-sök" : "▸ Sök event (autofyll + auto-rättning)"}
-              </button>
-              {showSearch && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input className="ap-input" style={{ flex: "0 0 150px" }} value={searchSport} onChange={(e) => setSearchSport(e.target.value)} placeholder="sport key" />
-                    <input className="ap-input" value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="lagnamn…" />
-                    <button className="ap-btn" onClick={runSearch} disabled={searching}>{searching ? "…" : "Sök"}</button>
-                  </div>
-                  {searchResults.length > 0 && (
-                    <div className="ap-eventlist">
-                      {searchResults.map((ev) => (
-                        <button key={ev.id} className="ap-eventrow" onClick={() => pickEvent(ev)}>
-                          <span>{ev.homeTeam} – {ev.awayTeam}</span>
-                          <span className="ap-num" style={{ color: "var(--dim2)", fontSize: 12 }}>
-                            {ev.homePrice?.toFixed(2) ?? "—"} / {ev.drawPrice?.toFixed(2) ?? "—"} / {ev.awayPrice?.toFixed(2) ?? "—"}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           <div className="ap-x3">
             <div className="ap-field">
               <label>Datum</label>

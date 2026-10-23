@@ -7,9 +7,8 @@ möjligt** utan att gissa — prova flera källor tills resultatet är entydigt.
 ## Två lager
 
 1. **Natten (Vercel-cron, ingen dator behövs):** `/api/cron/grade` 04:00 UTC rättar
-   strukturerade singlar mot ESPN (hoppar över förlängning/straffar),
-   `/api/cron/closing` 05:00 UTC hämtar closing odds. Varje körning lämnar en
-   `cron:<jobb>`-rad i `syncLog`.
+   strukturerade singlar mot ESPN (hoppar över förlängning/straffar). Varje körning
+   lämnar en `cron:grade`-rad i `syncLog`.
 2. **Morgonen (den här rutinen, 08:00 lokalt):** allt nattjobbet inte kan — props,
    kombi, daterlösa spel, ligor ESPN inte känner — plus rapport via mejl.
 
@@ -88,7 +87,7 @@ motsäger sig själv, eller saknar den marknad du behöver.
    ```
    npx tsx scripts/agent/cronStatus.ts
    ```
-   Ta med utfallet i rapporten ("Natten: 3 rättade av cron, closing 5").
+   Ta med utfallet i rapporten ("Natten: 3 rättade av cron").
 1. Lista öppna bets:
    ```
    npx tsx scripts/agent/openBets.ts > .claude/tmp/open-bets.json

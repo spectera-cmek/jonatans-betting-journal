@@ -26,7 +26,6 @@ export function GlobalActions() {
   // Shares the cached /api/settings entry with useMetrics/useBets instead of
   // firing a third request of its own.
   const { data: settings } = useSettings();
-  const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue || 100;
 
   return (
@@ -46,7 +45,6 @@ export function GlobalActions() {
           open={adding}
           onClose={() => setAdding(false)}
           onSaved={revalidateAll}
-          hasOddsApiKey={hasKey}
           unit={unit}
         />
       )}

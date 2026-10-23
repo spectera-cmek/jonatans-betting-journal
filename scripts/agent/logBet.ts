@@ -18,9 +18,6 @@ config();
 import { readFileSync } from "fs";
 import { PrismaClient } from "@prisma/client";
 import { buildBetData, ValidationError, type BetInput } from "../../lib/betInput";
-import { linkBetToOddsEvent } from "../../lib/eventLink";
-import { maybeCaptureKickoffClvForBet } from "../../lib/clvOddsApi";
-import { hasOddsApiKey } from "../../lib/oddsApi";
 
 interface AgentBetInput extends BetInput {
   stakeKr?: number;
@@ -80,25 +77,13 @@ async function main() {
     const bet = await prisma.bet.create({
       data: { ...(data as object), userId: user.id } as never,
     });
-    if (!bet.externalRef) {
-      await linkBetToOddsEvent(prisma, bet).catch(() => {});
-    }
-    if (hasOddsApiKey()) {
-      const kickoff = await maybeCaptureKickoffClvForBet(bet.id, { prisma }).catch(() => null);
-      if (kickoff && kickoff.closingUpdated > 0) {
-        console.log(`  CLV: kickoff-capture (${kickoff.details.find((d) => d.includes("closing")) ?? "ok"})`);
-      }
-    }
-    const linked = await prisma.bet.findUnique({ where: { id: bet.id } });
-    const out = linked ?? bet;
+    const out = bet;
     console.log(`OK: loggade bet ${out.id} för ${username}`);
     console.log(
       `  ${out.event} — ${out.selection} @ ${out.odds} | ${out.stakeUnits}u | ${out.bookmaker ?? "okänd bookmaker"}`
     );
-    if (out.externalRef) {
-      console.log(`  Länk: ${out.sportKey} / ${out.externalRef}`);
-    } else if (out.market === "h2h" || out.market === "totals" || out.market === "spreads") {
-      console.log("  CLV: ej länkad — sätt league + home/away + eventAt, eller hämta closing med npm run scrape:clv");
+    if (out.market === "h2h" || out.market === "totals" || out.market === "spreads") {
+      console.log("  CLV: hämtas med npm run scrape:clv (OddsPortal) — kräver league + home/away + eventAt");
     }
   } finally {
     await prisma.$disconnect();

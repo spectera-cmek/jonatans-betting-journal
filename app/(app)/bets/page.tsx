@@ -144,7 +144,6 @@ export default function BetsPage() {
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   }, [q, sport, league, book, market, scope, eventKind, stage, res, flag, clv, day, year, month, sortOrder]);
 
-  const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue ?? 100;
 
   // Nästa kvitto-tolkade bet i kön → förifyllning för modalen (kr → units där).
@@ -618,7 +617,6 @@ export default function BetsPage() {
           prefill={editing ? null : prefill}
           onClose={closeModal}
           onSaved={reload}
-          hasOddsApiKey={hasKey}
           unit={unit}
         />
       )}
