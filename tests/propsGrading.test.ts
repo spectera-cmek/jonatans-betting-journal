@@ -20,6 +20,7 @@ const load = (f: string) => JSON.parse(readFileSync(path.join(FIX, f), "utf8"));
 const events = parseEvents(load("football-events.json")).events;
 const mffAik = events.find((e) => e.id === 13981234)!;
 const footballData: MatchData = {
+  source: "Sofascore",
   event: mffAik,
   stats: parseStatistics(load("football-statistics.json")),
   lineups: parseLineups(load("football-lineups.json")),
@@ -94,6 +95,10 @@ describe("findEventForBet", () => {
   it("lagnamn ur event-texten när home/away saknas", () => {
     expect(teamsOf({ event: "Malmö FF - AIK", homeTeam: null, awayTeam: null })).toEqual({ home: "Malmö FF", away: "AIK" });
     expect(findEventForBet(bet({ homeTeam: null, awayTeam: null }), events)?.id).toBe(13981234);
+  });
+  it("amerikansk ordning (borta @ hemma) och omvänd lagordning", () => {
+    expect(teamsOf({ event: "AIK @ Malmö FF", homeTeam: null, awayTeam: null })).toEqual({ home: "Malmö FF", away: "AIK" });
+    expect(findEventForBet(bet({ homeTeam: "AIK", awayTeam: "Malmö FF" }), events)?.id).toBe(13981234);
   });
   it("fel lag ger ingen träff", () => {
     expect(findEventForBet(bet({ homeTeam: "IFK Göteborg", awayTeam: "Häcken" }), events)).toBeNull();
@@ -171,12 +176,12 @@ describe("gradeProp — fotboll", () => {
     // Cupmatchen: 2–2 efter 90, 3–2 efter förlängning. Totalt räknar 90 minuter.
     const cup = events.find((e) => e.id === 13981240)!;
     const total = bet({ marketCategory: "Totalt", line: 4.5, selectionSide: "under" });
-    expect(grade(total, { event: cup, stats: null, lineups: null })).toMatchObject({ outcome: "win", value: 4 });
+    expect(grade(total, { source: "Sofascore", event: cup, stats: null, lineups: null })).toMatchObject({ outcome: "win", value: 4 });
   });
 
   it("ej färdigspelad match rättas inte", () => {
     const upcoming = events.find((e) => e.status === "scheduled")!;
-    expect(grade(bet(), { event: upcoming, stats: null, lineups: null })).toMatchObject({ ok: false, reason: /inte färdigspelad/ });
+    expect(grade(bet(), { source: "Sofascore", event: upcoming, stats: null, lineups: null })).toMatchObject({ ok: false, reason: /inte färdigspelad/ });
   });
 
   it("statistik som saknas ger inget utfall", () => {
@@ -186,8 +191,8 @@ describe("gradeProp — fotboll", () => {
 
 describe("gradeProp — basket och hockey", () => {
   const ev = { ...mffAik, homeTeam: { id: 1, name: "Boston Celtics", shortName: null }, awayTeam: { id: 2, name: "New York Knicks", shortName: null } };
-  const bb: MatchData = { event: ev, stats: null, lineups: parseLineups(load("basketball-lineups.json")) };
-  const hk: MatchData = { event: ev, stats: null, lineups: parseLineups(load("hockey-lineups.json")) };
+  const bb: MatchData = { source: "Sofascore", event: ev, stats: null, lineups: parseLineups(load("basketball-lineups.json")) };
+  const hk: MatchData = { source: "Sofascore", event: ev, stats: null, lineups: parseLineups(load("hockey-lineups.json")) };
   const player = (sport: string, marketCategory: string, selection: string, line: number, side = "over") =>
     bet({ sport, marketCategory, marketScope: "player", selection, line, selectionSide: side });
 

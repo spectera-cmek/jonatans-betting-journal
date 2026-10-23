@@ -9,6 +9,17 @@
 //    betyder alltså 0 — men bara om nyckeln finns hos någon annan spelare i
 //    samma match. Annars vet vi inte om fältet ens finns (se hasStatKey).
 
+import {
+  hasStatKey,
+  playerPlayed,
+  type Lineups,
+  type MatchEvent,
+  type MatchStatus,
+  type MatchTeam,
+  type PlayerLine,
+  type StatPair,
+} from "../matchData";
+
 type Json = Record<string, unknown>;
 
 const obj = (v: unknown): Json => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : {});
@@ -20,33 +31,13 @@ const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? 
 // Matcher
 // ---------------------------------------------------------------------------
 
-export type SofaStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled";
-
-export interface SofaTeam {
-  id: number;
-  name: string;
-  shortName: string | null;
-}
-
-export interface SofaEvent {
-  id: number;
-  startAt: Date;
-  status: SofaStatus;
-  /** Sofascores egen statustext, t.ex. "AET" eller "AP" — för loggar. */
-  statusDescription: string | null;
-  homeTeam: SofaTeam;
-  awayTeam: SofaTeam;
-  /** Mål/poäng efter ordinarie tid (fotboll) när det finns, annars slutresultatet. */
-  homeScore: number | null;
-  awayScore: number | null;
-  /** Slutresultatet inklusive förlängning. */
-  homeScoreFinal: number | null;
-  awayScoreFinal: number | null;
-  tournamentName: string | null;
-  uniqueTournamentId: number | null;
-  seasonId: number | null;
-  round: number | null;
-}
+export type SofaStatus = MatchStatus;
+export type SofaTeam = MatchTeam;
+export type SofaEvent = MatchEvent;
+export type SofaPlayerLine = PlayerLine;
+export type SofaLineups = Lineups;
+export type { StatPair };
+export { hasStatKey, playerPlayed };
 
 export function mapStatus(type: string | null): SofaStatus {
   switch ((type ?? "").toLowerCase()) {
@@ -144,11 +135,6 @@ export function parseUniqueTournament(json: unknown): { id: number; name: string
 // Lagstatistik
 // ---------------------------------------------------------------------------
 
-export interface StatPair {
-  home: number;
-  away: number;
-}
-
 /**
  * /event/{id}/statistics → nyckel → {home, away} för hela matchen (period ALL).
  * Samma nyckel kan stå i flera grupper (totalShotsOnGoal finns i både
@@ -214,21 +200,6 @@ export function shotTotals(stats: Record<string, StatPair>): ShotTotals {
 // Spelarstatistik
 // ---------------------------------------------------------------------------
 
-export interface SofaPlayerLine {
-  playerId: number;
-  name: string;
-  shortName: string | null;
-  side: "home" | "away";
-  substitute: boolean;
-  /** Bara numeriska värden, platta (ratingVersions o.d. hoppas över). */
-  stats: Record<string, number>;
-}
-
-export interface SofaLineups {
-  confirmed: boolean;
-  players: SofaPlayerLine[];
-}
-
 /** /event/{id}/lineups — båda lagens spelare med sin matchstatistik. */
 export function parseLineups(json: unknown): SofaLineups {
   const j = obj(json);
@@ -249,20 +220,4 @@ export function parseLineups(json: unknown): SofaLineups {
     }
   }
   return { confirmed: j.confirmed === true, players };
-}
-
-/** Finns nyckeln hos någon spelare i matchen? Om inte vet vi inte om fältet finns alls. */
-export function hasStatKey(lineups: SofaLineups, key: string): boolean {
-  return lineups.players.some((p) => key in p.stats);
-}
-
-/**
- * Spelade spelaren? Fotboll har minutesPlayed, basket secondsPlayed, hockey
- * timeOnIce (sekunder). En avbytare utan någon statistik alls kom inte in.
- */
-export function playerPlayed(p: SofaPlayerLine): boolean {
-  for (const key of ["minutesPlayed", "secondsPlayed", "timeOnIce"]) {
-    if (key in p.stats) return p.stats[key] > 0;
-  }
-  return !p.substitute || Object.keys(p.stats).length > 0;
 }

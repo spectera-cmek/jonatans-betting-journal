@@ -1,0 +1,154 @@
+{
+ "events": [
+  {
+   "id": "401879263",
+   "date": "2026-10-18T13:00Z",
+   "name": "Sunderland at AFC Bournemouth",
+   "season": {
+    "year": 2026,
+    "type": 14308,
+    "slug": "2026-27-english-premier-league"
+   },
+   "status": {
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401879263",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "team": {
+        "id": "349",
+        "displayName": "AFC Bournemouth",
+        "shortDisplayName": "Bournemouth",
+        "name": "AFC Bournemouth",
+        "abbreviation": "BOU"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "366",
+        "displayName": "Sunderland",
+        "shortDisplayName": "Sunderland",
+        "name": "Sunderland",
+        "abbreviation": "SUN"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401879261",
+   "date": "2026-10-18T13:00Z",
+   "name": "Crystal Palace at Brighton & Hove Albion",
+   "season": {
+    "year": 2026,
+    "type": 14308,
+    "slug": "2026-27-english-premier-league"
+   },
+   "status": {
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401879261",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "5",
+       "team": {
+        "id": "331",
+        "displayName": "Brighton & Hove Albion",
+        "shortDisplayName": "Brighton",
+        "name": "Brighton & Hove Albion",
+        "abbreviation": "BHA"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "384",
+        "displayName": "Crystal Palace",
+        "shortDisplayName": "C Palace",
+        "name": "Crystal Palace",
+        "abbreviation": "CRY"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401923181",
+   "date": "2026-10-18T13:00Z",
+   "name": "Nottingham Forest at Sheffield United",
+   "season": {
+    "year": 2026,
+    "type": 14574,
+    "slug": "league-phase"
+   },
+   "status": {
+    "type": {
+     "id": "47",
+     "name": "STATUS_FINAL_PEN",
+     "state": "post",
+     "completed": true,
+     "description": "Final Score - After Penalties",
+     "detail": "FT-Pens",
+     "shortDetail": "FT-Pens"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401923181",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "team": {
+        "id": "21038",
+        "displayName": "Sheffield United",
+        "shortDisplayName": "Sheffield Utd",
+        "name": "Sheffield United",
+        "abbreviation": "SHU"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "21070",
+        "displayName": "Nottingham Forest",
+        "shortDisplayName": "Nottm Forest",
+        "name": "Nottingham Forest",
+        "abbreviation": "FOR"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

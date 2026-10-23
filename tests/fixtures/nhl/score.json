@@ -1,0 +1,63 @@
+{
+ "games": [
+  {
+   "id": 2026020152,
+   "startTimeUTC": "2026-10-21T23:30:00Z",
+   "gameState": "OFF",
+   "gameScheduleState": "OK",
+   "homeTeam": {
+    "id": 7,
+    "name": {
+     "default": "Sabres"
+    },
+    "abbrev": "BUF",
+    "score": 1,
+    "sog": 28,
+    "logo": "https://assets.nhle.com/logos/nhl/svg/BUF_light.svg"
+   },
+   "awayTeam": {
+    "id": 4,
+    "name": {
+     "default": "Flyers"
+    },
+    "abbrev": "PHI",
+    "score": 3,
+    "sog": 27,
+    "logo": "https://assets.nhle.com/logos/nhl/svg/PHI_light.svg"
+   },
+   "gameOutcome": {
+    "lastPeriodType": "REG"
+   }
+  },
+  {
+   "id": 2026020153,
+   "startTimeUTC": "2026-10-21T23:30:00Z",
+   "gameState": "OFF",
+   "gameScheduleState": "OK",
+   "homeTeam": {
+    "id": 9,
+    "name": {
+     "default": "Senators",
+     "fr": "Sénateurs"
+    },
+    "abbrev": "OTT",
+    "score": 5,
+    "sog": 30,
+    "logo": "https://assets.nhle.com/logos/nhl/svg/OTT_light.svg"
+   },
+   "awayTeam": {
+    "id": 13,
+    "name": {
+     "default": "Panthers"
+    },
+    "abbrev": "FLA",
+    "score": 1,
+    "sog": 19,
+    "logo": "https://assets.nhle.com/logos/nhl/svg/FLA_light.svg"
+   },
+   "gameOutcome": {
+    "lastPeriodType": "REG"
+   }
+  }
+ ]
+}
