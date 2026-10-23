@@ -22,6 +22,7 @@ import { SOFA_MAX_AGE, SofascoreClient } from "../../lib/sofascore/client";
 import {
   parseEvents,
   parseLineups,
+  parseSeasons,
   parseStatistics,
   parseUniqueTournament,
   shotTotals,
@@ -68,13 +69,42 @@ function trimLineups(json: unknown): unknown {
   return { confirmed: j.confirmed, home: side(j.home), away: side(j.away) };
 }
 
+/** Kort beskrivning av en lista: antal matcher per status, eller varför den är tom. */
+function describeList(json: unknown): string {
+  if (json === null) return "404 (finns inte)";
+  const { events } = parseEvents(json);
+  if (events.length === 0) {
+    const keys = json && typeof json === "object" ? Object.keys(json as object).join(", ") : typeof json;
+    return `0 matcher tolkade (svarets nycklar: ${keys || "inga"})`;
+  }
+  const byStatus = new Map<string, number>();
+  for (const e of events) byStatus.set(e.status, (byStatus.get(e.status) ?? 0) + 1);
+  return `${events.length} matcher (${[...byStatus].map(([k, n]) => `${k} ${n}`).join(", ")})`;
+}
+
+/**
+ * En färdigspelad match: först ur turneringarnas säsongslistor (samma väg
+ * som shots:ingest:sofascore), sedan ur dagslistorna som reserv.
+ */
 async function findFinished(client: SofascoreClient, sport: SofaSport, days: number): Promise<SofaEvent | null> {
+  for (const ut of PREFERRED[sport]) {
+    const season = parseSeasons(await client.get(sofaPaths.seasons(ut), SOFA_MAX_AGE.seasons))[0];
+    if (!season) {
+      console.log(`    turnering ${ut}: inga säsonger`);
+      continue;
+    }
+    const json = await client.get(sofaPaths.seasonEvents(ut, season.id, "last", 0), SOFA_MAX_AGE.schedule);
+    console.log(`    turnering ${ut}, säsong ${season.year || season.name}, senaste sidan: ${describeList(json)}`);
+    const finished = parseEvents(json).events.filter((e) => e.status === "finished");
+    // Senaste spelade matchen — sidan är sorterad äldst först.
+    if (finished.length) return finished.sort((a, b) => b.startAt.getTime() - a.startAt.getTime())[0];
+  }
   for (let back = 1; back <= days; back++) {
     const date = utcDate(new Date(Date.now() - back * 86_400_000));
     const json = await client.get(sofaPaths.scheduledEvents(sport, date), SOFA_MAX_AGE.schedule);
+    console.log(`    dagslista ${date}: ${describeList(json)}`);
     const finished = parseEvents(json).events.filter((e) => e.status === "finished");
-    const preferred = finished.find((e) => e.uniqueTournamentId != null && PREFERRED[sport].includes(e.uniqueTournamentId));
-    if (preferred ?? finished[0]) return preferred ?? finished[0];
+    if (finished[0]) return finished[0];
   }
   return null;
 }
@@ -128,6 +158,7 @@ async function main() {
     await client.close();
   }
   console.log(`\nFixturer sparade i ${OUT_DIR}. Anrop: ${client.fetched} hämtade, ${client.cacheHits} ur cachen.`);
+  console.log(`Väg in till Sofascore: ${client.routeLabel()}`);
   if (problems.length) {
     console.log(`\n${problems.length} kontroll(er) misslyckades: ${problems.join(", ")}`);
     console.log("Skicka rapporten ovan så rättas tolkaren/mappningen.");

@@ -98,6 +98,12 @@ export class SofascoreClient {
   private route = 0;
   private warmedUp = false;
 
+  /** Vägen in som används just nu, t.ex. "HTTP www.sofascore.com" — för rapporter. */
+  routeLabel(): string {
+    const r = SOFA_ROUTES[this.route];
+    return r ? describeRoute(r) : "ingen (alla spärrade)";
+  }
+
   constructor(private readonly opts: SofascoreClientOptions = {}) {
     this.cacheDir = opts.cacheDir ?? SOFASCORE_CACHE_DIR;
     this.throttleMs = opts.throttleMs ?? (Number(process.env.SOFASCORE_THROTTLE_MS) || 1500);
