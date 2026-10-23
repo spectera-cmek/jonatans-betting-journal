@@ -139,6 +139,13 @@ function printComparison(rows: FetcherComparisonRow[]) {
     console.log("\nInga kandidater att jämföra.");
     return;
   }
+  // Startade inte Playwright alls är det samma fel på varje rad — säg det en gång.
+  if (rows.every((r) => r.playwright.code === "browser_error")) {
+    console.log(`\nPlaywright startade inte: ${rows[0].playwright.detail}`);
+    if (/Executable doesn't exist|playwright install/i.test(rows[0].playwright.detail)) {
+      console.log("  Ladda ner webbläsaren en gång med: npx playwright install chromium");
+    }
+  }
   let both = 0;
   let onlyPw = 0;
   let onlySc = 0;

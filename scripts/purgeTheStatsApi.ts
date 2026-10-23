@@ -22,40 +22,61 @@ config();
 import { PrismaClient } from "@prisma/client";
 import { hasShotsDb, shotsPrisma } from "../lib/shotsDb";
 
+/** Värden ur en connection string som säger vilken databas det gäller, utan lösenord. */
+function hostOf(url: string | undefined): string {
+  try {
+    return url ? new URL(url).host : "(inte satt)";
+  } catch {
+    return "(ogiltig adress)";
+  }
+}
+
+/** Prismas långa fel → första begripliga raden. */
+function shortError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const line = msg.split("\n").find((l) => /Can't reach|Authentication|does not exist|timed out|ECONN|ENOTFOUND/i.test(l));
+  return (line ?? msg.split("\n").filter(Boolean).pop() ?? msg).trim();
+}
+
 async function main() {
   const confirm = process.argv.includes("--confirm");
   console.log(`Läge: ${confirm ? "CONFIRM (tar bort)" : "DRY-RUN (inget ändras)"}\n`);
 
   if (hasShotsDb()) {
-    const mt = { matchId: { startsWith: "mt_" } };
-    const [matches, odds, projections, prices, snapshots] = await Promise.all([
-      shotsPrisma.shotMatch.count({ where: { id: { startsWith: "mt_" } } }),
-      shotsPrisma.shotOddsSnapshot.count({ where: mt }),
-      shotsPrisma.shotProjection.count({ where: mt }),
-      shotsPrisma.marketPrice.count({ where: mt }),
-      shotsPrisma.evSnapshot.count({ where: mt }),
-    ]);
-    console.log("Skottmodellen (SHOTS_DATABASE_URL):");
-    console.log(`  ${matches} matcher från TheStatsAPI (mt_…)`);
-    console.log(`  följer med: ${odds} odds, ${projections} projektioner, ${prices} MarketPrice, ${snapshots} EvSnapshot`);
-    if (confirm && matches > 0) {
-      const { count } = await shotsPrisma.shotMatch.deleteMany({ where: { id: { startsWith: "mt_" } } });
-      console.log(`  ✓ ${count} matcher borttagna (med allt som hängde på dem)`);
+    console.log(`Skottmodellen (SHOTS_DATABASE_URL, ${hostOf(process.env.SHOTS_DATABASE_URL)}):`);
+    try {
+      const mt = { matchId: { startsWith: "mt_" } };
+      const matches = await shotsPrisma.shotMatch.count({ where: { id: { startsWith: "mt_" } } });
+      const odds = await shotsPrisma.shotOddsSnapshot.count({ where: mt });
+      const projections = await shotsPrisma.shotProjection.count({ where: mt });
+      const prices = await shotsPrisma.marketPrice.count({ where: mt });
+      const snapshots = await shotsPrisma.evSnapshot.count({ where: mt });
+      console.log(`  ${matches} matcher från TheStatsAPI (mt_…)`);
+      console.log(`  följer med: ${odds} odds, ${projections} projektioner, ${prices} MarketPrice, ${snapshots} EvSnapshot`);
+      if (confirm && matches > 0) {
+        const { count } = await shotsPrisma.shotMatch.deleteMany({ where: { id: { startsWith: "mt_" } } });
+        console.log(`  ✓ ${count} matcher borttagna (med allt som hängde på dem)`);
+      }
+    } catch (err) {
+      console.log(`  ✗ Databasen svarar inte: ${shortError(err)}`);
+      console.log("    Hoppar över skottmodellen. Bet-loggen nedan körs ändå.");
     }
   } else {
     console.log("Skottmodellen: ingen SHOTS_DATABASE_URL — hoppar över.");
   }
 
   const prisma = new PrismaClient();
+  console.log(`\nBet-loggen (DATABASE_URL, ${hostOf(process.env.DATABASE_URL)}):`);
   try {
     const where = { OR: [{ externalRef: { startsWith: "mt_" } }, { sportKey: { startsWith: "tsa:" } }] };
     const bets = await prisma.bet.count({ where });
-    console.log("\nBet-loggen (DATABASE_URL):");
     console.log(`  ${bets} bets med gamla TheStatsAPI-länkar (externalRef mt_… / sportKey tsa:…)`);
     if (confirm && bets > 0) {
       const { count } = await prisma.bet.updateMany({ where, data: { externalRef: null, sportKey: null } });
       console.log(`  ✓ ${count} länkar nollställda — betten och deras closing-odds är kvar`);
     }
+  } catch (err) {
+    console.log(`  ✗ Databasen svarar inte: ${shortError(err)}`);
   } finally {
     await prisma.$disconnect();
     await shotsPrisma.$disconnect();

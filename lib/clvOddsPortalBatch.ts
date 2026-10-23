@@ -301,7 +301,26 @@ export async function compareOddsPortalFetchers(
   if (items.length === 0) return [];
 
   const plain = items.map(({ id, input }) => ({ id, input }));
-  const pw = new Map((await scrapeWith("playwright", plain, opts.pauseMs)).map((r) => [r.id, r.result]));
-  const sc = new Map((await scrapeWith("scrapling", plain, opts.pauseMs)).map((r) => [r.id, r.result]));
+  // En väg som inte ens startar (t.ex. Playwright utan nedladdad webbläsare)
+  // ska inte stoppa den andra — då blir varje rad ett fel med orsaken.
+  const run = async (fetcher: OddsPortalFetcher) => {
+    try {
+      return new Map((await scrapeWith(fetcher, plain, opts.pauseMs)).map((r) => [r.id, r.result]));
+    } catch (e) {
+      const detail = (e instanceof Error ? e.message : String(e)).split("\n")[0];
+      const failed: ScrapeClosingResult = {
+        ok: false,
+        closingOdds: null,
+        bookmakerUsed: null,
+        matchUrl: null,
+        provisional: false,
+        code: "browser_error",
+        detail,
+      };
+      return new Map(plain.map(({ id }) => [id, failed]));
+    }
+  };
+  const pw = await run("playwright");
+  const sc = await run("scrapling");
   return items.map(({ id, bet }) => ({ bet, playwright: pw.get(id)!, scrapling: sc.get(id)! }));
 }
