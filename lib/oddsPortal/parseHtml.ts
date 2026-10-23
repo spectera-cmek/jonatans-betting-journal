@@ -208,3 +208,93 @@ export function formatLine(line: number, signed: boolean): string {
   if (line < 0) return `-${s}`;
   return signed ? `+${s}` : s;
 }
+
+// ---------------------------------------------------------------------------
+// Spelade matcher (h2h-sidor)
+// ---------------------------------------------------------------------------
+//
+// OddsPortals sök visar bara kommande matcher. En spelad match nås via
+// h2h-sidan för lagparet, /{sport}/h2h/{lag-id}/{lag-id}/, som listar
+// tidigare möten med datum och en länk (#eventId) till varje. Lagens id:n
+// ("arsenal-hA1Zm19f") står i sökträffarnas länkar.
+
+export interface TeamSegment {
+  /** Länkens del för laget, t.ex. "arsenal-hA1Zm19f". */
+  segment: string;
+  /** Namnet ur delen, t.ex. "arsenal" eller "fleetwood town". */
+  name: string;
+  /** Antal länkar delen stod i — huvudlaget syns oftare än dam- och ungdomslag. */
+  count: number;
+}
+
+const H2H_PATH = /\/([a-z-]+)\/h2h\/([a-z0-9-]+-[A-Za-z0-9]{8})\/([a-z0-9-]+-[A-Za-z0-9]{8})\/?/;
+
+/** Lagens id-delar ur alla h2h-länkar på en sida (t.ex. sökresultatet), vanligast först. */
+export function teamSegmentsFromLinks(html: string, sportSlug: string): TeamSegment[] {
+  const seen = new Map<string, TeamSegment>();
+  for (const m of html.matchAll(/href="([^"]*\/h2h\/[^"]*)"/g)) {
+    const hit = m[1].match(H2H_PATH);
+    if (!hit || hit[1] !== sportSlug) continue;
+    for (const segment of [hit[2], hit[3]]) {
+      const prev = seen.get(segment);
+      if (prev) prev.count += 1;
+      else seen.set(segment, { segment, name: segment.replace(/-[A-Za-z0-9]{8}$/, "").replace(/-/g, " "), count: 1 });
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.count - a.count);
+}
+
+/** h2h-sidans sökväg för två lag — OddsPortal sorterar delarna i bokstavsordning. */
+export function h2hPath(sportSlug: string, a: string, b: string): string {
+  const [x, y] = [a, b].sort();
+  return `/${sportSlug}/h2h/${x}/${y}/`;
+}
+
+export interface H2hMeeting {
+  eventId: string;
+  /** "10/Oct" eller "10/Oct/2025" som det står. */
+  dateText: string;
+  /** Länkens text, t.ex. "10/Oct2Arsenal-Leeds1". */
+  title: string;
+}
+
+/** Tidigare (och kommande) möten på en h2h-sida, ett per eventId. */
+export function parseH2hMeetings(html: string, path: string): H2hMeeting[] {
+  const $ = cheerio.load(html);
+  const out = new Map<string, H2hMeeting>();
+  $("a[href*='#']").each((_, el) => {
+    const href = $(el).attr("href") ?? "";
+    let url: URL;
+    try {
+      url = new URL(href, BASE);
+    } catch {
+      return;
+    }
+    if (url.pathname.replace(/\/?$/, "/") !== path) return;
+    const eventId = url.hash.replace(/^#/, "").split(/[:;]/)[0];
+    if (!/^[A-Za-z0-9]{8}$/.test(eventId) || out.has(eventId)) return;
+    const title = $(el).text().replace(/\s+/g, " ").trim();
+    const date = title.match(/^(\d{1,2}\/[A-Za-z]{3}(?:\/\d{4})?)/);
+    if (!date) return;
+    out.set(eventId, { eventId, dateText: date[1], title });
+  });
+  return [...out.values()];
+}
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/**
+ * "10/Oct" → datum. Utan år väljs det år som ligger närmast `near`
+ * (ett möte i december och ett bet i januari ska inte hamna ett år fel).
+ */
+export function meetingDate(dateText: string, near: Date): Date | null {
+  const m = dateText.match(/^(\d{1,2})\/([A-Za-z]{3})(?:\/(\d{4}))?$/);
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[2].toLowerCase());
+  if (month < 0) return null;
+  const day = Number(m[1]);
+  if (m[3]) return new Date(Date.UTC(Number(m[3]), month, day, 12));
+  const y = near.getUTCFullYear();
+  const options = [y - 1, y, y + 1].map((yy) => new Date(Date.UTC(yy, month, day, 12)));
+  return options.sort((a, b) => Math.abs(a.getTime() - near.getTime()) - Math.abs(b.getTime() - near.getTime()))[0];
+}

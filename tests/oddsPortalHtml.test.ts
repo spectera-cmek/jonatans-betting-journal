@@ -3,14 +3,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   formatLine,
+  h2hPath,
   htmlToLines,
+  meetingDate,
+  parseH2hMeetings,
+  teamSegmentsFromLinks,
   isBlockedHtml,
   parseBookmakerTable,
   parseLineSummary,
   parseSearchCandidates,
   tableToOddsRows,
 } from "../lib/oddsPortal/parseHtml";
-import { closingFromLines, planMarket } from "../lib/oddsPortal/scraplingScrape";
+import { closingFromLines, pickUpcoming, planMarket } from "../lib/oddsPortal/scraplingScrape";
 import { pickSearchCandidate, type ScrapeBetInput } from "../lib/oddsPortal/scrape";
 
 // Fångade via Scrapling från oddsportal.com i oktober 2026 (amerikansk IP,
@@ -179,5 +183,53 @@ describe("closingFromLines", () => {
   it("AH utan bolagstabell: inget utfall hellre än fel linje", () => {
     const i = input({ market: "spreads", selectionSide: "home", line: -1.5, selection: "Arsenal -1.5" });
     expect(closingFromLines(lines("match-ah"), plan(i), i, URL)).toMatchObject({ ok: false, code: "odds_not_found" });
+  });
+});
+
+describe("spelade matcher via h2h-sidan", () => {
+  const html = (f: string) => readFileSync(path.join(FIX, f), "utf8");
+
+  it("lagens id-delar ur sökträffarna, vanligast först", () => {
+    const segs = teamSegmentsFromLinks(html("search-arsenal-links.html"), "football");
+    const arsenal = segs.filter((s) => s.name === "arsenal");
+    // Herrlaget står i fyra länkar, damlaget i en.
+    expect(arsenal.map((s) => [s.segment, s.count])).toEqual([
+      ["arsenal-hA1Zm19f", 4],
+      ["arsenal-8CKOoQdn", 1],
+    ]);
+    expect(segs.find((s) => s.segment === "fleetwood-town-tCZ3D68d")?.name).toBe("fleetwood town");
+    expect(teamSegmentsFromLinks(html("search-arsenal-links.html"), "basketball")).toEqual([]);
+  });
+
+  it("h2h-sökvägen sorterar lagen som OddsPortal", () => {
+    expect(h2hPath("football", "leeds-tUxUbLR2", "arsenal-hA1Zm19f")).toBe("/football/h2h/arsenal-hA1Zm19f/leeds-tUxUbLR2/");
+  });
+
+  it("mötena på h2h-sidan, ett per eventId, utan språklänkar", () => {
+    const m = parseH2hMeetings(html("h2h-arsenal-leeds.html"), "/football/h2h/arsenal-hA1Zm19f/leeds-tUxUbLR2/");
+    expect(m.map((x) => [x.eventId, x.dateText])).toEqual([
+      ["xtmHKGT0", "10/Oct"],
+      ["Sp1AidqQ", "31/Jan"],
+      ["zFCHVyGF", "23/Aug"],
+    ]);
+  });
+
+  it("datum utan år: året närmast bettet", () => {
+    expect(meetingDate("10/Oct", new Date("2026-10-11T00:00:00Z"))?.toISOString().slice(0, 10)).toBe("2026-10-10");
+    // Bet i januari, möte i december: förra året, inte samma.
+    expect(meetingDate("30/Dec", new Date("2027-01-02T00:00:00Z"))?.toISOString().slice(0, 10)).toBe("2026-12-30");
+    expect(meetingDate("31/Jan/2025", new Date("2026-10-11T00:00:00Z"))?.toISOString().slice(0, 10)).toBe("2025-01-31");
+    expect(meetingDate("Today", new Date())).toBeNull();
+  });
+
+  it("kommande match kräver båda lagen — en träff på bara ena laget väljs inte", () => {
+    const c = [
+      { href: "https://www.oddsportal.com/football/h2h/arsenal-hA1Zm19f/everton-KluSTr9s/#G0XLh1up", title: "24/OctArsenal-Everton", dateText: "24/Oct Arsenal - Everton" },
+    ];
+    const i = (o: Partial<ScrapeBetInput>) => input({ homeTeam: "Arsenal", awayTeam: "Leeds", eventAt: new Date("2026-10-24T13:00:00Z"), ...o });
+    expect(pickUpcoming(c, i({}))).toBeNull();
+    expect(pickUpcoming(c, i({ awayTeam: "Everton" }))).toBe(c[0].href);
+    // Rätt lag men fel datum (en annan omgång) väljs inte heller.
+    expect(pickUpcoming(c, i({ awayTeam: "Everton", eventAt: new Date("2026-12-01T13:00:00Z") }))).toBeNull();
   });
 });

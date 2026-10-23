@@ -14,4 +14,11 @@ describe("parseHomeAway", () => {
       away: "Chelsea",
     });
   });
+
+  it("bindestreck med mellanslag, men bara en gång", () => {
+    expect(parseHomeAway("IFK Goteborg - Vasteras SK FK")).toEqual({ home: "IFK Goteborg", away: "Vasteras SK FK" });
+    expect(parseHomeAway("Al-Hilal - Al-Nassr")).toEqual({ home: "Al-Hilal", away: "Al-Nassr" });
+    expect(parseHomeAway("A - B - C")).toBeNull();
+    expect(parseHomeAway("Saint-Etienne")).toBeNull();
+  });
 });

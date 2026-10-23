@@ -13,24 +13,31 @@
 // market_not_found.
 
 import { ScraplingWorker } from "../scrapling";
-import { buildSearchQuery, oddsPortalSportSlug, pickBookmakerOdds, resolveMarketTarget } from "./mapping";
+import { buildSearchQuery, matchTitleLooksLike, oddsPortalSportSlug, pickBookmakerOdds, resolveMarketTarget } from "./mapping";
 import {
   formatLine,
+  h2hPath,
   htmlToLines,
   isBlockedHtml,
+  meetingDate,
   parseBookmakerTable,
+  parseH2hMeetings,
   parseLineSummary,
   parseSearchCandidates,
   tableToOddsRows,
+  teamSegmentsFromLinks,
+  type H2hMeeting,
+  type TeamSegment,
 } from "./parseHtml";
+import { MIN_TEAM_SIMILARITY, teamSimilarity } from "../teamMatch";
 import {
   pickColumnOdds,
   pickOuLine,
-  pickSearchCandidate,
   type BatchScrapeItem,
   type BatchScrapeResult,
   type ScrapeBetInput,
   type ScrapeClosingResult,
+  type SearchCandidate,
 } from "./scrape";
 
 const BASE = "https://www.oddsportal.com";
@@ -136,32 +143,102 @@ export function closingFromLines(
   return fail("odds_not_found", "Inga bookmaker-odds i sidans tabell.", matchUrl);
 }
 
+/** Högst så här många lagpar provas på h2h-sidor (namnet kan träffa t.ex. damlaget också). */
+const MAX_H2H_PAIRS = 4;
+/** Ett möte räknas som bettets match om datumet ligger så här nära eventAt. */
+const MEETING_WINDOW_MS = 2 * 86_400_000;
+
+/**
+ * En kommande match ur sökträffarna — men bara om BÅDA lagen står i titeln
+ * och datumet (när det går att läsa) stämmer. Hellre ingen träff än fel
+ * match: fel closing-odds syns inte, de ser bara ut som CLV.
+ */
+export function pickUpcoming(candidates: SearchCandidate[], input: ScrapeBetInput): string | null {
+  const at = input.eventAt;
+  const hits = candidates.filter((c) => {
+    if (!matchTitleLooksLike(c.title, input.homeTeam, input.awayTeam)) return false;
+    if (!at) return true;
+    const d = meetingDate(c.dateText.match(/^(\d{1,2}\/[A-Za-z]{3})/)?.[1] ?? "", at);
+    // "Today"/"Tomorr." saknar datum — godtas bara för matcher som inte spelats än.
+    return d ? Math.abs(d.getTime() - at.getTime()) <= MEETING_WINDOW_MS : at.getTime() > Date.now() - 86_400_000;
+  });
+  return hits.length === 1 ? hits[0].href : null;
+}
+
+/** Lagets id-delar ur sökträffarna, de som liknar lagnamnet — vanligast först. */
+function segmentsFor(team: string, segments: TeamSegment[]): string[] {
+  const counts = new Map<string, number>();
+  for (const s of segments) {
+    if (teamSimilarity(team, s.name) >= MIN_TEAM_SIMILARITY) counts.set(s.segment, (counts.get(s.segment) ?? 0) + s.count);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1]).map(([segment]) => segment);
+}
+
+/**
+ * En spelad match via lagparets h2h-sida: mötet närmast bettets datum
+ * (inom två dygn). Null om inget lagpar har ett sådant möte.
+ */
+async function findPlayedMatch(
+  worker: ScraplingWorker,
+  input: ScrapeBetInput,
+  sport: string,
+  searchPages: string[]
+): Promise<string | null> {
+  const at = input.eventAt;
+  if (!at || !input.homeTeam || !input.awayTeam) return null;
+  const segments = searchPages.flatMap((html) => teamSegmentsFromLinks(html, sport));
+  const homes = [...new Set(segmentsFor(input.homeTeam, segments))];
+  const aways = [...new Set(segmentsFor(input.awayTeam, segments))];
+  const pairs = homes.flatMap((h) => aways.filter((a) => a !== h).map((a) => h2hPath(sport, h, a))).slice(0, MAX_H2H_PAIRS);
+  for (const path of [...new Set(pairs)]) {
+    // Ett lagpar som aldrig mötts har ingen sida — prova nästa i stället för att ge upp.
+    const page = await worker.fetch({ mode: "browser", url: BASE + path, actions: [{ waitMs: 2500 }] }).catch(() => null);
+    if (!page || page.status >= 400) continue;
+    if (isBlockedHtml(page.body)) return null;
+    const meetings = parseH2hMeetings(page.body, path)
+      .map((m) => ({ m, d: meetingDate(m.dateText, at) }))
+      .filter((x): x is { m: H2hMeeting; d: Date } => x.d !== null && Math.abs(x.d.getTime() - at.getTime()) <= MEETING_WINDOW_MS)
+      .sort((a, b) => Math.abs(a.d.getTime() - at.getTime()) - Math.abs(b.d.getTime() - at.getTime()));
+    if (meetings[0]) return `${BASE}${path}#${meetings[0].m.eventId}`;
+  }
+  return null;
+}
+
 export async function scrapeClosingForBetScrapling(worker: ScraplingWorker, input: ScrapeBetInput): Promise<ScrapeClosingResult> {
   const plan = planMarket(input);
   if (!plan.ok) return fail("market_not_found", plan.detail);
 
   const sport = oddsPortalSportSlug(input.sport, input.league);
-  const query = buildSearchQuery(input);
-  if (!query || query.length < 2) return fail("missing_fields", "Saknar lag/event för sök.");
+  const home = buildSearchQuery({ homeTeam: input.homeTeam });
+  const away = buildSearchQuery({ homeTeam: input.awayTeam });
+  if (home.length < 2 || away.length < 2) {
+    return fail("missing_fields", "Saknar hemma- och bortalag (homeTeam/awayTeam eller \"Hemma - Borta\" i event).");
+  }
 
-  // OddsPortals sök (okt 2026) svarar inte på två lagnamn i samma fråga —
-  // då provas hemmalaget och sedan bortalaget var för sig. Urvalet kräver
-  // fortfarande båda lagen i träffens titel.
-  const queries = [...new Set([query, buildSearchQuery({ homeTeam: input.homeTeam }), buildSearchQuery({ homeTeam: input.awayTeam })])].filter(
-    (q) => q.length >= 2
-  );
-  let found: ReturnType<typeof pickSearchCandidate> | null = null;
-  for (const q of queries) {
+  // OddsPortals sök (okt 2026) svarar inte på två lagnamn i samma fråga och
+  // visar bara kommande matcher. Varje lag söks för sig: kommande matcher
+  // väljs direkt ur träffarna, spelade nås via lagparets h2h-sida (lagens
+  // id:n står i träffarnas länkar).
+  const pages: string[] = [];
+  let url: string | null = null;
+  for (const q of [home, away]) {
     const search = await worker.fetch({
       mode: "browser",
       url: `${BASE}/search/${encodeURIComponent(q)}/`,
       actions: [{ waitSelector: "a[href*='/h2h/'], .eventRow a[href]", timeoutMs: 12_000 }, { waitMs: 800 }],
     });
     if (isBlockedHtml(search.body)) return fail("blocked", "OddsPortal blockerade (Cloudflare).");
-    found = pickSearchCandidate(parseSearchCandidates(search.body, sport), input, q, sport);
-    if (found.ok && found.url) break;
+    pages.push(search.body);
+    url = pickUpcoming(parseSearchCandidates(search.body, sport), input);
+    if (url) break;
   }
-  if (!found?.ok || !found.url) return fail(found?.code ?? "match_not_found", found?.detail ?? "Ingen sökträff.");
+  if (!url && input.eventAt && input.eventAt.getTime() < Date.now()) {
+    url = await findPlayedMatch(worker, input, sport, pages);
+  }
+  if (!url) {
+    return fail("match_not_found", `Hittade ingen OddsPortal-match för ${home}–${away} (${sport}) nära ${input.eventAt?.toISOString().slice(0, 10) ?? "okänt datum"}.`);
+  }
+  const found = { url };
 
   const actions: NonNullable<Parameters<ScraplingWorker["fetch"]>[0]["actions"]> = [TABS.wait];
   if (plan.kind !== "1x2" || input.sport?.toLowerCase() !== "football") {

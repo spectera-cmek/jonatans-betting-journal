@@ -20,5 +20,13 @@ export function parseHomeAway(event: string): { home: string; away: string } | n
     const [home, away] = e.split(/[–—]/).map((s) => s.trim());
     if (home && away) return { home, away };
   }
+  // "Home - Away" (bindestreck med mellanslag, som kvitton och importer skriver).
+  // Bara när det står exakt en gång: "Al-Hilal" har inga mellanslag, och en
+  // text med flera " - " går inte att dela säkert.
+  const parts = e.split(" - ");
+  if (parts.length === 2) {
+    const [home, away] = parts.map((s) => s.trim());
+    if (home && away) return { home, away };
+  }
   return null;
 }
