@@ -5,13 +5,9 @@
  *   npm run purge:thestatsapi              # dry-run: visar vad som skulle tas bort
  *   npm run purge:thestatsapi -- --confirm # tar bort
  *
- * Två delar:
- *  1. Skottmodellens databas: matcher med TheStatsAPI-id ("mt_…"). Raderingen
- *     tar med sig allt som hänger på matcherna (cascade): odds, projektioner och
- *     den avvecklade oddsjämförelsens historik (MarketPrice, EvSnapshot).
- *     Hämta matcherna på nytt med `npm run shots:ingest -- --confirm` (Sofascore).
- *  2. Bet-loggen: gamla länkar på bets (externalRef "mt_…", sportKey "tsa:…")
- *     nollställs. Betten, deras resultat och closing-odds rörs inte.
+ * Gamla länkar på bets (externalRef "mt_…", sportKey "tsa:…") nollställs.
+ * Betten, deras resultat och closing-odds rörs inte. (Skottmodellen, som
+ * också hade TheStatsAPI-data, är borttagen tillsammans med sin databas.)
  *
  * Kan inte ångras — dry-run först. Gör gärna `npm run db:export` innan.
  */
@@ -20,7 +16,6 @@ config({ path: ".env.local" });
 config();
 
 import { PrismaClient } from "@prisma/client";
-import { hasShotsDb, shotsPrisma } from "../lib/shotsDb";
 
 /** Värden ur en connection string som säger vilken databas det gäller, utan lösenord. */
 function hostOf(url: string | undefined): string {
@@ -42,31 +37,8 @@ async function main() {
   const confirm = process.argv.includes("--confirm");
   console.log(`Läge: ${confirm ? "CONFIRM (tar bort)" : "DRY-RUN (inget ändras)"}\n`);
 
-  if (hasShotsDb()) {
-    console.log(`Skottmodellen (SHOTS_DATABASE_URL, ${hostOf(process.env.SHOTS_DATABASE_URL)}):`);
-    try {
-      const mt = { matchId: { startsWith: "mt_" } };
-      const matches = await shotsPrisma.shotMatch.count({ where: { id: { startsWith: "mt_" } } });
-      const odds = await shotsPrisma.shotOddsSnapshot.count({ where: mt });
-      const projections = await shotsPrisma.shotProjection.count({ where: mt });
-      const prices = await shotsPrisma.marketPrice.count({ where: mt });
-      const snapshots = await shotsPrisma.evSnapshot.count({ where: mt });
-      console.log(`  ${matches} matcher från TheStatsAPI (mt_…)`);
-      console.log(`  följer med: ${odds} odds, ${projections} projektioner, ${prices} MarketPrice, ${snapshots} EvSnapshot`);
-      if (confirm && matches > 0) {
-        const { count } = await shotsPrisma.shotMatch.deleteMany({ where: { id: { startsWith: "mt_" } } });
-        console.log(`  ✓ ${count} matcher borttagna (med allt som hängde på dem)`);
-      }
-    } catch (err) {
-      console.log(`  ✗ Databasen svarar inte: ${shortError(err)}`);
-      console.log("    Hoppar över skottmodellen. Bet-loggen nedan körs ändå.");
-    }
-  } else {
-    console.log("Skottmodellen: ingen SHOTS_DATABASE_URL — hoppar över.");
-  }
-
   const prisma = new PrismaClient();
-  console.log(`\nBet-loggen (DATABASE_URL, ${hostOf(process.env.DATABASE_URL)}):`);
+  console.log(`Bet-loggen (DATABASE_URL, ${hostOf(process.env.DATABASE_URL)}):`);
   try {
     const where = { OR: [{ externalRef: { startsWith: "mt_" } }, { sportKey: { startsWith: "tsa:" } }] };
     const bets = await prisma.bet.count({ where });
@@ -79,7 +51,6 @@ async function main() {
     console.log(`  ✗ Databasen svarar inte: ${shortError(err)}`);
   } finally {
     await prisma.$disconnect();
-    await shotsPrisma.$disconnect();
   }
 
   if (!confirm) console.log("\nInget ändrat. Kör med --confirm för att ta bort.");

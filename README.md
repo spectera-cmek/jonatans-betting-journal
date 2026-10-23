@@ -102,8 +102,7 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run backfill:bookmakers` | Fold bookmaker spelling variants onto one name (`--confirm`) |
 | `npm run scrapling:setup` | Install the Scrapling fetcher into `.venv` (Python 3.10+) |
 | `npm run scrapling:check` | Check the Scrapling chain against a harmless page |
-| `npm run shots:ingest` | Shot-model fixtures + team stats from Sofascore (`--confirm`) |
-| `npm run purge:thestatsapi` | Remove leftover TheStatsAPI rows and bet links (`--confirm`) |
+| `npm run purge:thestatsapi` | Clear leftover TheStatsAPI links on bets (`--confirm`) |
 | `npm run props:grade` | Grade props/stat totals from Sofascore (`--confirm` settles) |
 | `npm run sofascore:capture` | Check the Sofascore parsers against live data (local) |
 
@@ -117,7 +116,6 @@ immediately — replace them with your own from the **Logga bet** button.
 | **Analys** (Analytics) | P/L by market, league, sport and odds band |
 | **Insikter** (Insights) | Streaks, best/worst days, averages |
 | **VM 2026** | Tournament hub for bets tagged with the World Cup league |
-| **Skottmodell** (Shot model) | Team-level shots & corners model, own database |
 | **CS2** | Teams, players, per-map gameplan (T/CT), match pricing and props angles, own database |
 | **Fair odds** | De-vig, combo, correlation and Poisson calculators |
 | **Verktyg** (Tools) | Cashout, hedge, Asian-handicap matrix, bonus value, Kelly |
@@ -260,21 +258,9 @@ npm run scrapling:check     # fetch a harmless page in HTTP and browser mode
 | Uses Scrapling | How |
 |----------------|-----|
 | HLTV (CS2) | `--scrapling` on `cs2:capture` / `cs2:ingest` / `cs2:update`, or `CS2_FETCHER=scrapling` |
-| Shot model data (Sofascore) | `npm run shots:ingest` — fixtures + shots/SoT/corners/xG, no API key |
 | Props grading (fallback source) | `npm run props:grade` uses ESPN and the NHL API first; Sofascore only for leagues they don't cover |
 | Parser check (Sofascore) | `npm run sofascore:capture` — saves live fixtures and reports missing fields |
 | OddsPortal CLV (experiment) | `npm run scrape:clv -- --scrapling`; `--compare` runs Playwright and Scrapling side by side |
-
-**Shot model data from Sofascore.** Match rows get ids `ss_<eventId>` (teams
-`ss_t_<id>`). Rows from the removed TheStatsAPI (`mt_…`) would be counted twice, so the
-script skips a league that still has them; `npm run purge:thestatsapi` removes them
-(dry-run first). Bookmaker shot/corner lines are no longer fetched automatically — type
-a book's price under *Manuella odds* on the shot-model page to get fair odds and edge.
-
-```bash
-npm run shots:ingest -- --league allsvenskan            # dry-run: listing + budget
-npm run shots:ingest -- --league allsvenskan --confirm  # write fixtures + stats
-```
 
 **Props grading.** `npm run props:grade` finds each open bet's match, reads the team or
 player statistic and grades over/under with the app's own rules. Sources, in order:
@@ -320,7 +306,7 @@ lib/            betting.ts (math) · grading.ts (auto-settle) · bet365.ts (PDF 
                 oddsApi.ts · sync.ts · insights.ts
 lib/cs2/        CS2 module: hltv/ (scrape + parse) · demo/ (demo pipeline) ·
                 ratings · veto · mapModel · killModel · pricing · backtest · settle
-prisma/         schema.prisma + seed.ts (demo data) · shots.prisma · cs2.prisma
+prisma/         schema.prisma + seed.ts (demo data) · cs2.prisma
 scripts/        sync.ts · importBet365.ts (CLI tools) · cs2/ (CS2 scripts)
 tests/          Unit tests for the math and grading
 ```

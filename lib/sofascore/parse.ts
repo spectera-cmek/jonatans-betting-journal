@@ -122,15 +122,6 @@ export function parseSeasons(json: unknown): SofaSeason[] {
     .filter((s): s is SofaSeason => s !== null);
 }
 
-/** /unique-tournament/{id} → namnet, för att kontrollera att id:t är rätt liga. */
-export function parseUniqueTournament(json: unknown): { id: number; name: string; category: string | null } | null {
-  const t = obj(obj(json).uniqueTournament);
-  const id = num(t.id);
-  const name = str(t.name);
-  if (id == null || !name) return null;
-  return { id, name, category: str(obj(t.category).name) };
-}
-
 // ---------------------------------------------------------------------------
 // Lagstatistik
 // ---------------------------------------------------------------------------
@@ -156,44 +147,6 @@ export function parseStatistics(json: unknown): Record<string, StatPair> {
     }
   }
   return out;
-}
-
-export interface ShotTotals {
-  homeShots: number | null;
-  awayShots: number | null;
-  homeSot: number | null;
-  awaySot: number | null;
-  homeCorners: number | null;
-  awayCorners: number | null;
-  homeXg: number | null;
-  awayXg: number | null;
-  homePossession: number | null;
-  awayPossession: number | null;
-}
-
-/**
- * Skottmodellens fält ur lagstatistiken. Obs: Sofascores `totalShotsOnGoal`
- * är TOTALA skott; skott på mål heter `shotsOnGoal`.
- */
-export function shotTotals(stats: Record<string, StatPair>): ShotTotals {
-  const pick = (key: string) => stats[key] ?? null;
-  const shots = pick("totalShotsOnGoal");
-  const sot = pick("shotsOnGoal");
-  const corners = pick("cornerKicks");
-  const xg = pick("expectedGoals");
-  const poss = pick("ballPossession");
-  return {
-    homeShots: shots?.home ?? null,
-    awayShots: shots?.away ?? null,
-    homeSot: sot?.home ?? null,
-    awaySot: sot?.away ?? null,
-    homeCorners: corners?.home ?? null,
-    awayCorners: corners?.away ?? null,
-    homeXg: xg?.home ?? null,
-    awayXg: xg?.away ?? null,
-    homePossession: poss?.home ?? null,
-    awayPossession: poss?.away ?? null,
-  };
 }
 
 // ---------------------------------------------------------------------------

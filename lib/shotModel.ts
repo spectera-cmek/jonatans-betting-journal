@@ -1,4 +1,6 @@
-// Skottmodellen — egna förväntningar på lagskott, skott på mål och hörnor.
+// Räknemodell för räknemarknader (skott, hörnor, kills …): fördelningar,
+// över/under-sannolikheter och fair odds. Skrevs för skottmodellen (borttagen
+// oktober 2026); CS2-modulen (lib/cs2) använder den fortfarande.
 //
 // Kedjan: observerade matcher → attack/försvar-ratings per lag → väntevärde λ
 // för en kommande match → negativ binomial fördelning → sannolikhet över/under
@@ -30,8 +32,8 @@ export const DEFAULT_SHRINK_K = 6;
  * mätetal låg på 0,00 (Allsvenskan hörnor, 629 linjer), 0,15 (PL hörnor, 289)
  * och 0,30 (LaLiga hörnor, 328) — och vinsten mot ren marknad var i bästa fall
  * 0,0007 i log-loss. Med andra ord: modellen slår ännu inte bet365/BetMGM på
- * hörnor. 0,15 är mitten av det spann backtestet stöder; höj den inte utan att
- * köra om `npm run shots:backtest` och se att minimum flyttat.
+ * hörnor. 0,15 är mitten av det spann backtestet stödde (backtestet försvann
+ * med skottmodellen i oktober 2026).
  */
 export const DEFAULT_BLEND_W = 0.15;
 /** Antal varv i den iterativa rating-anpassningen (schemastyrka). */

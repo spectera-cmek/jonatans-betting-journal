@@ -16,7 +16,6 @@
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { SHOT_LEAGUES } from "../../lib/shotData";
 import { sofaPaths, utcDate, type SofaSport } from "../../lib/sofascore/api";
 import { SOFA_MAX_AGE, SofascoreClient } from "../../lib/sofascore/client";
 import {
@@ -24,8 +23,6 @@ import {
   parseLineups,
   parseSeasons,
   parseStatistics,
-  parseUniqueTournament,
-  shotTotals,
   type SofaEvent,
 } from "../../lib/sofascore/parse";
 import { PROP_STAT_CHECKS } from "../../lib/propsGrading";
@@ -34,7 +31,7 @@ const OUT_DIR = path.join("tests", "fixtures", "sofascore", "live");
 
 /** Turneringar att föredra per sport — de vanligaste i bet-loggen. */
 const PREFERRED: Record<SofaSport, number[]> = {
-  football: SHOT_LEAGUES.map((l) => l.sofascoreId),
+  football: [40, 17, 8, 679], // Allsvenskan, Premier League, LaLiga, Europa League
   basketball: [132], // NBA
   "ice-hockey": [234], // NHL
 };
@@ -84,7 +81,7 @@ function describeList(json: unknown): string {
 
 /**
  * En färdigspelad match: först ur turneringarnas säsongslistor (samma väg
- * som shots:ingest:sofascore), sedan ur dagslistorna som reserv.
+ * som skottmodellen gjorde), sedan ur dagslistorna som reserv.
  */
 async function findFinished(client: SofascoreClient, sport: SofaSport, days: number): Promise<SofaEvent | null> {
   for (const ut of PREFERRED[sport]) {
@@ -122,11 +119,12 @@ async function captureSport(client: SofascoreClient, sport: SofaSport, days: num
   check("lagstatistik", Object.keys(stats).length > 0, `${Object.keys(stats).length} nycklar: ${Object.keys(stats).join(", ")}`);
   if (statsJson) await save(`${sport}-statistics.json`, trimStatistics(statsJson));
   if (sport === "football") {
-    const t = shotTotals(stats);
+    // Lagtotalerna props-rättningen läser (hörnor, skott, skott på mål).
+    const pair = (k: string) => (stats[k] ? `${stats[k].home}–${stats[k].away}` : "saknas");
     check(
-      "skottmodellens fält",
-      t.homeShots != null && t.homeSot != null && t.homeCorners != null,
-      `skott ${t.homeShots}–${t.awayShots} · på mål ${t.homeSot}–${t.awaySot} · hörnor ${t.homeCorners}–${t.awayCorners} · xG ${t.homeXg}–${t.awayXg}`
+      "lagtotaler för props",
+      ["cornerKicks", "totalShotsOnGoal", "shotsOnGoal"].every((k) => k in stats),
+      `hörnor ${pair("cornerKicks")} · skott ${pair("totalShotsOnGoal")} · på mål ${pair("shotsOnGoal")}`
     );
   }
 
@@ -146,11 +144,6 @@ async function main() {
   const days = argNum("--days", 2);
   const client = new SofascoreClient({ maxRequests: 60 });
   try {
-    console.log("Ligor i skottmodellen");
-    for (const league of SHOT_LEAGUES) {
-      const t = parseUniqueTournament(await client.get(sofaPaths.uniqueTournament(league.sofascoreId), SOFA_MAX_AGE.seasons));
-      check(`${league.label} (${league.sofascoreId})`, !!t, t ? `${t.name}${t.category ? ` · ${t.category}` : ""}` : "okänt id");
-    }
     for (const sport of ["football", "basketball", "ice-hockey"] as const) {
       await captureSport(client, sport, days);
     }

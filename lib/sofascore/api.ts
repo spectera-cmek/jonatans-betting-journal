@@ -22,7 +22,6 @@ export type SofaSport = "football" | "basketball" | "ice-hockey";
 export const sofaPaths = {
   /** Alla matcher en dag (UTC-datum, YYYY-MM-DD). */
   scheduledEvents: (sport: SofaSport, date: string) => `/sport/${sport}/scheduled-events/${date}`,
-  uniqueTournament: (id: number) => `/unique-tournament/${id}`,
   seasons: (uniqueTournamentId: number) => `/unique-tournament/${uniqueTournamentId}/seasons`,
   /** "last" = spelade (sida 0 är den senaste), "next" = kommande. */
   seasonEvents: (uniqueTournamentId: number, seasonId: number, dir: "last" | "next", page: number) =>

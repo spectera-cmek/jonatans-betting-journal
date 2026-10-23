@@ -12,7 +12,6 @@ import {
   parseSeasons,
   parseStatistics,
   playerPlayed,
-  shotTotals,
 } from "../lib/sofascore/parse";
 import type { ScraplingRequest, ScraplingResponse, ScraplingWorker } from "../lib/scrapling";
 
@@ -68,23 +67,12 @@ describe("Sofascore-tolkarna", () => {
     expect(stats.cornerKicks).toEqual({ home: 7, away: 4 }); // inte 1ST:s 3–1
     expect(stats.totalShotsOnGoal).toEqual({ home: 15, away: 9 });
     expect(stats.shotsOnGoal).toEqual({ home: 6, away: 3 });
-    expect(shotTotals(stats)).toEqual({
-      homeShots: 15,
-      awayShots: 9,
-      homeSot: 6,
-      awaySot: 3,
-      homeCorners: 7,
-      awayCorners: 4,
-      homeXg: 1.84,
-      awayXg: 0.92,
-      homePossession: 58,
-      awayPossession: 42,
-    });
+    expect(stats.expectedGoals).toEqual({ home: 1.84, away: 0.92 });
   });
 
-  it("tom statistik ger null-fält, inte ett fel", () => {
-    expect(shotTotals(parseStatistics({})).homeShots).toBeNull();
-    expect(shotTotals(parseStatistics(null)).awayCorners).toBeNull();
+  it("tom statistik ger ett tomt objekt, inte ett fel", () => {
+    expect(parseStatistics({})).toEqual({});
+    expect(parseStatistics(null)).toEqual({});
   });
 
   it("lineups: spelare per sida med platt numerisk statistik", () => {
@@ -125,11 +113,11 @@ describe("Sofascore-tolkarna", () => {
   describe.skipIf(!existsSync(LIVE))("live-fixturer från Sofascore", () => {
     const files = existsSync(LIVE) ? readdirSync(LIVE) : [];
     for (const f of files.filter((x) => x.endsWith("-statistics.json"))) {
-      it(`${f}: skottmodellens fält finns`, () => {
-        const t = shotTotals(parseStatistics(JSON.parse(readFileSync(path.join(LIVE, f), "utf8"))));
+      it(`${f}: lagtotalerna för props finns`, () => {
+        const stats = parseStatistics(JSON.parse(readFileSync(path.join(LIVE, f), "utf8")));
         if (f.startsWith("football")) {
-          expect(t.homeShots).not.toBeNull();
-          expect(t.homeCorners).not.toBeNull();
+          expect(stats).toHaveProperty("totalShotsOnGoal");
+          expect(stats).toHaveProperty("cornerKicks");
         }
       });
     }

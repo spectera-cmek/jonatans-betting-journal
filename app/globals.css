@@ -2906,7 +2906,7 @@ select.ap-input {
   max-width: 68ch;
 }
 
-/* ---------- skottmodellen: edge-screen ---------- */
+/* ---------- räknemodeller: sammanfattningar (används av CS2) ---------- */
 .ap-shot-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

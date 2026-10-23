@@ -1,6 +1,6 @@
 // Prisma-klient för CS2-databasen (prisma/cs2.prisma).
 //
-// Skild från lib/db.ts och lib/shotsDb.ts med flit: CS2-datan är referensdata
+// Skild från lib/db.ts med flit: CS2-datan är referensdata
 // som läses in i bulk från HLTV och ska aldrig kunna röra speljournalen.
 // Klienten genereras till .prisma/cs2-client så den inte skriver över
 // huvudschemats klient.
