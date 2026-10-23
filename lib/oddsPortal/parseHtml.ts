@@ -1,6 +1,5 @@
-// Tolkar för OddsPortal-sidor som sparad HTML — Scrapling-vägen
-// (lib/oddsPortal/scraplingScrape.ts). Playwright-vägen läser sidan direkt i
-// webbläsaren och använder inte de här.
+// Tolkar för OddsPortal-sidor som sparad HTML (hämtade av
+// lib/oddsPortal/scrape.ts via Scrapling).
 //
 // Oddstabellerna läses som TEXT, rad för rad, inte via CSS-klasser: OddsPortal
 // byter Tailwind-klasser ofta (oktober 2026 fanns varken li.odds-item eller
@@ -47,7 +46,7 @@ export function isBlockedHtml(html: string): boolean {
 }
 
 /**
- * Sökträffar som Playwright-vägens evaluate-skript: länkar till matchsidor
+ * Sökträffar: länkar till matchsidor
  * (/h2h/… eller klassiska …-<id>) inom sporten, med radens text för datumet.
  */
 export function parseSearchCandidates(html: string, sportSlug: string): SearchCandidate[] {
@@ -150,7 +149,7 @@ export function parseBookmakerTable(lines: string[]): BookmakerTable | null {
   return null;
 }
 
-/** Tabellen som OddsRow — samma form som Playwright-vägen ger. */
+/** Tabellen som OddsRow (en rad per bolag). */
 export function tableToOddsRows(table: BookmakerTable): (OddsRow & { line: number | null })[] {
   const cols = table.columns.map((c) => c.toLowerCase());
   const val = (r: BookmakerTableRow, i: number) => (Number.isFinite(r.values[i]) && r.values[i] > 1 ? r.values[i] : undefined);

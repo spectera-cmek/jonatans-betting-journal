@@ -16,8 +16,14 @@ import {
   parseSearchCandidates,
   tableToOddsRows,
 } from "../lib/oddsPortal/parseHtml";
-import { closingFromLines, leagueResultsPath, pickUpcoming, planMarket, searchVariants } from "../lib/oddsPortal/scraplingScrape";
-import { pickSearchCandidate, type ScrapeBetInput } from "../lib/oddsPortal/scrape";
+import {
+  closingFromLines,
+  leagueResultsPath,
+  pickUpcoming,
+  planMarket,
+  searchVariants,
+  type ScrapeBetInput,
+} from "../lib/oddsPortal/scrape";
 
 // Fångade via Scrapling från oddsportal.com i oktober 2026 (amerikansk IP,
 // därav bet365.us/DraftKings). Arsenal–Everton, 24 okt 2026.
@@ -127,11 +133,6 @@ describe("sökträffar", () => {
     expect(c[2].title).toMatch(/Arsenal/);
     expect(c[2].title).toMatch(/Everton/);
     expect(parseSearchCandidates(html, "basketball")).toEqual([]);
-  });
-  it("samma urval som Playwright-vägen", () => {
-    const html = readFileSync(path.join(FIX, "search.html"), "utf8");
-    const r = pickSearchCandidate(parseSearchCandidates(html, "football"), input(), "Arsenal Everton", "football");
-    expect(r).toMatchObject({ ok: true, url: URL });
   });
 });
 

@@ -130,7 +130,7 @@ export async function runGradeByScores(
 }
 
 /**
- * OddsPortal batch scrape for featured markets (local/CLI only — needs Playwright).
+ * OddsPortal batch scrape for featured markets (local/CLI only — needs the Scrapling worker).
  */
 export async function runClosingFromOddsPortal(
   opts: {

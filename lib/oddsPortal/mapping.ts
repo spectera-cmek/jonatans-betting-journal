@@ -1,5 +1,5 @@
 // Pure OddsPortal mapping helpers (sport slug, market target, bookmaker priority).
-// Kept free of Playwright so unit tests stay offline.
+// Kept free of the fetcher so unit tests stay offline.
 
 export type OddsPortalSportSlug =
   | "football"

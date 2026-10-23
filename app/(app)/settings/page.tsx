@@ -184,7 +184,7 @@ export default function SettingsPage() {
           <p style={{ fontSize: 13, color: "var(--dim)", marginTop: 14, lineHeight: 1.55 }}>
             Closing-odds hämtas från OddsPortal på datorn: refresh-knappen bredvid varje bets
             CLV-cell, eller <code>npm run scrape:clv -- --confirm</code> för alla på en gång (kräver
-            Playwright lokalt). Props och udda marknader sätts för hand.
+            Scrapling lokalt: <code>npm run scrapling:setup</code>). Props och udda marknader sätts för hand.
           </p>
         </Card>
 

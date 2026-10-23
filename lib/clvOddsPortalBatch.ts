@@ -1,19 +1,12 @@
 // Batch OddsPortal CLV capture for featured markets (h2h / totals / spreads).
-// Local/CLI only — Playwright is not suited for serverless.
-//
-// Two fetchers: Playwright (default) and Scrapling (`fetcher: "scrapling"`, the
-// experiment behind `scrape:clv -- --scrapling`). compareOddsPortalFetchers runs
-// both on the same bets and writes nothing.
+// Local/CLI only — the pages are fetched by the Scrapling worker (Python and
+// a browser), which a serverless deployment does not have.
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./db";
 import { clvPct } from "./betting";
 import { parseHomeAway } from "./eventLink";
-import {
-  scrapeClosingBatch,
-  type ScrapeBetInput,
-  type ScrapeClosingResult,
-} from "./oddsPortal";
+import type { ScrapeBetInput, ScrapeClosingResult } from "./oddsPortal";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
@@ -45,23 +38,14 @@ export interface OddsPortalClvOptions {
   graceMinutes?: number;
   /** Pause between OddsPortal searches (default 1200). */
   pauseMs?: number;
-  /** Who fetches the pages (default Playwright). */
-  fetcher?: OddsPortalFetcher;
   prisma?: PrismaClient;
 }
 
-export type OddsPortalFetcher = "playwright" | "scrapling";
-
-async function scrapeWith(
-  fetcher: OddsPortalFetcher | undefined,
-  items: { id: string; input: ScrapeBetInput }[],
-  pauseMs: number | undefined
-) {
-  if (fetcher !== "scrapling") return scrapeClosingBatch(items, { pauseMs });
+async function scrapeBatch(items: { id: string; input: ScrapeBetInput }[], pauseMs: number | undefined) {
   // Laddas bara här: /api/sync importerar den här filen och ska inte dra in
   // cheerio och child_process för en väg som bara körs från skripten.
-  const { scrapeClosingBatchScrapling } = await import("./oddsPortal/scraplingScrape");
-  return scrapeClosingBatchScrapling(items, { pauseMs });
+  const { scrapeClosingBatch } = await import("./oddsPortal/scrape");
+  return scrapeClosingBatch(items, { pauseMs });
 }
 
 export interface OddsPortalClvResult {
@@ -235,8 +219,7 @@ export async function captureClosingFromOddsPortal(
     };
   }
 
-  const scraped = await scrapeWith(
-    opts.fetcher,
+  const scraped = await scrapeBatch(
     batchItems.map(({ id, input }) => ({ id, input })),
     opts.pauseMs
   );
@@ -278,49 +261,4 @@ export async function captureClosingFromOddsPortal(
     failed,
     details,
   };
-}
-
-export interface FetcherComparisonRow {
-  bet: CandidateBet;
-  playwright: ScrapeClosingResult;
-  scrapling: ScrapeClosingResult;
-}
-
-/**
- * Runs both fetchers on the same candidates — Playwright first, then
- * Scrapling — and returns the results side by side. Never writes to the DB.
- */
-export async function compareOddsPortalFetchers(
-  opts: OddsPortalClvOptions = {}
-): Promise<FetcherComparisonRow[]> {
-  const candidates = await listFeaturedClvCandidates(opts);
-  const items = candidates
-    .map((bet) => ({ bet, input: toScrapeInput(bet) }))
-    .filter((x): x is { bet: CandidateBet; input: ScrapeBetInput } => x.input !== null)
-    .map((x) => ({ id: x.bet.id, input: x.input, bet: x.bet }));
-  if (items.length === 0) return [];
-
-  const plain = items.map(({ id, input }) => ({ id, input }));
-  // En väg som inte ens startar (t.ex. Playwright utan nedladdad webbläsare)
-  // ska inte stoppa den andra — då blir varje rad ett fel med orsaken.
-  const run = async (fetcher: OddsPortalFetcher) => {
-    try {
-      return new Map((await scrapeWith(fetcher, plain, opts.pauseMs)).map((r) => [r.id, r.result]));
-    } catch (e) {
-      const detail = (e instanceof Error ? e.message : String(e)).split("\n")[0];
-      const failed: ScrapeClosingResult = {
-        ok: false,
-        closingOdds: null,
-        bookmakerUsed: null,
-        matchUrl: null,
-        provisional: false,
-        code: "browser_error",
-        detail,
-      };
-      return new Map(plain.map(({ id }) => [id, failed]));
-    }
-  };
-  const pw = await run("playwright");
-  const sc = await run("scrapling");
-  return items.map(({ id, bet }) => ({ bet, playwright: pw.get(id)!, scrapling: sc.get(id)! }));
 }

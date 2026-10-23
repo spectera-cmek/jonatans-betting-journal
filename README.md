@@ -54,7 +54,7 @@
 
 **Next.js 14** (App Router) · **TypeScript** · **Prisma + Postgres** (Neon) ·
 **Tailwind CSS** · hand-rolled **SVG charts** · **Vitest** · **pdfjs-dist** (statement
-parsing) · **Playwright** (local OddsPortal CLV scrape).
+parsing) · **Scrapling** (local OddsPortal, HLTV and Sofascore fetching) · **patchright** (HLTV demos).
 
 ## 🚀 Quick start
 
@@ -148,12 +148,10 @@ are settled with `npm run props:grade` (ESPN + the NHL API, see below).
 
 ### Automatic CLV via OddsPortal (local scrape batch)
 
-Primary free CLV path for featured markets after kickoff:
+Primary free CLV path for featured markets after kickoff. The pages are fetched by
+[Scrapling](#️-scrapling-fetcher-local), so run `npm run scrapling:setup` once first:
 
 ```bash
-npm i playwright
-npx playwright install chromium
-
 npm run scrape:clv -- --list                         # candidates only
 npm run scrape:clv -- --confirm --limit 30            # post-kickoff batch
 npm run backfill:clv-scrape -- --limit 50             # 90d backfill (writes DB)
@@ -162,8 +160,8 @@ npm run backfill:clv-scrape -- --limit 50             # 90d backfill (writes DB)
 Schedule `npm run scrape:clv -- --confirm` hourly via Task Scheduler. Per-bet refresh
 in the UI still works. Prefers the bet’s bookmaker, then Pinnacle → bet365.
 
-Requires local Node — not suited for serverless. Playwright keeps its Chromium in a
-user-level cache outside the project, so it is never part of a serverless bundle: on a
+Requires local Node and Python — not suited for serverless. The Scrapling worker and its
+browser live outside the project, so they are never part of a serverless bundle: on a
 Vercel deployment the per-bet CLV button is hidden and the endpoint answers `501
 scrape_unavailable` rather than failing a browser launch. Manual closing odds and
 `npm run scrape:clv` on your own machine both work as before. Props/niche markets may
@@ -187,7 +185,7 @@ the lines you enter (by hand, from a screenshot, or fetched from Unibet/Kambi).
 **Data flow**
 
 ```
-HLTV (Playwright, your PC) → HTML cache (.cache/cs2/html) → parsers → CS2 DB
+HLTV (patchright or Scrapling, your PC) → HTML cache (.cache/cs2/html) → parsers → CS2 DB
 HLTV demos (.rar/.zip)     → demoparser2 → facts (.cache/cs2/demos/norm) → CS2 DB
 CS2 DB → profiles · gameplan · ratings/veto/map/kill models → /api/cs2 → /cs2
 ```
@@ -200,7 +198,7 @@ CS2 DB → profiles · gameplan · ratings/veto/map/kill models → /api/cs2 →
    it at the bet log's schema: `db push` drops tables that are not in
    `prisma/cs2.prisma`.
 2. `npm run db:push:cs2`
-3. `npm i playwright && npx playwright install chromium` (as for the OddsPortal scraper).
+3. `npm i` installs patchright, which uses your Chrome or Edge.
    `npm i @laihoe/demoparser2` for demos (an optional native module).
 4. `npm run cs2:capture`: checks every parser against live HLTV pages and prints a
    report. Any missing field means a selector needs fixing before you ingest.
@@ -260,7 +258,7 @@ npm run scrapling:check     # fetch a harmless page in HTTP and browser mode
 | HLTV (CS2) | `--scrapling` on `cs2:capture` / `cs2:ingest` / `cs2:update`, or `CS2_FETCHER=scrapling` |
 | Props grading (fallback source) | `npm run props:grade` uses ESPN and the NHL API first; Sofascore only for leagues they don't cover |
 | Parser check (Sofascore) | `npm run sofascore:capture` — saves live fixtures and reports missing fields |
-| OddsPortal CLV (experiment) | `npm run scrape:clv -- --scrapling`; `--compare` runs Playwright and Scrapling side by side |
+| OddsPortal CLV | `npm run scrape:clv` and the per-bet CLV button in the app |
 
 **Props grading.** `npm run props:grade` finds each open bet's match, reads the team or
 player statistic and grades over/under with the app's own rules. Sources, in order:
@@ -272,18 +270,13 @@ and touches nothing until `--confirm`. Cards, combos, quarter lines, players who
 play, 90-minute markets in games that went to extra time, and fields not seen in the
 match's data are listed and left for manual settling.
 
-**OddsPortal via Scrapling (experiment).** Same flow as the Playwright scraper (search,
-tab, line, bookmaker), but the odds tables are read as page text instead of CSS classes,
+**OddsPortal.** Played matches are found through the league's results page and the
+two teams' head-to-head page (OddsPortal's search only lists upcoming games), upcoming
+ones through the search. The odds tables are read as page text instead of CSS classes,
 which OddsPortal renames often. Clicking a line open ("Over/Under +2.5") shows odds per
 bookmaker, so O/U and Asian handicap closing comes from the bet's bookmaker or Pinnacle
 rather than the site average. 1X2/moneyline, Over/Under (goals) and Asian handicap only:
-props, corners, cards and team totals answer `market_not_found`. Playwright stays the
-default until `--compare` has shown the two agree:
-
-```bash
-npm run scrape:clv -- --compare --limit 10    # both fetchers, nothing written
-npm run scrape:clv -- --scrapling --confirm   # write closing odds fetched by Scrapling
-```
+props, corners, cards and team totals answer `market_not_found`.
 
 The scripts find `.venv` on their own; `SCRAPLING_PYTHON` points them at another Python.
 Same rules as the other scrapers: local only, slow pace, cache everything, personal use.
