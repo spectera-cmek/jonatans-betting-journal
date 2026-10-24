@@ -9,12 +9,12 @@ import { parseHomeAway } from "./eventLink";
 import type { ScrapeBetInput, ScrapeClosingResult } from "./oddsPortal";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
+export const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
 /** CLV (i procent) som flaggas i utskriften — oftast fel marknad, inte ett slaget pris. */
 const SUSPICIOUS_CLV_PCT = 25;
 
 /** Sports OddsPortal scrape handles reliably enough for batch CLV. */
-const SCRAPEABLE_SPORTS = [
+export const SCRAPEABLE_SPORTS = [
   "Football",
   "Tennis",
   "Basketball",
