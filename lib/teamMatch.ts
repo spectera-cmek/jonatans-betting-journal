@@ -37,6 +37,8 @@ export const TEAM_ALIASES: Record<string, string> = {
   "sint truidense": "sint truiden",
   internazionale: "inter milan",
   "sporting cp": "sporting lisbon",
+  // Esport: spelbolagen skriver förkortningen, OddsPortal hela namnet.
+  navi: "natus vincere",
 };
 
 /**
@@ -59,7 +61,17 @@ const DIACRITICS = /[̀-ͯ]/g;
  * ren ASCII.
  */
 export function normalizeTeam(name: string): string {
-  const folded = name
+  const folded = foldTeam(name);
+  return TEAM_ALIASES[folded] ?? folded;
+}
+
+/** Klubbnamnet ur TEAM_ALIASES när ett alias gäller ("NaVi" → "natus vincere"), annars null. */
+export function teamAlias(name: string): string | null {
+  return TEAM_ALIASES[foldTeam(name)] ?? null;
+}
+
+function foldTeam(name: string): string {
+  return name
     .normalize("NFD")
     .replace(DIACRITICS, "")
     .toLowerCase()
@@ -71,8 +83,8 @@ export function normalizeTeam(name: string): string {
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-  return TEAM_ALIASES[folded] ?? folded;
 }
+
 
 export function teamTokens(name: string): string[] {
   const tokens = normalizeTeam(name)

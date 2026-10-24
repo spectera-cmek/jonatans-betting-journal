@@ -22,10 +22,12 @@ import {
   closingFromLines,
   leagueResultsPath,
   isSwapped,
+  lineFromSelection,
   liveBetDetail,
   swapSides,
   pickUpcoming,
   planMarket,
+  sameGame,
   searchVariants,
   type ScrapeBetInput,
 } from "../lib/oddsPortal/scrape";
@@ -321,5 +323,42 @@ describe("lag i omvänd ordning", () => {
     // Arsenal −1 borta = Leeds +1 sett från hemmalaget, som OddsPortal anger det.
     expect(planMarket(turned)).toMatchObject({ ok: true, kind: "ah", column: "away", lineLabel: "Asian Handicap +1" });
     expect(swapSides(input({ selectionSide: "over" })).selectionSide).toBe("over");
+  });
+});
+
+describe("esport", () => {
+  const es = (o: Partial<ScrapeBetInput>) => input({ sport: "Esports", league: "CS2", homeTeam: "Vitality", awayTeam: "NaVi", ...o });
+
+  it("bara matchvinnare — kart-handikapp och totaler finns inte på OddsPortal", () => {
+    expect(planMarket(es({ market: "h2h", selection: "Vitality", selectionSide: "home" }))).toMatchObject({ ok: true, kind: "1x2", tabs: expect.arrayContaining(["Home/Away"]) });
+    expect(planMarket(es({ market: "spreads", selection: "NaVi +1.5", selectionSide: "away", line: 1.5 }))).toMatchObject({ ok: false });
+    expect(planMarket(es({ market: "totals", selection: "Over 2.5 maps", selectionSide: "over", line: 2.5 }))).toMatchObject({ ok: false });
+  });
+
+  it("lagpar bara inom samma spel", () => {
+    expect(sameGame("team-vitality-counter-strike-tMJZDVwo", "natus-vincere-counter-strike-AH1VkXGn")).toBe(true);
+    expect(sameGame("team-vitality-league-of-legends-aaaaaaaa", "natus-vincere-counter-strike-AH1VkXGn")).toBe(false);
+    expect(sameGame("arsenal-hA1Zm19f", "leeds-tUxUbLR2")).toBe(true);
+  });
+
+  it("förkortningen söks med OddsPortals namn", () => {
+    expect(searchVariants("NaVi")[0]).toBe("natus vincere");
+    expect(searchVariants("Ipswich Town")[0]).toBe("Ipswich Town");
+  });
+});
+
+describe("BTTS och handikapp utan linje", () => {
+  it("BTTS: Ja = första kolumnen, Nej = andra, på fliken Both Teams to Score", () => {
+    const btts = (selection: string) => planMarket(input({ market: "other", marketCategory: "BTTS", selection }));
+    expect(btts("Ja")).toMatchObject({ ok: true, kind: "1x2", column: "home", tabs: expect.arrayContaining(["Both Teams to Score"]) });
+    expect(btts("Nej")).toMatchObject({ ok: true, column: "away" });
+  });
+
+  it("linjen ur valet när fältet saknar den", () => {
+    expect(lineFromSelection("Arsenal -1.5")).toBe(-1.5);
+    expect(lineFromSelection("Leeds +0,25")).toBe(0.25);
+    expect(lineFromSelection("Arsenal")).toBeNull();
+    expect(lineFromSelection("Over 2.5")).toBeNull();
+    expect(planMarket(input({ market: "spreads", selection: "Everton +1.5", selectionSide: "away", line: null }))).toMatchObject({ ok: true, kind: "ah", lineLabel: "Asian Handicap -1.5" });
   });
 });

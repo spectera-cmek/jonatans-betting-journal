@@ -30,7 +30,7 @@ import {
   teamSegmentsFromLinks,
   type TeamSegment,
 } from "./parseHtml";
-import { MIN_TEAM_SIMILARITY, teamSimilarity } from "../teamMatch";
+import { MIN_TEAM_SIMILARITY, teamAlias, teamSimilarity } from "../teamMatch";
 
 const BASE = "https://www.oddsportal.com";
 /** Väntan efter ett klick innan sidan läses — OddsPortal laddar oddsen i efterhand. */
@@ -148,6 +148,10 @@ export function planMarket(input: ScrapeBetInput):
   if (target.tabLabels.some((t) => /corner|card|booking/i.test(t)) || /hörn|horn|corner|kort|card|skott|shot|offside|frispark|räddning|save/i.test(what)) {
     return { ok: false, detail: "Hörnor/kort/skott finns inte som egen marknad på OddsPortal — ange closing manuellt." };
   }
+  // Esport har bara matchvinnare (Home/Away) på OddsPortal — inga kart-handikapp eller totaler.
+  if (oddsPortalSportSlug(input.sport, input.league) === "esports" && target.tabLabels[0] !== "Home/Away") {
+    return { ok: false, detail: "Esport har bara matchvinnare på OddsPortal — ange closing manuellt." };
+  }
   if (input.marketScope === "team") {
     return { ok: false, detail: "Lagtotaler finns inte på OddsPortals Over/Under-flik — ange closing manuellt." };
   }
@@ -156,9 +160,11 @@ export function planMarket(input: ScrapeBetInput):
     return { ok: true, kind: "ou", tabs: ["Over/Under", "Over Under", "Totals"], lineLabel: label, line: target.line, column: target.column };
   }
   if (target.tabLabels.includes("Asian Handicap")) {
-    if (target.line == null) return { ok: false, detail: "Handikapp utan linje." };
+    // Linjen saknas ibland i fältet men står i valet: "Arsenal -1.5".
+    const line = target.line ?? lineFromSelection(input.selection);
+    if (line == null) return { ok: false, detail: "Handikapp utan linje." };
     // OddsPortal anger linjen från hemmalagets håll.
-    const homeLine = target.column === "away" ? -target.line : target.line;
+    const homeLine = target.column === "away" ? -line : line;
     return {
       ok: true,
       kind: "ah",
@@ -277,7 +283,9 @@ export function searchVariants(team: string): string[] {
   const base = buildSearchQuery({ homeTeam: team });
   const words = base.split(/\s+/).filter(Boolean);
   const stripped = words.filter((w) => !NAME_SUFFIXES.has(w.toLowerCase()));
+  // Ett känt alias ("NaVi" → "natus vincere") söks först: OddsPortal har bara det långa namnet.
   const out = [
+    teamAlias(team) ?? "",
     base,
     stripped.join(" "),
     words.length >= 2 && words[1].length > 4 ? `${words[0]} ${words[1].slice(0, 4)}` : "",
@@ -305,6 +313,19 @@ export function pickUpcoming(candidates: SearchCandidate[], input: ScrapeBetInpu
 }
 
 /** Lagets id-delar ur sökträffarna, de som liknar lagnamnet — vanligast först. */
+/** Spelet i ett esportlags id-del: "team-vitality-counter-strike-tMJZDVwo" → "counter-strike". */
+const ESPORTS_GAME = /-(counter-strike|league-of-legends|dota-2|valorant|rainbow-six|overwatch|rocket-league|call-of-duty|starcraft-2|king-of-glory|mobile-legends|honor-of-kings)-[A-Za-z0-9]{8}$/;
+
+/**
+ * Esportlag finns i flera spel under samma namn (Vitality i CS och LoL).
+ * Två lag från olika spel har aldrig mötts — hoppa över det paret.
+ */
+export function sameGame(a: string, b: string): boolean {
+  const ga = a.match(ESPORTS_GAME)?.[1];
+  const gb = b.match(ESPORTS_GAME)?.[1];
+  return !ga || !gb || ga === gb;
+}
+
 function segmentsFor(team: string, segments: TeamSegment[]): string[] {
   const counts = new Map<string, number>();
   for (const s of segments) {
@@ -313,7 +334,6 @@ function segmentsFor(team: string, segments: TeamSegment[]): string[] {
   return [...counts].sort((a, b) => b[1] - a[1]).map(([segment]) => segment);
 }
 
-/** Söker tills laget dyker upp i träffarnas länkar; ger dess id-delar. */
 /**
  * Sidor som är desamma för många bets i en körning (ligans resultatsida,
  * lagsök, h2h-sidor), sparade tolkade per worker. En körning över ett helt
@@ -374,6 +394,7 @@ function searchTeam(worker: ScraplingWorker, team: string, sport: string): Promi
   return remember(memoFor(worker).segments, `search:${sport}:${team.toLowerCase()}`, () => searchTeamUncached(worker, team, sport), (segs) => segs.length > 0);
 }
 
+/** Söker tills laget dyker upp i träffarnas länkar; ger dess id-delar. */
 async function searchTeamUncached(worker: ScraplingWorker, team: string, sport: string): Promise<TeamSegment[]> {
   for (const q of searchVariants(team).slice(0, 3)) {
     const res = await worker.fetch({
@@ -404,7 +425,9 @@ async function findPlayedMatch(worker: ScraplingWorker, input: ScrapeBetInput, s
   }
   const homes = segmentsFor(input.homeTeam, segments);
   const aways = segmentsFor(input.awayTeam, segments);
-  const pairs = homes.flatMap((h) => aways.filter((a) => a !== h).map((a) => h2hPath(sport, h, a))).slice(0, MAX_H2H_PAIRS);
+  const pairs = homes
+    .flatMap((h) => aways.filter((a) => a !== h && sameGame(h, a)).map((a) => h2hPath(sport, h, a)))
+    .slice(0, MAX_H2H_PAIRS);
   for (const path of [...new Set(pairs)]) {
     // Ett lagpar som aldrig mötts har ingen sida — prova nästa i stället för att ge upp.
     const page = await h2hPage(worker, path);
@@ -481,10 +504,17 @@ export async function scrapeClosingWith(worker: ScraplingWorker, input: ScrapeBe
 
 type Plan = Extract<ReturnType<typeof planMarket>, { ok: true }>;
 
+/** "Arsenal -1.5" / "Leeds +0,25" → linjen. Null utan ett tecken framför talet. */
+export function lineFromSelection(selection: string | null | undefined): number | null {
+  const m = (selection ?? "").match(/(?:^|\s)([+-]\d+(?:[.,]\d+)?)(?:\s|$)/);
+  return m ? Number(m[1].replace(",", ".")) : null;
+}
+
 /** Klicken som tar fram betets flik och linje på matchsidan. */
 function marketActions(plan: Plan, input: ScrapeBetInput): NonNullable<Parameters<ScraplingWorker["fetch"]>[0]["actions"]> {
   const actions: NonNullable<Parameters<ScraplingWorker["fetch"]>[0]["actions"]> = [TABS.wait];
-  if (plan.kind !== "1x2" || input.sport?.toLowerCase() !== "football") {
+  // Fotbollens matchsida öppnar på 1X2; allt annat (BTTS, linjer, andra sporter) kräver ett klick.
+  if (plan.tabs[0] !== "1X2" || input.sport?.toLowerCase() !== "football") {
     actions.push({ clickFirst: plan.tabs }, { waitMs: SETTLE_MS });
   }
   if (plan.lineLabel) actions.push({ clickText: plan.lineLabel }, { waitMs: SETTLE_MS });

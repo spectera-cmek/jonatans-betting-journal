@@ -15,7 +15,7 @@ config();
 
 import { PrismaClient } from "@prisma/client";
 import { hasRealOdds } from "../lib/betting";
-import { FEATURED_MARKETS, SCRAPEABLE_SPORTS } from "../lib/clvOddsPortalBatch";
+import { isScrapeableMarket, SCRAPEABLE_SPORTS } from "../lib/clvOddsPortalBatch";
 import { planMarket } from "../lib/oddsPortal/scrape";
 
 const prisma = new PrismaClient();
@@ -62,7 +62,7 @@ function reason(b: Bet, now: number): string {
   if (b.eventKind !== "match") return "Långtidsspel (outright)";
   if (b.marketScope === "player") return "Spelarprops";
   if (!(SCRAPEABLE_SPORTS as readonly string[]).includes(b.sport ?? "")) return `Sport som inte skrapas (${b.sport || "saknas"})`;
-  if (!(FEATURED_MARKETS as readonly string[]).includes(b.market)) return "Annan marknad (market = other)";
+  if (!isScrapeableMarket(b.market, b.marketCategory)) return `Annan marknad (${b.marketCategory || b.market})`;
   const plan = planMarket({ ...b, selection: b.selection });
   if (!plan.ok) return `Går inte på OddsPortal: ${plan.detail.split(" — ")[0]}`;
   const t = (b.eventAt ?? b.placedAt).getTime();

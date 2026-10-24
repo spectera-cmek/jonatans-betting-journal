@@ -10,6 +10,16 @@ import type { ScrapeBetInput, ScrapeClosingResult } from "./oddsPortal";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
+/** market = "other" som ändå finns på OddsPortal (marketCategory som loggen sätter den). */
+export const SCRAPEABLE_OTHER_CATEGORIES = ["BTTS"] as const;
+
+/** Featured-marknad, eller en "other" som OddsPortal har (BTTS). */
+export function isScrapeableMarket(market: string, marketCategory: string | null): boolean {
+  return (
+    (FEATURED_MARKETS as readonly string[]).includes(market) ||
+    (market === "other" && (SCRAPEABLE_OTHER_CATEGORIES as readonly string[]).includes(marketCategory ?? ""))
+  );
+}
 /** CLV (i procent) som flaggas i utskriften — oftast fel marknad, inte ett slaget pris. */
 const SUSPICIOUS_CLV_PCT = 25;
 
@@ -24,6 +34,7 @@ export const SCRAPEABLE_SPORTS = [
   "MMA",
   "Boxing",
   "Darts",
+  "Esports",
 ] as const;
 
 export interface OddsPortalClvOptions {
@@ -144,13 +155,13 @@ export async function listFeaturedClvCandidates(
   const where: Prisma.BetWhereInput = {
     betType: "single",
     eventKind: "match",
-    market: { in: [...FEATURED_MARKETS] },
     closingOdds: null,
     // En boost är inget marknadspris — den får aldrig CLV (se /api/metrics).
     boosted: false,
     sport: { in: [...SCRAPEABLE_SPORTS] },
     OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
     AND: [
+      { OR: [{ market: { in: [...FEATURED_MARKETS] } }, { market: "other", marketCategory: { in: [...SCRAPEABLE_OTHER_CATEGORIES] } }] },
       {
         OR: [
           { eventAt: { gte: since } },
