@@ -10,6 +10,8 @@ import type { ScrapeBetInput, ScrapeClosingResult } from "./oddsPortal";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
+/** CLV (i procent) som flaggas i utskriften — oftast fel marknad, inte ett slaget pris. */
+const SUSPICIOUS_CLV_PCT = 25;
 
 /** Sports OddsPortal scrape handles reliably enough for batch CLV. */
 const SCRAPEABLE_SPORTS = [
@@ -109,7 +111,10 @@ function formatResult(
   const pct = clvPct(bet.odds, scraped.closingOdds);
   const pctStr = pct == null ? "?" : `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
   const bk = scraped.bookmakerUsed ? ` via ${scraped.bookmakerUsed}` : "";
-  return `${bet.event}: closing ${scraped.closingOdds.toFixed(2)} (du ${bet.odds.toFixed(2)}, CLV ${pctStr})${bk}${dryRun ? " [dry-run]" : ""}`;
+  // Så stor skillnad är nästan alltid fel marknad (halvlek, live, boost som inte
+  // är markerad) snarare än ett riktigt slaget closing-pris.
+  const odd = pct != null && Math.abs(pct) >= SUSPICIOUS_CLV_PCT ? ` ⚠ kontrollera marknaden` : "";
+  return `${bet.event}: closing ${scraped.closingOdds.toFixed(2)} (du ${bet.odds.toFixed(2)}, CLV ${pctStr})${bk}${odd}${dryRun ? " [dry-run]" : ""}`;
 }
 
 /** Featured singles missing closing odds in the lookback window. */
@@ -130,6 +135,8 @@ export async function listFeaturedClvCandidates(
     eventKind: "match",
     market: { in: [...FEATURED_MARKETS] },
     closingOdds: null,
+    // En boost är inget marknadspris — den får aldrig CLV (se /api/metrics).
+    boosted: false,
     sport: { in: [...SCRAPEABLE_SPORTS] },
     OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
     AND: [
