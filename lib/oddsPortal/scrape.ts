@@ -18,6 +18,7 @@ import {
   h2hPath,
   htmlToLines,
   isBlockedHtml,
+  kickoffFromLines,
   meetingDate,
   parseBookmakerTable,
   featuredMatch,
@@ -42,6 +43,8 @@ export interface ScrapeBetInput {
   homeTeam?: string | null;
   awayTeam?: string | null;
   eventAt?: Date | null;
+  /** När betet lades. Efter avspark = live-spel, som inte har något closing-pris. */
+  placedAt?: Date | null;
   market: string;
   marketCategory?: string | null;
   marketScope?: string | null;
@@ -403,7 +406,23 @@ export async function scrapeClosingWith(worker: ScraplingWorker, input: ScrapeBe
   if (plan.lineLabel) actions.push({ clickText: plan.lineLabel }, { waitMs: SETTLE_MS });
   const page = await worker.fetch({ mode: "browser", url: found.url, actions });
   if (isBlockedHtml(page.body)) return fail("blocked", "OddsPortal blockerade (Cloudflare).", found.url);
-  return closingFromLines(htmlToLines(page.body), plan, input, found.url);
+  const lines = htmlToLines(page.body);
+  const live = liveBetDetail(input.placedAt, kickoffFromLines(lines));
+  if (live) return fail("live_bet", live, found.url);
+  return closingFromLines(lines, plan, input, found.url);
+}
+
+/** Minuter efter avspark som ännu räknas som före matchen (klockor, avrundning). */
+const LIVE_GRACE_MS = 2 * 60_000;
+
+/**
+ * Lagt efter avspark: oddsen sattes under matchen och kan inte jämföras med
+ * closing. Null när betet lades före, eller när en av tiderna saknas.
+ */
+export function liveBetDetail(placedAt: Date | null | undefined, kickoff: Date | null): string | null {
+  if (!placedAt || !kickoff || placedAt.getTime() <= kickoff.getTime() + LIVE_GRACE_MS) return null;
+  const hhmm = (d: Date) => d.toTimeString().slice(0, 5);
+  return `Live-spel (lagt ${hhmm(placedAt)}, avspark ${hhmm(kickoff)}) — closing-odds gäller inte live, ingen CLV.`;
 }
 
 /** Ett bet med en egen webbläsare — för knappen "Hämta CLV" i appen. */

@@ -66,6 +66,7 @@ type CandidateBet = {
   sport: string | null;
   league: string | null;
   eventAt: Date | null;
+  placedAt: Date;
   market: string;
   marketCategory: string | null;
   marketScope: string | null;
@@ -90,6 +91,7 @@ function toScrapeInput(bet: CandidateBet): ScrapeBetInput | null {
     homeTeam,
     awayTeam,
     eventAt: bet.eventAt,
+    placedAt: bet.placedAt,
     market: bet.market,
     marketCategory: bet.marketCategory,
     marketScope: bet.marketScope,
@@ -172,6 +174,7 @@ export async function listFeaturedClvCandidates(
       sport: true,
       league: true,
       eventAt: true,
+      placedAt: true,
       market: true,
       marketCategory: true,
       marketScope: true,

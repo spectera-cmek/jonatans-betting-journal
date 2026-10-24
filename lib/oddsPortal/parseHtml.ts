@@ -312,6 +312,23 @@ export function meetingDate(dateText: string, near: Date): Date | null {
 }
 
 /**
+ * Avsparken på en matchsida: "10 Oct 2026," följt av "18:30". Tiden står i
+ * webbläsarens tidszon, som är datorns — samma som Node:s, så den tolkas som
+ * lokal tid.
+ */
+export function kickoffFromLines(lines: string[]): Date | null {
+  for (let i = 0; i < lines.length - 1; i++) {
+    const d = lines[i].match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4}),?$/);
+    const t = lines[i + 1].match(/^(\d{1,2}):(\d{2})$/);
+    if (!d || !t) continue;
+    const month = MONTHS.indexOf(d[2].toLowerCase());
+    if (month < 0) continue;
+    return new Date(Number(d[3]), month, Number(d[1]), Number(t[1]), Number(t[2]));
+  }
+  return null;
+}
+
+/**
  * Matchen h2h-sidan visar överst. Den står inte i möteslistan (ingen länk);
  * id:t finns i sidans adress efter laddning (#eventId:…) och datumet som
  * "08 May 2027," under rubriken. Ibland är det just bettets match.

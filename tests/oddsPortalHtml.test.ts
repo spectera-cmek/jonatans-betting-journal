@@ -6,6 +6,7 @@ import {
   formatLine,
   h2hKey,
   h2hPath,
+  kickoffFromLines,
   htmlToLines,
   meetingDate,
   parseH2hMeetings,
@@ -19,6 +20,7 @@ import {
 import {
   closingFromLines,
   leagueResultsPath,
+  liveBetDetail,
   pickUpcoming,
   planMarket,
   searchVariants,
@@ -268,5 +270,26 @@ describe("vägar till en spelad match", () => {
     expect(searchVariants("West Bromwich Albion")).toContain("West Brom");
     // Varianter under fyra tecken söks inte — de träffar för brett.
     expect(searchVariants("Man Utd").every((v) => v.length >= 4)).toBe(true);
+  });
+});
+
+describe("live-spel", () => {
+  // Raderna som de står på matchsidan (Man Utd–Tottenham, okt 2026).
+  const page = ["Tottenham", "1", "Saturday,", "10 Oct 2026,", "18:30", "Final result", "1:1"];
+
+  it("avsparken ur matchsidan, i lokal tid", () => {
+    const k = kickoffFromLines(page)!;
+    expect([k.getFullYear(), k.getMonth(), k.getDate(), k.getHours(), k.getMinutes()]).toEqual([2026, 9, 10, 18, 30]);
+    expect(kickoffFromLines(["10 Oct 2026,", "Final result"])).toBeNull();
+  });
+
+  it("lagt efter avspark är live, före (eller utan tider) är det inte", () => {
+    const kickoff = kickoffFromLines(page)!;
+    const at = (min: number) => new Date(kickoff.getTime() + min * 60_000);
+    expect(liveBetDetail(at(35), kickoff)).toMatch(/^Live-spel \(lagt 19:05, avspark 18:30\)/);
+    expect(liveBetDetail(at(-90), kickoff)).toBeNull();
+    expect(liveBetDetail(at(1), kickoff)).toBeNull(); // inom marginalen
+    expect(liveBetDetail(null, kickoff)).toBeNull();
+    expect(liveBetDetail(at(35), null)).toBeNull();
   });
 });
