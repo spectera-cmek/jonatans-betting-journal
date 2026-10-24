@@ -6,6 +6,7 @@
  *   npx tsx scripts/scrapeClv.ts --confirm --since-days 90 --limit 50
  *   npx tsx scripts/scrapeClv.ts --confirm --since 2026-05-01
  *   npx tsx scripts/scrapeClv.ts --list                  # list candidates only (no browser)
+ *   npx tsx scripts/scrapeClv.ts --confirm --save-suspicious   # also save CLV of ±25 % or more
  *
  * Local only: pages are fetched by the Scrapling worker (npm run scrapling:setup
  * once). Schedule via Task Scheduler, e.g. every hour.
@@ -34,6 +35,7 @@ async function main() {
   const sinceDaysRaw = argValue("--since-days");
   const graceRaw = argValue("--grace-minutes");
   const allowLive = process.argv.includes("--allow-live");
+  const saveSuspicious = process.argv.includes("--save-suspicious");
 
   const limit = limitRaw ? Number(limitRaw) : 50;
   const sinceDate = sinceRaw ? new Date(sinceRaw) : undefined;
@@ -85,6 +87,7 @@ async function main() {
     sinceDays: sinceDate ? undefined : sinceDays,
     graceMinutes: Number.isFinite(graceMinutes) ? graceMinutes : 15,
     postKickoffOnly: !allowLive,
+    saveSuspicious,
     log: (line) => console.log(`  ${line}`),
   });
 

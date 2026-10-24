@@ -51,6 +51,38 @@ const TOKEN_ALIASES: Record<string, string> = {
   man: "manchester",
 };
 
+/**
+ * Landslag: kvittona skriver svenska namn ("Sverige U20", "Saudiarabien"),
+ * OddsPortal och ESPN engelska. Ett ord per land — namn i flera ord står i
+ * COUNTRY_NAMES nedan. Länder som heter likadant på båda språken saknas.
+ */
+const COUNTRY_WORDS: Record<string, string> = {
+  sverige: "sweden", norge: "norway", danmark: "denmark",
+  tyskland: "germany", frankrike: "france", spanien: "spain", italien: "italy", nederlanderna: "netherlands",
+  belgien: "belgium", schweiz: "switzerland", osterrike: "austria", polen: "poland", tjeckien: "czech republic",
+  slovakien: "slovakia", ungern: "hungary", rumanien: "romania", grekland: "greece", turkiet: "turkey",
+  kroatien: "croatia", serbien: "serbia", slovenien: "slovenia", albanien: "albania", ukraina: "ukraine",
+  ryssland: "russia", skottland: "scotland", irland: "ireland", nordirland: "northern ireland",
+  brasilien: "brazil", mexiko: "mexico", kanada: "canada", marocko: "morocco", algeriet: "algeria",
+  tunisien: "tunisia", egypten: "egypt", sydafrika: "south africa", elfenbenskusten: "ivory coast",
+  kamerun: "cameroon", jordanien: "jordan", saudiarabien: "saudi arabia", irak: "iraq", sydkorea: "south korea",
+  nordkorea: "north korea", kina: "china", australien: "australia",
+};
+
+/**
+ * Svenska landsnamn som bara översätts som hela namnet (eller med U21 o.d.
+ * efter): flera ord, eller ett ord som också står i andra lagnamn ("Rhode Island").
+ */
+const COUNTRY_NAMES: Record<string, string> = {
+  island: "iceland",
+  "nya zeeland": "new zealand",
+  "kap verde": "cape verde",
+  "dr kongo": "dr congo",
+  "bosnien och hercegovina": "bosnia and herzegovina",
+  "bosnien hercegovina": "bosnia and herzegovina",
+  "forenade arabemiraten": "united arab emirates",
+};
+
 const DIACRITICS = /[̀-ͯ]/g;
 
 /**
@@ -62,12 +94,29 @@ const DIACRITICS = /[̀-ͯ]/g;
  */
 export function normalizeTeam(name: string): string {
   const folded = foldTeam(name);
-  return TEAM_ALIASES[folded] ?? folded;
+  return TEAM_ALIASES[folded] ?? translateCountry(folded);
 }
 
-/** Klubbnamnet ur TEAM_ALIASES när ett alias gäller ("NaVi" → "natus vincere"), annars null. */
+/**
+ * Namnet källorna använder när det skiljer sig från kvittots: ett klubbalias
+ * ("NaVi" → "natus vincere") eller ett svenskt landsnamn ("Sverige U20" →
+ * "sweden u20"). Null när namnet redan är det källorna har.
+ */
 export function teamAlias(name: string): string | null {
-  return TEAM_ALIASES[foldTeam(name)] ?? null;
+  const folded = foldTeam(name);
+  const named = normalizeTeam(name);
+  return named !== folded ? named : null;
+}
+
+/** "sverige u20" → "sweden u20", "nya zeeland" → "new zealand". Annat lämnas orört. */
+function translateCountry(folded: string): string {
+  for (const [sv, en] of Object.entries(COUNTRY_NAMES)) {
+    if (folded === sv || folded.startsWith(`${sv} `)) return en + folded.slice(sv.length);
+  }
+  return folded
+    .split(" ")
+    .map((w) => COUNTRY_WORDS[w] ?? w)
+    .join(" ");
 }
 
 function foldTeam(name: string): string {

@@ -12,7 +12,15 @@
 // de svarar market_not_found.
 
 import { ScraplingWorker } from "../scrapling";
-import { buildSearchQuery, matchTitleLooksLike, oddsPortalSportSlug, pickBookmakerOdds, resolveMarketTarget, type SelectionColumn } from "./mapping";
+import {
+  buildSearchQuery,
+  matchTitleLooksLike,
+  oddsPortalSportSlug,
+  pickBookmakerOdds,
+  resolveMarketTarget,
+  stripTeamPrefix,
+  type SelectionColumn,
+} from "./mapping";
 import {
   formatLine,
   h2hPath,
@@ -261,15 +269,29 @@ const LEAGUE_PAGES: Record<string, string> = {
   superettan: "/football/sweden/superettan/",
   nhl: "/hockey/usa/nhl/",
   nba: "/basketball/usa/nba/",
+  wnba: "/basketball/usa/wnba/",
+  nfl: "/american-football/usa/nfl/",
+  mlb: "/baseball/usa/mlb/",
+  "vm 2026": "/football/world/world-championship-2026/",
+  "world cup 2026": "/football/world/world-championship-2026/",
+  "fifa world cup": "/football/world/world-championship-2026/",
 };
 
 /** Ligans resultatsida, eller null för ligor som inte står i listan. */
 export function leagueResultsPath(league: string | null | undefined): string | null {
   const l = (league ?? "").trim().toLowerCase();
   if (!l) return null;
-  const key = Object.keys(LEAGUE_PAGES).find((k) => l === k || l.includes(k));
+  // Längsta träffen vinner: "WNBA" innehåller "nba".
+  const key = Object.keys(LEAGUE_PAGES)
+    .filter((k) => l === k || l.includes(k))
+    .sort((a, b) => b.length - a.length)[0];
   return key ? `${LEAGUE_PAGES[key]}results/` : null;
 }
+
+/** Sidor att leta lag på när varken ligan eller söket gav dem. */
+const FALLBACK_PAGES: Record<string, string[]> = {
+  football: ["/football/world/world-championship-2026/results/", "/football/world/friendly-international/results/"],
+};
 
 /** Klubbsuffix OddsPortal ofta stryker ("Ipswich Town" → "Ipswich"). */
 const NAME_SUFFIXES = new Set(["town", "city", "albion", "united", "utd", "fc", "fk", "sk", "if", "bk", "ff", "cf", "afc", "sc"]);
@@ -327,11 +349,18 @@ export function sameGame(a: string, b: string): boolean {
 }
 
 function segmentsFor(team: string, segments: TeamSegment[]): string[] {
-  const counts = new Map<string, number>();
-  for (const s of segments) {
-    if (teamSimilarity(team, s.name) >= MIN_TEAM_SIMILARITY) counts.set(s.segment, (counts.get(s.segment) ?? 0) + s.count);
-  }
-  return [...counts].sort((a, b) => b[1] - a[1]).map(([segment]) => segment);
+  const match = (name: string) => {
+    const counts = new Map<string, number>();
+    for (const s of segments) {
+      if (teamSimilarity(name, s.name) >= MIN_TEAM_SIMILARITY) counts.set(s.segment, (counts.get(s.segment) ?? 0) + s.count);
+    }
+    return [...counts].sort((a, b) => b[1] - a[1]).map(([segment]) => segment);
+  };
+  // Spelbolagens förkortning ("OKC Thunder", "BKN Nets") gör namnet för olikt
+  // OddsPortals ("Oklahoma City Thunder") — utan förkortningen räcker "Thunder".
+  const found = match(team);
+  const stripped = stripTeamPrefix(team);
+  return found.length || stripped === team ? found : match(stripped);
 }
 
 /**
@@ -423,6 +452,12 @@ async function findPlayedMatch(worker: ScraplingWorker, input: ScrapeBetInput, s
   for (const team of [input.homeTeam, input.awayTeam]) {
     if (!segmentsFor(team, segments).length) segments.push(...(await searchTeam(worker, team, sport)));
   }
+  // Landslag utan kommande match syns inte i söket. VM-sidan har alla
+  // VM-nationer, vänskapslandskamperna de som spelat nyligen.
+  for (const page of FALLBACK_PAGES[sport] ?? []) {
+    if (segmentsFor(input.homeTeam, segments).length && segmentsFor(input.awayTeam, segments).length) break;
+    segments.push(...(await leagueSegments(worker, page, sport)));
+  }
   const homes = segmentsFor(input.homeTeam, segments);
   const aways = segmentsFor(input.awayTeam, segments);
   const pairs = homes
@@ -437,12 +472,32 @@ async function findPlayedMatch(worker: ScraplingWorker, input: ScrapeBetInput, s
       .map((m) => ({ eventId: m.eventId, d: meetingDate(m.dateText, at) }))
       .filter((x): x is { eventId: string; d: Date } => x.d !== null);
     if (page.top) candidates.push({ eventId: page.top.eventId, d: page.top.date });
-    const best = candidates
-      .filter((x) => Math.abs(x.d.getTime() - at.getTime()) <= MEETING_WINDOW_MS)
-      .sort((a, b) => Math.abs(a.d.getTime() - at.getTime()) - Math.abs(b.d.getTime() - at.getTime()))[0];
-    if (best) return `${BASE}${path}#${best.eventId}`;
+    const best = pickMeeting(candidates, at, input.placedAt ?? null);
+    if (best) return `${BASE}${path}#${best}`;
   }
   return null;
+}
+
+/** Hur långt efter läggningen matchen får ligga när betet bara har ett datum. */
+const PLACED_AHEAD_MS = 21 * 86_400_000;
+
+/**
+ * Mötet bettet gäller. Först det närmast bettets datum, inom två dygn. Har
+ * datumet ingen tid (00:00) är det ofta läggningsdagen från kvittot, inte
+ * matchdagen — då det första mötet efter att betet lades, inom tre veckor.
+ */
+export function pickMeeting(candidates: { eventId: string; d: Date }[], at: Date, placedAt: Date | null): string | null {
+  const near = candidates
+    .filter((x) => Math.abs(x.d.getTime() - at.getTime()) <= MEETING_WINDOW_MS)
+    .sort((a, b) => Math.abs(a.d.getTime() - at.getTime()) - Math.abs(b.d.getTime() - at.getTime()))[0];
+  if (near) return near.eventId;
+  if (at.getHours() !== 0 || at.getMinutes() !== 0) return null;
+  // Mötesdatumen är hela dagar (kl. 12 UTC): räkna från läggningsdagens början.
+  const from = (placedAt ?? at).getTime() - 86_400_000;
+  const next = candidates
+    .filter((x) => x.d.getTime() >= from && x.d.getTime() <= from + PLACED_AHEAD_MS)
+    .sort((a, b) => a.d.getTime() - b.d.getTime())[0];
+  return next?.eventId ?? null;
 }
 
 export async function scrapeClosingWith(worker: ScraplingWorker, input: ScrapeBetInput): Promise<ScrapeClosingResult> {
@@ -452,6 +507,8 @@ export async function scrapeClosingWith(worker: ScraplingWorker, input: ScrapeBe
   const sport = oddsPortalSportSlug(input.sport, input.league);
   const home = buildSearchQuery({ homeTeam: input.homeTeam });
   const away = buildSearchQuery({ homeTeam: input.awayTeam });
+  // "Brasilien v Marocko / Australien v Turkiet": ett spel på flera matcher.
+  if (/\s\/\s/.test(input.event ?? "")) return fail("missing_fields", "Spelet gäller flera matcher — inget closing-pris för en enskild match.");
   if (home.length < 2 || away.length < 2) {
     return fail("missing_fields", "Saknar hemma- och bortalag (homeTeam/awayTeam eller \"Hemma - Borta\" i event).");
   }
@@ -506,7 +563,7 @@ type Plan = Extract<ReturnType<typeof planMarket>, { ok: true }>;
 
 /** "Arsenal -1.5" / "Leeds +0,25" → linjen. Null utan ett tecken framför talet. */
 export function lineFromSelection(selection: string | null | undefined): number | null {
-  const m = (selection ?? "").match(/(?:^|\s)([+-]\d+(?:[.,]\d+)?)(?:\s|$)/);
+  const m = (selection ?? "").match(/(?:^|[\s(])([+-]\d+(?:[.,]\d+)?)(?:[\s)]|$)/);
   return m ? Number(m[1].replace(",", ".")) : null;
 }
 
@@ -524,13 +581,11 @@ function marketActions(plan: Plan, input: ScrapeBetInput): NonNullable<Parameter
 /** Bettets hemmalag är sidans bortalag och tvärtom. */
 export function isSwapped(input: ScrapeBetInput, page: { home: string; away: string } | null): boolean {
   if (!page || !input.homeTeam || !input.awayTeam) return false;
-  const straight = teamSimilarity(input.homeTeam, page.home) + teamSimilarity(input.awayTeam, page.away);
-  const turned = teamSimilarity(input.homeTeam, page.away) + teamSimilarity(input.awayTeam, page.home);
-  return (
-    turned > straight &&
-    teamSimilarity(input.homeTeam, page.away) >= MIN_TEAM_SIMILARITY &&
-    teamSimilarity(input.awayTeam, page.home) >= MIN_TEAM_SIMILARITY
-  );
+  const home = stripTeamPrefix(input.homeTeam);
+  const away = stripTeamPrefix(input.awayTeam);
+  const straight = teamSimilarity(home, page.home) + teamSimilarity(away, page.away);
+  const turned = teamSimilarity(home, page.away) + teamSimilarity(away, page.home);
+  return turned > straight && teamSimilarity(home, page.away) >= MIN_TEAM_SIMILARITY && teamSimilarity(away, page.home) >= MIN_TEAM_SIMILARITY;
 }
 
 /** Samma bet med lagen bytta: spelet gäller fortfarande samma lag. */

@@ -3,6 +3,7 @@ import {
   matchFixture,
   MIN_TEAM_SIMILARITY,
   normalizeTeam,
+  teamAlias,
   teamSimilarity,
   teamTokens,
   type FixtureCandidate,
@@ -68,6 +69,10 @@ describe("teamSimilarity", () => {
     ["Manchester United", "Manchester Utd"],
     ["Man Utd", "Manchester United"],
     ["NaVi", "Natus Vincere"],
+    ["Sverige U20", "Sweden U20"],
+    ["Saudiarabien", "Saudi Arabia"],
+    ["Nya Zeeland", "New Zealand"],
+    ["Bosnien och Hercegovina", "Bosnia and Herzegovina"],
   ];
 
   it.each(samePairs)("kopplar ihop %s och %s", (a, b) => {
@@ -194,5 +199,16 @@ describe("matchFixture", () => {
         ambiguous
       )
     ).toBeNull();
+  });
+});
+
+describe("teamAlias", () => {
+  it("svenska landsnamn och klubbalias, annars null", () => {
+    expect(teamAlias("Sverige U20")).toBe("sweden u20");
+    expect(teamAlias("Elfenbenskusten")).toBe("ivory coast");
+    expect(teamAlias("Island")).toBe("iceland");
+    expect(teamAlias("Rhode Island")).toBeNull();
+    expect(teamAlias("NaVi")).toBe("natus vincere");
+    expect(teamAlias("Arsenal")).toBeNull();
   });
 });

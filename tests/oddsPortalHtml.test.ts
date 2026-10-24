@@ -25,6 +25,7 @@ import {
   lineFromSelection,
   liveBetDetail,
   swapSides,
+  pickMeeting,
   pickUpcoming,
   planMarket,
   sameGame,
@@ -266,6 +267,9 @@ describe("vägar till en spelad match", () => {
     expect(leagueResultsPath("Premier League")).toBe("/football/england/premier-league/results/");
     expect(leagueResultsPath("Spain - LaLiga")).toBe("/football/spain/laliga/results/");
     expect(leagueResultsPath("UFC")).toBeNull();
+    expect(leagueResultsPath("WNBA")).toBe("/basketball/usa/wnba/results/");
+    expect(leagueResultsPath("NBA")).toBe("/basketball/usa/nba/results/");
+    expect(leagueResultsPath("VM 2026")).toBe("/football/world/world-championship-2026/results/");
     expect(leagueResultsPath(null)).toBeNull();
   });
 
@@ -358,7 +362,29 @@ describe("BTTS och handikapp utan linje", () => {
     expect(lineFromSelection("Arsenal -1.5")).toBe(-1.5);
     expect(lineFromSelection("Leeds +0,25")).toBe(0.25);
     expect(lineFromSelection("Arsenal")).toBeNull();
+    expect(lineFromSelection("Barcelona (-1)")).toBe(-1);
     expect(lineFromSelection("Over 2.5")).toBeNull();
     expect(planMarket(input({ market: "spreads", selection: "Everton +1.5", selectionSide: "away", line: null }))).toMatchObject({ ok: true, kind: "ah", lineLabel: "Asian Handicap -1.5" });
+  });
+});
+
+describe("vilket möte bettet gäller", () => {
+  const day = (iso: string) => new Date(`${iso}T12:00:00Z`);
+  const meetings = [
+    { eventId: "aug", d: day("2025-08-23") },
+    { eventId: "jun15", d: day("2026-06-15") },
+    { eventId: "jul", d: day("2026-07-20") },
+  ];
+  const local = (y: number, m: number, d: number, h = 0) => new Date(y, m - 1, d, h);
+
+  it("närmast bettets datum, inom två dygn", () => {
+    expect(pickMeeting(meetings, local(2026, 6, 14, 21), null)).toBe("jun15");
+  });
+  it("bara datum (läggningsdagen): första mötet efter läggningen, inom tre veckor", () => {
+    expect(pickMeeting(meetings, local(2026, 5, 30), local(2026, 5, 30, 14))).toBe("jun15");
+    expect(pickMeeting(meetings, local(2026, 5, 1), local(2026, 5, 1, 14))).toBeNull();
+  });
+  it("med klockslag gissas inget: fel datum ska synas, inte ge en annan match", () => {
+    expect(pickMeeting(meetings, local(2026, 5, 30, 20), local(2026, 5, 30, 14))).toBeNull();
   });
 });

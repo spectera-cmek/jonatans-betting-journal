@@ -21,7 +21,34 @@ export function isScrapeableMarket(market: string, marketCategory: string | null
   );
 }
 /** CLV (i procent) som flaggas i utskriften — oftast fel marknad, inte ett slaget pris. */
-const SUSPICIOUS_CLV_PCT = 25;
+export const SUSPICIOUS_CLV_PCT = 25;
+
+export function isSuspicious(odds: number, closingOdds: number): boolean {
+  const pct = clvPct(odds, closingOdds);
+  return pct != null && Math.abs(pct) >= SUSPICIOUS_CLV_PCT;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Databasen (Neon) kan tappa anslutningen mitt i en lång körning — den somnar
+ * eller nätet hackar. Ett par nya försök med väntan emellan innan körningen
+ * stoppas; allt sparat dittills ligger kvar.
+ */
+async function withDbRetry<T>(fn: () => Promise<T>, log?: (line: string) => void): Promise<T> {
+  const waits = [3_000, 10_000, 30_000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      // P1001/P1002/P1017: servern nås inte, svarar inte eller stängde anslutningen.
+      if (attempt >= waits.length || !["P1001", "P1002", "P1017"].includes(code ?? "")) throw err;
+      log?.(`  (databasen svarar inte — försöker igen om ${waits[attempt] / 1000} s)`);
+      await sleep(waits[attempt]);
+    }
+  }
+}
 
 /** Sports OddsPortal scrape handles reliably enough for batch CLV. */
 export const SCRAPEABLE_SPORTS = [
@@ -51,6 +78,12 @@ export interface OddsPortalClvOptions {
   graceMinutes?: number;
   /** Pause between OddsPortal searches (default 1200). */
   pauseMs?: number;
+  /**
+   * Save closing odds whose CLV is ±SUSPICIOUS_CLV_PCT or more. Off by default:
+   * that size is almost always the wrong market (a live bet without a time, an
+   * unmarked boost, a different market logged as h2h), not a real edge.
+   */
+  saveSuspicious?: boolean;
   /**
    * Called with each result line as soon as that bet is done (it is also in
    * `details`). Lets a long run show progress instead of going quiet for hours.
@@ -135,7 +168,7 @@ function formatResult(
   const bk = scraped.bookmakerUsed ? ` via ${scraped.bookmakerUsed}` : "";
   // Så stor skillnad är nästan alltid fel marknad (halvlek, live, boost som inte
   // är markerad) snarare än ett riktigt slaget closing-pris.
-  const odd = pct != null && Math.abs(pct) >= SUSPICIOUS_CLV_PCT ? ` ⚠ kontrollera marknaden` : "";
+  const odd = isSuspicious(bet.odds, scraped.closingOdds) ? ` ⚠ kontrollera marknaden` : "";
   return `${bet.event}: closing ${scraped.closingOdds.toFixed(2)} (du ${bet.odds.toFixed(2)}, CLV ${pctStr})${bk}${odd}${dryRun ? " [dry-run]" : ""}`;
 }
 
@@ -281,11 +314,14 @@ export async function captureClosingFromOddsPortal(
         failed += 1;
         return;
       }
+      if (isSuspicious(bet.odds, row.result.closingOdds) && !opts.saveSuspicious) {
+        note(`  → sparades inte (kontrollera, eller kör med --save-suspicious)`);
+        failed += 1;
+        return;
+      }
       if (!dryRun) {
-        await prisma.bet.update({
-          where: { id: bet.id },
-          data: { closingOdds: row.result.closingOdds },
-        });
+        const closingOdds = row.result.closingOdds;
+        await withDbRetry(() => prisma.bet.update({ where: { id: bet.id }, data: { closingOdds } }), opts.log);
       }
       updated += 1;
     }
