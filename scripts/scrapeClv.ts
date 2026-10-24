@@ -85,12 +85,12 @@ async function main() {
     sinceDays: sinceDate ? undefined : sinceDays,
     graceMinutes: Number.isFinite(graceMinutes) ? graceMinutes : 15,
     postKickoffOnly: !allowLive,
+    log: (line) => console.log(`  ${line}`),
   });
 
   console.log(
     `\nKandidater ${result.candidates}, scrapade ${result.attempted}, uppdaterade ${result.updated}, misslyckade ${result.failed}`
   );
-  for (const d of result.details) console.log(`  ${d}`);
 
   console.log(
     dryRun

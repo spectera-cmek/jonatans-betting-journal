@@ -19,6 +19,7 @@ import {
   htmlToLines,
   isBlockedHtml,
   kickoffFromLines,
+  matchTeamsFromLines,
   meetingDate,
   parseBookmakerTable,
   featuredMatch,
@@ -313,7 +314,67 @@ function segmentsFor(team: string, segments: TeamSegment[]): string[] {
 }
 
 /** Söker tills laget dyker upp i träffarnas länkar; ger dess id-delar. */
-async function searchTeam(worker: ScraplingWorker, team: string, sport: string): Promise<TeamSegment[]> {
+/**
+ * Sidor som är desamma för många bets i en körning (ligans resultatsida,
+ * lagsök, h2h-sidor), sparade tolkade per worker. En körning över ett helt
+ * år hämtar då Premier Leagues resultatsida en gång, inte en gång per bet.
+ * Bara tolkat innehåll sparas — inte HTML:en, som är flera hundra kB per sida.
+ */
+interface PageMemo {
+  segments: Map<string, Promise<TeamSegment[]>>;
+  h2h: Map<string, Promise<H2hPage | null>>;
+}
+interface H2hPage {
+  blocked: boolean;
+  meetings: { eventId: string; dateText: string }[];
+  top: { eventId: string; date: Date } | null;
+}
+const memos = new WeakMap<ScraplingWorker, PageMemo>();
+function memoFor(worker: ScraplingWorker): PageMemo {
+  let m = memos.get(worker);
+  if (!m) memos.set(worker, (m = { segments: new Map(), h2h: new Map() }));
+  return m;
+}
+/**
+ * Kör `load` en gång per nyckel. Ett fel, eller ett svar `keep` inte godtar
+ * (tom lista, Cloudflare-spärr), sparas inte — nästa bet provar igen.
+ */
+function remember<T>(map: Map<string, Promise<T>>, key: string, load: () => Promise<T>, keep: (v: T) => boolean): Promise<T> {
+  const hit = map.get(key);
+  if (hit) return hit;
+  const p = load();
+  map.set(key, p);
+  p.then(
+    (v) => {
+      if (!keep(v)) map.delete(key);
+    },
+    () => map.delete(key)
+  );
+  return p;
+}
+
+function leagueSegments(worker: ScraplingWorker, leaguePath: string, sport: string): Promise<TeamSegment[]> {
+  return remember(memoFor(worker).segments, `league:${leaguePath}`, async () => {
+    const page = await worker.fetch({ mode: "browser", url: BASE + leaguePath, actions: [{ waitMs: 2500 }] }).catch(() => null);
+    return page && page.status < 400 && !isBlockedHtml(page.body) ? teamSegmentsFromLinks(page.body, sport) : [];
+  }, (segs) => segs.length > 0);
+}
+
+function h2hPage(worker: ScraplingWorker, path: string): Promise<H2hPage | null> {
+  return remember(memoFor(worker).h2h, path, async () => {
+    const page = await worker.fetch({ mode: "browser", url: BASE + path, actions: [{ waitMs: 2500 }] }).catch(() => null);
+    // Ett lagpar som aldrig mötts har ingen sida.
+    if (!page || page.status >= 400) return null;
+    if (isBlockedHtml(page.body)) return { blocked: true, meetings: [], top: null };
+    return { blocked: false, meetings: parseH2hMeetings(page.body, path), top: featuredMatch(htmlToLines(page.body), page.url) };
+  }, (page) => !page?.blocked);
+}
+
+function searchTeam(worker: ScraplingWorker, team: string, sport: string): Promise<TeamSegment[]> {
+  return remember(memoFor(worker).segments, `search:${sport}:${team.toLowerCase()}`, () => searchTeamUncached(worker, team, sport), (segs) => segs.length > 0);
+}
+
+async function searchTeamUncached(worker: ScraplingWorker, team: string, sport: string): Promise<TeamSegment[]> {
   for (const q of searchVariants(team).slice(0, 3)) {
     const res = await worker.fetch({
       mode: "browser",
@@ -337,10 +398,7 @@ async function findPlayedMatch(worker: ScraplingWorker, input: ScrapeBetInput, s
   if (!at || !input.homeTeam || !input.awayTeam) return null;
   const segments: TeamSegment[] = [];
   const leaguePath = leagueResultsPath(input.league);
-  if (leaguePath && leaguePath.startsWith(`/${sport}/`)) {
-    const page = await worker.fetch({ mode: "browser", url: BASE + leaguePath, actions: [{ waitMs: 2500 }] }).catch(() => null);
-    if (page && page.status < 400 && !isBlockedHtml(page.body)) segments.push(...teamSegmentsFromLinks(page.body, sport));
-  }
+  if (leaguePath && leaguePath.startsWith(`/${sport}/`)) segments.push(...(await leagueSegments(worker, leaguePath, sport)));
   for (const team of [input.homeTeam, input.awayTeam]) {
     if (!segmentsFor(team, segments).length) segments.push(...(await searchTeam(worker, team, sport)));
   }
@@ -349,14 +407,13 @@ async function findPlayedMatch(worker: ScraplingWorker, input: ScrapeBetInput, s
   const pairs = homes.flatMap((h) => aways.filter((a) => a !== h).map((a) => h2hPath(sport, h, a))).slice(0, MAX_H2H_PAIRS);
   for (const path of [...new Set(pairs)]) {
     // Ett lagpar som aldrig mötts har ingen sida — prova nästa i stället för att ge upp.
-    const page = await worker.fetch({ mode: "browser", url: BASE + path, actions: [{ waitMs: 2500 }] }).catch(() => null);
-    if (!page || page.status >= 400) continue;
-    if (isBlockedHtml(page.body)) return null;
-    const candidates = parseH2hMeetings(page.body, path)
+    const page = await h2hPage(worker, path);
+    if (!page) continue;
+    if (page.blocked) return null;
+    const candidates = page.meetings
       .map((m) => ({ eventId: m.eventId, d: meetingDate(m.dateText, at) }))
       .filter((x): x is { eventId: string; d: Date } => x.d !== null);
-    const top = featuredMatch(htmlToLines(page.body), page.url);
-    if (top) candidates.push({ eventId: top.eventId, d: top.date });
+    if (page.top) candidates.push({ eventId: page.top.eventId, d: page.top.date });
     const best = candidates
       .filter((x) => Math.abs(x.d.getTime() - at.getTime()) <= MEETING_WINDOW_MS)
       .sort((a, b) => Math.abs(a.d.getTime() - at.getTime()) - Math.abs(b.d.getTime() - at.getTime()))[0];
@@ -399,17 +456,57 @@ export async function scrapeClosingWith(worker: ScraplingWorker, input: ScrapeBe
   }
   const found = { url };
 
+  const page = await worker.fetch({ mode: "browser", url: found.url, actions: marketActions(plan, input) });
+  if (isBlockedHtml(page.body)) return fail("blocked", "OddsPortal blockerade (Cloudflare).", found.url);
+  let lines = htmlToLines(page.body);
+  const live = liveBetDetail(input.placedAt, kickoffFromLines(lines));
+  if (live) return fail("live_bet", live, found.url);
+
+  // Loggat i omvänd ordning ("Leeds - Arsenal" när Arsenal spelade hemma):
+  // vänd betet så att "hemma" och handikappets tecken följer OddsPortal.
+  if (isSwapped(input, matchTeamsFromLines(lines))) {
+    const turned = swapSides(input);
+    const turnedPlan = planMarket(turned);
+    if (!turnedPlan.ok) return fail("market_not_found", turnedPlan.detail, found.url);
+    if (turnedPlan.lineLabel !== plan.lineLabel) {
+      const again = await worker.fetch({ mode: "browser", url: found.url, actions: marketActions(turnedPlan, turned) });
+      if (isBlockedHtml(again.body)) return fail("blocked", "OddsPortal blockerade (Cloudflare).", found.url);
+      lines = htmlToLines(again.body);
+    }
+    const r = closingFromLines(lines, turnedPlan, turned, found.url);
+    return r.ok ? { ...r, detail: `${r.detail} (lagen står i omvänd ordning i loggen)` } : r;
+  }
+  return closingFromLines(lines, plan, input, found.url);
+}
+
+type Plan = Extract<ReturnType<typeof planMarket>, { ok: true }>;
+
+/** Klicken som tar fram betets flik och linje på matchsidan. */
+function marketActions(plan: Plan, input: ScrapeBetInput): NonNullable<Parameters<ScraplingWorker["fetch"]>[0]["actions"]> {
   const actions: NonNullable<Parameters<ScraplingWorker["fetch"]>[0]["actions"]> = [TABS.wait];
   if (plan.kind !== "1x2" || input.sport?.toLowerCase() !== "football") {
     actions.push({ clickFirst: plan.tabs }, { waitMs: SETTLE_MS });
   }
   if (plan.lineLabel) actions.push({ clickText: plan.lineLabel }, { waitMs: SETTLE_MS });
-  const page = await worker.fetch({ mode: "browser", url: found.url, actions });
-  if (isBlockedHtml(page.body)) return fail("blocked", "OddsPortal blockerade (Cloudflare).", found.url);
-  const lines = htmlToLines(page.body);
-  const live = liveBetDetail(input.placedAt, kickoffFromLines(lines));
-  if (live) return fail("live_bet", live, found.url);
-  return closingFromLines(lines, plan, input, found.url);
+  return actions;
+}
+
+/** Bettets hemmalag är sidans bortalag och tvärtom. */
+export function isSwapped(input: ScrapeBetInput, page: { home: string; away: string } | null): boolean {
+  if (!page || !input.homeTeam || !input.awayTeam) return false;
+  const straight = teamSimilarity(input.homeTeam, page.home) + teamSimilarity(input.awayTeam, page.away);
+  const turned = teamSimilarity(input.homeTeam, page.away) + teamSimilarity(input.awayTeam, page.home);
+  return (
+    turned > straight &&
+    teamSimilarity(input.homeTeam, page.away) >= MIN_TEAM_SIMILARITY &&
+    teamSimilarity(input.awayTeam, page.home) >= MIN_TEAM_SIMILARITY
+  );
+}
+
+/** Samma bet med lagen bytta: spelet gäller fortfarande samma lag. */
+export function swapSides(input: ScrapeBetInput): ScrapeBetInput {
+  const side = input.selectionSide === "home" ? "away" : input.selectionSide === "away" ? "home" : input.selectionSide;
+  return { ...input, homeTeam: input.awayTeam, awayTeam: input.homeTeam, selectionSide: side };
 }
 
 /** Minuter efter avspark som ännu räknas som före matchen (klockor, avrundning). */
@@ -442,7 +539,12 @@ export async function scrapeClosingForBet(input: ScrapeBetInput): Promise<Scrape
 /** Många bets med en och samma webbläsare, i tur och ordning. */
 export async function scrapeClosingBatch(
   items: BatchScrapeItem[],
-  opts: { pauseMs?: number; worker?: ScraplingWorker } = {}
+  opts: {
+    pauseMs?: number;
+    worker?: ScraplingWorker;
+    /** Efter varje bet, innan nästa hämtas — för att spara och visa framsteg medan körningen pågår. */
+    onResult?: (row: BatchScrapeResult, index: number, total: number) => Promise<void> | void;
+  } = {}
 ): Promise<BatchScrapeResult[]> {
   if (items.length === 0) return [];
   return withScrapeLock(async () => {
@@ -459,6 +561,7 @@ export async function scrapeClosingBatch(
           result = fail("browser_error", e instanceof Error ? e.message : String(e));
         }
         out.push({ id: item.id, result });
+        await opts.onResult?.({ id: item.id, result }, i, items.length);
         if (i < items.length - 1 && pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
       }
     } finally {

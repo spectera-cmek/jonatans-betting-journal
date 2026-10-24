@@ -40,14 +40,23 @@ export interface OddsPortalClvOptions {
   graceMinutes?: number;
   /** Pause between OddsPortal searches (default 1200). */
   pauseMs?: number;
+  /**
+   * Called with each result line as soon as that bet is done (it is also in
+   * `details`). Lets a long run show progress instead of going quiet for hours.
+   */
+  log?: (line: string) => void;
   prisma?: PrismaClient;
 }
 
-async function scrapeBatch(items: { id: string; input: ScrapeBetInput }[], pauseMs: number | undefined) {
+async function scrapeBatch(
+  items: { id: string; input: ScrapeBetInput }[],
+  pauseMs: number | undefined,
+  onResult: (row: { id: string; result: ScrapeClosingResult }, index: number, total: number) => Promise<void>
+) {
   // Laddas bara här: /api/sync importerar den här filen och ska inte dra in
   // cheerio och child_process för en väg som bara körs från skripten.
   const { scrapeClosingBatch } = await import("./oddsPortal/scrape");
-  return scrapeClosingBatch(items, { pauseMs });
+  return scrapeClosingBatch(items, { pauseMs, onResult });
 }
 
 export interface OddsPortalClvResult {
@@ -229,40 +238,47 @@ export async function captureClosingFromOddsPortal(
     };
   }
 
-  const scraped = await scrapeBatch(
-    batchItems.map(({ id, input }) => ({ id, input })),
-    opts.pauseMs
-  );
-
   const byId = new Map(batchItems.map((b) => [b.id, b.bet]));
   let updated = 0;
   let failed = 0;
+  const startedAt = Date.now();
+  const note = (line: string) => {
+    details.push(line);
+    opts.log?.(line);
+  };
 
-  for (const row of scraped) {
-    const bet = byId.get(row.id);
-    if (!bet) continue;
-    details.push(formatResult(bet, row.result, dryRun));
+  // Each bet is written as soon as it is scraped: a run over a whole season
+  // takes hours, and a crash or Ctrl+C must not throw away what was fetched.
+  // A rerun picks up where this one stopped, since saved bets have closingOdds.
+  await scrapeBatch(
+    batchItems.map(({ id, input }) => ({ id, input })),
+    opts.pauseMs,
+    async (row, index, total) => {
+      const bet = byId.get(row.id);
+      if (!bet) return;
+      const left = total - index - 1;
+      const eta = left > 0 ? ` · ~${Math.ceil((((Date.now() - startedAt) / (index + 1)) * left) / 60_000)} min kvar` : "";
+      note(`[${index + 1}/${total}${eta}] ${formatResult(bet, row.result, dryRun)}`);
 
-    if (!row.result.ok || row.result.closingOdds == null || !(row.result.closingOdds > 1)) {
-      failed += 1;
-      continue;
+      if (!row.result.ok || row.result.closingOdds == null || !(row.result.closingOdds > 1)) {
+        failed += 1;
+        return;
+      }
+      // Skip writing provisional (pre-kickoff) live odds in batch mode.
+      if (row.result.provisional && opts.postKickoffOnly !== false) {
+        note(`  → hoppade provisional (pre-kickoff)`);
+        failed += 1;
+        return;
+      }
+      if (!dryRun) {
+        await prisma.bet.update({
+          where: { id: bet.id },
+          data: { closingOdds: row.result.closingOdds },
+        });
+      }
+      updated += 1;
     }
-
-    // Skip writing provisional (pre-kickoff) live odds in batch mode.
-    if (row.result.provisional && opts.postKickoffOnly !== false) {
-      details.push(`  → hoppade provisional (pre-kickoff)`);
-      failed += 1;
-      continue;
-    }
-
-    if (!dryRun) {
-      await prisma.bet.update({
-        where: { id: bet.id },
-        data: { closingOdds: row.result.closingOdds },
-      });
-    }
-    updated += 1;
-  }
+  );
 
   return {
     candidates: candidates.length,

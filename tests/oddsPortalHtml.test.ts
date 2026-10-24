@@ -7,6 +7,7 @@ import {
   h2hKey,
   h2hPath,
   kickoffFromLines,
+  matchTeamsFromLines,
   htmlToLines,
   meetingDate,
   parseH2hMeetings,
@@ -20,7 +21,9 @@ import {
 import {
   closingFromLines,
   leagueResultsPath,
+  isSwapped,
   liveBetDetail,
+  swapSides,
   pickUpcoming,
   planMarket,
   searchVariants,
@@ -291,5 +294,32 @@ describe("live-spel", () => {
     expect(liveBetDetail(at(1), kickoff)).toBeNull(); // inom marginalen
     expect(liveBetDetail(null, kickoff)).toBeNull();
     expect(liveBetDetail(at(35), null)).toBeNull();
+  });
+});
+
+describe("lag i omvänd ordning", () => {
+  // Raderna före datumet på matchsidan, Leeds–Arsenal 31 jan 2026.
+  const page = ["Premier League 2025/2026", ">", "Leeds - Arsenal", "Leeds", "0", "-", "Arsenal", "4", "Saturday,", "31 Jan 2026,", "17:00"];
+
+  it("hemma- och bortalag ur matchsidans rubrik", () => {
+    expect(matchTeamsFromLines(page)).toEqual({ home: "Leeds", away: "Arsenal" });
+    expect(matchTeamsFromLines(["Arsenal", "1"])).toBeNull();
+  });
+
+  it("vänder bara när lagen tydligt står omvänt", () => {
+    const teams = matchTeamsFromLines(page);
+    expect(isSwapped(input({ homeTeam: "Arsenal", awayTeam: "Leeds United" }), teams)).toBe(true);
+    expect(isSwapped(input({ homeTeam: "Leeds", awayTeam: "Arsenal" }), teams)).toBe(false);
+    expect(isSwapped(input({ homeTeam: "Arsenal", awayTeam: "Everton" }), teams)).toBe(false);
+    expect(isSwapped(input({ homeTeam: "Arsenal", awayTeam: "Leeds" }), null)).toBe(false);
+  });
+
+  it("det vända betet gäller samma lag och samma handikapp", () => {
+    const bet = input({ homeTeam: "Arsenal", awayTeam: "Leeds", market: "spreads", selection: "Arsenal -1.0", selectionSide: "home", line: -1 });
+    const turned = swapSides(bet);
+    expect(turned).toMatchObject({ homeTeam: "Leeds", awayTeam: "Arsenal", selectionSide: "away", line: -1 });
+    // Arsenal −1 borta = Leeds +1 sett från hemmalaget, som OddsPortal anger det.
+    expect(planMarket(turned)).toMatchObject({ ok: true, kind: "ah", column: "away", lineLabel: "Asian Handicap +1" });
+    expect(swapSides(input({ selectionSide: "over" })).selectionSide).toBe("over");
   });
 });

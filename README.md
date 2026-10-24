@@ -154,6 +154,8 @@ Primary free CLV path for featured markets after kickoff. The pages are fetched 
 ```bash
 npm run scrape:clv -- --list                         # candidates only
 npm run scrape:clv -- --confirm --limit 30            # post-kickoff batch
+npm run scrape:clv -- --confirm --since 2026-01-01 --limit 2000   # a whole year; saved bet by bet, rerun resumes
+npm run clv:coverage                                  # where closing odds are missing, and why
 npm run backfill:clv-scrape -- --limit 50             # 90d backfill (writes DB)
 ```
 

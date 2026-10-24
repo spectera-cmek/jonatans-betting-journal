@@ -328,6 +328,23 @@ export function kickoffFromLines(lines: string[]): Date | null {
   return null;
 }
 
+/** Datumraden på en matchsida: "31 Jan 2026,". */
+const DATE_LINE = /^(\d{1,2}) ([A-Za-z]{3}) (\d{4}),?$/;
+
+/**
+ * Lagen i den ordning OddsPortal har dem (hemma först), ur rubriken
+ * "Leeds - Arsenal" som står några rader före datumet på matchsidan.
+ */
+export function matchTeamsFromLines(lines: string[]): { home: string; away: string } | null {
+  const i = lines.findIndex((l) => DATE_LINE.test(l));
+  for (let j = i - 1; j >= Math.max(0, i - 12); j--) {
+    const m = lines[j].match(/^(.+?) - (.+)$/);
+    if (m) return { home: m[1].trim(), away: m[2].trim() };
+  }
+  return null;
+}
+
+
 /**
  * Matchen h2h-sidan visar överst. Den står inte i möteslistan (ingen länk);
  * id:t finns i sidans adress efter laddning (#eventId:…) och datumet som
