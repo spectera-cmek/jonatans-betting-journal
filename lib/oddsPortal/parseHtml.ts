@@ -363,3 +363,46 @@ export function featuredMatch(lines: string[], finalUrl: string): { eventId: str
   }
   return null;
 }
+
+// --- Ligans resultatsida ----------------------------------------------------
+//
+// /{sport}/{land}/{liga}/results/ listar spelade matcher, nyast först, 50 per
+// sida (#/page/2/ osv.), under datumrubriker: "19 Oct 2026", "Today, 25 Oct",
+// "Yesterday, 24 Oct". Varje rad länkar till /{sport}/h2h/{lag}/{lag}/#eventId.
+// Till skillnad från h2h-sidan finns här varje match, inte bara den senaste.
+
+export interface ResultsRow {
+  eventId: string;
+  /** h2h-sökvägen raden länkar till (lagen i bokstavsordning, inte hemma/borta). */
+  path: string;
+  /** Lagens id-delar ur länken. */
+  segments: [string, string];
+  /** Matchdagen kl. 12 UTC, som mötesdatumen. */
+  date: Date;
+}
+
+const ROW_TOKENS =
+  /<div[^>]*>(\d{2}) ([A-Z][a-z]{2}) (\d{4})[^<]*<\/div>|>(Today|Yesterday), (\d{1,2}) ([A-Z][a-z]{2})<|href="(\/[a-z-]+\/h2h\/([a-z0-9-]+-[A-Za-z0-9]{8})\/([a-z0-9-]+-[A-Za-z0-9]{8})\/)#([A-Za-z0-9]{8})"/g;
+
+/** Raderna på en resultatsida, i sidans ordning, med datumrubriken de står under. */
+export function parseResultsRows(html: string, sportSlug: string, now: Date = new Date()): ResultsRow[] {
+  const out = new Map<string, ResultsRow>();
+  let date: Date | null = null;
+  for (const m of html.matchAll(ROW_TOKENS)) {
+    if (m[1]) {
+      const month = MONTHS.indexOf(m[2].toLowerCase());
+      if (month >= 0) date = new Date(Date.UTC(Number(m[3]), month, Number(m[1]), 12));
+    } else if (m[4]) {
+      // "Today, 25 Oct" saknar år: året då det var den dagen, sett från nu.
+      const month = MONTHS.indexOf(m[6].toLowerCase());
+      if (month >= 0) {
+        const d = new Date(Date.UTC(now.getUTCFullYear(), month, Number(m[5]), 12));
+        if (d.getTime() > now.getTime() + 2 * 86_400_000) d.setUTCFullYear(d.getUTCFullYear() - 1);
+        date = d;
+      }
+    } else if (date && m[7].startsWith(`/${sportSlug}/`) && !out.has(m[10])) {
+      out.set(m[10], { eventId: m[10], path: m[7], segments: [m[8], m[9]], date });
+    }
+  }
+  return [...out.values()];
+}

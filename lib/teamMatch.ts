@@ -39,6 +39,8 @@ export const TEAM_ALIASES: Record<string, string> = {
   "sporting cp": "sporting lisbon",
   // Esport: spelbolagen skriver förkortningen, OddsPortal hela namnet.
   navi: "natus vincere",
+  psg: "paris saint germain",
+  "g a eagles": "go ahead eagles",
 };
 
 /**
@@ -49,6 +51,7 @@ const TOKEN_ALIASES: Record<string, string> = {
   atl: "atletico",
   utd: "united",
   man: "manchester",
+  munchen: "munich",
 };
 
 /**

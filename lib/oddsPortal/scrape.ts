@@ -33,6 +33,8 @@ import {
   featuredMatch,
   parseH2hMeetings,
   parseLineSummary,
+  parseResultsRows,
+  type ResultsRow,
   parseSearchCandidates,
   tableToOddsRows,
   teamSegmentsFromLinks,
@@ -164,8 +166,10 @@ export function planMarket(input: ScrapeBetInput):
     return { ok: false, detail: "Lagtotaler finns inte på OddsPortals Over/Under-flik — ange closing manuellt." };
   }
   if (target.column === "over" || target.column === "under") {
-    const label = target.line != null ? `Over/Under ${formatLine(target.line, true)}` : null;
-    return { ok: true, kind: "ou", tabs: ["Over/Under", "Over Under", "Totals"], lineLabel: label, line: target.line, column: target.column };
+    // Utan linje går det inte att välja rad — sidans första linje (ofta 0,5) blir fel.
+    const line = target.line ?? ouLineFromSelection(input.selection);
+    if (line == null) return { ok: false, detail: "Över/under utan linje." };
+    return { ok: true, kind: "ou", tabs: ["Over/Under", "Over Under", "Totals"], lineLabel: `Over/Under ${formatLine(line, true)}`, line, column: target.column };
   }
   if (target.tabLabels.includes("Asian Handicap")) {
     // Linjen saknas ibland i fältet men står i valet: "Arsenal -1.5".
@@ -272,6 +276,35 @@ const LEAGUE_PAGES: Record<string, string> = {
   wnba: "/basketball/usa/wnba/",
   nfl: "/american-football/usa/nfl/",
   mlb: "/baseball/usa/mlb/",
+  eredivisie: "/football/netherlands/eredivisie/",
+  "liga portugal": "/football/portugal/liga-portugal/",
+  "primeira liga": "/football/portugal/liga-portugal/",
+  "jupiler": "/football/belgium/jupiler-pro-league/",
+  "belgian pro league": "/football/belgium/jupiler-pro-league/",
+  superligaen: "/football/denmark/superliga/",
+  "danish superliga": "/football/denmark/superliga/",
+  eliteserien: "/football/norway/eliteserien/",
+  veikkausliiga: "/football/finland/veikkausliiga/",
+  "scottish premiership": "/football/scotland/premiership/",
+  mls: "/football/usa/mls/",
+  "liga mx": "/football/mexico/liga-mx/",
+  brasileirao: "/football/brazil/serie-a-betano/",
+  "brasileirão": "/football/brazil/serie-a-betano/",
+  "liga profesional": "/football/argentina/liga-profesional/",
+  "2. bundesliga": "/football/germany/2-bundesliga/",
+  "ligue 2": "/football/france/ligue-2/",
+  "laliga 2": "/football/spain/laliga2/",
+  "segunda division": "/football/spain/laliga2/",
+  "serie b": "/football/italy/serie-b/",
+  "conference league": "/football/europe/conference-league/",
+  "nations league": "/football/europe/uefa-nations-league/",
+  "swiss super league": "/football/switzerland/super-league/",
+  "austrian bundesliga": "/football/austria/bundesliga/",
+  "league one": "/football/england/league-one/",
+  shl: "/hockey/sweden/shl/",
+  hockeyallsvenskan: "/hockey/sweden/hockeyallsvenskan/",
+  liiga: "/hockey/finland/liiga/",
+  euroleague: "/basketball/europe/euroleague/",
   "vm 2026": "/football/world/world-championship-2026/",
   "world cup 2026": "/football/world/world-championship-2026/",
   "fifa world cup": "/football/world/world-championship-2026/",
@@ -279,13 +312,46 @@ const LEAGUE_PAGES: Record<string, string> = {
 
 /** Ligans resultatsida, eller null för ligor som inte står i listan. */
 export function leagueResultsPath(league: string | null | undefined): string | null {
+  const base = leagueBase(league);
+  return base ? `${base}results/` : null;
+}
+
+function leagueBase(league: string | null | undefined): string | null {
   const l = (league ?? "").trim().toLowerCase();
   if (!l) return null;
   // Längsta träffen vinner: "WNBA" innehåller "nba".
   const key = Object.keys(LEAGUE_PAGES)
     .filter((k) => l === k || l.includes(k))
     .sort((a, b) => b.length - a.length)[0];
-  return key ? `${LEAGUE_PAGES[key]}results/` : null;
+  return key ? LEAGUE_PAGES[key] : null;
+}
+
+/** Ligor vars säsong är ett kalenderår ("allsvenskan-2025"); övriga går över årsskiftet ("premier-league-2025-2026"). */
+const CALENDAR_SEASONS = [
+  "/football/sweden/",
+  "/football/norway/",
+  "/football/finland/",
+  "/football/usa/mls/",
+  "/football/brazil/",
+  "/football/argentina/",
+  "/baseball/usa/mlb/",
+];
+/** Turneringar utan säsonger i adressen. */
+const SINGLE_EDITION = ["/football/world/world-championship-2026/"];
+
+/**
+ * Resultatsidan för säsongen ett datum hör till. Innevarande säsong har
+ * ingen säsong i adressen; tidigare säsonger har ("allsvenskan-2025/results/").
+ */
+export function seasonResultsPath(base: string, at: Date, now: Date = new Date()): string {
+  if (SINGLE_EDITION.includes(base)) return `${base}results/`;
+  const calendar = CALENDAR_SEASONS.some((p) => base.startsWith(p));
+  // Säsong som går över årsskiftet börjar i juli: juni 2026 hör till 2025/26.
+  const season = (d: Date) => (calendar ? d.getUTCFullYear() : d.getUTCMonth() >= 6 ? d.getUTCFullYear() : d.getUTCFullYear() - 1);
+  const y = season(at);
+  if (y >= season(now)) return `${base}results/`;
+  const slug = base.replace(/\/$/, "");
+  return calendar ? `${slug}-${y}/results/` : `${slug}-${y}-${y + 1}/results/`;
 }
 
 /** Sidor att leta lag på när varken ligan eller söket gav dem. */
@@ -372,6 +438,7 @@ function segmentsFor(team: string, segments: TeamSegment[]): string[] {
 interface PageMemo {
   segments: Map<string, Promise<TeamSegment[]>>;
   h2h: Map<string, Promise<H2hPage | null>>;
+  results: Map<string, Promise<ResultsRow[]>>;
 }
 interface H2hPage {
   blocked: boolean;
@@ -381,7 +448,7 @@ interface H2hPage {
 const memos = new WeakMap<ScraplingWorker, PageMemo>();
 function memoFor(worker: ScraplingWorker): PageMemo {
   let m = memos.get(worker);
-  if (!m) memos.set(worker, (m = { segments: new Map(), h2h: new Map() }));
+  if (!m) memos.set(worker, (m = { segments: new Map(), h2h: new Map(), results: new Map() }));
   return m;
 }
 /**
@@ -419,6 +486,52 @@ function h2hPage(worker: ScraplingWorker, path: string): Promise<H2hPage | null>
   }, (page) => !page?.blocked);
 }
 
+/** En sida ur ligans resultatarkiv (50 matcher). Tom lista när sidorna tagit slut. */
+function resultsPage(worker: ScraplingWorker, path: string, page: number, sport: string): Promise<ResultsRow[]> {
+  const url = page === 1 ? BASE + path : `${BASE}${path}#/page/${page}/`;
+  return remember(memoFor(worker).results, url, async () => {
+    const res = await worker.fetch({ mode: "browser", url, actions: [{ waitMs: 2500 }] }).catch(() => null);
+    return res && res.status < 400 && !isBlockedHtml(res.body) ? parseResultsRows(res.body, sport) : [];
+  }, (rows) => rows.length > 0);
+}
+
+/** Högst så många arkivsidor per säsong (50 matcher styck) — en hel säsong i de flesta ligor. */
+const MAX_RESULTS_PAGES = 10;
+
+/**
+ * Matchen i ligans resultatarkiv: bläddrar bakåt från nyaste sidan tills
+ * bettets datum är passerat. Lagen jämförs med raderna; datumet väljs som för
+ * h2h-mötena (pickMeeting). Null när ligan är okänd eller matchen inte finns.
+ */
+async function findInResults(worker: ScraplingWorker, input: ScrapeBetInput, sport: string, at: Date): Promise<string | null> {
+  const base = leagueBase(input.league);
+  if (!base || !base.startsWith(`/${sport}/`) || !input.homeTeam || !input.awayTeam) return null;
+  const path = seasonResultsPath(base, at);
+  const candidates: { eventId: string; d: Date }[] = [];
+  const urlFor = new Map<string, string>();
+  let previousFirst = "";
+  for (let page = 1; page <= MAX_RESULTS_PAGES; page++) {
+    const rows = await resultsPage(worker, path, page, sport);
+    // Tom sida, eller samma sida igen (OddsPortal visar sista sidan för höga nummer): slut.
+    if (!rows.length || rows[0].eventId === previousFirst) break;
+    previousFirst = rows[0].eventId;
+    for (const r of rows) {
+      const names = r.segments.map((seg) => ({ segment: seg, name: seg.replace(/-[A-Za-z0-9]{8}$/, "").replace(/-/g, " "), count: 1 }));
+      if (segmentsFor(input.homeTeam, names).length && segmentsFor(input.awayTeam, names).length) {
+        const [h] = segmentsFor(input.homeTeam, names);
+        const [a] = segmentsFor(input.awayTeam, names);
+        if (h === a) continue;
+        candidates.push({ eventId: r.eventId, d: r.date });
+        urlFor.set(r.eventId, `${BASE}${r.path}#${r.eventId}`);
+      }
+    }
+    // Sidorna går bakåt i tiden: när sidans äldsta match är äldre än bettet finns inget mer att hämta.
+    if (rows[rows.length - 1].date.getTime() < at.getTime() - MEETING_WINDOW_MS) break;
+  }
+  const best = pickMeeting(candidates, at, input.placedAt ?? null);
+  return best ? urlFor.get(best) ?? null : null;
+}
+
 function searchTeam(worker: ScraplingWorker, team: string, sport: string): Promise<TeamSegment[]> {
   return remember(memoFor(worker).segments, `search:${sport}:${team.toLowerCase()}`, () => searchTeamUncached(worker, team, sport), (segs) => segs.length > 0);
 }
@@ -446,6 +559,10 @@ async function searchTeamUncached(worker: ScraplingWorker, team: string, sport: 
 async function findPlayedMatch(worker: ScraplingWorker, input: ScrapeBetInput, sport: string): Promise<string | null> {
   const at = input.eventAt;
   if (!at || !input.homeTeam || !input.awayTeam) return null;
+  // Ligans resultatarkiv har varje spelad match. h2h-sidan listar tidigare möten
+  // bara när lagen har en kommande match — annars bara det senaste mötet.
+  const archived = await findInResults(worker, input, sport, at);
+  if (archived) return archived;
   const segments: TeamSegment[] = [];
   const leaguePath = leagueResultsPath(input.league);
   if (leaguePath && leaguePath.startsWith(`/${sport}/`)) segments.push(...(await leagueSegments(worker, leaguePath, sport)));
@@ -560,6 +677,13 @@ export async function scrapeClosingWith(worker: ScraplingWorker, input: ScrapeBe
 }
 
 type Plan = Extract<ReturnType<typeof planMarket>, { ok: true }>;
+
+/** "Över 2.5", "Under 3,5 mål" → linjen. Null utan över/under och ett tal. */
+export function ouLineFromSelection(selection: string | null | undefined): number | null {
+  // Inte \b: den räknar inte "ö" som en bokstav, så "Över" skulle missas.
+  const m = (selection ?? "").match(/(?:^|[^a-zåäö])(?:över|over|under|o|u)\s*(\d+(?:[.,]\d+)?)/i);
+  return m ? Number(m[1].replace(",", ".")) : null;
+}
 
 /** "Arsenal -1.5" / "Leeds +0,25" → linjen. Null utan ett tecken framför talet. */
 export function lineFromSelection(selection: string | null | undefined): number | null {

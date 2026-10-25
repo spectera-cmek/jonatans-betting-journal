@@ -18,7 +18,9 @@ export type ScraplingAction =
   /** Klickar den första texten i listan som finns och syns. */
   | { clickFirst: string[]; exact?: boolean; timeoutMs?: number }
   | { waitMs: number }
-  | { waitSelector: string; timeoutMs?: number };
+  | { waitSelector: string; timeoutMs?: number }
+  /** Rullar ner sidan i steg — innehåll som laddas först när det syns. */
+  | { scrollBottom: true; steps?: number };
 
 export interface ScraplingRequest {
   /** "http": snabb hämtning med webbläsarens TLS-fingeravtryck. "browser": riktig webbläsare. */
@@ -102,6 +104,7 @@ function toWireAction(a: ScraplingAction): Record<string, unknown> {
   if ("clickText" in a) return { click_text: a.clickText, exact: a.exact ?? true, timeout_ms: a.timeoutMs };
   if ("clickFirst" in a) return { click_first: a.clickFirst, exact: a.exact ?? true, timeout_ms: a.timeoutMs };
   if ("waitMs" in a) return { wait_ms: a.waitMs };
+  if ("scrollBottom" in a) return { scroll_bottom: true, steps: a.steps };
   return { wait_selector: a.waitSelector, timeout_ms: a.timeoutMs };
 }
 

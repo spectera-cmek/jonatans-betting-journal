@@ -17,12 +17,15 @@ import {
   parseLineSummary,
   parseSearchCandidates,
   tableToOddsRows,
+  parseResultsRows,
 } from "../lib/oddsPortal/parseHtml";
 import {
   closingFromLines,
   leagueResultsPath,
   isSwapped,
   lineFromSelection,
+  ouLineFromSelection,
+  seasonResultsPath,
   liveBetDetail,
   swapSides,
   pickMeeting,
@@ -386,5 +389,47 @@ describe("vilket möte bettet gäller", () => {
   });
   it("med klockslag gissas inget: fel datum ska synas, inte ge en annan match", () => {
     expect(pickMeeting(meetings, local(2026, 5, 30, 20), local(2026, 5, 30, 14))).toBeNull();
+  });
+});
+
+describe("över/under utan sparad linje", () => {
+  it("linjen ur valet", () => {
+    expect(ouLineFromSelection("Över 2.5")).toBe(2.5);
+    expect(ouLineFromSelection("Under 3,5 mål")).toBe(3.5);
+    expect(ouLineFromSelection("Antal mål: Över 2.5")).toBe(2.5);
+    expect(ouLineFromSelection("Arsenal")).toBeNull();
+  });
+  it("utan linje alls tas ingen rad — sidans första linje vore fel", () => {
+    expect(planMarket(input({ market: "totals", selection: "Över", selectionSide: "over", line: null }))).toMatchObject({ ok: false });
+    expect(planMarket(input({ market: "totals", selection: "Över 2.5", selectionSide: "over", line: null }))).toMatchObject({ ok: true, line: 2.5, lineLabel: "Over/Under +2.5" });
+  });
+});
+
+describe("ligans resultatarkiv", () => {
+  it("rader med datumrubriken de står under, en per match", () => {
+    const html = `
+      <div class="x">Today, 25 Oct</div>
+      <div class="h"><div>19 Oct 2026</div></div>
+      <a href="/football/h2h/degerfors-zNSwBuue/kalmar-rkrUu5ae/#4l9GpcXN">Degerfors</a>
+      <a href="/football/h2h/degerfors-zNSwBuue/kalmar-rkrUu5ae/#4l9GpcXN">igen</a>
+      <div class="h"><div>18 Oct 2026</div></div>
+      <a href="/football/h2h/aik-lzqk4S68/malmo-ff-tYNTdpar/#AbCdEf12">AIK</a>
+      <a href="/hockey/h2h/a-12345678/b-12345678/#ZZZZZZZZ">annan sport</a>`;
+    const rows = parseResultsRows(html, "football", new Date("2026-10-25T10:00:00Z"));
+    expect(rows.map((r) => [r.eventId, r.date.toISOString().slice(0, 10)])).toEqual([
+      ["4l9GpcXN", "2026-10-19"],
+      ["AbCdEf12", "2026-10-18"],
+    ]);
+    expect(rows[1].segments).toEqual(["aik-lzqk4S68", "malmo-ff-tYNTdpar"]);
+  });
+
+  it("säsongens sida: innevarande utan år, tidigare med", () => {
+    const now = new Date("2026-10-25T12:00:00Z");
+    expect(seasonResultsPath("/football/sweden/allsvenskan/", new Date("2026-04-27T12:00:00Z"), now)).toBe("/football/sweden/allsvenskan/results/");
+    expect(seasonResultsPath("/football/sweden/allsvenskan/", new Date("2025-09-01T12:00:00Z"), now)).toBe("/football/sweden/allsvenskan-2025/results/");
+    expect(seasonResultsPath("/football/england/premier-league/", new Date("2026-03-11T12:00:00Z"), now)).toBe("/football/england/premier-league-2025-2026/results/");
+    expect(seasonResultsPath("/football/england/premier-league/", new Date("2026-08-22T12:00:00Z"), now)).toBe("/football/england/premier-league/results/");
+    expect(seasonResultsPath("/basketball/usa/nba/", new Date("2026-06-06T12:00:00Z"), now)).toBe("/basketball/usa/nba-2025-2026/results/");
+    expect(seasonResultsPath("/football/world/world-championship-2026/", new Date("2026-06-21T12:00:00Z"), now)).toBe("/football/world/world-championship-2026/results/");
   });
 });

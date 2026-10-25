@@ -9,7 +9,8 @@ Protokoll: en JSON per rad. stdin tar anrop, stdout ger svar.
   anrop:  {"id": 1, "mode": "browser" | "http", "url": "...",
            "wait_selector"?: "...", "network_idle"?: true, "timeout_ms"?: 60000,
            "headers"?: {...}, "actions"?: [{"click_text": "..."} | {"click_first": ["...", "..."]}
-                                           | {"wait_ms": 500} | {"wait_selector": "..."}]}
+                                           | {"wait_ms": 500} | {"wait_selector": "..."}
+                                          | {"scroll_bottom": true}]}
   svar:   {"id": 1, "ok": true, "status": 200, "url": "...", "body": "...",
            "actions"?: [{"ok": true} | {"ok": false, "detail": "..."}]}
           {"id": 1, "ok": false, "error": "..."}
@@ -175,6 +176,12 @@ def run_actions(page, actions, results):
                     raise ValueError(f"ingen av {action['click_first']} finns på sidan")
             elif "wait_ms" in action:
                 page.wait_for_timeout(int(action["wait_ms"]))
+            elif "scroll_bottom" in action:
+                # Innehåll längre ner laddas först när det syns (OddsPortals H2H-lista).
+                # Några steg i taget, så att det som laddas på vägen hinner komma.
+                for _ in range(int(action.get("steps", 6))):
+                    page.mouse.wheel(0, 2500)
+                    page.wait_for_timeout(400)
             elif "wait_selector" in action:
                 page.locator(action["wait_selector"]).first.wait_for(timeout=action.get("timeout_ms", 12000))
             else:
