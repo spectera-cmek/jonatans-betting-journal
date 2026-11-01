@@ -75,6 +75,7 @@ model NbaGame {
   odds        NbaOdds[]
   projections NbaProjection[]
   overrides   NbaMinutesOverride[]
+  picks       NbaPick[]
 
   @@index([startAt])
   @@index([status, startAt])
@@ -211,6 +212,40 @@ model NbaProjection {
 
   @@unique([gameId, market])
   @@index([modelVersion, createdAt])
+}
+
+/// Modellens pick i poäng, låst mot första linjen den såg och aldrig
+/// omprissatt. Facit och CLV räknas mot den låsta linjen.
+model NbaPick {
+  id           Int      @id @default(autoincrement())
+  gameId       Int
+  game         NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  /// spread | total
+  market       String
+  lockedAt     DateTime @default(now())
+  book         String
+  /// Spread: hemmalagets handicap. Total: totalen.
+  line         Float
+  price1       Float
+  price2       Float
+  /// Modellens linje när picken låstes (samma perspektiv som line).
+  modelLine    Float
+  /// 1 = hemma/över, 2 = borta/under.
+  side         Int
+  edgePts      Float
+  modelVersion String
+  /// Samma boks senaste linje före start.
+  closingLine  Float?
+  closingPrice Float?
+  /// Poäng bättre än stängningen (positivt = marknaden gick mot oss).
+  clv          Float?
+  /// W | L | P
+  result       String?
+  homeScore    Int?
+  awayScore    Int?
+
+  @@unique([gameId, market])
+  @@index([result])
 }
 
 /// En sparad backtest-körning (npm run nba:backtest -- --save).

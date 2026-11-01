@@ -1,4 +1,10 @@
-// Från spelare och minuter till en simulerad match.
+// Från lag, spelare och minuter till en simulerad match (nba-v2).
+//
+//   lagrating (ORtg/DRtg/tempo mot motståndet)  → nivå och tempo
+//   spelarmodellen: kvällens uppställning mot normal → justering av nivån
+//   spelarnas profil (andel trejor, straffar …)  → hur poängen görs
+//
+// Spelarmodellen ensam (nba-v1) får man med ratingMix = 0:
 //
 //   spelarnas takter × förväntade minuter  → lagets offensiva profil
 //   justerad mot motståndarens försvar     → profil i just den här matchen
@@ -17,6 +23,7 @@ import {
   type TeamProfile,
 } from "./ratings";
 import { expectedPpp, logit, prepare, sigmoid, simulateGame, summarize, type GameSimInput, type SimResult, type SimSummary, type TeamSimInput } from "./sim";
+import { expectedOrtg, fitTeamRatings, ratingOf, type RatingTable } from "./teamRatings";
 
 export interface LineupEntry {
   playerId: number;
@@ -108,6 +115,24 @@ export interface GameContext {
   neutral?: boolean;
   homeLineup: LineupEntry[];
   awayLineup: LineupEntry[];
+  /**
+   * Lagens "normala" uppställning — minuterna lagratingen bygger på. Skillnaden
+   * mot kvällens uppställning är spelarjusteringen. Saknas den blir
+   * justeringen 0.
+   */
+  homeBaseLineup?: LineupEntry[];
+  awayBaseLineup?: LineupEntry[];
+}
+
+export interface Targets {
+  /** Förväntade poäng per 100 possessions. */
+  homeOrtg: number;
+  awayOrtg: number;
+  /** Possessions per 48. */
+  pace: number;
+  /** Spelarjusteringen i poäng per 100 (negativ = sämre uppställning än normalt). */
+  homeAdj: number;
+  awayAdj: number;
 }
 
 export interface Projection {
@@ -118,12 +143,33 @@ export interface Projection {
   awayProfile: TeamProfile;
   homeB2B: boolean;
   awayB2B: boolean;
+  targets: Targets;
 }
+
+/** Shot-logit som får profilen att ge `ppp` poäng per possession. */
+export function logitForPpp(t: TeamSimInput, ppp: number, ftsPerTrip: number): number {
+  const prep = prepare({ ...t, shotLogit: 0 });
+  const f = (d: number) => expectedPpp(prep, sigmoid(prep.l2 + d), sigmoid(prep.l3 + d), ftsPerTrip);
+  let lo = -1.5;
+  let hi = 1.5;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (f(mid) < ppp) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+const pppOf = (t: TeamSimInput, ftsPerTrip: number) => {
+  const prep = prepare(t);
+  return expectedPpp(prep, sigmoid(prep.l2), sigmoid(prep.l3), ftsPerTrip);
+};
 
 const B2B_MS = 30 * 3600e3;
 
-export function buildSimInput(h: History, ctx: GameContext, p: NbaModelParams = DEFAULT_NBA_PARAMS, league?: League) {
+export function buildSimInput(h: History, ctx: GameContext, p: NbaModelParams = DEFAULT_NBA_PARAMS, league?: League, ratings?: RatingTable) {
   const lg = league ?? leagueAverages(h, ctx.t, p);
+  const rt = ratings ?? (p.ratingMix > 0 ? fitTeamRatings(h, ctx.t, p) : null);
   const hp = teamProfile(h, ctx.homeId, ctx.t, lg, p);
   const ap = teamProfile(h, ctx.awayId, ctx.t, lg, p);
   const homeRaw = teamOffense(h, ctx.homeLineup, ctx.t, lg, p);
@@ -135,12 +181,45 @@ export function buildSimInput(h: History, ctx: GameContext, p: NbaModelParams = 
   const awayB2B = ap.lastGameT != null && ctx.t - ap.lastGameT < B2B_MS;
   const hca = ctx.neutral ? 0 : p.homeLogit;
   const level = levelLogit(lg, p.ftsPerTrip) + p.effLogit;
+  // Spelarmodellen (nba-v1): nivå ur spelarnas takter.
   const home: TeamSimInput = { ...homeOff, shotLogit: level + hca + usage(homeRaw.usageRatio) + (homeB2B ? p.b2bLogit : 0) };
   const away: TeamSimInput = { ...awayOff, shotLogit: level - hca + usage(awayRaw.usageRatio) + (awayB2B ? p.b2bLogit : 0) };
+  const playerPace = (hp.pace * ap.pace) / lg.pace;
+  const playerHome = 100 * pppOf(home, p.ftsPerTrip);
+  const playerAway = 100 * pppOf(away, p.ftsPerTrip);
+
+  // Spelarjustering: kvällens uppställning mot den normala, i spelarmodellen
+  // (utan motståndare och hemmaplan, så att bara uppställningen skiljer).
+  const lineupPpp = (lineup: LineupEntry[]) => {
+    const raw = teamOffense(h, lineup, ctx.t, lg, p);
+    return 100 * pppOf({ ...raw, shotLogit: level + usage(raw.usageRatio) }, p.ftsPerTrip);
+  };
+  const adj = (today: LineupEntry[], base?: LineupEntry[]) => (base && base.length ? p.playerAdjK * (lineupPpp(today) - lineupPpp(base)) : 0);
+  const homeAdj = rt ? adj(ctx.homeLineup, ctx.homeBaseLineup) : 0;
+  const awayAdj = rt ? adj(ctx.awayLineup, ctx.awayBaseLineup) : 0;
+
+  let homeOrtg = playerHome;
+  let awayOrtg = playerAway;
+  let pace = playerPace;
+  if (rt) {
+    const homeHca = ctx.neutral ? 0 : p.homeRtg / 2;
+    const rHome = expectedOrtg(rt, ctx.homeId, ctx.awayId) + homeHca + (homeB2B ? p.b2bRtg : 0) + homeAdj;
+    const rAway = expectedOrtg(rt, ctx.awayId, ctx.homeId) - homeHca + (awayB2B ? p.b2bRtg : 0) + awayAdj;
+    const rPace = rt.pace + ratingOf(rt, ctx.homeId).pace + ratingOf(rt, ctx.awayId).pace;
+    const m = p.ratingMix;
+    homeOrtg = m * rHome + (1 - m) * playerHome;
+    awayOrtg = m * rAway + (1 - m) * playerAway;
+    pace = m * rPace + (1 - m) * playerPace;
+    // Profilens form (andel trejor, straffar, turnovers) kommer från spelarna;
+    // nivån sätts så att den träffar målet.
+    home.shotLogit = logitForPpp(home, homeOrtg / 100, p.ftsPerTrip);
+    away.shotLogit = logitForPpp(away, awayOrtg / 100, p.ftsPerTrip);
+  }
+  const targets: Targets = { homeOrtg, awayOrtg, pace, homeAdj, awayAdj };
   const input: GameSimInput = {
     home,
     away,
-    possMean: (hp.pace * ap.pace) / lg.pace,
+    possMean: pace,
     possSd: p.possSd,
     nightSigma: p.nightSigma,
     sharedSigma: p.sharedSigma,
@@ -149,11 +228,11 @@ export function buildSimInput(h: History, ctx: GameContext, p: NbaModelParams = 
     sims: p.sims,
     seed: (ctx.homeId * 7919 + ctx.awayId * 104729 + Math.floor(ctx.t / 864e5)) >>> 0,
   };
-  return { input, league: lg, homeProfile: hp, awayProfile: ap, homeB2B, awayB2B, homeUsage: homeRaw.usageRatio, awayUsage: awayRaw.usageRatio };
+  return { input, league: lg, homeProfile: hp, awayProfile: ap, homeB2B, awayB2B, homeUsage: homeRaw.usageRatio, awayUsage: awayRaw.usageRatio, targets };
 }
 
-export function projectGame(h: History, ctx: GameContext, p: NbaModelParams = DEFAULT_NBA_PARAMS, league?: League): Projection {
-  const b = buildSimInput(h, ctx, p, league);
+export function projectGame(h: History, ctx: GameContext, p: NbaModelParams = DEFAULT_NBA_PARAMS, league?: League, ratings?: RatingTable): Projection {
+  const b = buildSimInput(h, ctx, p, league, ratings);
   const sim = simulateGame(b.input);
   return {
     input: b.input,
@@ -163,5 +242,6 @@ export function projectGame(h: History, ctx: GameContext, p: NbaModelParams = DE
     awayProfile: b.awayProfile,
     homeB2B: b.homeB2B,
     awayB2B: b.awayB2B,
+    targets: b.targets,
   };
 }

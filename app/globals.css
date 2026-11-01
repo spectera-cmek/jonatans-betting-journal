@@ -3682,3 +3682,76 @@ select.ap-input {
     grid-template-columns: 1fr;
   }
 }
+.ap-nba-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ap-nba-tiles > .ap-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  font: inherit;
+  color: inherit;
+}
+.ap-nba-tiles small {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim2);
+}
+.ap-nba-tiles b {
+  font-size: 20px;
+}
+.ap-nba-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 12px;
+}
+.ap-nba-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.ap-nba-card-time {
+  font-size: 12px;
+  color: var(--dim);
+}
+.ap-nba-card-team {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  padding: 2px 0;
+}
+.ap-nba-card-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--line, rgba(127, 127, 127, 0.18));
+  padding-top: 8px;
+  font-size: 12.5px;
+}
+.ap-nba-card-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+.ap-nba-card-label {
+  width: 46px;
+  color: var(--dim2);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+@media (max-width: 560px) {
+  .ap-nba-cards {
+    grid-template-columns: 1fr;
+  }
+}

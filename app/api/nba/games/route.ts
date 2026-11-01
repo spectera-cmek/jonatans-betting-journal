@@ -19,11 +19,32 @@ export async function GET(req: Request) {
     ? { status: "final", startAt: { gte: new Date(now - days * 864e5), lte: new Date(now) } }
     : { startAt: { gte: new Date(now - 4 * 3600e3), lte: new Date(now + days * 864e5) }, status: { in: ["scheduled", "live"] } };
   const [games, teams] = await Promise.all([
-    nbaPrisma.nbaGame.findMany({ where, orderBy: { startAt: past ? "desc" : "asc" }, include: { projections: true }, take: 120 }),
+    nbaPrisma.nbaGame.findMany({ where, orderBy: { startAt: past ? "desc" : "asc" }, include: { projections: true, picks: true }, take: 120 }),
     nbaPrisma.nbaTeam.findMany(),
   ]);
   const t = new Map(teams.map((x) => [x.id, { id: x.id, abbr: x.abbr, name: x.name }]));
   const lastRun = await nbaPrisma.nbaProjection.findFirst({ orderBy: { updatedAt: "desc" }, select: { updatedAt: true } });
+  // Lagens V-F i grundserien den säsong matcherna spelas.
+  const seasons = [...new Set(games.map((g) => g.season))];
+  const finals = seasons.length
+    ? await nbaPrisma.nbaGame.findMany({
+        where: { season: { in: seasons }, seasonType: 2, status: "final" },
+        select: { season: true, startAt: true, homeTeamId: true, awayTeamId: true, homeScore: true, awayScore: true },
+      })
+    : [];
+  /** V-F före matchen (så att spelade matcher visar rekordet inför matchen). */
+  const record = (teamId: number, season: number, before: Date) => {
+    let w = 0;
+    let l = 0;
+    for (const f of finals) {
+      if (f.season !== season || f.startAt >= before || f.homeScore == null || f.awayScore == null) continue;
+      if (f.homeTeamId !== teamId && f.awayTeamId !== teamId) continue;
+      const won = f.homeTeamId === teamId ? f.homeScore > f.awayScore : f.awayScore > f.homeScore;
+      if (won) w++;
+      else l++;
+    }
+    return `${w}-${l}`;
+  };
   return NextResponse.json({
     dbConfigured: true,
     lastRun: lastRun?.updatedAt ?? null,
@@ -37,6 +58,20 @@ export async function GET(req: Request) {
       awayScore: g.awayScore,
       home: t.get(g.homeTeamId),
       away: t.get(g.awayTeamId),
+      homeRecord: record(g.homeTeamId, g.season, g.startAt),
+      awayRecord: record(g.awayTeamId, g.season, g.startAt),
+      picks: g.picks.map((k) => ({
+        market: k.market,
+        book: k.book,
+        line: k.line,
+        modelLine: k.modelLine,
+        side: k.side,
+        edgePts: k.edgePts,
+        price: k.side === 1 ? k.price1 : k.price2,
+        lockedAt: k.lockedAt,
+        result: k.result,
+        clv: k.clv,
+      })),
       projections: g.projections.map((p) => ({
         market: p.market,
         line: p.line,

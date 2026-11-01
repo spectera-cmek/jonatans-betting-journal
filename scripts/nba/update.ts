@@ -22,7 +22,7 @@ import { saveInjuries, saveSummary, upsertGames } from "../../lib/nba/store";
 import { ingestRange } from "./ingest";
 import { captureNbaOdds } from "../../lib/nba/oddspapiCapture";
 import { hasOddspapiKey, oddspapiCallsThisRun, OddspapiError, quotaLeft } from "../../lib/oddspapi";
-import { projectUpcoming, settleProjections } from "../../lib/nba/pipeline";
+import { projectUpcoming, settlePicks, settleProjections } from "../../lib/nba/pipeline";
 
 function numberArg(flag: string, fallback: number): number {
   const i = process.argv.indexOf(flag);
@@ -95,7 +95,7 @@ async function main() {
 
   if (!closing) {
     console.log("5/5 Facit");
-    console.log(`   ${await settleProjections(db)} projektioner rättade`);
+    console.log(`   ${await settleProjections(db)} projektioner och ${await settlePicks(db)} låsta picks rättade`);
   }
 }
 

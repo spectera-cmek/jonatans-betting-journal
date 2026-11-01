@@ -3,7 +3,9 @@
 
 import type { NbaPrisma } from "../nbaDb";
 import { oddspapiBookmaker } from "../oddspapi";
-import { baselineMinutes, projectMinutes, type MinutesInput, type MinutesRow } from "./minutes";
+import { baseLineup, baselineMinutes, projectMinutes, type MinutesInput, type MinutesRow } from "./minutes";
+import { clvPoints, gradePick, modelLine, pickFromLine, type PickMarket } from "./picks";
+import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, isFlagged, type NbaModelParams } from "./params";
 import { fairLine, priceMarket, settle, type MarketPrice, type MarketQuote, type NbaMarket } from "./pricing";
 import { leagueAverages, type History, type League } from "./ratings";
@@ -121,6 +123,11 @@ export interface GameProjection {
   awayB2B: boolean;
   /** Referenspriset per marknad. */
   markets: MarketPrice[];
+  /** Modellens linjer i poäng (hemmalagets handicap och total, en decimal). */
+  modelSpread: number;
+  modelTotal: number;
+  /** Lagratingens mål: poäng per 100, tempo och spelarjustering. */
+  targets: Projection["targets"];
   /** Alla sparade priser (alla böcker och dina egna), prissatta. */
   quotes: Array<MarketPrice & { id: number; source: string; capturedAt: string; flagged: boolean }>;
   projection: Projection;
@@ -130,7 +137,15 @@ export interface GameProjection {
 export async function projectStoredGame(
   db: NbaPrisma,
   gameId: number,
-  opts: { h?: History; league?: League; params?: NbaModelParams; save?: boolean; injuries?: Map<number, { status: string; detail: string | null }>; names?: Map<number, string> } = {}
+  opts: {
+    h?: History;
+    league?: League;
+    ratings?: RatingTable;
+    params?: NbaModelParams;
+    save?: boolean;
+    injuries?: Map<number, { status: string; detail: string | null }>;
+    names?: Map<number, string>;
+  } = {}
 ): Promise<GameProjection | null> {
   const g = await db.nbaGame.findUnique({ where: { id: gameId } });
   if (!g) return null;
@@ -138,6 +153,7 @@ export async function projectStoredGame(
   const t = g.startAt.getTime();
   const h = opts.h ?? (await loadHistory(db, new Date(t - HISTORY_DAYS * 864e5)));
   const league = opts.league ?? leagueAverages(h, t, p);
+  const ratings = opts.ratings ?? (p.ratingMix > 0 ? fitTeamRatings(h, t, p) : undefined);
   const cache = { injuries: opts.injuries, names: opts.names ?? new Map<number, string>() };
   const [home, away] = await Promise.all([buildLineup(db, h, g.homeTeamId, g.id, t, cache), buildLineup(db, h, g.awayTeamId, g.id, t, cache)]);
   const proj = projectGame(
@@ -149,10 +165,15 @@ export async function projectStoredGame(
       neutral: g.neutral,
       homeLineup: home.rows.map((r) => ({ playerId: r.playerId, minutes: r.minutes })),
       awayLineup: away.rows.map((r) => ({ playerId: r.playerId, minutes: r.minutes })),
+      homeBaseLineup: baseLineup(h, g.homeTeamId, t),
+      awayBaseLineup: baseLineup(h, g.awayTeamId, t),
     },
     p,
-    league
+    league,
+    ratings
   );
+  const modelSpread = modelLine("spread", proj.summary.homeMean, proj.summary.awayMean);
+  const modelTotal = modelLine("total", proj.summary.homeMean, proj.summary.awayMean);
   const quotes = await latestQuotes(db, g.id, g.status === "scheduled" ? undefined : g.startAt);
   const markets: MarketPrice[] = [];
   for (const m of MARKETS) {
@@ -191,6 +212,34 @@ export async function projectStoredGame(
       };
       await db.nbaProjection.upsert({ where: { gameId_market: { gameId: g.id, market: mp.market } }, create: { gameId: g.id, market: mp.market, ...data }, update: data });
     }
+    // Låst pick: första gången matchen har en linje sparas modellens pick mot
+    // den, och den ändras aldrig efter det.
+    if (g.status === "scheduled") {
+      for (const market of ["spread", "total"] as PickMarket[]) {
+        const ref = referenceQuote(quotes, market);
+        if (!ref || ref.line == null || ref.price1 == null || ref.price2 == null) continue;
+        const exists = await db.nbaPick.findUnique({ where: { gameId_market: { gameId: g.id, market } }, select: { id: true } });
+        if (exists) continue;
+        const ml = market === "spread" ? modelSpread : modelTotal;
+        const pk = pickFromLine(market, ml, ref.line);
+        await db.nbaPick
+          .create({
+            data: {
+              gameId: g.id,
+              market,
+              book: ref.book ?? "?",
+              line: ref.line,
+              price1: ref.price1,
+              price2: ref.price2,
+              modelLine: ml,
+              side: pk.side,
+              edgePts: pk.edgePts,
+              modelVersion: NBA_MODEL_VERSION,
+            },
+          })
+          .catch(() => null);
+      }
+    }
   }
   return {
     gameId: g.id,
@@ -202,6 +251,9 @@ export async function projectStoredGame(
     homeB2B: proj.homeB2B,
     awayB2B: proj.awayB2B,
     markets,
+    modelSpread,
+    modelTotal,
+    targets: proj.targets,
     quotes: priced,
     projection: proj,
   };
@@ -220,16 +272,23 @@ export async function projectUpcoming(db: NbaPrisma, opts: { hours?: number; par
   const injuries = new Map((await db.nbaInjury.findMany()).map((i) => [i.playerId, { status: i.status, detail: i.detail }]));
   const names = new Map((await db.nbaPlayer.findMany({ select: { id: true, name: true } })).map((p) => [p.id, p.name]));
   const teams = new Map((await db.nbaTeam.findMany()).map((t) => [t.id, t.abbr]));
+  const params = opts.params ?? DEFAULT_NBA_PARAMS;
+  // Liga och lagrating ur samma historik för alla kvällens matcher.
+  const league = leagueAverages(h, now, params);
+  const ratings = params.ratingMix > 0 ? fitTeamRatings(h, now, params) : undefined;
   let flagged = 0;
   for (const g of games) {
-    const r = await projectStoredGame(db, g.id, { h, params: opts.params, save: true, injuries, names });
+    const r = await projectStoredGame(db, g.id, { h, league, ratings, params, save: true, injuries, names });
     if (!r) continue;
     const s = r.summary;
     const f = r.quotes.filter((q) => q.flagged);
     flagged += f.length;
     log(
       `${teams.get(g.awayTeamId)} @ ${teams.get(g.homeTeamId)}  modell ${s.awayMean.toFixed(1)}–${s.homeMean.toFixed(1)}  ` +
-        `spread ${fmtLine(r.fairSpread)} total ${r.fairTotal}  P(hemma) ${(s.pHomeWin * 100).toFixed(1)} %` +
+        `spread ${fmtLine(r.modelSpread)} total ${r.modelTotal}  P(hemma) ${(s.pHomeWin * 100).toFixed(1)} %` +
+        (Math.abs(r.targets.homeAdj) >= 0.5 || Math.abs(r.targets.awayAdj) >= 0.5
+          ? `  uppställning ${r.targets.awayAdj >= 0 ? "+" : ""}${r.targets.awayAdj.toFixed(1)}/${r.targets.homeAdj >= 0 ? "+" : ""}${r.targets.homeAdj.toFixed(1)}`
+          : "") +
         (f.length ? `  ⚑ ${f.map((q) => `${sideText(q, teams.get(g.homeTeamId) ?? "H", teams.get(g.awayTeamId) ?? "B")} @${q.bestOdds?.toFixed(2)} ${q.book} +${((q.edge ?? 0) * 100).toFixed(1)} %`).join(", ")}` : "")
     );
   }
@@ -244,6 +303,36 @@ export async function settleProjections(db: NbaPrisma): Promise<number> {
     const g = p.game;
     if (g.status !== "final" || g.homeScore == null || g.awayScore == null) continue;
     await db.nbaProjection.update({ where: { id: p.id }, data: { actual: settle(p.market as NbaMarket, p.line, g.homeScore, g.awayScore) } });
+    n++;
+  }
+  return n;
+}
+
+/** Facit och CLV för låsta picks i spelade matcher. */
+export async function settlePicks(db: NbaPrisma): Promise<number> {
+  const open = await db.nbaPick.findMany({ where: { result: null }, include: { game: true } });
+  let n = 0;
+  for (const pk of open) {
+    const g = pk.game;
+    if (g.status !== "final" || g.homeScore == null || g.awayScore == null) continue;
+    const market = pk.market as PickMarket;
+    // Stängning: samma boks senaste linje före start.
+    const close = await db.nbaOdds.findFirst({
+      where: { gameId: g.id, market, book: pk.book, capturedAt: { lte: g.startAt } },
+      orderBy: { capturedAt: "desc" },
+    });
+    const side = pk.side === 1 ? 1 : 2;
+    await db.nbaPick.update({
+      where: { id: pk.id },
+      data: {
+        result: gradePick(market, side, pk.line, g.homeScore, g.awayScore),
+        homeScore: g.homeScore,
+        awayScore: g.awayScore,
+        closingLine: close?.line ?? null,
+        closingPrice: close ? (side === 1 ? close.price1 : close.price2) : null,
+        clv: close?.line != null ? clvPoints(market, side, pk.line, close.line) : null,
+      },
+    });
     n++;
   }
   return n;

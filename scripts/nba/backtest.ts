@@ -102,6 +102,17 @@ async function main() {
     console.log(`        ${x.blend.map((b) => `${b.w}:${b.logLoss.toFixed(4)}`).join("  ")}`);
   }
   console.log("");
+  for (const [mk, buckets] of Object.entries(r.ats)) {
+    if (!buckets) continue;
+    console.log(
+      `Picks ${mk.padEnd(6)} ` +
+        buckets
+          .map((b) => `${b.minEdge}+: ${b.w}-${b.l}-${b.p} ${b.hit == null ? "—" : (b.hit * 100).toFixed(1) + " %"}${b.roi == null ? "" : ` ROI ${(b.roi * 100).toFixed(1)} %`}`)
+          .join("   ")
+    );
+  }
+  console.log("Break-even vid −110 (1,91): 52,4 %. Picks räknas mot stängningslinjen — svårare än första linjen.");
+  console.log("");
   console.log("Läsguide: vikt 0 = bara marknaden. Om bästa vikt är 0 slår modellen inte marknaden än.");
   console.log("Bias > 0 = verkligheten högre än modellen. Sim-spridning ska ligga nära den verkliga.");
 

@@ -9,7 +9,9 @@
 
 import { devigProportional } from "../fairOdds";
 import { blendProb } from "../shotModel";
-import { baselineMinutes, projectMinutes } from "./minutes";
+import { baseLineup, baselineMinutes, projectMinutes } from "./minutes";
+import { bucketRecords, gradePick, modelLine, pickFromLine, type BucketRecord, type GradedPick, type PickMarket } from "./picks";
+import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, isFlagged, type NbaModelParams } from "./params";
 import { modelProb, settle, type NbaMarket } from "./pricing";
 import { leagueAverages, type History, type League, type PlayerGameRow } from "./ratings";
@@ -52,6 +54,8 @@ export interface BacktestResult {
   margin: { maeModel: number; maeMarket: number | null; bias: number; residualSd: number; simSd: number };
   total: { maeModel: number; maeMarket: number | null; bias: number; residualSd: number; simSd: number };
   markets: Partial<Record<NbaMarket, MarketMetrics>>;
+  /** Picks i poäng mot stängningslinjen, per edge-hink (alla, 3+, 6+). */
+  ats: Partial<Record<PickMarket, BucketRecord[]>>;
   books: string[];
 }
 
@@ -83,6 +87,8 @@ export function runBacktest(
     else played.set(r.gameId, [r]);
   }
   const leagueByDay = new Map<number, League>();
+  const ratingsByDay = new Map<number, RatingTable>();
+  const picks: Record<PickMarket, GradedPick[]> = { spread: [], total: [] };
   const obs: Obs[] = [];
   const books = new Set<string>();
   const m = { absModel: 0, absMarket: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
@@ -95,6 +101,11 @@ export function runBacktest(
     if (!league) {
       league = leagueAverages(h, g.t, p);
       leagueByDay.set(day, league);
+    }
+    let ratings = ratingsByDay.get(day);
+    if (!ratings && p.ratingMix > 0) {
+      ratings = fitTeamRatings(h, g.t, p);
+      ratingsByDay.set(day, ratings);
     }
     const rows = played.get(g.id) ?? [];
     const lineup = (teamId: number) => {
@@ -115,7 +126,22 @@ export function runBacktest(
     const homeLineup = lineup(g.homeId);
     const awayLineup = lineup(g.awayId);
     if (homeLineup.length < 5 || awayLineup.length < 5) continue;
-    const proj = projectGame(h, { homeId: g.homeId, awayId: g.awayId, t: g.t, neutral: g.neutral, homeLineup, awayLineup }, p, league);
+    const proj = projectGame(
+      h,
+      {
+        homeId: g.homeId,
+        awayId: g.awayId,
+        t: g.t,
+        neutral: g.neutral,
+        homeLineup,
+        awayLineup,
+        homeBaseLineup: baseLineup(h, g.homeId, g.t),
+        awayBaseLineup: baseLineup(h, g.awayId, g.t),
+      },
+      p,
+      league,
+      ratings
+    );
     const s = proj.summary;
     const margin = g.homeScore - g.awayScore;
     const total = g.homeScore + g.awayScore;
@@ -138,6 +164,15 @@ export function runBacktest(
       if (q.market === "total" && q.line != null) {
         t.absMarket += Math.abs(total - q.line);
         t.nMarket++;
+      }
+      if ((q.market === "spread" || q.market === "total") && q.line != null) {
+        const ml = modelLine(q.market, s.homeMean, s.awayMean);
+        const pk = pickFromLine(q.market, ml, q.line);
+        picks[q.market].push({
+          edgePts: pk.edgePts,
+          result: gradePick(q.market, pk.side, q.line, g.homeScore, g.awayScore),
+          price: pk.side === 1 ? q.price1 : q.price2,
+        });
       }
       const y = settle(q.market, q.line, g.homeScore, g.awayScore);
       const dv = devigProportional(q.price1, [q.price2]);
@@ -191,5 +226,12 @@ export function runBacktest(
     residualSd: n ? Math.sqrt(x.sq / n) : 0,
     simSd: n ? Math.sqrt(x.simVar / n) : 0,
   });
-  return { games: n, margin: fin(m), total: fin(t), markets, books: [...books] };
+  return {
+    games: n,
+    margin: fin(m),
+    total: fin(t),
+    markets,
+    ats: { spread: bucketRecords(picks.spread), total: bucketRecords(picks.total) },
+    books: [...books],
+  };
 }

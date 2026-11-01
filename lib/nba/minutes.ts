@@ -117,3 +117,36 @@ export function projectMinutes(inputs: MinutesInput[], total = TEAM_MINUTES, cap
   }
   return rows.map((r) => ({ ...r, minutes: Math.round(r.minutes * 10) / 10 }));
 }
+
+/**
+ * Lagets "normala" uppställning under perioden lagratingen bygger på:
+ * grundminuter × andelen av lagets senaste `n` matcher spelaren faktiskt
+ * spelade, omfördelat till 240. En stjärna som varit skadad i tre veckor finns
+ * alltså bara delvis med här — ratingen har redan räknat med att han saknats.
+ */
+export function baseLineup(h: History, teamId: number, asOf: number, n = 15): Array<{ playerId: number; minutes: number }> {
+  const teamRows = h.teams.get(teamId) ?? [];
+  const ti = firstBefore(teamRows, asOf);
+  const recent = teamRows.slice(ti, ti + n).map((r) => r.gameId);
+  if (!recent.length) return [];
+  const recentSet = new Set(recent);
+  const base = baselineMinutes(h, teamId, asOf, { activeDays: 120 });
+  const inputs: MinutesInput[] = base.map((b) => {
+    const rows = h.players.get(b.playerId) ?? [];
+    let played = 0;
+    for (const r of rows) if (recentSet.has(r.gameId) && r.minutes > 0) played++;
+    return {
+      playerId: b.playerId,
+      name: "",
+      position: b.position,
+      baseline: b.baseline * (played / recent.length),
+      games: b.games,
+      injuryStatus: null,
+      injuryDetail: null,
+      override: null,
+    };
+  });
+  return projectMinutes(inputs)
+    .filter((r) => r.minutes > 0)
+    .map((r) => ({ playerId: r.playerId, minutes: r.minutes }));
+}

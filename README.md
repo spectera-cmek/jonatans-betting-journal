@@ -257,8 +257,13 @@ A player-based simulation of every NBA game. It produces our own prices for mone
 spread and total, blends them with the market and shows the edge against any price
 (Pinnacle via OddsPapi, DraftKings via ESPN, or your own book's odds entered by hand).
 
-**How the model works (`lib/nba/`)**
+**How the model works (`lib/nba/`, version nba-v2)**
 
+0. **Team ratings** (`teamRatings.ts`). Offensive and defensive efficiency (points per
+   100 possessions) and pace for every team, solved against the opponents each team has
+   actually faced. Recent games weigh most (25-day half-life). They set 60 % of the
+   scoring level and the pace; the player model below sets the other 40 % and adjusts for
+   tonight's lineup against the lineup the rating was built on.
 1. **Player rates** (`ratings.ts`). Each player gets per-minute rates (2PA, 3PA, FTA,
    turnovers, offensive rebounds) and shooting percentages from his recent games.
    Recent games weigh more, and each rate is shrunk toward his position's average.
@@ -272,7 +277,11 @@ spread and total, blends them with the market and shows the edge against any pri
    "rubber band" keeps the spread of the margin at NBA levels without moving the
    favourite's expected margin. The overall scoring level is calibrated to the league's
    actual points per possession.
-5. **Pricing** (`pricing.ts`). The simulated probability is blended with the de-vigged
+5. **Picks in points** (`picks.ts`). The model's spread and total are compared with the
+   market line, e.g. "model −7.2 vs market −6.5 → pick −6.5 (0.7)". The first line the
+   model sees is locked (`NbaPick`) and never re-priced. Results and CLV are graded
+   against that line and shown per edge bucket (all, 3+, 6+) in the Facit tab.
+6. **Pricing** (`pricing.ts`). The simulated probability is blended with the de-vigged
    market price (`priceTwoWay`, shared with CS2). Edge is EV per unit staked. Prices with
    edge ≥ 5 % at odds ≤ 4.0 are flagged.
 
@@ -311,9 +320,11 @@ in Windows Task Scheduler. That is ~60 OddsPapi requests a month out of the free
 
 **Status and caveats**
 
-- The backtest (nba-v1, 1 026 games Dec 2025–Jun 2026 against DraftKings closing lines)
-  shows the model does **not** beat a closing line yet. Margin MAE is 11.8 vs the
-  market's 11.25, and the market alone gives the lowest log loss. The blend weight is
+- The backtest (1 026 games Dec 2025–Jun 2026 against DraftKings closing lines) shows
+  the model does **not** beat a closing line yet. nba-v2 cut margin MAE from 11.77 to
+  11.68 and total MAE from 16.0 to 15.64, against the market's 11.25 and 14.50. Picks
+  against the closing line hit 48.9 % on spreads (break-even 52.4 %), and the market
+  alone gives the lowest log loss. The blend weight is
   therefore 10 %, so the model nudges the market price rather than replacing it. Raise it
   (`DEFAULT_NBA_BLEND_W` in `lib/nba/params.ts`) only when a backtest says so.
 - Edges mostly appear against soft prices, i.e. your own book's odds entered on the match

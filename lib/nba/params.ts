@@ -1,7 +1,7 @@
 // NBA-modellens parametrar på ett ställe. Backtesten (npm run nba:backtest)
 // är det som ska flytta dem — ändra versionen när modellens matte ändras.
 
-export const NBA_MODEL_VERSION = "nba-v1";
+export const NBA_MODEL_VERSION = "nba-v2";
 
 export interface NbaModelParams {
   /** Spelartakter: halveringstid i spelarens egna matcher. */
@@ -46,6 +46,28 @@ export interface NbaModelParams {
   ftsPerTrip: number;
   /** Antal simulerade matcher. */
   sims: number;
+  /** Lagrating: halveringstid i dagar för matcherna bakom ratingen. */
+  ratingHalfLifeDays: number;
+  /** Lagrating: ridge mot snittlaget (eller förra säsongen), i matcher. */
+  ratingRidgeGames: number;
+  /**
+   * Förra säsongens slutrating som utgångspunkt: värd så här många matcher
+   * i början av säsongen. Laget drar sig bort från den när det spelat fler.
+   */
+  priorGames: number;
+  /** Andel av förra säsongens rating som behålls över sommaren (resten mot snittet). */
+  priorKeep: number;
+  /** Hemmafördel i poäng per 100 possessions (marginal). */
+  homeRtg: number;
+  /** Back-to-back i poäng per 100 possessions för laget som spelar igen. */
+  b2bRtg: number;
+  /**
+   * Hur mycket lagratingen bestämmer nivån: 1 = lagrating (+ spelarjustering),
+   * 0 = bara spelarmodellen (nba-v1).
+   */
+  ratingMix: number;
+  /** Hur mycket av spelarmodellens skillnad mellan kvällens och normal uppställning som läggs på lagratingen. */
+  playerAdjK: number;
 }
 
 export const DEFAULT_NBA_PARAMS: NbaModelParams = {
@@ -66,6 +88,21 @@ export const DEFAULT_NBA_PARAMS: NbaModelParams = {
   possSd: 4,
   ftsPerTrip: 1 / 0.44,
   sims: 20000,
+  // Backtest nba-v2 (1 026 matcher dec 2025–jun 2026): 60 % lagrating ger
+  // lägst fel och log loss — marginal-MAE 11,67 mot v1:s 11,77, total 15,65
+  // mot 16,00. 25 dagars halveringstid följer poängnivån när den ändras under
+  // säsongen, och 1,6 poäng hemmafördel tar bort marginalens bias.
+  ratingHalfLifeDays: 25,
+  ratingRidgeGames: 3,
+  // Av som standard: på säsongens första 88 matcher (okt 2026) gav förra
+  // säsongens rating SÄMRE spread (log loss 0,7392 mot 0,7261) — trupperna
+  // ändras för mycket över sommaren. Prova igen med --param priorGames=10.
+  priorGames: 0,
+  priorKeep: 0.6,
+  homeRtg: 1.6,
+  b2bRtg: -1.5,
+  ratingMix: 0.6,
+  playerAdjK: 1,
 };
 
 /**
