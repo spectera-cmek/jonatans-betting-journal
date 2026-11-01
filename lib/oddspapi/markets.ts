@@ -1,0 +1,199 @@
+// OddsPapi-marknader för basket: vilka marketId som är moneyline, spread och
+// total, och hur oddsen i ett svar blir rader med pris för sida 1 och 2.
+//
+// OddsPapi ger varje linje ett eget marketId (t.ex. "Totals 224.5"), och
+// linjen står i katalogens `handicap`. Katalogen (/v4/markets) hämtas en gång
+// av `npm run oddspapi:discover` och sparas i lib/oddspapi/ids.json, så att
+// den dagliga körningen inte bränner kvot på den.
+//
+// Konvention här: sida 1 = participant1 (spread/ml) eller över (total). För
+// spread är linjen participant1:s handicap. Orienteringen mot ESPN:s hemmalag
+// görs i orientRows.
+
+import fs from "node:fs";
+import path from "node:path";
+import type { OpFixtureOdds, OpHistoricalOdds, OpMarket } from "../oddspapi";
+
+export type NbaMarketKind = "ml" | "spread" | "total";
+
+export interface MarketSpec {
+  kind: NbaMarketKind;
+  /** Linjen ur katalogen: participant1:s handicap eller totalen. null för ml. */
+  line: number | null;
+  /** outcomeId → sida. */
+  sides: Record<string, 1 | 2>;
+  name?: string;
+}
+
+export interface OddspapiIds {
+  generatedAt: string;
+  bookmaker: string;
+  nba: { tournamentId: number; tournamentName: string } | null;
+  /** marketId → spec, bara basketmarknader för hela matchen inkl. förlängning. */
+  basketballMarkets: Record<string, MarketSpec>;
+  /** Fotbollsturneringar för nästa modell, namn → id. */
+  footballTournaments?: Record<string, number>;
+}
+
+export const IDS_PATH = path.join("lib", "oddspapi", "ids.json");
+
+/** Läser ids.json från arbetskatalogen, eller null om discover inte körts. */
+export function loadIds(cwd = process.cwd()): OddspapiIds | null {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(cwd, IDS_PATH), "utf8")) as OddspapiIds;
+  } catch {
+    return null;
+  }
+}
+
+const PARTIAL = /half|quarter|\b(1st|2nd|3rd|4th)\b|\bq[1-4]\b|\bh[12]\b|regulation|regular time|excl/i;
+const NOT_GAME = /team total|home total|away total|player|race|\bodd\b|\beven\b|margin|exact|band|winning|3.?way|draw|both|first|last|highest|lowest|double/i;
+
+function sideOf(name: string, index: number, kind: NbaMarketKind): 1 | 2 | null {
+  const n = name.trim().toLowerCase();
+  if (kind === "total") {
+    if (/over|^o$/.test(n)) return 1;
+    if (/under|^u$/.test(n)) return 2;
+    return null;
+  }
+  if (/^(1|home|team ?1|p1)\b/.test(n)) return 1;
+  if (/^(2|away|team ?2|p2)\b/.test(n)) return 2;
+  return index === 0 ? 1 : index === 1 ? 2 : null;
+}
+
+/**
+ * Klassar en katalogmarknad. Bara hela matchen (inkl. förlängning) och två
+ * utfall räknas — perioder, lagtotaler, 3-vägs och props sorteras bort.
+ */
+export function classifyBasketballMarket(m: OpMarket): MarketSpec | null {
+  if (m.sportId !== 11 || m.playerProp) return null;
+  if (!m.outcomes || m.outcomes.length !== 2) return null;
+  if (PARTIAL.test(m.period ?? "") || PARTIAL.test(m.marketName)) return null;
+  if (NOT_GAME.test(m.marketName)) return null;
+  const type = (m.marketType ?? "").toLowerCase();
+  const name = m.marketName.toLowerCase();
+  const outs = m.outcomes.map((o) => o.outcomeName.toLowerCase());
+  let kind: NbaMarketKind | null = null;
+  if (outs.some((o) => /over/.test(o)) && outs.some((o) => /under/.test(o))) kind = "total";
+  else if (/handicap|spread|line/.test(type) || /handicap|spread/.test(name)) kind = "spread";
+  else if (/moneyline|money line|winner|^12$|1x2|home.?away|match odds/.test(type + " " + name)) kind = "ml";
+  if (!kind) return null;
+  const hc = Number.isFinite(m.handicap) ? m.handicap : 0;
+  if (kind === "ml" && hc !== 0) kind = "spread";
+  const sides: Record<string, 1 | 2> = {};
+  m.outcomes.forEach((o, i) => {
+    const s = sideOf(o.outcomeName, i, kind!);
+    if (s) sides[String(o.outcomeId)] = s;
+  });
+  if (Object.keys(sides).length !== 2 || new Set(Object.values(sides)).size !== 2) return null;
+  return { kind, line: kind === "ml" ? null : hc, sides, name: m.marketName };
+}
+
+export function buildMarketMap(catalog: OpMarket[]): Record<string, MarketSpec> {
+  const out: Record<string, MarketSpec> = {};
+  for (const m of catalog) {
+    const spec = classifyBasketballMarket(m);
+    if (spec) out[String(m.marketId)] = spec;
+  }
+  return out;
+}
+
+export interface LineRow {
+  kind: NbaMarketKind;
+  /** Spread: sida 1:s handicap. Total: totalen. ml: null. */
+  line: number | null;
+  price1: number;
+  price2: number;
+  mainLine: boolean;
+}
+
+const okPrice = (p: unknown): p is number => typeof p === "number" && Number.isFinite(p) && p > 1;
+
+/** Linjen ur bokens egen outcome-id ("224.5/over"), när katalogen saknar den. */
+function lineFromOutcomeId(id: string | null | undefined): number | null {
+  const m = /^(-?\d+(?:\.\d+)?)\//.exec(id ?? "");
+  return m ? Number(m[1]) : null;
+}
+
+/** Alla prissatta linjer för en bok i ett odds-svar. */
+export function extractLines(fx: OpFixtureOdds, book: string, markets: Record<string, MarketSpec>): LineRow[] {
+  const b = fx.bookmakerOdds?.[book];
+  if (!b || b.suspended || b.bookmakerIsActive === false) return [];
+  const out: LineRow[] = [];
+  for (const [marketId, mk] of Object.entries(b.markets ?? {})) {
+    const spec = markets[marketId];
+    if (!spec || mk.marketActive === false) continue;
+    let p1: number | null = null;
+    let p2: number | null = null;
+    let main = false;
+    let line = spec.line;
+    for (const [outcomeId, oc] of Object.entries(mk.outcomes ?? {})) {
+      const side = spec.sides[outcomeId];
+      const pl = oc.players?.["0"] ?? Object.values(oc.players ?? {})[0];
+      if (!side || !pl || pl.active === false || !okPrice(pl.price)) continue;
+      if (side === 1) p1 = pl.price;
+      else p2 = pl.price;
+      if (pl.mainLine) main = true;
+      if (line == null && spec.kind !== "ml" && side === 1) line = lineFromOutcomeId(pl.bookmakerOutcomeId);
+    }
+    if (p1 == null || p2 == null) continue;
+    if (spec.kind !== "ml" && line == null) continue;
+    out.push({ kind: spec.kind, line, price1: p1, price2: p2, mainLine: main });
+  }
+  return out;
+}
+
+/**
+ * Stängningspriset ur historiken: senaste aktiva pris före matchstart per
+ * utfall. Historiken säger inget om huvudlinje, så pickMainLines väljer den
+ * jämnaste.
+ */
+export function closingFromHistory(h: OpHistoricalOdds, book: string, markets: Record<string, MarketSpec>, startTime: Date): LineRow[] {
+  const b = h?.bookmakers?.[book];
+  if (!b) return [];
+  const cutoff = startTime.getTime();
+  const out: LineRow[] = [];
+  for (const [marketId, mk] of Object.entries(b.markets ?? {})) {
+    const spec = markets[marketId];
+    if (!spec) continue;
+    const prices: Partial<Record<1 | 2, number>> = {};
+    for (const [outcomeId, oc] of Object.entries(mk.outcomes ?? {})) {
+      const side = spec.sides[outcomeId];
+      const series = oc.players?.["0"] ?? Object.values(oc.players ?? {})[0];
+      if (!side || !Array.isArray(series)) continue;
+      let best: { t: number; price: number } | null = null;
+      for (const e of series) {
+        const t = Date.parse(e.createdAt);
+        if (!Number.isFinite(t) || t > cutoff || e.active === false || !okPrice(e.price)) continue;
+        if (!best || t > best.t) best = { t, price: e.price };
+      }
+      if (best) prices[side] = best.price;
+    }
+    if (prices[1] && prices[2] && (spec.kind === "ml" || spec.line != null)) {
+      out.push({ kind: spec.kind, line: spec.line, price1: prices[1], price2: prices[2], mainLine: false });
+    }
+  }
+  return out;
+}
+
+/** En linje per marknad: bokens huvudlinje, annars den mest jämna. */
+export function pickMainLines(rows: LineRow[]): LineRow[] {
+  const out: LineRow[] = [];
+  for (const kind of ["ml", "spread", "total"] as NbaMarketKind[]) {
+    const c = rows.filter((r) => r.kind === kind);
+    if (!c.length) continue;
+    const mains = c.filter((r) => r.mainLine);
+    const pool = mains.length ? mains : c;
+    const evenness = (r: LineRow) => Math.abs(1 / r.price1 - 1 / r.price2);
+    out.push(pool.reduce((a, b) => (evenness(b) < evenness(a) ? b : a)));
+  }
+  return out;
+}
+
+/** Vänder raderna så att sida 1 = ESPN:s hemmalag. Totals påverkas inte. */
+export function orientRows(rows: LineRow[], participant1IsHome: boolean): LineRow[] {
+  if (participant1IsHome) return rows;
+  return rows.map((r) =>
+    r.kind === "total" ? r : { ...r, price1: r.price2, price2: r.price1, line: r.line == null ? null : -r.line }
+  );
+}

@@ -1,0 +1,226 @@
+// NBA-databasen — egen databas, skild från bet-loggen, skottmodellen och CS2.
+//
+// Referensdata och modellens utdata: lag, spelare, matcher, boxscores per
+// spelare, ESPN:s skadelista, dina minut-ändringar, odds och projektioner.
+// Källor: ESPN:s öppna JSON (resultat, boxscores, skador, DraftKings-linjer)
+// och OddsPapi (Pinnacle m.fl.). Allt läses in lokalt med npm run nba:*.
+//
+// Generera:  npm run generate
+// Migrera:   npm run db:push:nba
+//
+// OBS: kör aldrig db:push:nba mot samma databas som DATABASE_URL,
+// SHOTS_DATABASE_URL eller CS2_DATABASE_URL utan eget schema — `db push`
+// tar bort tabeller som inte finns i schemat. Samma Neon-endpoint går bra
+// med ett eget Postgres-schema: `…&schema=nba`.
+generator nbaClient {
+  provider = "prisma-client-js"
+  // Egen output — annars skriver den över huvudschemats klient.
+  output   = "../node_modules/.prisma/nba-client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("NBA_DATABASE_URL")
+  directUrl = env("NBA_DATABASE_URL_UNPOOLED")
+}
+
+/// Ett lag. Id är ESPN:s team-id.
+model NbaTeam {
+  id         Int     @id
+  abbr       String
+  name       String
+  /// OddsPapi:s participantId — lärs in första gången laget syns där.
+  oddspapiId Int?    @unique
+  updatedAt  DateTime @updatedAt
+}
+
+/// En spelare. Id är ESPN:s athlete-id. teamId = laget i senaste matchen.
+model NbaPlayer {
+  id        Int      @id
+  name      String
+  /// G | F | C — förenklad position för modellens priors.
+  position  String?
+  teamId    Int?
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+}
+
+/// En match. Id är ESPN:s event-id.
+model NbaGame {
+  id                Int       @id
+  /// ESPN:s säsongsår: 2027 = säsongen 2026–27.
+  season            Int
+  /// 1 = försäsong, 2 = grundserie, 3 = slutspel, 5 = play-in.
+  seasonType        Int
+  startAt           DateTime
+  homeTeamId        Int
+  awayTeamId        Int
+  neutral           Boolean   @default(false)
+  /// scheduled | live | final | postponed | canceled
+  status            String
+  homeScore         Int?
+  awayScore         Int?
+  /// 4 = ordinarie tid, 5+ = förlängning.
+  periods           Int?
+  /// När boxscoren lästes in. null = inte hämtad än.
+  boxFetchedAt      DateTime?
+  oddspapiFixtureId String?   @unique
+  /// true = OddsPapi:s participant1 är hemmalaget (för att vända historiska odds).
+  oddspapiP1Home    Boolean?
+  updatedAt         DateTime  @updatedAt
+
+  teamGames   NbaTeamGame[]
+  playerGames NbaPlayerGame[]
+  odds        NbaOdds[]
+  projections NbaProjection[]
+  overrides   NbaMinutesOverride[]
+
+  @@index([startAt])
+  @@index([status, startAt])
+}
+
+/// Lagets boxscore i en match — underlag för tempo och försvar.
+model NbaTeamGame {
+  gameId  Int
+  game    NbaGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  teamId  Int
+  home    Boolean
+  pts     Int
+  fgm2    Int
+  fga2    Int
+  fgm3    Int
+  fga3    Int
+  ftm     Int
+  fta     Int
+  oreb    Int
+  dreb    Int
+  /// Totala turnovers inklusive lag-turnovers.
+  tov     Int
+
+  @@id([gameId, teamId])
+  @@index([teamId])
+}
+
+/// En spelares rad i boxscoren.
+model NbaPlayerGame {
+  gameId    Int
+  game      NbaGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId  Int
+  teamId    Int
+  starter   Boolean @default(false)
+  minutes   Float
+  pts       Int     @default(0)
+  fgm2      Int     @default(0)
+  fga2      Int     @default(0)
+  fgm3      Int     @default(0)
+  fga3      Int     @default(0)
+  ftm       Int     @default(0)
+  fta       Int     @default(0)
+  oreb      Int     @default(0)
+  dreb      Int     @default(0)
+  ast       Int     @default(0)
+  tov       Int     @default(0)
+  /// true = stod i boxscoren men spelade inte.
+  dnp       Boolean @default(false)
+  /// ESPN:s skäl, t.ex. "COACH'S DECISION" eller "INJURY/ILLNESS - ...".
+  dnpReason String?
+
+  @@id([gameId, playerId])
+  @@index([playerId])
+  @@index([teamId])
+}
+
+/// ESPN:s skadelista just nu. Ersätts i sin helhet vid varje körning.
+model NbaInjury {
+  playerId   Int      @id
+  teamId     Int?
+  playerName String
+  /// Out | Doubtful | Questionable | Day-To-Day | Probable
+  status     String
+  detail     String?
+  reportedAt DateTime?
+  fetchedAt  DateTime @default(now())
+}
+
+/// Din egen ändring av en spelares minuter i en match. 0 = spelar inte.
+model NbaMinutesOverride {
+  gameId    Int
+  game      NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId  Int
+  minutes   Float
+  createdBy String?
+  updatedAt DateTime @updatedAt
+
+  @@id([gameId, playerId])
+}
+
+/// Ett pris för en marknad. Sida 1 = hemma/över, sida 2 = borta/under.
+/// line: spread i hemmalagets perspektiv (−5,5 = hemma favorit), total för
+/// totals, null för moneyline.
+model NbaOdds {
+  id         Int      @id @default(autoincrement())
+  gameId     Int
+  game       NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  book       String
+  /// ml | spread | total
+  market     String
+  line       Float?
+  price1     Float
+  price2     Float
+  /// oddspapi | oddspapi-history | espn | manual
+  source     String
+  capturedAt DateTime @default(now())
+  /// Senaste priset före matchstart.
+  isClosing  Boolean  @default(false)
+
+  @@index([gameId, market, book, capturedAt])
+}
+
+/// Modellens pris för en match och marknad (senaste körningen).
+model NbaProjection {
+  id           Int      @id @default(autoincrement())
+  gameId       Int
+  game         NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  /// ml | spread | total
+  market       String
+  line         Float?
+  /// P(sida 1 | ingen push) ur simuleringen.
+  pModel       Float
+  pPush        Float    @default(0)
+  pMarket      Float?
+  pFinal       Float
+  blendW       Float
+  fair1        Float
+  fair2        Float
+  book         String?
+  price1       Float?
+  price2       Float?
+  edge1        Float?
+  edge2        Float?
+  homeMean     Float
+  awayMean     Float
+  marginSd     Float
+  totalSd      Float
+  sims         Int
+  modelVersion String
+  /// 1 = sida 1 vann, 0 = sida 2, 0,5 = push. Sätts när matchen är klar.
+  actual       Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([gameId, market])
+  @@index([modelVersion, createdAt])
+}
+
+/// En sparad backtest-körning (npm run nba:backtest -- --save).
+model NbaBacktestRun {
+  id           Int      @id @default(autoincrement())
+  modelVersion String
+  fromDate     DateTime
+  toDate       DateTime
+  games        Int
+  params       Json
+  metrics      Json
+  createdAt    DateTime @default(now())
+}

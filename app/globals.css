@@ -3632,3 +3632,53 @@ select.ap-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   NBA (/nba) — modellens matcher, minuter och priser
+   --------------------------------------------------------------------------- */
+.ap-nba .ap-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.ap-nba-tabs {
+  margin-bottom: var(--sp-4);
+}
+.ap-nba-scroll {
+  overflow-x: auto;
+}
+.ap-nba-flag {
+  background: var(--pos-soft);
+}
+.ap-nba-min {
+  width: 64px;
+  padding: 4px 6px;
+  text-align: right;
+}
+.ap-nba-min.is-set {
+  border-color: var(--acc);
+}
+.ap-nba-out {
+  opacity: 0.55;
+}
+.ap-nba-teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.ap-nba-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 12px 16px 16px;
+}
+.ap-nba-form .ap-field {
+  min-width: 90px;
+}
+@media (max-width: 560px) {
+  .ap-nba-teams {
+    grid-template-columns: 1fr;
+  }
+}

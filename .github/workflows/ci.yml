@@ -12,7 +12,7 @@ jobs:
 
     # `prisma generate` resolves the datasource env vars but never connects, so
     # placeholders are enough. They must be set at job level because `npm ci`
-    # triggers `postinstall` -> `npm run generate`, which reads both schemas.
+    # triggers `postinstall` -> `npm run generate`, which reads every schema.
     # The tests are pure unit tests (vitest `environment: node`) and touch no DB.
     env:
       DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
@@ -21,6 +21,8 @@ jobs:
       SHOTS_DATABASE_URL_UNPOOLED: "postgresql://ci:ci@localhost:5432/ci"
       CS2_DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
       CS2_DATABASE_URL_UNPOOLED: "postgresql://ci:ci@localhost:5432/ci"
+      NBA_DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+      NBA_DATABASE_URL_UNPOOLED: "postgresql://ci:ci@localhost:5432/ci"
 
     steps:
       - uses: actions/checkout@v4

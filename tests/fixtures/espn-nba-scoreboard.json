@@ -1,0 +1,266 @@
+{
+"events": [
+{
+"id": "401909896",
+"date": "2026-10-31T19:00Z",
+"season": {
+"year": 2027,
+"type": 2,
+"slug": "regular-season"
+},
+"status": {
+"clock": 0.0,
+"displayClock": "0.0",
+"period": 4,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final",
+"shortDetail": "Final"
+}
+},
+"competitions": [
+{
+"id": "401909896",
+"date": "2026-10-31T19:00Z",
+"neutralSite": false,
+"status": {
+"clock": 0.0,
+"displayClock": "0.0",
+"period": 4,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final",
+"shortDetail": "Final"
+}
+},
+"type": {
+"id": "1",
+"abbreviation": "STD"
+},
+"competitors": [
+{
+"id": "26",
+"homeAway": "home",
+"score": "90",
+"linescores": [
+{
+"value": 18.0
+},
+{
+"value": 24.0
+},
+{
+"value": 22.0
+},
+{
+"value": 26.0
+}
+],
+"team": {
+"id": "26",
+"abbreviation": "UTAH",
+"displayName": "Utah Jazz"
+}
+},
+{
+"id": "22",
+"homeAway": "away",
+"score": "112",
+"linescores": [
+{
+"value": 27.0
+},
+{
+"value": 32.0
+},
+{
+"value": 29.0
+},
+{
+"value": 24.0
+}
+],
+"team": {
+"id": "22",
+"abbreviation": "POR",
+"displayName": "Portland Trail Blazers"
+}
+}
+]
+}
+]
+},
+{
+"id": "401909897",
+"date": "2026-10-31T22:00Z",
+"season": {
+"year": 2027,
+"type": 2,
+"slug": "regular-season"
+},
+"status": {
+"clock": 0.0,
+"displayClock": "0.0",
+"period": 4,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final",
+"shortDetail": "Final"
+}
+},
+"competitions": [
+{
+"id": "401909897",
+"date": "2026-10-31T22:00Z",
+"neutralSite": false,
+"status": {
+"clock": 0.0,
+"displayClock": "0.0",
+"period": 4,
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final",
+"shortDetail": "Final"
+}
+},
+"type": {
+"id": "1",
+"abbreviation": "STD"
+},
+"competitors": [
+{
+"id": "30",
+"homeAway": "home",
+"score": "104",
+"linescores": [
+{
+"value": 37.0
+},
+{
+"value": 17.0
+},
+{
+"value": 29.0
+},
+{
+"value": 21.0
+}
+],
+"team": {
+"id": "30",
+"abbreviation": "CHA",
+"displayName": "Charlotte Hornets"
+}
+},
+{
+"id": "20",
+"homeAway": "away",
+"score": "109",
+"linescores": [
+{
+"value": 27.0
+},
+{
+"value": 30.0
+},
+{
+"value": 20.0
+},
+{
+"value": 32.0
+}
+],
+"team": {
+"id": "20",
+"abbreviation": "PHI",
+"displayName": "Philadelphia 76ers"
+}
+}
+]
+}
+]
+},
+{
+"id": "401909907",
+"date": "2026-11-03T00:00Z",
+"season": {
+"year": 2027,
+"type": 2,
+"slug": "regular-season"
+},
+"status": {
+"clock": 0.0,
+"displayClock": "0.0",
+"period": 0,
+"type": {
+"id": "1",
+"name": "STATUS_SCHEDULED",
+"state": "pre",
+"completed": false,
+"description": "Scheduled",
+"detail": "Mon, November 2nd at 7:00 PM EST",
+"shortDetail": "11/2 - 7:00 PM EST"
+}
+},
+"competitions": [
+{
+"id": "401909907",
+"date": "2026-11-03T00:00Z",
+"neutralSite": false,
+"status": {
+"clock": 0.0,
+"displayClock": "0.0",
+"period": 0,
+"type": {
+"id": "1",
+"name": "STATUS_SCHEDULED",
+"state": "pre",
+"completed": false,
+"description": "Scheduled",
+"detail": "Mon, November 2nd at 7:00 PM EST",
+"shortDetail": "11/2 - 7:00 PM EST"
+}
+},
+"competitors": [
+{
+"id": "5",
+"homeAway": "home",
+"score": "0",
+"team": {
+"id": "5",
+"abbreviation": "CLE",
+"displayName": "Cleveland Cavaliers"
+}
+},
+{
+"id": "25",
+"homeAway": "away",
+"score": "0",
+"team": {
+"id": "25",
+"abbreviation": "OKC",
+"displayName": "Oklahoma City Thunder"
+}
+}
+]
+}
+]
+}
+]
+}

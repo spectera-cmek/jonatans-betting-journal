@@ -1,0 +1,1381 @@
+{
+"header": {
+"id": "401909896",
+"season": {
+"year": 2027,
+"current": true,
+"type": 2
+},
+"competitions": [
+{
+"id": "401909896",
+"date": "2026-10-31T19:00Z",
+"neutralSite": false,
+"status": {
+"type": {
+"id": "3",
+"name": "STATUS_FINAL",
+"state": "post",
+"completed": true,
+"description": "Final",
+"detail": "Final",
+"shortDetail": "Final"
+}
+},
+"competitors": [
+{
+"id": "26",
+"homeAway": "home",
+"winner": false,
+"team": {
+"id": "26",
+"abbreviation": "UTAH",
+"displayName": "Utah Jazz"
+},
+"score": "90",
+"linescores": [
+{
+"displayValue": "18"
+},
+{
+"displayValue": "24"
+},
+{
+"displayValue": "22"
+},
+{
+"displayValue": "26"
+}
+]
+},
+{
+"id": "22",
+"homeAway": "away",
+"winner": true,
+"team": {
+"id": "22",
+"abbreviation": "POR",
+"displayName": "Portland Trail Blazers"
+},
+"score": "112",
+"linescores": [
+{
+"displayValue": "27"
+},
+{
+"displayValue": "32"
+},
+{
+"displayValue": "29"
+},
+{
+"displayValue": "24"
+}
+]
+}
+]
+}
+]
+},
+"boxscore": {
+"teams": [
+{
+"team": {
+"id": "22",
+"abbreviation": "POR",
+"displayName": "Portland Trail Blazers"
+},
+"statistics": [
+{
+"name": "fieldGoalsMade-fieldGoalsAttempted",
+"displayValue": "31-76",
+"label": "FG"
+},
+{
+"name": "fieldGoalPct",
+"displayValue": "41",
+"abbreviation": "FG%",
+"label": "Field Goal %"
+},
+{
+"name": "threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+"displayValue": "16-44",
+"label": "3PT"
+},
+{
+"name": "threePointFieldGoalPct",
+"displayValue": "36",
+"abbreviation": "3P%",
+"label": "Three Point %"
+},
+{
+"name": "freeThrowsMade-freeThrowsAttempted",
+"displayValue": "34-41",
+"label": "FT"
+},
+{
+"name": "freeThrowPct",
+"displayValue": "83",
+"abbreviation": "FT%",
+"label": "Free Throw %"
+},
+{
+"name": "totalRebounds",
+"displayValue": "48",
+"abbreviation": "REB",
+"label": "Rebounds"
+},
+{
+"name": "offensiveRebounds",
+"displayValue": "9",
+"abbreviation": "OR",
+"label": "Offensive Rebounds"
+},
+{
+"name": "defensiveRebounds",
+"displayValue": "39",
+"abbreviation": "DR",
+"label": "Defensive Rebounds"
+},
+{
+"name": "assists",
+"displayValue": "16",
+"abbreviation": "AST",
+"label": "Assists"
+},
+{
+"name": "steals",
+"displayValue": "13",
+"abbreviation": "STL",
+"label": "Steals"
+},
+{
+"name": "blocks",
+"displayValue": "3",
+"abbreviation": "BLK",
+"label": "Blocks"
+},
+{
+"name": "turnovers",
+"displayValue": "17",
+"abbreviation": "TO",
+"label": "Turnovers"
+},
+{
+"name": "teamTurnovers",
+"displayValue": "2",
+"abbreviation": "TTO",
+"label": "Team Turnovers"
+},
+{
+"name": "totalTurnovers",
+"displayValue": "19",
+"abbreviation": "ToTO",
+"label": "Total Turnovers"
+},
+{
+"name": "technicalFouls",
+"displayValue": "0",
+"abbreviation": "TECH",
+"label": "Technical Fouls"
+},
+{
+"name": "totalTechnicalFouls",
+"displayValue": "0",
+"abbreviation": "TECH",
+"label": "Total Technical Fouls"
+},
+{
+"name": "flagrantFouls",
+"displayValue": "0",
+"abbreviation": "FLAG",
+"label": "Flagrant Fouls"
+},
+{
+"name": "turnoverPoints",
+"displayValue": "11",
+"abbreviation": "Points Conceded Off Turnovers",
+"label": "Points Conceded Off Turnovers"
+},
+{
+"name": "fastBreakPoints",
+"displayValue": "6",
+"abbreviation": "FBPs",
+"label": "Fast Break Points"
+},
+{
+"name": "pointsInPaint",
+"displayValue": "26",
+"abbreviation": "PIP",
+"label": "Points in Paint"
+},
+{
+"name": "fouls",
+"displayValue": "26",
+"abbreviation": "PF",
+"label": "Fouls"
+},
+{
+"name": "largestLead",
+"displayValue": "28",
+"abbreviation": "LL",
+"label": "Largest Lead"
+},
+{
+"name": "leadChanges",
+"displayValue": "4",
+"abbreviation": "LC",
+"label": "Lead Changes"
+},
+{
+"name": "leadPercentage",
+"displayValue": "95",
+"abbreviation": "LPCT",
+"label": "Percent Led"
+}
+],
+"displayOrder": 1,
+"homeAway": "away"
+},
+{
+"team": {
+"id": "26",
+"abbreviation": "UTAH",
+"displayName": "Utah Jazz"
+},
+"statistics": [
+{
+"name": "fieldGoalsMade-fieldGoalsAttempted",
+"displayValue": "29-78",
+"label": "FG"
+},
+{
+"name": "fieldGoalPct",
+"displayValue": "37",
+"abbreviation": "FG%",
+"label": "Field Goal %"
+},
+{
+"name": "threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+"displayValue": "11-40",
+"label": "3PT"
+},
+{
+"name": "threePointFieldGoalPct",
+"displayValue": "28",
+"abbreviation": "3P%",
+"label": "Three Point %"
+},
+{
+"name": "freeThrowsMade-freeThrowsAttempted",
+"displayValue": "21-26",
+"label": "FT"
+},
+{
+"name": "freeThrowPct",
+"displayValue": "81",
+"abbreviation": "FT%",
+"label": "Free Throw %"
+},
+{
+"name": "totalRebounds",
+"displayValue": "37",
+"abbreviation": "REB",
+"label": "Rebounds"
+},
+{
+"name": "offensiveRebounds",
+"displayValue": "7",
+"abbreviation": "OR",
+"label": "Offensive Rebounds"
+},
+{
+"name": "defensiveRebounds",
+"displayValue": "30",
+"abbreviation": "DR",
+"label": "Defensive Rebounds"
+},
+{
+"name": "assists",
+"displayValue": "23",
+"abbreviation": "AST",
+"label": "Assists"
+},
+{
+"name": "steals",
+"displayValue": "12",
+"abbreviation": "STL",
+"label": "Steals"
+},
+{
+"name": "blocks",
+"displayValue": "7",
+"abbreviation": "BLK",
+"label": "Blocks"
+},
+{
+"name": "turnovers",
+"displayValue": "19",
+"abbreviation": "TO",
+"label": "Turnovers"
+},
+{
+"name": "teamTurnovers",
+"displayValue": "1",
+"abbreviation": "TTO",
+"label": "Team Turnovers"
+},
+{
+"name": "totalTurnovers",
+"displayValue": "20",
+"abbreviation": "ToTO",
+"label": "Total Turnovers"
+},
+{
+"name": "technicalFouls",
+"displayValue": "0",
+"abbreviation": "TECH",
+"label": "Technical Fouls"
+},
+{
+"name": "totalTechnicalFouls",
+"displayValue": "0",
+"abbreviation": "TECH",
+"label": "Total Technical Fouls"
+},
+{
+"name": "flagrantFouls",
+"displayValue": "0",
+"abbreviation": "FLAG",
+"label": "Flagrant Fouls"
+},
+{
+"name": "turnoverPoints",
+"displayValue": "20",
+"abbreviation": "Points Conceded Off Turnovers",
+"label": "Points Conceded Off Turnovers"
+},
+{
+"name": "fastBreakPoints",
+"displayValue": "14",
+"abbreviation": "FBPs",
+"label": "Fast Break Points"
+},
+{
+"name": "pointsInPaint",
+"displayValue": "28",
+"abbreviation": "PIP",
+"label": "Points in Paint"
+},
+{
+"name": "fouls",
+"displayValue": "26",
+"abbreviation": "PF",
+"label": "Fouls"
+},
+{
+"name": "largestLead",
+"displayValue": "1",
+"abbreviation": "LL",
+"label": "Largest Lead"
+},
+{
+"name": "leadChanges",
+"displayValue": "4",
+"abbreviation": "LC",
+"label": "Lead Changes"
+},
+{
+"name": "leadPercentage",
+"displayValue": "2",
+"abbreviation": "LPCT",
+"label": "Percent Led"
+}
+],
+"displayOrder": 2,
+"homeAway": "home"
+}
+],
+"players": [
+{
+"team": {
+"id": "22",
+"abbreviation": "POR",
+"displayName": "Portland Trail Blazers"
+},
+"statistics": [
+{
+"names": [
+"MIN",
+"PTS",
+"FG",
+"3PT",
+"FT",
+"REB",
+"AST",
+"TO",
+"STL",
+"BLK",
+"OREB",
+"DREB",
+"PF",
+"+/-"
+],
+"keys": [
+"minutes",
+"points",
+"fieldGoalsMade-fieldGoalsAttempted",
+"threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+"freeThrowsMade-freeThrowsAttempted",
+"rebounds",
+"assists",
+"turnovers",
+"steals",
+"blocks",
+"offensiveRebounds",
+"defensiveRebounds",
+"fouls",
+"plusMinus"
+],
+"athletes": [
+{
+"active": false,
+"athlete": {
+"id": "4431736",
+"displayName": "Toumani Camara",
+"position": {
+"abbreviation": "F"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"31",
+"14",
+"4-9",
+"4-9",
+"2-2",
+"4",
+"0",
+"1",
+"2",
+"0",
+"0",
+"4",
+"3",
+"+26"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4683021",
+"displayName": "Deni Avdija",
+"position": {
+"abbreviation": "F"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"30",
+"24",
+"6-12",
+"2-4",
+"10-13",
+"5",
+"2",
+"3",
+"1",
+"0",
+"0",
+"5",
+"3",
+"+32"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "5105565",
+"displayName": "Donovan Clingan",
+"position": {
+"abbreviation": "C"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"15",
+"4",
+"1-3",
+"0-1",
+"2-2",
+"9",
+"0",
+"0",
+"0",
+"1",
+"4",
+"5",
+"5",
+"+20"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "6606",
+"displayName": "Damian Lillard",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"27",
+"22",
+"6-17",
+"3-10",
+"7-8",
+"5",
+"4",
+"5",
+"2",
+"1",
+"1",
+"4",
+"2",
+"+21"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4683678",
+"displayName": "Scoot Henderson",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"31",
+"14",
+"4-11",
+"1-4",
+"5-6",
+"3",
+"1",
+"4",
+"3",
+"0",
+"2",
+"1",
+"2",
+"-5"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4066211",
+"displayName": "Robert Williams III",
+"position": {
+"abbreviation": "C"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"14",
+"3",
+"1-2",
+"0-0",
+"1-2",
+"3",
+"1",
+"1",
+"1",
+"1",
+"0",
+"3",
+"1",
+"+7"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "4066399",
+"displayName": "Micah Potter",
+"position": {
+"abbreviation": "C"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"4",
+"2",
+"0-0",
+"0-0",
+"2-2",
+"1",
+"0",
+"0",
+"0",
+"0",
+"1",
+"0",
+"0",
+"0"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "4592435",
+"displayName": "Branden Carlson",
+"position": {
+"abbreviation": "C"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"4",
+"0",
+"0-1",
+"0-1",
+"0-0",
+"2",
+"1",
+"0",
+"0",
+"0",
+"1",
+"1",
+"0",
+"0"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "5217746",
+"displayName": "Yang Hansen",
+"position": {
+"abbreviation": "C"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"13",
+"6",
+"2-5",
+"2-3",
+"0-0",
+"5",
+"1",
+"1",
+"1",
+"0",
+"0",
+"5",
+"1",
+"-3"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "3995",
+"displayName": "Jrue Holiday",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"22",
+"14",
+"4-6",
+"2-4",
+"4-4",
+"4",
+"3",
+"1",
+"1",
+"0",
+"0",
+"4",
+"2",
+"+7"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "4578893",
+"displayName": "Vit Krejci",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"24",
+"5",
+"2-6",
+"1-4",
+"0-0",
+"4",
+"2",
+"0",
+"1",
+"0",
+"0",
+"4",
+"2",
+"+1"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "4706557",
+"displayName": "Chris Youngblood",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"7",
+"3",
+"1-4",
+"1-4",
+"0-0",
+"0",
+"0",
+"0",
+"0",
+"0",
+"0",
+"0",
+"2",
+"-2"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "5081727",
+"displayName": "Sidy Cissoko",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"19",
+"1",
+"0-0",
+"0-0",
+"1-2",
+"3",
+"1",
+"1",
+"1",
+"0",
+"0",
+"3",
+"3",
+"+6"
+]
+}
+]
+}
+],
+"displayOrder": 1
+},
+{
+"team": {
+"id": "26",
+"abbreviation": "UTAH",
+"displayName": "Utah Jazz"
+},
+"statistics": [
+{
+"names": [
+"MIN",
+"PTS",
+"FG",
+"3PT",
+"FT",
+"REB",
+"AST",
+"TO",
+"STL",
+"BLK",
+"OREB",
+"DREB",
+"PF",
+"+/-"
+],
+"keys": [
+"minutes",
+"points",
+"fieldGoalsMade-fieldGoalsAttempted",
+"threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+"freeThrowsMade-freeThrowsAttempted",
+"rebounds",
+"assists",
+"turnovers",
+"steals",
+"blocks",
+"offensiveRebounds",
+"defensiveRebounds",
+"fouls",
+"plusMinus"
+],
+"athletes": [
+{
+"active": false,
+"athlete": {
+"id": "4066336",
+"displayName": "Lauri Markkanen",
+"position": {
+"abbreviation": "F"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"29",
+"13",
+"3-14",
+"2-11",
+"5-6",
+"6",
+"1",
+"2",
+"2",
+"2",
+"0",
+"6",
+"6",
+"-17"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4397077",
+"displayName": "Jaxson Hayes",
+"position": {
+"abbreviation": "C"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"20",
+"7",
+"2-7",
+"0-0",
+"3-4",
+"7",
+"2",
+"3",
+"2",
+"1",
+"4",
+"3",
+"4",
+"-15"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4433627",
+"displayName": "Keyonte George",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"29",
+"8",
+"2-10",
+"0-4",
+"4-4",
+"3",
+"4",
+"3",
+"1",
+"0",
+"0",
+"3",
+"3",
+"-10"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "4873138",
+"displayName": "Ace Bailey",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"37",
+"9",
+"4-10",
+"1-6",
+"0-0",
+"7",
+"1",
+"3",
+"2",
+"3",
+"0",
+"7",
+"2",
+"-16"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "5041955",
+"displayName": "Darryn Peterson",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": true,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"36",
+"16",
+"6-15",
+"3-8",
+"1-2",
+"4",
+"4",
+"3",
+"1",
+"1",
+"1",
+"3",
+"4",
+"-8"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "4684793",
+"displayName": "Kyle Filipowski",
+"position": {
+"abbreviation": "F"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"6",
+"5",
+"2-2",
+"1-1",
+"0-0",
+"0",
+"2",
+"0",
+"1",
+"0",
+"0",
+"0",
+"1",
+"0"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "5105839",
+"displayName": "Brice Sensabaugh",
+"position": {
+"abbreviation": "F"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"19",
+"12",
+"3-7",
+"2-4",
+"4-4",
+"3",
+"2",
+"1",
+"0",
+"0",
+"0",
+"3",
+"1",
+"+2"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4277919",
+"displayName": "Mo Bamba",
+"position": {
+"abbreviation": "C"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"11",
+"6",
+"2-2",
+"0-0",
+"2-2",
+"4",
+"0",
+"0",
+"1",
+"0",
+"1",
+"3",
+"0",
+"-7"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "3133602",
+"displayName": "Svi Mykhailiuk",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"18",
+"6",
+"2-5",
+"2-5",
+"0-0",
+"1",
+"3",
+"0",
+"0",
+"0",
+"1",
+"0",
+"3",
+"-10"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4065663",
+"displayName": "Josh Okogie",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"14",
+"0",
+"0-1",
+"0-1",
+"0-0",
+"1",
+"0",
+"1",
+"0",
+"0",
+"0",
+"1",
+"2",
+"-7"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4432811",
+"displayName": "Josh Green",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"2",
+"0",
+"0-0",
+"0-0",
+"0-0",
+"0",
+"0",
+"0",
+"0",
+"0",
+"0",
+"0",
+"0",
+"-1"
+]
+},
+{
+"active": true,
+"athlete": {
+"id": "4683766",
+"displayName": "Isaiah Collier",
+"position": {
+"abbreviation": "G"
+}
+},
+"starter": false,
+"didNotPlay": false,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": [
+"20",
+"8",
+"3-5",
+"0-0",
+"2-4",
+"1",
+"4",
+"3",
+"2",
+"0",
+"0",
+"1",
+"0",
+"-21"
+]
+},
+{
+"active": false,
+"athlete": {
+"id": "4065673",
+"displayName": "Tony Bradley",
+"position": {
+"abbreviation": "C"
+}
+},
+"starter": false,
+"didNotPlay": true,
+"reason": "COACH'S DECISION",
+"ejected": false,
+"stats": []
+}
+]
+}
+],
+"displayOrder": 2
+}
+]
+},
+"pickcenter": [
+{
+"provider": {
+"id": "100",
+"name": "DraftKings",
+"priority": 1
+},
+"details": "POR -6.5",
+"overUnder": 232.5,
+"spread": 6.5,
+"overOdds": -115.0,
+"underOdds": -105.0,
+"awayTeamOdds": {
+"favorite": true,
+"underdog": false,
+"moneyLine": -258,
+"spreadOdds": -112.0,
+"teamId": "22",
+"favoriteAtOpen": true
+},
+"homeTeamOdds": {
+"favorite": false,
+"underdog": true,
+"moneyLine": 210,
+"spreadOdds": -108.0,
+"teamId": "26",
+"favoriteAtOpen": false
+},
+"moneyline": {
+"displayName": "Moneyline",
+"shortDisplayName": "ML",
+"home": {
+"close": {
+"odds": "+210"
+},
+"open": {
+"odds": "+185"
+}
+},
+"away": {
+"close": {
+"odds": "-258"
+},
+"open": {
+"odds": "-225"
+}
+}
+},
+"pointSpread": {
+"displayName": "Spread",
+"shortDisplayName": "Spread",
+"home": {
+"close": {
+"line": "+6.5",
+"odds": "-108"
+},
+"open": {
+"line": "+6.5",
+"odds": "-110"
+}
+},
+"away": {
+"close": {
+"line": "-6.5",
+"odds": "-112"
+},
+"open": {
+"line": "-6.5",
+"odds": "-110"
+}
+}
+},
+"total": {
+"displayName": "Total",
+"shortDisplayName": "Total",
+"over": {
+"close": {
+"line": "o232.5",
+"odds": "-115"
+},
+"open": {
+"line": "o232.5",
+"odds": "-115"
+}
+},
+"under": {
+"close": {
+"line": "u232.5",
+"odds": "-105"
+},
+"open": {
+"line": "u232.5",
+"odds": "-105"
+}
+}
+},
+"link": {
+"text": "See More Odds",
+"language": "en-US",
+"rel": [
+"main",
+"desktop",
+"bets"
+],
+"href": "https://sportsbook.draftkings.com",
+"isExternal": true,
+"isPremium": false
+},
+"header": {
+"logo": {
+"dark": "https://a.espncdn.com/i/espnbet/dark/espn-bet-square-off.svg",
+"light": "https://a.espncdn.com/i/espnbet/espn-bet-square-off.svg",
+"exclusivesLogoDark": "https://a.espncdn.com/i/espnbet/espn-bet-square-mint.svg",
+"exclusivesLogoLight": "https://a.espncdn.com/i/espnbet/espn-bet-square-mint.svg"
+},
+"text": "Game Odds"
+},
+"footer": {
+"disclaimer": "GAMBLING PROBLEM? CALL 1-800-GAMBLER or 1-800-MY-RESET, (800) 327-5050 or visit gamblinghelplinema.org (MA). Call 877-8-HOPENY/text HOPENY (467369) (NY). Call 888-789-7777/visit ccpg.org (CT), or visit www.mdgamblinghelp.org (MD), 1-800-981-0023 (PR). 21+ and present in most states. (18+ DC/KY/NH/PR/WY). Void in ONT. Eligibility restrictions apply. Terms: draftkings.com/sportsbook. On behalf of Boot Hill Casino (KS). Pass-thru of per wager tax may apply in IL."
+}
+}
+]
+}
