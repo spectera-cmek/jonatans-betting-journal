@@ -52,6 +52,7 @@
     "capture:kickoff-clv": "tsx scripts/captureKickoffClv.ts",
     "watch:kickoff-clv": "tsx scripts/watchKickoffClv.ts",
     "install:kickoff-clv-task": "powershell -ExecutionPolicy Bypass -File scripts/install-kickoff-clv-task.ps1",
+    "install:nba-tasks": "powershell -ExecutionPolicy Bypass -File scripts/install-nba-tasks.ps1",
     "import:bet365": "tsx scripts/importBet365.ts",
     "import:unibet": "tsx scripts/importUnibet.ts",
     "recategorize": "tsx scripts/recategorize.ts",

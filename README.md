@@ -324,8 +324,10 @@ npm run nba:props-backtest            # props vs real box scores (no prop lines 
 npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle closing (free history)
 ```
 
-Schedule `nba:update` in the morning and `nba:closing` in the evening (Swedish time)
-in Windows Task Scheduler. That is ~60 OddsPapi requests a month out of the free 250.
+Schedule both with `npm run install:nba-tasks` (Windows Task Scheduler): `nba:update`
+daily at 09:00 and `nba:closing` at 23:45, before the first tip-off. Change the times
+with `npm run install:nba-tasks -- -MorningAt 08:30 -ClosingAt 23:30`. Logs go to
+`.claude/logs/nba.log`. That is ~60 OddsPapi requests a month out of the free 250.
 
 **Status and caveats**
 
