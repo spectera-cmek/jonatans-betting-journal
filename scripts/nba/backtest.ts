@@ -7,6 +7,7 @@
  *   npm run nba:backtest -- --book pinnacle            # bara en boks stängning
  *   npm run nba:backtest -- --line bet                 # mot Pinnacles pris 12 h före start + CLV
  *                                                      (kräver npm run nba:odds-history först)
+ *   npm run nba:backtest -- --line bet --lineup actual # som ovan, men modellen vet vilka som spelade (fusk)
  *   npm run nba:backtest -- --sims 8000 --save         # spara körningen (visas under Facit)
  *   npm run nba:backtest -- --param usageK=0.4 --param rubberBand=0.05   # prova andra parametrar
  *
@@ -56,6 +57,14 @@ async function main() {
   const book = arg("--book");
   const betMode = arg("--line") === "bet";
   const evalRank = betMode ? BET_RANK : SOURCE_RANK;
+  // Mot speltidspriset är det ärliga att bara veta det som var känt på morgonen.
+  const lineupArg = arg("--lineup");
+  const lineup: "actual" | "prev" = lineupArg === "actual" || lineupArg === "prev" ? lineupArg : betMode ? "prev" : "actual";
+  console.log(
+    lineup === "prev"
+      ? "Laguppställning: förra matchens spelare (inga besked från matchdagen) — --lineup actual för de som faktiskt spelade"
+      : "Laguppställning: de som faktiskt spelade (vet sena strykningar)"
+  );
   const params = paramOverrides();
   const changed = Object.entries(params).filter(([k, v]) => (DEFAULT_NBA_PARAMS as unknown as Record<string, number>)[k] !== v);
   if (changed.length) console.log(`Parametrar: ${changed.map(([k, v]) => `${k}=${v}`).join(", ")}`);
@@ -105,6 +114,7 @@ async function main() {
     params,
     closeLines: betMode ? closeLines : undefined,
     stints,
+    lineup,
     onProgress: (d, n) => {
       if (d - last >= 100 || d === n) {
         last = d;

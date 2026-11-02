@@ -15,7 +15,7 @@ import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { fitRapm, type RapmFit, type StintRow } from "./rapm";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, isFlagged, type NbaModelParams } from "./params";
 import { modelProb, settle, type NbaMarket } from "./pricing";
-import { leagueAverages, type History, type League, type PlayerGameRow } from "./ratings";
+import { firstBefore, leagueAverages, type History, type League, type PlayerGameRow } from "./ratings";
 import { projectGame } from "./project";
 
 export interface BacktestGame {
@@ -87,6 +87,12 @@ export function runBacktest(
     closeLines?: Map<number, ClosingQuote[]>;
     /** Stintar för RAPM (används när params.rapmK > 0). RAPM räknas om en gång i veckan. */
     stints?: StintRow[];
+    /**
+     * Vilka spelare modellen får veta spelar:
+     *   "actual" — de som faktiskt spelade (vet sena strykningar, som marknaden vid stängning)
+     *   "prev"   — de som spelade lagets förra match (vad som är känt på morgonen, före dagens skadebesked)
+     */
+    lineup?: "actual" | "prev";
     onProgress?: (done: number, total: number) => void;
   } = {}
 ): BacktestResult {
@@ -131,7 +137,13 @@ export function runBacktest(
     }
     const rows = played.get(g.id) ?? [];
     const lineup = (teamId: number) => {
-      const who = new Set(rows.filter((r) => r.teamId === teamId && r.minutes > 0).map((r) => r.playerId));
+      let who: Set<number>;
+      if (opts.lineup === "prev") {
+        // Förra matchens spelare — inga besked från matchdagen.
+        const teamRows = h.teams.get(teamId) ?? [];
+        const prev = teamRows[firstBefore(teamRows, g.t)];
+        who = new Set((prev ? played.get(prev.gameId) ?? [] : []).filter((r) => r.teamId === teamId && r.minutes > 0).map((r) => r.playerId));
+      } else who = new Set(rows.filter((r) => r.teamId === teamId && r.minutes > 0).map((r) => r.playerId));
       const base = new Map(baselineMinutes(h, teamId, g.t, { activeDays: 400 }).map((b) => [b.playerId, b.baseline]));
       const inputs = [...who].map((playerId) => ({
         playerId,
