@@ -61,6 +61,8 @@ export interface BacktestResult {
   ats: Partial<Record<PickMarket, BucketRecord[]>>;
   /** Bara med closeLines: CLV per sida mot att alltid spela sida 1. */
   clv?: Partial<Record<PickMarket, ClvCheck>>;
+  /** Med betQuotes: hur många picks som spelades hos varje bolag. */
+  betBooks?: Record<string, number>;
   books: string[];
 }
 
@@ -95,6 +97,11 @@ export function runBacktest(
      *   "prev"   — de som spelade lagets förra match (vad som är känt på morgonen, före dagens skadebesked)
      */
     lineup?: "actual" | "prev";
+    /**
+     * Spela picken hos de här bolagen i stället för mot `closing`: alla deras
+     * speltidspriser per match, bästa linjen för modellens sida väljs.
+     */
+    betQuotes?: Map<number, ClosingQuote[]>;
     onProgress?: (done: number, total: number) => void;
   } = {}
 ): BacktestResult {
@@ -110,6 +117,7 @@ export function runBacktest(
   const rapmByWeek = new Map<number, RapmFit>();
   const picks: Record<PickMarket, GradedPick[]> = { spread: [], total: [] };
   const always1: Record<PickMarket, number[]> = { spread: [], total: [] };
+  const betBooks: Record<string, number> = {};
   const obs: Obs[] = [];
   const books = new Set<string>();
   const m = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
@@ -208,17 +216,32 @@ export function runBacktest(
         t.nMarket++;
       }
       if ((q.market === "spread" || q.market === "total") && q.line != null) {
-        const ml = modelLine(q.market, s.homeMean, s.awayMean);
-        const pk = pickFromLine(q.market, ml, q.line);
-        const close = opts.closeLines?.get(g.id)?.find((c) => c.market === q.market && c.line != null);
-        if (close?.line != null) always1[q.market].push(clvPoints(q.market, 1, q.line, close.line));
-        picks[q.market].push({
-          edgePts: pk.edgePts,
-          side: pk.side,
-          result: gradePick(q.market, pk.side, q.line, g.homeScore, g.awayScore),
-          price: pk.side === 1 ? q.price1 : q.price2,
-          clv: close?.line != null ? clvPoints(q.market, pk.side, q.line, close.line) : null,
-        });
+        const mk = q.market;
+        const ml = modelLine(mk, s.homeMean, s.awayMean);
+        const close = opts.closeLines?.get(g.id)?.find((c) => c.market === mk && c.line != null);
+        // Utan betQuotes spelas picken på q (Pinnacle). Med betQuotes: bästa linjen bland dina bolag.
+        const cands = opts.betQuotes ? (opts.betQuotes.get(g.id) ?? []).filter((c) => c.market === mk && c.line != null) : [q];
+        const chosen = bestPick(mk, ml, cands);
+        if (chosen) {
+          const { c, pk } = chosen;
+          if (opts.betQuotes) betBooks[c.book] = (betBooks[c.book] ?? 0) + 1;
+          // Jämförelser på samma linjer: alltid sida 1, och en slumpad sida (snittet av bästa sida 1 och 2).
+          let base: number | null = null;
+          if (close?.line != null) {
+            const best1 = Math.max(...cands.map((x) => clvPoints(mk, 1, x.line!, close.line!)));
+            const best2 = Math.max(...cands.map((x) => clvPoints(mk, 2, x.line!, close.line!)));
+            always1[mk].push(best1);
+            base = (best1 + best2) / 2;
+          }
+          picks[mk].push({
+            edgePts: pk.edgePts,
+            side: pk.side,
+            result: gradePick(mk, pk.side, c.line!, g.homeScore, g.awayScore),
+            price: pk.side === 1 ? c.price1 : c.price2,
+            clv: close?.line != null ? clvPoints(mk, pk.side, c.line!, close.line) : null,
+            base,
+          });
+        }
       }
       const y = settle(q.market, q.line, g.homeScore, g.awayScore);
       const dv = devigProportional(q.price1, [q.price2]);
@@ -281,5 +304,18 @@ export function runBacktest(
     ats: { spread: bucketRecords(picks.spread), total: bucketRecords(picks.total) },
     clv: opts.closeLines ? { spread: clvCheck(picks.spread, always1.spread), total: clvCheck(picks.total, always1.total) } : undefined,
     books: [...books],
+    betBooks: opts.betQuotes ? betBooks : undefined,
   };
+}
+
+/** Bästa linjen för modellen bland bolagens priser: störst edge i poäng, sedan bäst pris. */
+export function bestPick(market: PickMarket, model: number, cands: ClosingQuote[]) {
+  let best: { c: ClosingQuote; pk: ReturnType<typeof pickFromLine>; price: number } | null = null;
+  for (const c of cands) {
+    if (c.line == null) continue;
+    const pk = pickFromLine(market, model, c.line);
+    const price = pk.side === 1 ? c.price1 : c.price2;
+    if (!best || pk.edgePts > best.pk.edgePts || (pk.edgePts === best.pk.edgePts && price > best.price)) best = { c, pk, price };
+  }
+  return best;
 }

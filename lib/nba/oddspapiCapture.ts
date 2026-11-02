@@ -224,19 +224,22 @@ export const HISTORY_CLOSING = "oddspapi-history";
 export const HISTORY_BET = "oddspapi-bet";
 
 /**
- * Pinnacles pris ur OddsPapi-historiken (gratis) vid två tidpunkter:
+ * Pris ur OddsPapi-historiken (gratis) vid två tidpunkter, för Pinnacle eller
+ * upp till tre valfria bolag (`books`, t.ex. svenska bolag att jämföra med):
  *   stängning — senaste priset före start (source "oddspapi-history")
  *   speltid   — priset `betHours` timmar före start, när du skulle ha spelat
  *               (standard 12 h ≈ kl. 13 svensk tid för en match kl. 01) — source "oddspapi-bet"
  * Skillnaden mellan dem är linjerörelsen, som CLV-mätningen i nba:backtest bygger på.
+ * En match markeras som tom (och frågas inte igen) bara när inget av bolagen har historik.
  */
 export async function captureHistoricalClosing(
   db: NbaPrisma,
-  opts: { from: Date; to: Date; max?: number; betHours?: number; retryEmpty?: boolean; log?: (m: string) => void }
-): Promise<{ games: number; saved: number; empty: number }> {
+  opts: { from: Date; to: Date; max?: number; betHours?: number; retryEmpty?: boolean; books?: string[]; log?: (m: string) => void }
+): Promise<{ games: number; saved: number; empty: number; byBook: Record<string, number> }> {
   const log = opts.log ?? (() => {});
   const ids = requireIds();
-  const book = oddspapiBookmaker();
+  const books = (opts.books?.length ? opts.books : [oddspapiBookmaker()]).slice(0, 3);
+  const byBook: Record<string, number> = Object.fromEntries(books.map((b) => [b, 0]));
   const games = await db.nbaGame.findMany({
     where: {
       status: "final",
@@ -245,7 +248,7 @@ export async function captureHistoricalClosing(
       // Matcher där historiken redan visat sig tom frågas inte igen (5 s styck).
       ...(opts.retryEmpty ? {} : { oddsHistoryEmptyAt: null }),
       // Saknar stängning eller speltidspris från historiken.
-      OR: [{ odds: { none: { source: HISTORY_CLOSING, book } } }, { odds: { none: { source: HISTORY_BET, book } } }],
+      OR: books.flatMap((book) => [{ odds: { none: { source: HISTORY_CLOSING, book } } }, { odds: { none: { source: HISTORY_BET, book } } }]),
     },
     orderBy: { startAt: "asc" },
     take: opts.max ?? 2000,
@@ -258,7 +261,7 @@ export async function captureHistoricalClosing(
   for (const [i, g] of games.entries()) {
     let h: Awaited<ReturnType<typeof getHistoricalOdds>>;
     try {
-      h = await oddspapiRetry(() => getHistoricalOdds(g.oddspapiFixtureId!, [book]), 5, (m) => log(`match ${g.id}: ${m}`));
+      h = await oddspapiRetry(() => getHistoricalOdds(g.oddspapiFixtureId!, books), 5, (m) => log(`match ${g.id}: ${m}`));
     } catch (e) {
       // 404 "No historical odds found" = OddsPapi har ingen historik för matchen. Hoppa över den.
       if (!(e instanceof OddspapiError && e.statusCode === 404)) throw e;
@@ -272,18 +275,22 @@ export async function captureHistoricalClosing(
       { source: HISTORY_BET, at: new Date(g.startAt.getTime() - betMs), capturedAt: new Date(g.startAt.getTime() - betMs), isClosing: false },
     ];
     let any = false;
-    for (const pt of points) {
-      const lines = pickMainLines(closingFromHistory(h, book, markets, pt.at));
-      if (!lines.length) continue;
-      any = true;
-      await db.nbaOdds.deleteMany({ where: { gameId: g.id, book, source: pt.source } });
-      // participant1 är inte alltid hemmalaget — orienteringen sparades vid kopplingen.
-      for (const r of orientRows(lines, g.oddspapiP1Home ?? true)) {
-        await db.nbaOdds.create({
-          data: { gameId: g.id, book, market: r.kind, line: r.line, price1: r.price1, price2: r.price2, source: pt.source, capturedAt: pt.capturedAt, isClosing: pt.isClosing },
-        });
-        saved++;
+    for (const book of books) {
+      let bookAny = false;
+      for (const pt of points) {
+        const lines = pickMainLines(closingFromHistory(h, book, markets, pt.at));
+        if (!lines.length) continue;
+        any = bookAny = true;
+        await db.nbaOdds.deleteMany({ where: { gameId: g.id, book, source: pt.source } });
+        // participant1 är inte alltid hemmalaget — orienteringen sparades vid kopplingen.
+        for (const r of orientRows(lines, g.oddspapiP1Home ?? true)) {
+          await db.nbaOdds.create({
+            data: { gameId: g.id, book, market: r.kind, line: r.line, price1: r.price1, price2: r.price2, source: pt.source, capturedAt: pt.capturedAt, isClosing: pt.isClosing },
+          });
+          saved++;
+        }
       }
+      if (bookAny) byBook[book]++;
     }
     if (!any) {
       empty++;
@@ -291,7 +298,7 @@ export async function captureHistoricalClosing(
     }
     if ((i + 1) % 25 === 0) log(`${i + 1}/${games.length} matcher`);
   }
-  return { games: games.length, saved, empty };
+  return { games: games.length, saved, empty, byBook };
 }
 
 /**

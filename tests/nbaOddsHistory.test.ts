@@ -102,20 +102,32 @@ describe("OddsPapi-historiken", () => {
 });
 
 describe("CLV-koll", () => {
-  it("skiljer modellens CLV per sida från ren linjedrift", async () => {
+  it("räknar modellens bidrag utöver en slumpad sida på samma linjer", async () => {
     const { clvCheck } = await import("../lib/nba/picks");
     const picks = [
-      { edgePts: 3, result: "W" as const, side: 1 as const, clv: 1 },
-      { edgePts: 3, result: "L" as const, side: 1 as const, clv: 0.5 },
-      { edgePts: 3, result: "W" as const, side: 2 as const, clv: 0.5 },
-      { edgePts: 3, result: "L" as const, side: 2 as const, clv: -0.5 },
-      { edgePts: 3, result: "L" as const, side: 2 as const, clv: 0 },
+      { edgePts: 3, result: "W" as const, side: 1 as const, clv: 1, base: 0.5 },
+      { edgePts: 3, result: "L" as const, side: 1 as const, clv: 0.5, base: 0.5 },
+      { edgePts: 3, result: "W" as const, side: 2 as const, clv: 0.5, base: 0 },
+      { edgePts: 3, result: "L" as const, side: 2 as const, clv: -0.5, base: 0 },
+      { edgePts: 3, result: "L" as const, side: 2 as const, clv: 0, base: 0 },
     ];
     const c = clvCheck(picks, [1, 0.5, -0.5, 0.5, 0]);
     expect(c.side1).toEqual({ n: 2, clv: 0.75, beat: 1 });
     expect(c.side2.n).toBe(3);
     expect(c.side2.beat).toBe(0.5); // push (0) räknas inte som rörelse
     expect(c.always1.clv).toBeCloseTo(0.3);
-    expect(c.t).toBeGreaterThan(0);
+    expect(c.base).toBeCloseTo(0.2);
+    expect(c.skill).toBeCloseTo(0.1); // 0,3 i snitt − 0,2 som en slumpad sida också fått
+    expect(c.t).not.toBeNull();
+  });
+
+  it("väljer bästa linjen bland bolagen för modellens sida", async () => {
+    const { bestPick } = await import("../lib/nba/backtest");
+    const q = (book: string, line: number, p1 = 1.9, p2 = 1.9) => ({ market: "total" as const, line, price1: p1, price2: p2, book });
+    // Modellen 224: över är rätt sida, och lägst total är bäst för över.
+    expect(bestPick("total", 224, [q("a", 221.5), q("b", 220.5), q("c", 222)])!.c.book).toBe("b");
+    // Samma linje: högst pris vinner.
+    expect(bestPick("total", 224, [q("a", 220.5, 1.87), q("b", 220.5, 1.95)])!.c.book).toBe("b");
+    expect(bestPick("total", 224, [])).toBeNull();
   });
 });

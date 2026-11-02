@@ -6,6 +6,9 @@
  *
  *   npm run nba:odds-history -- --from 2026-01-01 --to 2026-06-30 --confirm
  *   npm run nba:odds-history -- --confirm --bet-hours 10   # speltid 10 h före start
+ *   npm run nba:odds-history -- --confirm --books unibet,betsson,smarkets
+ *       # andra bolag (max 3 per körning, namn enligt npm run oddspapi:books) —
+ *       # jämförs mot Pinnacle med nba:backtest -- --line bet --bet-books …
  *
  * Kostnad: historiken är gratis, men matcherna måste först kopplas till
  * OddsPapi-fixtures via /fixtures, som är debiterat: ett anrop per 9 dagar
@@ -51,14 +54,22 @@ async function main() {
     console.log(`Kopplade ${l.linked} matcher med ${l.calls} anrop`);
   }
   const betHours = Number(arg("--bet-hours")) || 12;
+  const books = (arg("--books") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (books.length > 3) {
+    console.error("Max 3 bolag per körning (OddsPapi-gränsen) — kör flera gånger.");
+    process.exit(1);
+  }
+  if (books.length) console.log(`Bolag: ${books.join(", ")}`);
   const r = await captureHistoricalClosing(db, {
     from,
     to,
     betHours,
     retryEmpty: process.argv.includes("--retry-empty"),
+    books,
     log: (m) => console.log(`  ${m}`),
   });
   console.log(`Klart: ${r.games} matcher, ${r.saved} priser (stängning + ${betHours} h före start), ${r.empty} utan historik. Debiterade anrop: ${oddspapiCallsThisRun()}`);
+  console.log(`Matcher med priser per bolag: ${Object.entries(r.byBook).map(([b, n]) => `${b} ${n}`).join(", ")}`);
 }
 
 main()
