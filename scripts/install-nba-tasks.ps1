@@ -1,23 +1,25 @@
 # Install (or update) two Windows Scheduled Tasks for the NBA model:
 #
-#   BettingTracker-NbaUpdate   daily at 09:00 - results, injuries, odds, projections, settle
-#   BettingTracker-NbaClosing  daily at 23:45 - injuries + closing odds before tip-off
+#   BettingTracker-NbaUpdate   daily at 13:00 - last night's results and settlement,
+#                              injuries, odds, projections and locked picks
+#   BettingTracker-NbaClosing  daily at 23:30 - injuries + closing odds before tip-off
 #
 #   npm run install:nba-tasks
-#   npm run install:nba-tasks -- -MorningAt 08:30 -ClosingAt 23:30
+#   npm run install:nba-tasks -- -UpdateAt 12:00 -ClosingAt 23:00
 #
 # Each run costs 1 OddsPapi request (about 60 of the free 250 a month).
-# Why 23:45 and not later: most NBA games tip at 00:00-02:00 Swedish time, so
-# the closing run has to happen before the first of them. It prices every game
-# starting within 4 hours and marks lines as closing for games within 3 hours.
+# 13:00: the night's games are long finished and the books have posted
+# tonight's lines. 23:30: before the first tip-off (most games start at
+# 00:00-02:00 Swedish time); it prices every game starting within 4 hours and
+# marks lines as closing for games within 3 hours.
 #
 # Remove with:
 #   Unregister-ScheduledTask -TaskName "BettingTracker-NbaUpdate" -Confirm:$false
 #   Unregister-ScheduledTask -TaskName "BettingTracker-NbaClosing" -Confirm:$false
 
 param(
-  [string]$MorningAt = "09:00",
-  [string]$ClosingAt = "23:45"
+  [string]$UpdateAt = "13:00",
+  [string]$ClosingAt = "23:30"
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,8 +40,8 @@ $Tasks = @(
   @{
     Name = "BettingTracker-NbaUpdate"
     Job = "update"
-    At = $MorningAt
-    # Catch up if the PC was off at 09:00 - results and projections are still useful later in the day.
+    At = $UpdateAt
+    # Catch up if the PC was off at 13:00 - results and projections are still useful later in the day.
     StartWhenAvailable = $true
     Description = "Betting Tracker: NBA results, injuries, OddsPapi odds (1 request), projections and settlement."
   },

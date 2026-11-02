@@ -325,8 +325,9 @@ npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle closing (fr
 ```
 
 Schedule both with `npm run install:nba-tasks` (Windows Task Scheduler): `nba:update`
-daily at 09:00 and `nba:closing` at 23:45, before the first tip-off. Change the times
-with `npm run install:nba-tasks -- -MorningAt 08:30 -ClosingAt 23:30`. Logs go to
+daily at 13:00 (last night's results, tonight's lines) and `nba:closing` at 23:30,
+before the first tip-off. Change the times with
+`npm run install:nba-tasks -- -UpdateAt 12:00 -ClosingAt 23:00`. Logs go to
 `.claude/logs/nba.log`. That is ~60 OddsPapi requests a month out of the free 250.
 
 **Status and caveats**
