@@ -1,7 +1,7 @@
 // NBA-modellens parametrar på ett ställe. Backtesten (npm run nba:backtest)
 // är det som ska flytta dem — ändra versionen när modellens matte ändras.
 
-export const NBA_MODEL_VERSION = "nba-v2";
+export const NBA_MODEL_VERSION = "nba-v3";
 
 export interface NbaModelParams {
   /** Spelartakter: halveringstid i spelarens egna matcher. */
@@ -68,6 +68,15 @@ export interface NbaModelParams {
   ratingMix: number;
   /** Hur mycket av spelarmodellens skillnad mellan kvällens och normal uppställning som läggs på lagratingen. */
   playerAdjK: number;
+  /**
+   * Vikt för RAPM-justeringen (spelarnas påverkan på anfall OCH försvar ur
+   * play-by-play) av kvällens uppställning mot den normala. 0 = av.
+   */
+  rapmK: number;
+  /** Slutspel: poäng per 100 possessions för båda lagen (tätare försvar). */
+  playoffRtg: number;
+  /** Slutspel: possessions per 48 (lägre tempo). */
+  playoffPace: number;
 }
 
 export const DEFAULT_NBA_PARAMS: NbaModelParams = {
@@ -88,11 +97,13 @@ export const DEFAULT_NBA_PARAMS: NbaModelParams = {
   possSd: 4,
   ftsPerTrip: 1 / 0.44,
   sims: 20000,
-  // Backtest nba-v2 (1 026 matcher dec 2025–jun 2026): 60 % lagrating ger
-  // lägst fel och log loss — marginal-MAE 11,67 mot v1:s 11,77, total 15,65
-  // mot 16,00. 25 dagars halveringstid följer poängnivån när den ändras under
-  // säsongen, och 1,6 poäng hemmafördel tar bort marginalens bias.
-  ratingHalfLifeDays: 25,
+  // nba-v3, kalibrerad på tre säsonger (backtest nov 2024–jun 2026, 2 471
+  // matcher, varav 1 066 med DraftKings-linje): 60 % lagrating med 40 dagars
+  // halveringstid, RAPM i stället för spelarmodellens uppställningsjustering,
+  // slutspels- och back-to-back-justering. På samma matcher som marknaden:
+  // marginal-MAE 11,60 (v2 11,62, marknaden 11,20), total 14,96 (v2 15,29,
+  // marknaden 14,58), log loss spread 0,7145 / total 0,7075.
+  ratingHalfLifeDays: 40,
   ratingRidgeGames: 3,
   // Av som standard: på säsongens första 88 matcher (okt 2026) gav förra
   // säsongens rating SÄMRE spread (log loss 0,7392 mot 0,7261) — trupperna
@@ -100,9 +111,14 @@ export const DEFAULT_NBA_PARAMS: NbaModelParams = {
   priorGames: 0,
   priorKeep: 0.6,
   homeRtg: 1.6,
-  b2bRtg: -1.5,
+  b2bRtg: -3,
   ratingMix: 0.6,
-  playerAdjK: 1,
+  // Spelarmodellens justering (bara anfall) ersätts av RAPM (anfall + försvar):
+  // med båda på samtidigt blev det sämre.
+  playerAdjK: 0,
+  rapmK: 0.8,
+  playoffRtg: -3,
+  playoffPace: -2,
 };
 
 /**

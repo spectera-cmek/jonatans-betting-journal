@@ -3,6 +3,8 @@
 // espn.com själv använder. Tolkningen är ren och testas mot sparade svar i
 // tests/fixtures/espn-nba-*.json.
 
+import { parseStints, type StintParse } from "./stints";
+
 const BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
 
 export type GameStatus = "scheduled" | "live" | "final" | "postponed" | "canceled";
@@ -78,6 +80,8 @@ export interface EspnSummary {
   teams: EspnTeamBox[];
   players: EspnPlayerLine[];
   odds: EspnOdds | null;
+  /** Stintar ur play-by-play (bara spelade matcher), eller null. */
+  stints: StintParse | null;
 }
 
 export interface EspnInjury {
@@ -286,7 +290,7 @@ export function parseSummary(json: Any, eventId: number): EspnSummary | null {
     teamBox(t, t.homeAway === "home" ? game.homeScore ?? 0 : game.awayScore ?? 0)
   );
   const players = ((box.players ?? []) as Any[]).flatMap(playerLines);
-  return { game, teams, players, odds: parsePickcenter(json?.pickcenter) };
+  return { game, teams, players, odds: parsePickcenter(json?.pickcenter), stints: game.status === "final" ? parseStints(json) : null };
 }
 
 export function parseInjuries(json: Any): EspnInjury[] {

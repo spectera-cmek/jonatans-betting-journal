@@ -24,6 +24,7 @@ import {
 } from "./ratings";
 import { expectedPpp, logit, prepare, sigmoid, simulateGame, summarize, type GameSimInput, type SimResult, type SimSummary, type TeamSimInput } from "./sim";
 import { expectedOrtg, fitTeamRatings, ratingOf, type RatingTable } from "./teamRatings";
+import { lineupImpact, type RapmFit } from "./rapm";
 
 export interface LineupEntry {
   playerId: number;
@@ -113,6 +114,8 @@ export interface GameContext {
   /** Matchstart i ms — modellen ser bara matcher före den. */
   t: number;
   neutral?: boolean;
+  /** ESPN: 2 = grundserie, 3 = slutspel, 5 = play-in. */
+  seasonType?: number;
   homeLineup: LineupEntry[];
   awayLineup: LineupEntry[];
   /**
@@ -122,6 +125,8 @@ export interface GameContext {
    */
   homeBaseLineup?: LineupEntry[];
   awayBaseLineup?: LineupEntry[];
+  /** Spelarnas påverkan (RAPM) — används med rapmK > 0. */
+  rapm?: RapmFit;
 }
 
 export interface Targets {
@@ -133,6 +138,9 @@ export interface Targets {
   /** Spelarjusteringen i poäng per 100 (negativ = sämre uppställning än normalt). */
   homeAdj: number;
   awayAdj: number;
+  /** RAPM-justeringen av lagets ORtg (anfall − motståndarens försvarsförändring). */
+  homeRapm: number;
+  awayRapm: number;
 }
 
 export interface Projection {
@@ -210,12 +218,34 @@ export function buildSimInput(h: History, ctx: GameContext, p: NbaModelParams = 
     homeOrtg = m * rHome + (1 - m) * playerHome;
     awayOrtg = m * rAway + (1 - m) * playerAway;
     pace = m * rPace + (1 - m) * playerPace;
+  }
+  // RAPM: kvällens uppställning mot den normala, både anfall och försvar.
+  let homeRapm = 0;
+  let awayRapm = 0;
+  const useRapm = p.rapmK > 0 && !!ctx.rapm && !!ctx.homeBaseLineup?.length && !!ctx.awayBaseLineup?.length;
+  if (useRapm) {
+    const hi = lineupImpact(ctx.rapm!, ctx.homeLineup, ctx.homeBaseLineup!);
+    const ai = lineupImpact(ctx.rapm!, ctx.awayLineup, ctx.awayBaseLineup!);
+    // Hemmas anfall blir bättre om hemmas anfall förbättras eller bortas försvar försämras.
+    homeRapm = p.rapmK * (hi.off - ai.def);
+    awayRapm = p.rapmK * (ai.off - hi.def);
+    homeOrtg += homeRapm;
+    awayOrtg += awayRapm;
+  }
+  // Slutspel: tätare försvar och lägre tempo än i grundserien.
+  const playoff = ctx.seasonType === 3;
+  if (playoff) {
+    homeOrtg += p.playoffRtg;
+    awayOrtg += p.playoffRtg;
+    pace += p.playoffPace;
+  }
+  if (rt || playoff || useRapm) {
     // Profilens form (andel trejor, straffar, turnovers) kommer från spelarna;
     // nivån sätts så att den träffar målet.
     home.shotLogit = logitForPpp(home, homeOrtg / 100, p.ftsPerTrip);
     away.shotLogit = logitForPpp(away, awayOrtg / 100, p.ftsPerTrip);
   }
-  const targets: Targets = { homeOrtg, awayOrtg, pace, homeAdj, awayAdj };
+  const targets: Targets = { homeOrtg, awayOrtg, pace, homeAdj, awayAdj, homeRapm, awayRapm };
   const input: GameSimInput = {
     home,
     away,

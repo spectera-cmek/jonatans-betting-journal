@@ -1,5 +1,5 @@
 @echo off
-REM Called by Windows Task Scheduler: run-nba.cmd update  |  run-nba.cmd closing
+REM Called by Windows Task Scheduler: run-nba.cmd update | closing | lineups
 REM Logs to .claude\logs\nba.log in the repo.
 setlocal
 cd /d "%~dp0\.."

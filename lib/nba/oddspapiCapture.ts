@@ -10,6 +10,7 @@ import {
   getHistoricalOdds,
   getOddsByTournaments,
   oddspapiBookmaker,
+  OddspapiError,
   type OpFixture,
 } from "../oddspapi";
 import {
@@ -217,9 +218,20 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
  * Stängningsodds ur OddsPapi:s historik (gratis endpoint) för spelade
  * matcher som har ett kopplat fixture-id. Historiken finns från januari 2026.
  */
+/** Källnamn för historikens två tidpunkter. */
+export const HISTORY_CLOSING = "oddspapi-history";
+export const HISTORY_BET = "oddspapi-bet";
+
+/**
+ * Pinnacles pris ur OddsPapi-historiken (gratis) vid två tidpunkter:
+ *   stängning — senaste priset före start (source "oddspapi-history")
+ *   speltid   — priset `betHours` timmar före start, när du skulle ha spelat
+ *               (standard 12 h ≈ kl. 13 svensk tid för en match kl. 01) — source "oddspapi-bet"
+ * Skillnaden mellan dem är linjerörelsen, som CLV-mätningen i nba:backtest bygger på.
+ */
 export async function captureHistoricalClosing(
   db: NbaPrisma,
-  opts: { from: Date; to: Date; max?: number; log?: (m: string) => void }
+  opts: { from: Date; to: Date; max?: number; betHours?: number; log?: (m: string) => void }
 ): Promise<{ games: number; saved: number; empty: number }> {
   const log = opts.log ?? (() => {});
   const ids = requireIds();
@@ -229,33 +241,48 @@ export async function captureHistoricalClosing(
       status: "final",
       startAt: { gte: opts.from, lte: opts.to },
       oddspapiFixtureId: { not: null },
-      odds: { none: { source: "oddspapi-history", book } },
+      // Saknar stängning eller speltidspris från historiken.
+      OR: [{ odds: { none: { source: HISTORY_CLOSING, book } } }, { odds: { none: { source: HISTORY_BET, book } } }],
     },
     orderBy: { startAt: "asc" },
     take: opts.max ?? 2000,
   });
   let saved = 0;
   let empty = 0;
+  const betMs = (opts.betHours ?? 12) * 3600e3;
   for (const [i, g] of games.entries()) {
     const h = await getHistoricalOdds(g.oddspapiFixtureId!, [book]);
-    const lines = pickMainLines(closingFromHistory(h, book, ids.basketballMarkets as Record<string, MarketSpec>, g.startAt));
-    if (!lines.length) {
-      empty++;
-      continue;
+    const markets = ids.basketballMarkets as Record<string, MarketSpec>;
+    const points = [
+      { source: HISTORY_CLOSING, at: g.startAt, capturedAt: new Date(g.startAt.getTime() - 60e3), isClosing: true },
+      { source: HISTORY_BET, at: new Date(g.startAt.getTime() - betMs), capturedAt: new Date(g.startAt.getTime() - betMs), isClosing: false },
+    ];
+    let any = false;
+    for (const pt of points) {
+      const lines = pickMainLines(closingFromHistory(h, book, markets, pt.at));
+      if (!lines.length) continue;
+      any = true;
+      await db.nbaOdds.deleteMany({ where: { gameId: g.id, book, source: pt.source } });
+      // participant1 är inte alltid hemmalaget — orienteringen sparades vid kopplingen.
+      for (const r of orientRows(lines, g.oddspapiP1Home ?? true)) {
+        await db.nbaOdds.create({
+          data: { gameId: g.id, book, market: r.kind, line: r.line, price1: r.price1, price2: r.price2, source: pt.source, capturedAt: pt.capturedAt, isClosing: pt.isClosing },
+        });
+        saved++;
+      }
     }
-    // participant1 är inte alltid hemmalaget — orienteringen sparades vid kopplingen.
-    for (const r of orientRows(lines, g.oddspapiP1Home ?? true)) {
-      await db.nbaOdds.create({
-        data: { gameId: g.id, book, market: r.kind, line: r.line, price1: r.price1, price2: r.price2, source: "oddspapi-history", capturedAt: new Date(g.startAt.getTime() - 60e3), isClosing: true },
-      });
-      saved++;
-    }
+    if (!any) empty++;
     if ((i + 1) % 25 === 0) log(`${i + 1}/${games.length} matcher`);
   }
   return { games: games.length, saved, empty };
 }
 
-/** Kopplar spelade matcher till OddsPapi-fixtures (debiterade anrop: ett per fönster). */
+/**
+ * Kopplar spelade matcher till OddsPapi-fixtures. Debiterat: ett anrop per
+ * fönster (9 dagar). Bara fönster med matcher som saknar koppling och inte
+ * redan sökts frågas efter — sommaruppehåll och redan kopplade perioder kostar
+ * inget. "Inga matcher" (404) räknas som ett tomt fönster, inte ett fel.
+ */
 export async function linkHistoricalFixtures(
   db: NbaPrisma,
   opts: { from: Date; to: Date; windowDays?: number; maxCalls?: number; log?: (m: string) => void }
@@ -264,21 +291,39 @@ export async function linkHistoricalFixtures(
   const ids = requireIds();
   const tm = await teamMap(db);
   const step = (opts.windowDays ?? 9) * 864e5;
+  const pending = await db.nbaGame.findMany({
+    where: { status: "final", startAt: { gte: opts.from, lte: opts.to }, oddspapiFixtureId: null, oddspapiLinkTried: null },
+    select: { id: true, startAt: true },
+    orderBy: { startAt: "asc" },
+  });
   let calls = 0;
   let linked = 0;
-  for (let t = opts.from.getTime(); t < opts.to.getTime(); t += step) {
+  let i = 0;
+  while (i < pending.length) {
     if (calls >= (opts.maxCalls ?? 25)) {
-      log(`stannar vid anropstaket (${calls})`);
+      log(`stannar vid anropstaket (${calls}) — kör igen för resten`);
       break;
     }
-    const from = new Date(t).toISOString().slice(0, 10);
-    const to = new Date(Math.min(t + step, opts.to.getTime())).toISOString().slice(0, 10);
-    const fx = await getFixtures({ tournamentId: ids.nba.tournamentId, from, to });
+    // Fönstret börjar vid nästa okopplade match (dagen före, för tidszoner).
+    const t0 = pending[i].startAt.getTime() - 864e5;
+    const t1 = t0 + step;
+    const from = new Date(t0).toISOString().slice(0, 10);
+    const to = new Date(t1).toISOString().slice(0, 10);
+    let fx: OpFixture[] = [];
+    try {
+      fx = await getFixtures({ tournamentId: ids.nba.tournamentId, from, to });
+    } catch (e) {
+      if (!(e instanceof OddspapiError && (e.statusCode === 404 || e.code === "FIXTURE_NOT_FOUND"))) throw e;
+    }
     calls++;
     await learnTeams(db, fx, tm);
     for (const f of fx) {
       if (await findGame(db, f, tm)) linked++;
     }
+    // Markera fönstrets matcher som sökta, även de som inte hittades.
+    const inWindow = pending.filter((g) => g.startAt.getTime() < t1).slice(i).map((g) => g.id);
+    await db.nbaGame.updateMany({ where: { id: { in: inWindow } }, data: { oddspapiLinkTried: new Date() } });
+    while (i < pending.length && pending[i].startAt.getTime() < t1) i++;
     log(`${from}–${to}: ${fx.length} fixtures, totalt ${linked} kopplade`);
   }
   return { calls, linked };

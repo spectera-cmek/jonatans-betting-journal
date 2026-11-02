@@ -3,7 +3,7 @@
 
 import type { NbaPrisma } from "../nbaDb";
 import { oddspapiBookmaker } from "../oddspapi";
-import { baseLineup, baselineMinutes, projectMinutes, type MinutesInput, type MinutesRow } from "./minutes";
+import { baseLineup, baselineMinutes, projectMinutes, roleBaseline, type MinutesInput, type MinutesRow } from "./minutes";
 import { clvPoints, gradePick, modelLine, pickFromLine, type PickMarket } from "./picks";
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { gameProps, settleProps, type PlayerPropView } from "./propsPipeline";
@@ -11,7 +11,8 @@ import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, isFlagged, 
 import { fairLine, priceMarket, settle, type MarketPrice, type MarketQuote, type NbaMarket } from "./pricing";
 import { leagueAverages, type History, type League } from "./ratings";
 import { projectGame, type Projection } from "./project";
-import { loadHistory } from "./store";
+import { loadHistory, loadPlayerImpact, loadStints, savePlayerImpact } from "./store";
+import { fitRapm, type RapmFit } from "./rapm";
 import type { SimSummary } from "./sim";
 
 /** Hur långt bakåt modellen läser historik. */
@@ -66,7 +67,7 @@ export async function buildLineup(
   teamId: number,
   gameId: number,
   t: number,
-  cache?: { injuries?: Map<number, { status: string; detail: string | null }>; names?: Map<number, string> }
+  cache?: { injuries?: Map<number, { status: string; detail: string | null }>; names?: Map<number, string>; absSpread?: number | null }
 ): Promise<TeamLineup> {
   const base = baselineMinutes(h, teamId, t);
   const names = cache?.names ?? new Map<number, string>();
@@ -77,6 +78,10 @@ export async function buildLineup(
       : db.nbaInjury.findMany({ where: { teamId } }).then((l) => new Map(l.map((i) => [i.playerId, { status: i.status, detail: i.detail }]))),
   ]);
   const ov = new Map(overrides.map((o) => [o.playerId, o.minutes]));
+  // Startfemman, om ESPN publicerat den: grundminuter efter kvällens roll.
+  const starters = await db.nbaStarter.findMany({ where: { gameId, teamId }, select: { playerId: true } });
+  const starterSet = starters.length === 5 ? new Set(starters.map((s) => s.playerId)) : null;
+  const roleBase = (playerId: number, b: number) => (starterSet ? roleBaseline(h, playerId, t, starterSet.has(playerId), b) : b);
   // Spelare med en override men utan grundminuter (t.ex. ny i laget) tas med.
   const ids = new Set(base.map((b) => b.playerId));
   const extra = overrides.filter((o) => !ids.has(o.playerId));
@@ -93,7 +98,7 @@ export async function buildLineup(
       playerId: b.playerId,
       name: names.get(b.playerId) ?? `#${b.playerId}`,
       position: b.position,
-      baseline: Math.round(b.baseline * 10) / 10,
+      baseline: Math.round(roleBase(b.playerId, b.baseline) * 10) / 10,
       games: b.games,
       injuryStatus: injuries.get(b.playerId)?.status ?? null,
       injuryDetail: injuries.get(b.playerId)?.detail ?? null,
@@ -110,7 +115,7 @@ export async function buildLineup(
       override: ov.get(p.id) ?? null,
     })),
   ];
-  return { teamId, rows: projectMinutes(inputs) };
+  return { teamId, rows: projectMinutes(inputs, undefined, undefined, { absSpread: cache?.absSpread }) };
 }
 
 export interface GameProjection {
@@ -144,6 +149,8 @@ export async function projectStoredGame(
     h?: History;
     league?: League;
     ratings?: RatingTable;
+    /** Spelarnas RAPM; saknas den läses senast sparade. */
+    rapm?: RapmFit;
     params?: NbaModelParams;
     save?: boolean;
     /** Räkna props: true = utan fördelningskurvor, "hist" = med (för matchsidan). */
@@ -159,8 +166,16 @@ export async function projectStoredGame(
   const h = opts.h ?? (await loadHistory(db, new Date(t - HISTORY_DAYS * 864e5)));
   const league = opts.league ?? leagueAverages(h, t, p);
   const ratings = opts.ratings ?? (p.ratingMix > 0 ? fitTeamRatings(h, t, p) : undefined);
+  const rapm = opts.rapm ?? (p.rapmK > 0 ? await loadPlayerImpact(db) : undefined);
   const cache = { injuries: opts.injuries, names: opts.names ?? new Map<number, string>() };
-  const [home, away] = await Promise.all([buildLineup(db, h, g.homeTeamId, g.id, t, cache), buildLineup(db, h, g.awayTeamId, g.id, t, cache)]);
+  // Marknadens spread styr utklassningsrisken i minuterna — hämta priserna först.
+  const quotes = await latestQuotes(db, g.id, g.status === "scheduled" ? undefined : g.startAt);
+  const spreadQ = referenceQuote(quotes, "spread");
+  const lineupCache = { ...cache, absSpread: spreadQ?.line != null ? Math.abs(spreadQ.line) : null };
+  const [home, away] = await Promise.all([
+    buildLineup(db, h, g.homeTeamId, g.id, t, lineupCache),
+    buildLineup(db, h, g.awayTeamId, g.id, t, lineupCache),
+  ]);
   const proj = projectGame(
     h,
     {
@@ -168,10 +183,12 @@ export async function projectStoredGame(
       awayId: g.awayTeamId,
       t,
       neutral: g.neutral,
+      seasonType: g.seasonType,
       homeLineup: home.rows.map((r) => ({ playerId: r.playerId, minutes: r.minutes })),
       awayLineup: away.rows.map((r) => ({ playerId: r.playerId, minutes: r.minutes })),
       homeBaseLineup: baseLineup(h, g.homeTeamId, t),
       awayBaseLineup: baseLineup(h, g.awayTeamId, t),
+      rapm,
     },
     p,
     league,
@@ -179,7 +196,6 @@ export async function projectStoredGame(
   );
   const modelSpread = modelLine("spread", proj.summary.homeMean, proj.summary.awayMean);
   const modelTotal = modelLine("total", proj.summary.homeMean, proj.summary.awayMean);
-  const quotes = await latestQuotes(db, g.id, g.status === "scheduled" ? undefined : g.startAt);
   const markets: MarketPrice[] = [];
   for (const m of MARKETS) {
     const ref = referenceQuote(quotes, m);
@@ -283,7 +299,10 @@ export async function projectStoredGame(
 }
 
 /** Projicerar alla matcher som startar inom `hours`. */
-export async function projectUpcoming(db: NbaPrisma, opts: { hours?: number; params?: NbaModelParams; log?: (m: string) => void } = {}) {
+export async function projectUpcoming(
+  db: NbaPrisma,
+  opts: { hours?: number; params?: NbaModelParams; refitRapm?: boolean; log?: (m: string) => void } = {}
+) {
   const log = opts.log ?? (() => {});
   const now = Date.now();
   const games = await db.nbaGame.findMany({
@@ -299,9 +318,19 @@ export async function projectUpcoming(db: NbaPrisma, opts: { hours?: number; par
   // Liga och lagrating ur samma historik för alla kvällens matcher.
   const league = leagueAverages(h, now, params);
   const ratings = params.ratingMix > 0 ? fitTeamRatings(h, now, params) : undefined;
+  // RAPM: räknas om i dagskörningen (två säsonger stintar), annars läses den sparade.
+  let rapm: RapmFit | undefined;
+  if (params.rapmK > 0) {
+    if (opts.refitRapm) {
+      const stints = await loadStints(db, new Date(now - 800 * 864e5));
+      rapm = fitRapm(stints, now);
+      const n = await savePlayerImpact(db, rapm);
+      log(`RAPM: ${n} spelare ur ${rapm.stints} stintar`);
+    } else rapm = await loadPlayerImpact(db);
+  }
   let flagged = 0;
   for (const g of games) {
-    const r = await projectStoredGame(db, g.id, { h, league, ratings, params, save: true, injuries, names });
+    const r = await projectStoredGame(db, g.id, { h, league, ratings, rapm, params, save: true, injuries, names });
     if (!r) continue;
     const s = r.summary;
     const f = r.quotes.filter((q) => q.flagged);
