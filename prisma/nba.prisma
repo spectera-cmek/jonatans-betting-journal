@@ -70,6 +70,8 @@ model NbaGame {
   oddspapiP1Home    Boolean?
   /// När matchen senast söktes i OddsPapi:s fixtures (så att en miss inte kostar anrop igen).
   oddspapiLinkTried DateTime?
+  /// När OddsPapi-historiken visade sig tom för matchen (så att den inte frågas igen).
+  oddsHistoryEmptyAt DateTime?
   /// Stintar ur play-by-play: true = sparade, false = klarade inte kvalitetskontrollen,
   /// null = inte försökt (kör npm run nba:ingest -- --stints).
   stintsValid       Boolean?

@@ -11,6 +11,7 @@ import {
   getOddsByTournaments,
   oddspapiBookmaker,
   OddspapiError,
+  oddspapiRetry,
   type OpFixture,
 } from "../oddspapi";
 import {
@@ -231,7 +232,7 @@ export const HISTORY_BET = "oddspapi-bet";
  */
 export async function captureHistoricalClosing(
   db: NbaPrisma,
-  opts: { from: Date; to: Date; max?: number; betHours?: number; log?: (m: string) => void }
+  opts: { from: Date; to: Date; max?: number; betHours?: number; retryEmpty?: boolean; log?: (m: string) => void }
 ): Promise<{ games: number; saved: number; empty: number }> {
   const log = opts.log ?? (() => {});
   const ids = requireIds();
@@ -241,6 +242,8 @@ export async function captureHistoricalClosing(
       status: "final",
       startAt: { gte: opts.from, lte: opts.to },
       oddspapiFixtureId: { not: null },
+      // Matcher där historiken redan visat sig tom frågas inte igen (5 s styck).
+      ...(opts.retryEmpty ? {} : { oddsHistoryEmptyAt: null }),
       // Saknar stängning eller speltidspris från historiken.
       OR: [{ odds: { none: { source: HISTORY_CLOSING, book } } }, { odds: { none: { source: HISTORY_BET, book } } }],
     },
@@ -250,8 +253,18 @@ export async function captureHistoricalClosing(
   let saved = 0;
   let empty = 0;
   const betMs = (opts.betHours ?? 12) * 3600e3;
+  const markEmpty = (id: number) => db.nbaGame.update({ where: { id }, data: { oddsHistoryEmptyAt: new Date() } });
   for (const [i, g] of games.entries()) {
-    const h = await getHistoricalOdds(g.oddspapiFixtureId!, [book]);
+    let h: Awaited<ReturnType<typeof getHistoricalOdds>>;
+    try {
+      h = await oddspapiRetry(() => getHistoricalOdds(g.oddspapiFixtureId!, [book]));
+    } catch (e) {
+      // 404 "No historical odds found" = OddsPapi har ingen historik för matchen. Hoppa över den.
+      if (!(e instanceof OddspapiError && e.statusCode === 404)) throw e;
+      empty++;
+      await markEmpty(g.id);
+      continue;
+    }
     const markets = ids.basketballMarkets as Record<string, MarketSpec>;
     const points = [
       { source: HISTORY_CLOSING, at: g.startAt, capturedAt: new Date(g.startAt.getTime() - 60e3), isClosing: true },
@@ -271,7 +284,10 @@ export async function captureHistoricalClosing(
         saved++;
       }
     }
-    if (!any) empty++;
+    if (!any) {
+      empty++;
+      await markEmpty(g.id);
+    }
     if ((i + 1) % 25 === 0) log(`${i + 1}/${games.length} matcher`);
   }
   return { games: games.length, saved, empty };

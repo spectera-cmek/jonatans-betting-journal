@@ -14,6 +14,8 @@
  *
  * Historiken finns från januari 2026. Historik-endpointen har 5 s cooldown,
  * så 600 matcher tar runt en timme. Kan avbrytas och köras igen.
+ * Matcher utan historik (404) hoppas över och frågas inte igen; --retry-empty
+ * provar dem på nytt.
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -46,7 +48,13 @@ async function main() {
     console.log(`Kopplade ${l.linked} matcher med ${l.calls} anrop`);
   }
   const betHours = Number(arg("--bet-hours")) || 12;
-  const r = await captureHistoricalClosing(db, { from, to, betHours, log: (m) => console.log(`  ${m}`) });
+  const r = await captureHistoricalClosing(db, {
+    from,
+    to,
+    betHours,
+    retryEmpty: process.argv.includes("--retry-empty"),
+    log: (m) => console.log(`  ${m}`),
+  });
   console.log(`Klart: ${r.games} matcher, ${r.saved} priser (stängning + ${betHours} h före start), ${r.empty} utan historik. Debiterade anrop: ${oddspapiCallsThisRun()}`);
 }
 
