@@ -78,6 +78,7 @@
     "nba:ingest": "tsx scripts/nba/ingest.ts",
     "nba:update": "tsx scripts/nba/update.ts",
     "nba:closing": "tsx scripts/nba/update.ts --closing",
+    "nba:lineups": "tsx scripts/nba/update.ts --lineups",
     "nba:odds-history": "tsx scripts/nba/oddsHistory.ts",
     "nba:backtest": "tsx scripts/nba/backtest.ts",
     "nba:props-backtest": "tsx scripts/nba/propsBacktest.ts"

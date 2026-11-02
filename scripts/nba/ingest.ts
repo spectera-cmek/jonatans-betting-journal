@@ -6,7 +6,8 @@
  *   npm run nba:ingest -- --from 2026-10-20 --to 2026-10-31
  *   npm run nba:ingest -- --refresh             # hämta boxscores igen även om de finns
  *
- * Kan avbrytas och köras igen — matcher som redan har boxscore hoppas över.
+ * Kan avbrytas och köras igen — matcher som redan har boxscore och stintar
+ * hoppas över. Matcher inlästa innan stintar fanns hämtas om en gång.
  * En hel säsong tar runt 10–15 minuter (ESPN-anropen går med paus emellan).
  */
 import { config } from "dotenv";
@@ -53,7 +54,15 @@ export async function ingestRange(from: Date, to: Date, opts: { refresh?: boolea
     const finals = real.filter((g) => g.status === "final");
     const done = opts.refresh
       ? new Set<number>()
-      : new Set((await db.nbaGame.findMany({ where: { id: { in: finals.map((g) => g.id) }, boxFetchedAt: { not: null } }, select: { id: true } })).map((g) => g.id));
+      : // Klar = boxscore och stintar redan försökta. Äldre matcher utan stintar hämtas om en gång.
+        new Set(
+          (
+            await db.nbaGame.findMany({
+              where: { id: { in: finals.map((g) => g.id) }, boxFetchedAt: { not: null }, stintsValid: { not: null } },
+              select: { id: true },
+            })
+          ).map((g) => g.id)
+        );
     for (const g of finals) {
       if (done.has(g.id)) continue;
       try {

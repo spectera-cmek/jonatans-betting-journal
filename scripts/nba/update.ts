@@ -5,6 +5,8 @@
  *   npm run nba:update -- --no-odds    # utan OddsPapi (ESPN:s linjer används om de finns)
  *   npm run nba:update -- --hours 48   # projicera matcher inom 48 h (standard 36)
  *   npm run nba:closing                # nära tip-off: skador + odds som stängning + projektioner
+ *   npm run nba:lineups                # gratis (bara ESPN): startfemmor + skador, räknar om
+ *                                      # matcher som börjar inom 90 min — kör var 30:e minut kring tip-off
  *
  * Steg:
  *   1. ESPN: de senaste 3 dagarnas resultat och boxscores, och kommande matcher
@@ -35,7 +37,9 @@ async function main() {
     console.error("NBA_DATABASE_URL saknas i .env.local (se .env.local.example)");
     process.exit(1);
   }
-  const closing = process.argv.includes("--closing");
+  const lineups = process.argv.includes("--lineups");
+  // --lineups är en lätt stängningskörning utan OddsPapi.
+  const closing = process.argv.includes("--closing") || lineups;
   const now = Date.now();
 
   if (!closing) {
@@ -54,24 +58,26 @@ async function main() {
   console.log(`   ${inj} spelare på listan`);
   // ESPN:s matchsidor har DraftKings-linjen även före match — gratis reserv
   // när OddsPapi saknas eller kvoten är slut.
-  const hours = closing ? 4 : numberArg("--hours", 36);
+  const hours = lineups ? 1.5 : closing ? 4 : numberArg("--hours", 36);
   const soon = await db.nbaGame.findMany({
     where: { status: "scheduled", startAt: { gte: new Date(now - 3600e3), lte: new Date(now + hours * 3600e3) } },
     select: { id: true },
   });
   let espnLines = 0;
+  let startersKnown = 0;
   for (const g of soon) {
     try {
       const s = await fetchSummary(g.id);
-      if (s?.odds) {
-        await saveSummary(db, s);
-        espnLines++;
-      }
+      if (!s) continue;
+      // Sparar DraftKings-linjen och, när ESPN publicerat den, startfemmorna.
+      await saveSummary(db, s);
+      if (s.odds) espnLines++;
+      if (s.players.filter((p) => p.starter).length === 10) startersKnown++;
     } catch {
       /* en enskild match ska inte stoppa körningen */
     }
   }
-  console.log(`   DraftKings-linjer för ${espnLines}/${soon.length} kommande matcher`);
+  console.log(`   DraftKings-linjer för ${espnLines}/${soon.length} kommande matcher, startfemmor för ${startersKnown}`);
 
   // Engångsstädning: lagtotaler (t.ex. 113,5) som sparades som matchens total
   // innan MIN_GAME_TOTAL fanns, och picks som låstes mot dem.
@@ -80,7 +86,7 @@ async function main() {
   if (badOdds.count || badPicks.count) console.log(`   rensade ${badOdds.count} felaktiga total-linjer och ${badPicks.count} låsta picks mot dem`);
 
   console.log(`${closing ? "2/3" : "3/5"} OddsPapi${closing ? " (stängning)" : ""}`);
-  if (process.argv.includes("--no-odds")) console.log("   hoppar över (--no-odds)");
+  if (process.argv.includes("--no-odds") || lineups) console.log(`   hoppar över (${lineups ? "--lineups är gratis" : "--no-odds"})`);
   else if (!hasOddspapiKey()) console.log("   ODDSPAPI_KEY saknas — hoppar över, ESPN:s linjer används där de finns");
   else {
     try {

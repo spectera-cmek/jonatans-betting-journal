@@ -3,6 +3,8 @@
 
 import type { NbaPrisma } from "../nbaDb";
 import type { EspnGame, EspnInjury, EspnSummary } from "./espn";
+import type { StintParse } from "./stints";
+import type { StintRow } from "./rapm";
 import { buildHistory, type History, type PlayerGameRow, type TeamGameRow } from "./ratings";
 
 export async function upsertGames(db: NbaPrisma, games: EspnGame[]): Promise<number> {
@@ -73,8 +75,36 @@ export async function saveSummary(db: NbaPrisma, s: EspnSummary): Promise<{ play
       db.nbaGame.update({ where: { id: gameId }, data: { boxFetchedAt: new Date() } }),
     ]);
   }
+  if (!final) await saveStarters(db, gameId, s);
+  if (final && s.stints) await saveStints(db, gameId, s.stints);
+  else if (final) await db.nbaGame.update({ where: { id: gameId }, data: { stintsValid: false } }); // ingen play-by-play
   if (s.odds) await saveEspnOdds(db, gameId, s.odds, final ? s.game.startAt : null);
   return { players: s.players.length };
+}
+
+/**
+ * Startfemmorna före match: ESPN fyller boxscoren med kvällens spelare och
+ * startmarkering ungefär 30 minuter före start. Sparas bara när båda lagen
+ * har exakt fem startare.
+ */
+export async function saveStarters(db: NbaPrisma, gameId: number, s: EspnSummary): Promise<number> {
+  const starters = s.players.filter((p) => p.starter);
+  const teams = new Set(starters.map((p) => p.teamId));
+  if (starters.length !== 10 || teams.size !== 2) return 0;
+  await db.$transaction([
+    db.nbaStarter.deleteMany({ where: { gameId } }),
+    db.nbaStarter.createMany({ data: starters.map((p) => ({ gameId, playerId: p.playerId, teamId: p.teamId })) }),
+  ]);
+  return starters.length;
+}
+
+/** Ersätter matchens stintar. Bara matcher som klarar kvalitetskontrollen sparas. */
+export async function saveStints(db: NbaPrisma, gameId: number, p: StintParse): Promise<void> {
+  await db.$transaction([
+    db.nbaStint.deleteMany({ where: { gameId } }),
+    ...(p.valid ? [db.nbaStint.createMany({ data: p.stints.map((s) => ({ gameId, ...s })) })] : []),
+    db.nbaGame.update({ where: { id: gameId }, data: { stintsValid: p.valid } }),
+  ]);
 }
 
 /**
@@ -128,6 +158,15 @@ export async function saveInjuries(db: NbaPrisma, list: EspnInjury[]): Promise<n
   return rows.length;
 }
 
+/** Stintar (för RAPM) från och med `since`. */
+export async function loadStints(db: NbaPrisma, since: Date): Promise<StintRow[]> {
+  const rows = await db.nbaStint.findMany({
+    where: { game: { startAt: { gte: since } } },
+    select: { homeIds: true, awayIds: true, homePts: true, awayPts: true, poss: true, game: { select: { startAt: true } } },
+  });
+  return rows.map((r) => ({ t: r.game.startAt.getTime(), homeIds: r.homeIds, awayIds: r.awayIds, homePts: r.homePts, awayPts: r.awayPts, poss: r.poss }));
+}
+
 /** All historik från och med `since` som modellen räknar på. */
 export async function loadHistory(db: NbaPrisma, since: Date): Promise<History> {
   const games = await db.nbaGame.findMany({
@@ -140,7 +179,7 @@ export async function loadHistory(db: NbaPrisma, since: Date): Promise<History> 
     db.nbaTeamGame.findMany({ where: { gameId: { in: ids } } }),
     db.nbaPlayerGame.findMany({
       where: { gameId: { in: ids } },
-      select: { gameId: true, playerId: true, teamId: true, minutes: true, fga2: true, fgm2: true, fga3: true, fgm3: true, fta: true, ftm: true, oreb: true, dreb: true, ast: true, tov: true, dnp: true, dnpReason: true },
+      select: { gameId: true, playerId: true, teamId: true, minutes: true, fga2: true, fgm2: true, fga3: true, fgm3: true, fta: true, ftm: true, oreb: true, dreb: true, ast: true, tov: true, dnp: true, dnpReason: true, starter: true },
     }),
     db.nbaPlayer.findMany({ select: { id: true, position: true } }),
   ]);

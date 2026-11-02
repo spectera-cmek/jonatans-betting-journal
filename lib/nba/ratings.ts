@@ -24,6 +24,8 @@ export interface PlayerGameRow {
   ftm: number;
   oreb: number;
   tov: number;
+  /** Startade matchen (boxscore). Saknas i äldre testdata. */
+  starter?: boolean;
   /** Defensiva returer och assist — för props. Saknas i äldre testdata. */
   dreb?: number;
   ast?: number;
@@ -174,6 +176,7 @@ export function profileFromTotals(
 export function leagueAverages(h: History, asOf: number, p: NbaModelParams = DEFAULT_NBA_PARAMS, windowDays = 240): League {
   const from = asOf - windowDays * 864e5;
   const s = { fga2: 0, fgm2: 0, fga3: 0, fgm3: 0, fta: 0, ftm: 0, tov: 0, oreb: 0, orebChances: 0, poss: 0, min: 0, pts: 0, games: 0 };
+  const rw = { w: 0, poss: 0, min: 0, pts: 0 };
   for (let i = firstBefore(h.allTeamRows, asOf); i < h.allTeamRows.length; i++) {
     const r = h.allTeamRows[i];
     if (r.t < from) break;
@@ -190,12 +193,19 @@ export function leagueAverages(h: History, asOf: number, p: NbaModelParams = DEF
     s.min += gameMinutes(r.periods);
     s.pts += r.pts;
     s.games++;
+    // Nivå och tempo viktas mot färska matcher (samma halveringstid som lagratingen),
+    // så att modellen följer med när poängnivån ändras under säsongen.
+    const w = Math.pow(0.5, (asOf - r.t) / 864e5 / p.ratingHalfLifeDays);
+    rw.w += w;
+    rw.poss += w * possessions(r);
+    rw.min += w * gameMinutes(r.periods);
+    rw.pts += w * r.pts;
   }
   const prof = s.games
     ? profileFromTotals(s, p.ftsPerTrip)
     : { pTov: 0.12, pFt: 0.1, p3: 0.33, p2: 0.45, pct2: 0.54, pct3: 0.36, ftPct: 0.78, orebPct: 0.25 };
-  const pace = s.games ? (s.poss / s.min) * 48 : 99;
-  const ppp = s.poss > 0 ? s.pts / s.poss : 1.14;
+  const pace = rw.min > 0 ? (rw.poss / rw.min) * 48 : 99;
+  const ppp = rw.poss > 0 ? rw.pts / rw.poss : 1.14;
   // Lagens plays per 240 spelarminuter (= per match i ordinarie tid).
   const minutes = s.min * 5;
   const playsPer240 = minutes > 0 ? (plays(s.fga2, s.fga3, s.fta, s.tov, p.ftsPerTrip) / minutes) * 240 : 112;

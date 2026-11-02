@@ -68,6 +68,15 @@ export interface NbaModelParams {
   ratingMix: number;
   /** Hur mycket av spelarmodellens skillnad mellan kvällens och normal uppställning som läggs på lagratingen. */
   playerAdjK: number;
+  /**
+   * Vikt för RAPM-justeringen (spelarnas påverkan på anfall OCH försvar ur
+   * play-by-play) av kvällens uppställning mot den normala. 0 = av.
+   */
+  rapmK: number;
+  /** Slutspel: poäng per 100 possessions för båda lagen (tätare försvar). */
+  playoffRtg: number;
+  /** Slutspel: possessions per 48 (lägre tempo). */
+  playoffPace: number;
 }
 
 export const DEFAULT_NBA_PARAMS: NbaModelParams = {
@@ -103,6 +112,9 @@ export const DEFAULT_NBA_PARAMS: NbaModelParams = {
   b2bRtg: -1.5,
   ratingMix: 0.6,
   playerAdjK: 1,
+  rapmK: 0,
+  playoffRtg: 0,
+  playoffPace: 0,
 };
 
 /**

@@ -10,8 +10,9 @@
 import { devigProportional } from "../fairOdds";
 import { blendProb } from "../shotModel";
 import { baseLineup, baselineMinutes, projectMinutes } from "./minutes";
-import { bucketRecords, gradePick, modelLine, pickFromLine, type BucketRecord, type GradedPick, type PickMarket } from "./picks";
+import { bucketRecords, clvPoints, gradePick, modelLine, pickFromLine, type BucketRecord, type GradedPick, type PickMarket } from "./picks";
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
+import { fitRapm, type RapmFit, type StintRow } from "./rapm";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, isFlagged, type NbaModelParams } from "./params";
 import { modelProb, settle, type NbaMarket } from "./pricing";
 import { leagueAverages, type History, type League, type PlayerGameRow } from "./ratings";
@@ -23,6 +24,7 @@ export interface BacktestGame {
   homeId: number;
   awayId: number;
   neutral: boolean;
+  seasonType?: number;
   homeScore: number;
   awayScore: number;
 }
@@ -77,7 +79,15 @@ export function runBacktest(
   h: History,
   games: BacktestGame[],
   closing: Map<number, ClosingQuote[]>,
-  opts: { params?: NbaModelParams; sims?: number; onProgress?: (done: number, total: number) => void } = {}
+  opts: {
+    params?: NbaModelParams;
+    sims?: number;
+    /** Stängningslinjer för CLV när `closing` är priser före stängning (speltid). */
+    closeLines?: Map<number, ClosingQuote[]>;
+    /** Stintar för RAPM (används när params.rapmK > 0). RAPM räknas om en gång i veckan. */
+    stints?: StintRow[];
+    onProgress?: (done: number, total: number) => void;
+  } = {}
 ): BacktestResult {
   const p = { ...(opts.params ?? DEFAULT_NBA_PARAMS), sims: opts.sims ?? 4000 };
   const played = new Map<number, PlayerGameRow[]>();
@@ -88,6 +98,7 @@ export function runBacktest(
   }
   const leagueByDay = new Map<number, League>();
   const ratingsByDay = new Map<number, RatingTable>();
+  const rapmByWeek = new Map<number, RapmFit>();
   const picks: Record<PickMarket, GradedPick[]> = { spread: [], total: [] };
   const obs: Obs[] = [];
   const books = new Set<string>();
@@ -107,6 +118,16 @@ export function runBacktest(
       ratings = fitTeamRatings(h, g.t, p);
       ratingsByDay.set(day, ratings);
     }
+    let rapm: RapmFit | undefined;
+    if (p.rapmK > 0 && opts.stints?.length) {
+      // Veckovis: RAPM rör sig långsamt och är den dyraste delen att räkna.
+      const week = Math.floor(day / 7);
+      rapm = rapmByWeek.get(week);
+      if (!rapm) {
+        rapm = fitRapm(opts.stints, week * 7 * 864e5);
+        rapmByWeek.set(week, rapm);
+      }
+    }
     const rows = played.get(g.id) ?? [];
     const lineup = (teamId: number) => {
       const who = new Set(rows.filter((r) => r.teamId === teamId && r.minutes > 0).map((r) => r.playerId));
@@ -121,7 +142,8 @@ export function runBacktest(
         injuryDetail: null,
         override: null,
       }));
-      return projectMinutes(inputs).map((r) => ({ playerId: r.playerId, minutes: r.minutes }));
+      const sp = closing.get(g.id)?.find((q) => q.market === "spread")?.line;
+      return projectMinutes(inputs, undefined, undefined, { absSpread: sp != null ? Math.abs(sp) : null }).map((r) => ({ playerId: r.playerId, minutes: r.minutes }));
     };
     const homeLineup = lineup(g.homeId);
     const awayLineup = lineup(g.awayId);
@@ -133,10 +155,12 @@ export function runBacktest(
         awayId: g.awayId,
         t: g.t,
         neutral: g.neutral,
+        seasonType: g.seasonType,
         homeLineup,
         awayLineup,
         homeBaseLineup: baseLineup(h, g.homeId, g.t),
         awayBaseLineup: baseLineup(h, g.awayId, g.t),
+        rapm,
       },
       p,
       league,
@@ -168,10 +192,12 @@ export function runBacktest(
       if ((q.market === "spread" || q.market === "total") && q.line != null) {
         const ml = modelLine(q.market, s.homeMean, s.awayMean);
         const pk = pickFromLine(q.market, ml, q.line);
+        const close = opts.closeLines?.get(g.id)?.find((c) => c.market === q.market && c.line != null);
         picks[q.market].push({
           edgePts: pk.edgePts,
           result: gradePick(q.market, pk.side, q.line, g.homeScore, g.awayScore),
           price: pk.side === 1 ? q.price1 : q.price2,
+          clv: close?.line != null ? clvPoints(q.market, pk.side, q.line, close.line) : null,
         });
       }
       const y = settle(q.market, q.line, g.homeScore, g.awayScore);

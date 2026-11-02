@@ -39,6 +39,45 @@ export interface MinutesInput {
   override: number | null;
 }
 
+/**
+ * Utklassningsrisk, mätt på grundserien 2025–26: vid stor spread spelar
+ * startarna (grund ≥ 28 min) mindre — 100 % vid |spread| < 4, 98 % vid 8–12,
+ * 94,6 % vid 12+ (n = 6 310). Modell: 1 − 0,006 · max(0, |spread| − 6).
+ * Bänken får minuterna som blir över. Minutfelet för startare: 4,54 → 4,47.
+ *
+ * Prövat och bortvalt: färre minuter första matchen tillbaka efter ≥ 3
+ * missade (de spelar 92 % av grundminuterna) — efter omfördelningen till 240
+ * blev felet marginellt större, så det används inte.
+ */
+export const BLOWOUT_PER_POINT = 0.006;
+export const BLOWOUT_FROM = 6;
+export const STARTER_MINUTES = 28;
+
+/**
+ * Grundminuter när startfemman är känd: spelarens snitt i samma roll (startare
+ * eller bänk) de senaste 10 matcherna i den rollen, vägt mot vanliga
+ * grundminuter efter hur mycket data det finns. Mätt på grundserien 2025–26:
+ * minutfelet 5,10 → 4,76; för spelare som bytt roll 5,71 → 4,84.
+ */
+export function roleBaseline(h: History, playerId: number, asOf: number, starter: boolean, baseline: number): number {
+  const rows = h.players.get(playerId) ?? [];
+  const i0 = firstBefore(rows, asOf);
+  const same = rows
+    .slice(i0, i0 + 25)
+    .filter((r) => r.minutes > 0 && !!r.starter === starter)
+    .slice(0, 10);
+  if (same.length < 3) return baseline;
+  const avg = same.reduce((a, r) => a + r.minutes, 0) / same.length;
+  const w = same.length / (same.length + 3);
+  return w * avg + (1 - w) * baseline;
+}
+
+export function blowoutFactor(absSpread: number | null | undefined, baseline: number): number {
+  if (absSpread == null || baseline < STARTER_MINUTES) return 1;
+  return Math.max(0.85, 1 - BLOWOUT_PER_POINT * Math.max(0, absSpread - BLOWOUT_FROM));
+}
+
+
 export interface MinutesRow extends MinutesInput {
   /** Efter skada, override och omfördelning. */
   minutes: number;
@@ -91,10 +130,18 @@ export function baselineMinutes(
  * Lägger på skador och overrides och skalar de fria spelarna så att laget
  * får exakt 240 minuter, med tak per spelare.
  */
-export function projectMinutes(inputs: MinutesInput[], total = TEAM_MINUTES, cap = MAX_PLAYER_MINUTES): MinutesRow[] {
+export function projectMinutes(
+  inputs: MinutesInput[],
+  total = TEAM_MINUTES,
+  cap = MAX_PLAYER_MINUTES,
+  opts: { absSpread?: number | null } = {}
+): MinutesRow[] {
   const rows: MinutesRow[] = inputs.map((x) => ({
     ...x,
-    minutes: x.override != null ? Math.max(0, Math.min(48, x.override)) : x.baseline * injuryFactor(x.injuryStatus),
+    minutes:
+      x.override != null
+        ? Math.max(0, Math.min(48, x.override))
+        : x.baseline * injuryFactor(x.injuryStatus) * blowoutFactor(opts.absSpread, x.baseline),
   }));
   const fixed = new Set(rows.filter((r) => r.override != null).map((r) => r.playerId));
   for (let iter = 0; iter < 12; iter++) {

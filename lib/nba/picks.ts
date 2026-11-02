@@ -63,6 +63,8 @@ export interface BucketRecord {
   roi: number | null;
   /** Snitt-CLV i poäng. */
   clv: number | null;
+  /** Andel picks där linjen rörde sig mot oss (CLV > 0) bland de som rörde sig. */
+  clvBeat: number | null;
 }
 
 export function bucketRecords(picks: GradedPick[]): BucketRecord[] {
@@ -74,6 +76,8 @@ export function bucketRecords(picks: GradedPick[]): BucketRecord[] {
     let profit = 0;
     let clvSum = 0;
     let clvN = 0;
+    let beat = 0;
+    let moved = 0;
     for (const x of l) {
       const price = x.price && x.price > 1 ? x.price : 1.909;
       if (x.result === "W") {
@@ -86,6 +90,10 @@ export function bucketRecords(picks: GradedPick[]): BucketRecord[] {
       if (x.clv != null) {
         clvSum += x.clv;
         clvN++;
+        if (x.clv !== 0) {
+          moved++;
+          if (x.clv > 0) beat++;
+        }
       }
     }
     return {
@@ -96,6 +104,7 @@ export function bucketRecords(picks: GradedPick[]): BucketRecord[] {
       hit: w + lo ? w / (w + lo) : null,
       roi: l.length ? profit / l.length : null,
       clv: clvN ? clvSum / clvN : null,
+      clvBeat: moved ? beat / moved : null,
     };
   });
 }

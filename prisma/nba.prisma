@@ -68,6 +68,9 @@ model NbaGame {
   oddspapiFixtureId String?   @unique
   /// true = OddsPapi:s participant1 är hemmalaget (för att vända historiska odds).
   oddspapiP1Home    Boolean?
+  /// Stintar ur play-by-play: true = sparade, false = klarade inte kvalitetskontrollen,
+  /// null = inte försökt (kör npm run nba:ingest -- --stints).
+  stintsValid       Boolean?
   updatedAt         DateTime  @updatedAt
 
   teamGames   NbaTeamGame[]
@@ -77,6 +80,8 @@ model NbaGame {
   overrides   NbaMinutesOverride[]
   picks       NbaPick[]
   propLines   NbaPropLine[]
+  stints      NbaStint[]
+  starters    NbaStarter[]
   propProjs   NbaPropProjection[]
 
   @@index([startAt])
@@ -248,6 +253,34 @@ model NbaPick {
 
   @@unique([gameId, market])
   @@index([result])
+}
+
+/// En stint: samma tio spelare på planen. Underlag för spelarnas påverkan
+/// (on/off, RAPM). Byggs ur ESPN:s play-by-play i lib/nba/stints.ts.
+model NbaStint {
+  id       Int     @id @default(autoincrement())
+  gameId   Int
+  game     NbaGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  homeIds  Int[]
+  awayIds  Int[]
+  homePts  Int
+  awayPts  Int
+  poss     Float
+  seconds  Float
+
+  @@index([gameId])
+}
+
+/// Kvällens startfemma, när ESPN publicerat den (ungefär 30 min före start).
+model NbaStarter {
+  gameId    Int
+  game      NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId  Int
+  teamId    Int
+  fetchedAt DateTime @default(now())
+
+  @@id([gameId, playerId])
+  @@index([gameId, teamId])
 }
 
 /// Ett prop-pris: spelare, statistik, linje och över/under hos en bok.

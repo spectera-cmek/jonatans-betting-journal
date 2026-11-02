@@ -3,6 +3,8 @@
 #   BettingTracker-NbaUpdate   daily at 13:00 - last night's results and settlement,
 #                              injuries, odds, projections and locked picks
 #   BettingTracker-NbaClosing  daily at 23:30 - injuries + closing odds before tip-off
+#   BettingTracker-NbaLineups  every 30 min 00:00-04:00 - starting fives from ESPN (free,
+#                              no OddsPapi request), re-prices games starting within 90 min
 #
 #   npm run install:nba-tasks
 #   npm run install:nba-tasks -- -UpdateAt 12:00 -ClosingAt 23:00
@@ -19,7 +21,9 @@
 
 param(
   [string]$UpdateAt = "13:00",
-  [string]$ClosingAt = "23:30"
+  [string]$ClosingAt = "23:30",
+  [string]$LineupsFrom = "00:00",
+  [int]$LineupsHours = 4
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,12 +56,27 @@ $Tasks = @(
     # No catch-up: a closing run the next morning would only spend a request on finished games.
     StartWhenAvailable = $false
     Description = "Betting Tracker: NBA injuries and closing odds (1 OddsPapi request) before tip-off."
+  },
+  @{
+    Name = "BettingTracker-NbaLineups"
+    Job = "lineups"
+    At = $LineupsFrom
+    # Var 30:e minut under natten - startfemmorna publiceras ~30 min före varje match.
+    RepeatMinutes = 30
+    RepeatHours = $LineupsHours
+    StartWhenAvailable = $false
+    Description = "Betting Tracker: NBA starting fives from ESPN (free) and re-pricing near tip-off."
   }
 )
 
 foreach ($t in $Tasks) {
   $Action = New-ScheduledTaskAction -Execute $Runner -Argument $t.Job -WorkingDirectory $RepoRoot
   $Trigger = New-ScheduledTaskTrigger -Daily -At $t.At
+  if ($t.RepeatMinutes) {
+    $Trigger.Repetition = (New-ScheduledTaskTrigger -Once -At $t.At `
+      -RepetitionInterval (New-TimeSpan -Minutes $t.RepeatMinutes) `
+      -RepetitionDuration (New-TimeSpan -Hours $t.RepeatHours)).Repetition
+  }
   if ($t.StartWhenAvailable) {
     $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
       -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
@@ -73,7 +92,8 @@ foreach ($t in $Tasks) {
     -Principal $Principal `
     -Description $t.Description `
     -Force | Out-Null
-  Write-Host "Installed '$($t.Name)': npm run nba:$($t.Job) daily at $($t.At)."
+  $When = if ($t.RepeatMinutes) { "every $($t.RepeatMinutes) min for $($t.RepeatHours) h from $($t.At)" } else { "daily at $($t.At)" }
+  Write-Host "Installed '$($t.Name)': npm run nba:$($t.Job) $When."
 }
 
 Write-Host ""
@@ -83,3 +103,4 @@ Write-Host "Verify:  Get-ScheduledTask -TaskName BettingTracker-Nba*"
 Write-Host "Run now: Start-ScheduledTask -TaskName BettingTracker-NbaUpdate"
 Write-Host "Remove:  Unregister-ScheduledTask -TaskName BettingTracker-NbaUpdate -Confirm:`$false"
 Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaClosing -Confirm:`$false"
+Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaLineups -Confirm:`$false"

@@ -1,8 +1,11 @@
 /**
- * Pinnacles stängningsodds för spelade NBA-matcher ur OddsPapi:s historik —
- * underlaget för en backtest mot den skarpaste marknaden.
+ * Pinnacles odds för spelade NBA-matcher ur OddsPapi:s historik, vid två
+ * tidpunkter: stängning och speltid (12 h före start ≈ kl. 13 svensk tid).
+ * Underlaget för backtest och CLV-mätning mot den skarpaste marknaden:
+ *   npm run nba:backtest -- --line bet
  *
  *   npm run nba:odds-history -- --from 2026-01-01 --to 2026-06-30 --confirm
+ *   npm run nba:odds-history -- --confirm --bet-hours 10   # speltid 10 h före start
  *
  * Kostnad: historiken är gratis, men matcherna måste först kopplas till
  * OddsPapi-fixtures via /fixtures, som är debiterat: ett anrop per 9 dagar
@@ -43,8 +46,9 @@ async function main() {
     const l = await linkHistoricalFixtures(db, { from, to, maxCalls, log: (m) => console.log(`  ${m}`) });
     console.log(`Kopplade ${l.linked} matcher med ${l.calls} anrop`);
   }
-  const r = await captureHistoricalClosing(db, { from, to, log: (m) => console.log(`  ${m}`) });
-  console.log(`Klart: ${r.games} matcher, ${r.saved} stängningspriser, ${r.empty} utan historik. Debiterade anrop: ${oddspapiCallsThisRun()}`);
+  const betHours = Number(arg("--bet-hours")) || 12;
+  const r = await captureHistoricalClosing(db, { from, to, betHours, log: (m) => console.log(`  ${m}`) });
+  console.log(`Klart: ${r.games} matcher, ${r.saved} priser (stängning + ${betHours} h före start), ${r.empty} utan historik. Debiterade anrop: ${oddspapiCallsThisRun()}`);
 }
 
 main()

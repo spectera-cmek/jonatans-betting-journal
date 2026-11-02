@@ -3,7 +3,7 @@
 
 import type { NbaPrisma } from "../nbaDb";
 import { oddspapiBookmaker } from "../oddspapi";
-import { baseLineup, baselineMinutes, projectMinutes, type MinutesInput, type MinutesRow } from "./minutes";
+import { baseLineup, baselineMinutes, projectMinutes, roleBaseline, type MinutesInput, type MinutesRow } from "./minutes";
 import { clvPoints, gradePick, modelLine, pickFromLine, type PickMarket } from "./picks";
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { gameProps, settleProps, type PlayerPropView } from "./propsPipeline";
@@ -66,7 +66,7 @@ export async function buildLineup(
   teamId: number,
   gameId: number,
   t: number,
-  cache?: { injuries?: Map<number, { status: string; detail: string | null }>; names?: Map<number, string> }
+  cache?: { injuries?: Map<number, { status: string; detail: string | null }>; names?: Map<number, string>; absSpread?: number | null }
 ): Promise<TeamLineup> {
   const base = baselineMinutes(h, teamId, t);
   const names = cache?.names ?? new Map<number, string>();
@@ -77,6 +77,10 @@ export async function buildLineup(
       : db.nbaInjury.findMany({ where: { teamId } }).then((l) => new Map(l.map((i) => [i.playerId, { status: i.status, detail: i.detail }]))),
   ]);
   const ov = new Map(overrides.map((o) => [o.playerId, o.minutes]));
+  // Startfemman, om ESPN publicerat den: grundminuter efter kvällens roll.
+  const starters = await db.nbaStarter.findMany({ where: { gameId, teamId }, select: { playerId: true } });
+  const starterSet = starters.length === 5 ? new Set(starters.map((s) => s.playerId)) : null;
+  const roleBase = (playerId: number, b: number) => (starterSet ? roleBaseline(h, playerId, t, starterSet.has(playerId), b) : b);
   // Spelare med en override men utan grundminuter (t.ex. ny i laget) tas med.
   const ids = new Set(base.map((b) => b.playerId));
   const extra = overrides.filter((o) => !ids.has(o.playerId));
@@ -93,7 +97,7 @@ export async function buildLineup(
       playerId: b.playerId,
       name: names.get(b.playerId) ?? `#${b.playerId}`,
       position: b.position,
-      baseline: Math.round(b.baseline * 10) / 10,
+      baseline: Math.round(roleBase(b.playerId, b.baseline) * 10) / 10,
       games: b.games,
       injuryStatus: injuries.get(b.playerId)?.status ?? null,
       injuryDetail: injuries.get(b.playerId)?.detail ?? null,
@@ -110,7 +114,7 @@ export async function buildLineup(
       override: ov.get(p.id) ?? null,
     })),
   ];
-  return { teamId, rows: projectMinutes(inputs) };
+  return { teamId, rows: projectMinutes(inputs, undefined, undefined, { absSpread: cache?.absSpread }) };
 }
 
 export interface GameProjection {
@@ -160,7 +164,14 @@ export async function projectStoredGame(
   const league = opts.league ?? leagueAverages(h, t, p);
   const ratings = opts.ratings ?? (p.ratingMix > 0 ? fitTeamRatings(h, t, p) : undefined);
   const cache = { injuries: opts.injuries, names: opts.names ?? new Map<number, string>() };
-  const [home, away] = await Promise.all([buildLineup(db, h, g.homeTeamId, g.id, t, cache), buildLineup(db, h, g.awayTeamId, g.id, t, cache)]);
+  // Marknadens spread styr utklassningsrisken i minuterna — hämta priserna först.
+  const quotes = await latestQuotes(db, g.id, g.status === "scheduled" ? undefined : g.startAt);
+  const spreadQ = referenceQuote(quotes, "spread");
+  const lineupCache = { ...cache, absSpread: spreadQ?.line != null ? Math.abs(spreadQ.line) : null };
+  const [home, away] = await Promise.all([
+    buildLineup(db, h, g.homeTeamId, g.id, t, lineupCache),
+    buildLineup(db, h, g.awayTeamId, g.id, t, lineupCache),
+  ]);
   const proj = projectGame(
     h,
     {
@@ -168,6 +179,7 @@ export async function projectStoredGame(
       awayId: g.awayTeamId,
       t,
       neutral: g.neutral,
+      seasonType: g.seasonType,
       homeLineup: home.rows.map((r) => ({ playerId: r.playerId, minutes: r.minutes })),
       awayLineup: away.rows.map((r) => ({ playerId: r.playerId, minutes: r.minutes })),
       homeBaseLineup: baseLineup(h, g.homeTeamId, t),
@@ -179,7 +191,6 @@ export async function projectStoredGame(
   );
   const modelSpread = modelLine("spread", proj.summary.homeMean, proj.summary.awayMean);
   const modelTotal = modelLine("total", proj.summary.homeMean, proj.summary.awayMean);
-  const quotes = await latestQuotes(db, g.id, g.status === "scheduled" ? undefined : g.startAt);
   const markets: MarketPrice[] = [];
   for (const m of MARKETS) {
     const ref = referenceQuote(quotes, m);
