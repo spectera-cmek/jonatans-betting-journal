@@ -32,6 +32,35 @@ function parseDate(s: string | null, fallback: Date): Date {
   return d;
 }
 
+/** Databasfel som går över av sig själva: Neon stänger långa anslutningar, nätet hackar. */
+const TRANSIENT_DB = new Set(["P1001", "P1002", "P1008", "P1017", "P2024"]);
+
+function isTransientDb(e: unknown): boolean {
+  const code = (e as { code?: unknown })?.code;
+  if (typeof code === "string" && TRANSIENT_DB.has(code)) return true;
+  return /closed the connection|connection reset|ECONNRESET|Can't reach database|timed out/i.test(e instanceof Error ? e.message : String(e));
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Kör `fn` och försöker igen vid tillfälliga databasfel (upp till 4 gånger,
+ * 5 s → 15 s → 30 s → 60 s), med ny anslutning. Andra fel kastas direkt.
+ */
+async function withDbRetry<T>(fn: () => Promise<T>, label: string, log: (m: string) => void): Promise<T> {
+  const waits = [5, 15, 30, 60];
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!isTransientDb(e) || i >= waits.length) throw e;
+      log(`  ${label}: databasen kopplade ner — försöker igen om ${waits[i]} s (${i + 1}/${waits.length})`);
+      await db.$disconnect().catch(() => null);
+      await sleep(waits[i] * 1000);
+    }
+  }
+}
+
 export async function ingestRange(from: Date, to: Date, opts: { refresh?: boolean; log?: (m: string) => void } = {}) {
   const log = opts.log ?? console.log;
   let games = 0;
@@ -39,28 +68,34 @@ export async function ingestRange(from: Date, to: Date, opts: { refresh?: boolea
   let errors = 0;
   for (let t = from.getTime(); t <= to.getTime(); t += 864e5) {
     const day = new Date(t);
+    const label = day.toISOString().slice(0, 10);
     let list;
     try {
       list = await fetchScoreboard(day);
     } catch (e) {
       errors++;
-      log(`  ${day.toISOString().slice(0, 10)}: ${e instanceof Error ? e.message : e}`);
+      log(`  ${label}: ${e instanceof Error ? e.message : e}`);
       continue;
     }
     if (!list.length) continue;
     // Försäsong (1) och All-Star (4) säger inget om riktiga matcher.
     const real = list.filter((g) => g.seasonType === 2 || g.seasonType === 3 || g.seasonType === 5);
-    games += await upsertGames(db, real);
+    games += await withDbRetry(() => upsertGames(db, real), label, log);
     const finals = real.filter((g) => g.status === "final");
     const done = opts.refresh
       ? new Set<number>()
       : // Klar = boxscore och stintar redan försökta. Äldre matcher utan stintar hämtas om en gång.
         new Set(
           (
-            await db.nbaGame.findMany({
-              where: { id: { in: finals.map((g) => g.id) }, boxFetchedAt: { not: null }, stintsValid: { not: null } },
-              select: { id: true },
-            })
+            await withDbRetry(
+              () =>
+                db.nbaGame.findMany({
+                  where: { id: { in: finals.map((g) => g.id) }, boxFetchedAt: { not: null }, stintsValid: { not: null } },
+                  select: { id: true },
+                }),
+              label,
+              log
+            )
           ).map((g) => g.id)
         );
     for (const g of finals) {
@@ -68,7 +103,7 @@ export async function ingestRange(from: Date, to: Date, opts: { refresh?: boolea
       try {
         const s = await fetchSummary(g.id);
         if (s) {
-          await saveSummary(db, s);
+          await withDbRetry(() => saveSummary(db, s), `match ${g.id}`, log);
           boxes++;
         }
       } catch (e) {
@@ -76,7 +111,7 @@ export async function ingestRange(from: Date, to: Date, opts: { refresh?: boolea
         log(`  match ${g.id}: ${e instanceof Error ? e.message : e}`);
       }
     }
-    log(`${day.toISOString().slice(0, 10)}: ${real.length} matcher, ${finals.filter((g) => !done.has(g.id)).length} nya boxscores`);
+    log(`${label}: ${real.length} matcher, ${finals.filter((g) => !done.has(g.id)).length} nya boxscores`);
   }
   return { games, boxes, errors };
 }

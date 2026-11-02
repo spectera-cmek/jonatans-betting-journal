@@ -35,9 +35,8 @@ async function main() {
   const from = new Date(`${arg("--from") ?? "2026-01-01"}T00:00:00Z`);
   const to = new Date(`${arg("--to") ?? new Date().toISOString().slice(0, 10)}T23:59:59Z`);
   const maxCalls = Number(arg("--max-calls")) || 25;
-  const unlinked = await db.nbaGame.count({ where: { status: "final", startAt: { gte: from, lte: to }, oddspapiFixtureId: null } });
-  const windows = Math.ceil((to.getTime() - from.getTime()) / (9 * 864e5));
-  console.log(`${unlinked} spelade matcher saknar OddsPapi-koppling. Koppling kostar upp till ${Math.min(windows, maxCalls)} anrop.`);
+  const unlinked = await db.nbaGame.count({ where: { status: "final", startAt: { gte: from, lte: to }, oddspapiFixtureId: null, oddspapiLinkTried: null } });
+  console.log(`${unlinked} spelade matcher saknar OddsPapi-koppling och har inte sökts. Koppling kostar högst ${maxCalls} anrop (1 per 9 dagar med sådana matcher).`);
   if (!process.argv.includes("--confirm")) {
     console.log("Kör igen med --confirm för att hämta.");
     return;

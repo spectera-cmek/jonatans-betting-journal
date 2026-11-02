@@ -68,6 +68,8 @@ model NbaGame {
   oddspapiFixtureId String?   @unique
   /// true = OddsPapi:s participant1 är hemmalaget (för att vända historiska odds).
   oddspapiP1Home    Boolean?
+  /// När matchen senast söktes i OddsPapi:s fixtures (så att en miss inte kostar anrop igen).
+  oddspapiLinkTried DateTime?
   /// Stintar ur play-by-play: true = sparade, false = klarade inte kvalitetskontrollen,
   /// null = inte försökt (kör npm run nba:ingest -- --stints).
   stintsValid       Boolean?
