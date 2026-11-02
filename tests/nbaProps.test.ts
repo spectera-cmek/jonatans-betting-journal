@@ -142,5 +142,10 @@ describe("OddsPapi-props", () => {
     expect(normalizeName("Luka Dončić")).toBe("luka doncic");
     expect(normalizeName("Jaren Jackson Jr.")).toBe("jaren jackson");
     expect(normalizeName("De'Anthony Melton")).toBe("de anthony melton");
+    // OddsPapi: "Efternamn, Förnamn" (nba:update 2026-11-02).
+    expect(normalizeName("Reaves, Austin")).toBe(normalizeName("Austin Reaves"));
+    expect(normalizeName("Barrett, RJ")).toBe("rj barrett");
+    expect(normalizeName("Walker, Ja'Kobe")).toBe("ja kobe walker");
+    expect(normalizeName("Jackson Jr., Jaren")).toBe("jaren jackson");
   });
 });

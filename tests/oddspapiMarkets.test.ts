@@ -98,6 +98,23 @@ describe("odds-svar", () => {
     expect(flipped.find((r) => r.kind === "total")).toEqual(main.find((r) => r.kind === "total"));
   });
 
+  it("lagtotaler med samma namn som matchens total (113,5) väljs aldrig", () => {
+    const markets = {
+      ...map,
+      "1238": { kind: "total" as const, line: 113.5, sides: { "1238": 1 as const, "1239": 2 as const } },
+    };
+    const fx2 = JSON.parse(JSON.stringify(fx.odds[0]));
+    // Pinnacles lagtotal, markerad som huvudlinje och jämnare än matchens total.
+    fx2.bookmakerOdds.pinnacle.markets["1238"] = {
+      outcomes: {
+        "1238": { players: { "0": { price: 1.95, mainLine: true } } },
+        "1239": { players: { "0": { price: 1.95, mainLine: true } } },
+      },
+    };
+    const total = pickMainLines(extractLines(fx2, "pinnacle", markets)).find((r) => r.kind === "total")!;
+    expect(total.line).toBe(224.5);
+  });
+
   it("stängning ur historiken = senaste priset före start", () => {
     const rows = closingFromHistory(fx.history, "pinnacle", map, new Date("2026-03-01T00:30:00Z"));
     const ml = rows.find((r) => r.kind === "ml")!;

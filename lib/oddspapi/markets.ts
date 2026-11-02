@@ -116,6 +116,14 @@ export interface LineRow {
 
 const okPrice = (p: unknown): p is number => typeof p === "number" && Number.isFinite(p) && p > 1;
 
+/**
+ * Lägsta rimliga total för en hel NBA-match. OddsPapi ger lagtotaler och
+ * halvlekstotaler samma marknadsnamn som matchens total ("Over Under (incl.
+ * overtime)", linjer från 100,5) — de sorteras bort här, annars kan 113,5
+ * väljas som "matchens total".
+ */
+export const MIN_GAME_TOTAL = 150;
+
 /** Linjen ur bokens egen outcome-id ("224.5/over"), när katalogen saknar den. */
 function lineFromOutcomeId(id: string | null | undefined): number | null {
   const m = /^(-?\d+(?:\.\d+)?)\//.exec(id ?? "");
@@ -145,6 +153,7 @@ export function extractLines(fx: OpFixtureOdds, book: string, markets: Record<st
     }
     if (p1 == null || p2 == null) continue;
     if (spec.kind !== "ml" && line == null) continue;
+    if (spec.kind === "total" && (line ?? 0) < MIN_GAME_TOTAL) continue;
     out.push({ kind: spec.kind, line, price1: p1, price2: p2, mainLine: main });
   }
   return out;
@@ -176,6 +185,7 @@ export function closingFromHistory(h: OpHistoricalOdds, book: string, markets: R
       }
       if (best) prices[side] = best.price;
     }
+    if (spec.kind === "total" && (spec.line ?? 0) < MIN_GAME_TOTAL) continue;
     if (prices[1] && prices[2] && (spec.kind === "ml" || spec.line != null)) {
       out.push({ kind: spec.kind, line: spec.line, price1: prices[1], price2: prices[2], mainLine: false });
     }
@@ -300,7 +310,10 @@ export function extractPropLines(fx: OpFixtureOdds, book: string, markets: Recor
 
 /** "Luka Dončić Jr." → "luka doncic" — för att para OddsPapi-namn med ESPN. */
 export function normalizeName(name: string): string {
-  return name
+  // OddsPapi skriver "Reaves, Austin" — vänd till "Austin Reaves" som ESPN.
+  const m = /^\s*([^,]+),\s*(.+)$/.exec(name);
+  const ordered = m ? `${m[2]} ${m[1]}` : name;
+  return ordered
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()

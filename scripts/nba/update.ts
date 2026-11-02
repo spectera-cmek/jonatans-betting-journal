@@ -73,6 +73,12 @@ async function main() {
   }
   console.log(`   DraftKings-linjer för ${espnLines}/${soon.length} kommande matcher`);
 
+  // Engångsstädning: lagtotaler (t.ex. 113,5) som sparades som matchens total
+  // innan MIN_GAME_TOTAL fanns, och picks som låstes mot dem.
+  const badOdds = await db.nbaOdds.deleteMany({ where: { market: "total", line: { lt: 150 } } });
+  const badPicks = await db.nbaPick.deleteMany({ where: { market: "total", line: { lt: 150 }, result: null } });
+  if (badOdds.count || badPicks.count) console.log(`   rensade ${badOdds.count} felaktiga total-linjer och ${badPicks.count} låsta picks mot dem`);
+
   console.log(`${closing ? "2/3" : "3/5"} OddsPapi${closing ? " (stängning)" : ""}`);
   if (process.argv.includes("--no-odds")) console.log("   hoppar över (--no-odds)");
   else if (!hasOddspapiKey()) console.log("   ODDSPAPI_KEY saknas — hoppar över, ESPN:s linjer används där de finns");
