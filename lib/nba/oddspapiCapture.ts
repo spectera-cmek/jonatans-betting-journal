@@ -223,6 +223,11 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
 export const HISTORY_CLOSING = "oddspapi-history";
 export const HISTORY_BET = "oddspapi-bet";
 
+/** Källnamnet för speltidspriset: "oddspapi-bet" vid 12 h, annars t.ex. "oddspapi-bet-4h". */
+export function betSource(hours = 12): string {
+  return hours === 12 ? HISTORY_BET : `${HISTORY_BET}-${hours}h`;
+}
+
 /**
  * Pris ur OddsPapi-historiken (gratis) vid två tidpunkter, för Pinnacle eller
  * upp till tre valfria bolag (`books`, t.ex. svenska bolag att jämföra med):
@@ -239,6 +244,7 @@ export async function captureHistoricalClosing(
   const log = opts.log ?? (() => {});
   const ids = requireIds();
   const books = (opts.books?.length ? opts.books : [oddspapiBookmaker()]).slice(0, 3);
+  const BET = betSource(opts.betHours ?? 12);
   const byBook: Record<string, number> = Object.fromEntries(books.map((b) => [b, 0]));
   const games = await db.nbaGame.findMany({
     where: {
@@ -248,7 +254,7 @@ export async function captureHistoricalClosing(
       // Matcher där historiken redan visat sig tom frågas inte igen (5 s styck).
       ...(opts.retryEmpty ? {} : { oddsHistoryEmptyAt: null }),
       // Saknar stängning eller speltidspris från historiken.
-      OR: books.flatMap((book) => [{ odds: { none: { source: HISTORY_CLOSING, book } } }, { odds: { none: { source: HISTORY_BET, book } } }]),
+      OR: books.flatMap((book) => [{ odds: { none: { source: HISTORY_CLOSING, book } } }, { odds: { none: { source: BET, book } } }]),
     },
     orderBy: { startAt: "asc" },
     take: opts.max ?? 2000,
@@ -272,7 +278,7 @@ export async function captureHistoricalClosing(
     const markets = ids.basketballMarkets as Record<string, MarketSpec>;
     const points = [
       { source: HISTORY_CLOSING, at: g.startAt, capturedAt: new Date(g.startAt.getTime() - 60e3), isClosing: true },
-      { source: HISTORY_BET, at: new Date(g.startAt.getTime() - betMs), capturedAt: new Date(g.startAt.getTime() - betMs), isClosing: false },
+      { source: BET, at: new Date(g.startAt.getTime() - betMs), capturedAt: new Date(g.startAt.getTime() - betMs), isClosing: false },
     ];
     let any = false;
     for (const book of books) {

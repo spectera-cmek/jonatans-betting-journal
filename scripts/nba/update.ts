@@ -11,7 +11,8 @@
  * Steg:
  *   1. ESPN: de senaste 3 dagarnas resultat och boxscores, och kommande matcher
  *   2. ESPN:s skadelista och DraftKings-linjer för kommande matcher (gratis)
- *   3. OddsPapi: alla NBA-matchers odds i ett anrop (hoppas över utan nyckel)
+ *   3. OddsPapi: alla NBA-matchers odds i ett anrop (hoppas över utan nyckel),
+ *      och Smarkets priser (gratis)
  *   4. Modellen: minuter → simulering → pris mot marknaden, sparas i NbaProjection
  *   5. Facit för spelade matcher
  */
@@ -28,6 +29,7 @@ import { ingestRange } from "./ingest";
 import { captureNbaOdds } from "../../lib/nba/oddspapiCapture";
 import { hasOddspapiKey, oddspapiCallsThisRun, OddspapiError, quotaLeft } from "../../lib/oddspapi";
 import { projectUpcoming, settlePicks, settleProjections, settleProps } from "../../lib/nba/pipeline";
+import { captureSmarkets } from "../../lib/nba/smarketsCapture";
 
 function numberArg(flag: string, fallback: number): number {
   const i = process.argv.indexOf(flag);
@@ -109,6 +111,13 @@ async function main() {
     }
     const q = await quotaLeft();
     console.log(`   ${oddspapiCallsThisRun()} anrop nu${q ? `, ${q.used}/${q.limit} använda denna månad` : ""}`);
+  }
+
+  // Smarkets är gratis — körs även i --lineups och --no-odds.
+  try {
+    await captureSmarkets(db, { hours: Math.max(hours, 4), closing, log: (m) => console.log(`   Smarkets: ${m}`) });
+  } catch (e) {
+    console.log(`   Smarkets: hoppar över (${e instanceof Error ? e.message : String(e)})`);
   }
 
   console.log(`${closing ? "3/3" : "4/5"} Modellen`);

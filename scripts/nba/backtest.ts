@@ -7,7 +7,8 @@
  *   npm run nba:backtest -- --book pinnacle            # bara en boks stängning
  *   npm run nba:backtest -- --line bet                 # mot Pinnacles pris 12 h före start + CLV
  *                                                      (kräver npm run nba:odds-history först)
- *   npm run nba:backtest -- --line bet --bet-books unibet,betsson,smarkets
+ *   npm run nba:backtest -- --line bet --bet-hours 4  # speltid 4 h före start (hämtat med samma --bet-hours)
+ *   npm run nba:backtest -- --line bet --bet-books unibet.se,betsson,bet365
  *                                                      # picks hos dina bolag (bästa linjen), CLV mot Pinnacle
  *   npm run nba:backtest -- --line bet --lineup actual # som ovan, men modellen vet vilka som spelade (fusk)
  *   npm run nba:backtest -- --sims 8000 --save         # spara körningen (visas under Facit)
@@ -25,6 +26,7 @@ import { runBacktest, type BacktestGame, type ClosingQuote } from "../../lib/nba
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, type NbaModelParams } from "../../lib/nba/params";
 import type { NbaMarket } from "../../lib/nba/pricing";
 import { oddspapiBookmaker } from "../../lib/oddspapi";
+import { betSource } from "../../lib/nba/oddspapiCapture";
 
 /** Börsens provision på nettovinsten — priset räknas om till vad du faktiskt får. */
 const COMMISSION: Array<[RegExp, number]> = [
@@ -56,7 +58,6 @@ function paramOverrides(): NbaModelParams {
 
 const SOURCE_RANK: Record<string, number> = { "oddspapi-history": 0, oddspapi: 1, espn: 2 };
 /** --line bet: utvärdera mot speltidspriset, med stängningen som facit för CLV. */
-const BET_RANK: Record<string, number> = { "oddspapi-bet": 0 };
 
 async function main() {
   if (!hasNbaDb()) {
@@ -69,6 +70,10 @@ async function main() {
   const from = arg("--from") ? new Date(`${arg("--from")}T00:00:00Z`) : defFrom;
   const sims = Number(arg("--sims")) || 4000;
   const betMode = arg("--line") === "bet";
+  // Speltid: timmar före start (hämtat med nba:odds-history -- --bet-hours N). 12 h ≈ kl. 13.
+  const betHours = Number(arg("--bet-hours")) || 12;
+  const BET = betSource(betHours);
+  const BET_RANK: Record<string, number> = { [BET]: 0 };
   // Mot speltidspriset ska facit vara en enda skarp bok, annars blandas bolagen.
   const book = arg("--book") ?? (betMode ? oddspapiBookmaker() : null);
   const betBookList = (arg("--bet-books") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -128,7 +133,7 @@ async function main() {
       for (const b of betBookList)
         for (const m of ["spread", "total"] as NbaMarket[]) {
           const o = g.odds
-            .filter((x) => x.book === b && x.market === m && x.source === "oddspapi-bet" && x.capturedAt <= g.startAt)
+            .filter((x) => x.book === b && x.market === m && x.source === BET && x.capturedAt <= g.startAt)
             .sort((x, y) => y.capturedAt.getTime() - x.capturedAt.getTime())[0];
           if (o) bq.push({ market: m, line: o.line, price1: netPrice(b, o.price1), price2: netPrice(b, o.price2), book: b });
         }
@@ -138,7 +143,7 @@ async function main() {
   console.log(`${list.length} matcher ${from.toISOString().slice(0, 10)} → ${to.toISOString().slice(0, 10)}, ${sims} simuleringar per match`);
   let last = 0;
   if (betMode && !list.length) {
-    console.log("Inga matcher med speltidspris — kör npm run nba:odds-history -- --confirm först.");
+    console.log(`Inga matcher med speltidspris ${betHours} h före start — kör npm run nba:odds-history -- --confirm${betHours === 12 ? "" : ` --bet-hours ${betHours}`} först.`);
     return;
   }
   const r = runBacktest(h, list, closing, {
@@ -208,7 +213,7 @@ async function main() {
     );
   console.log(
     betMode
-      ? "Break-even vid −110 (1,91): 52,4 %. Picks mot Pinnacle vid speltid. CLV = poäng linjen rörde sig mot modellens sida till stängning — positiv CLV över många spel är det starkaste tecknet på en riktig edge."
+      ? `Break-even vid −110 (1,91): 52,4 %. Picks vid speltid (${betHours} h före start). CLV = poäng linjen rörde sig mot modellens sida till stängning — positiv CLV över många spel är det starkaste tecknet på en riktig edge.`
       : "Break-even vid −110 (1,91): 52,4 %. Picks räknas mot stängningslinjen — svårare än första linjen."
   );
   console.log("");

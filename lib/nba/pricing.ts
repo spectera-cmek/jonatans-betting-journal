@@ -7,6 +7,12 @@
 import { priceTwoWay, type Price } from "../cs2/pricing";
 import { DEFAULT_NBA_BLEND_W } from "./params";
 import { moneylineProb, spreadProb, totalProb, type SimResult } from "./sim";
+import { netPrice, SMARKETS_BOOK, SMARKETS_COMMISSION } from "../smarkets";
+
+/** Provision på nettovinst för börser. Edge räknas på vad du faktiskt får ut. */
+export function commissionOf(book: string | null | undefined): number {
+  return book === SMARKETS_BOOK ? SMARKETS_COMMISSION : 0;
+}
 
 export type NbaMarket = "ml" | "spread" | "total";
 
@@ -37,8 +43,12 @@ export function modelProb(sim: SimResult, market: NbaMarket, line: number | null
 
 export function priceMarket(sim: SimResult, q: MarketQuote, blendW = DEFAULT_NBA_BLEND_W[q.market]): MarketPrice {
   const m = modelProb(sim, q.market, q.line);
-  const price = priceTwoWay(m.p, m.push, q.price1, q.price2, blendW);
-  return { ...price, market: q.market, line: q.line, blendW, book: q.book ?? null, price1: q.price1, price2: q.price2 };
+  const c = commissionOf(q.book);
+  const net = (x: number | null) => (x != null && c > 0 ? netPrice(x, c) : x);
+  const price = priceTwoWay(m.p, m.push, net(q.price1), net(q.price2), blendW);
+  // Visa bolagets riktiga odds; edgen ovan är redan räknad efter provision.
+  const bestOdds = price.bestSide === "over" ? q.price1 : price.bestSide === "under" ? q.price2 : null;
+  return { ...price, bestOdds, market: q.market, line: q.line, blendW, book: q.book ?? null, price1: q.price1, price2: q.price2 };
 }
 
 /**

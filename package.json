@@ -76,6 +76,8 @@
     "cs2:capture": "tsx scripts/cs2/capture.ts",
     "oddspapi:discover": "tsx scripts/oddspapi/discover.ts",
     "oddspapi:books": "tsx scripts/oddspapi/books.ts",
+    "smarkets:discover": "tsx scripts/smarkets/discover.ts",
+    "nba:smarkets": "tsx scripts/nba/smarkets.ts",
     "nba:ingest": "tsx scripts/nba/ingest.ts",
     "nba:update": "tsx scripts/nba/update.ts",
     "nba:closing": "tsx scripts/nba/update.ts --closing",

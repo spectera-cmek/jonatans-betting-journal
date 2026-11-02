@@ -332,6 +332,10 @@ npm run nba:backtest -- --param usageK=0.8 --param rubberBand=0.05   # try param
 npm run nba:props-backtest            # props vs real box scores (no prop lines needed)
 npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle at bet time + close (free history)
 npm run nba:backtest -- --line bet    # backtest vs Pinnacle 12 h before tip, with CLV
+npm run nba:smarkets                  # free: Smarkets ladder + main lines (hourly via the tasks)
+npm run oddspapi:books -- unibet betsson   # OddsPapi names of your books (free)
+npm run nba:odds-history -- --confirm --books unibet.se,betsson,bet365   # your books' history
+npm run nba:backtest -- --line bet --bet-books unibet.se,betsson,bet365  # picks at your books
 ```
 
 Schedule both with `npm run install:nba-tasks` (Windows Task Scheduler): `nba:update`
@@ -339,6 +343,10 @@ daily at 13:00 (last night's results, tonight's lines) and `nba:closing` at 23:3
 before the first tip-off. Change the times with
 `npm run install:nba-tasks -- -UpdateAt 12:00 -ClosingAt 23:00`. Logs go to
 `.claude/logs/nba.log`. That is ~60 OddsPapi requests a month out of the free 250.
+The tasks also run `nba:lineups` every 30 min from 00:00 and `nba:smarkets` every hour
+12:00–03:00. Smarkets is not in OddsPapi and has no price history, so we build our own:
+the full ladder goes to `NbaSmarketsQuote` (only changed lines), the main line to `NbaOdds`
+as book `smarkets`, and the app prices it after Smarkets' 2 % commission.
 
 **Status and caveats**
 
@@ -357,7 +365,12 @@ before the first tip-off. Change the times with
 - Edges mostly appear against soft prices, i.e. your own book's odds entered on the match
   page, when they differ from Pinnacle.
 - The backtest knows which players played (as the injury list does before a real game),
-  but not their minutes.
+  but not their minutes. Against the bet-time line (`--line bet`) it instead uses the
+  team's previous game, since late scratches move the line after 13:00 and would fake CLV.
+- Bet-time test (Jan–Nov 2026, 693 games vs Pinnacle 12 h before tip, previous-game
+  lineups): spread CLV ≈ 0 (no edge); totals CLV +0.34 points (+0.49 at edge 3+), with
+  blend weight 0.3 best for totals. Check `CLV-koll`'s "modellens bidrag" before trusting
+  it: it removes line drift and line shopping.
 
 ## 🧪 Testing
 
