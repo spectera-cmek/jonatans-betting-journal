@@ -78,9 +78,12 @@ export function classifyBasketballMarket(m: OpMarket): MarketSpec | null {
   const name = m.marketName.toLowerCase();
   const outs = m.outcomes.map((o) => o.outcomeName.toLowerCase());
   let kind: NbaMarketKind | null = null;
+  // Ordningen spelar roll: "moneyline" innehåller "line", så vinnarmarknaden
+  // måste kännas igen före spread (OddsPapi: 111 "Winner (incl. overtime)",
+  // marketType "moneyline").
   if (outs.some((o) => /over/.test(o)) && outs.some((o) => /under/.test(o))) kind = "total";
-  else if (/handicap|spread|line/.test(type) || /handicap|spread/.test(name)) kind = "spread";
   else if (/moneyline|money line|winner|^12$|1x2|home.?away|match odds/.test(type + " " + name)) kind = "ml";
+  else if (/handicap|spread|\bline\b/.test(type) || /handicap|spread/.test(name)) kind = "spread";
   if (!kind) return null;
   const hc = Number.isFinite(m.handicap) ? m.handicap : 0;
   if (kind === "ml" && hc !== 0) kind = "spread";

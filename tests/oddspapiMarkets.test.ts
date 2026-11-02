@@ -46,6 +46,35 @@ describe("marknadskatalogen", () => {
   });
 });
 
+describe("OddsPapis riktiga basketkatalog (oddspapi:discover 2026-11-02)", () => {
+  const real = (marketId: number, marketName: string, marketType: string, period: string, handicap: number, outs: Array<[number, string]>): OpMarket => ({
+    marketId,
+    marketName,
+    marketType,
+    period,
+    handicap,
+    playerProp: false,
+    sportId: 11,
+    outcomes: outs.map(([outcomeId, outcomeName]) => ({ outcomeId, outcomeName })),
+  });
+
+  it("111 Winner (incl. overtime) är moneyline, inte spread — även med utfallen i ordningen 2/1", () => {
+    const spec = classifyBasketballMarket(real(111, "Winner (incl. overtime)", "moneyline", "result", 0, [[112, "2"], [111, "1"]]));
+    expect(spec).toMatchObject({ kind: "ml", line: null });
+    expect(spec!.sides).toEqual({ "111": 1, "112": 2 });
+  });
+
+  it("Handicap och Over Under (incl. overtime), men inte Regular Time Result", () => {
+    expect(classifyBasketballMarket(real(11358, "Handicap (incl. overtime)", "handicap", "result", -24.5, [[11358, "1"], [11359, "2"]]))).toMatchObject({ kind: "spread", line: -24.5 });
+    expect(classifyBasketballMarket(real(116, "Over Under (incl. overtime)", "totals", "result", 100.5, [[117, "Under"], [116, "Over"]]))).toMatchObject({
+      kind: "total",
+      line: 100.5,
+      sides: { "116": 1, "117": 2 },
+    });
+    expect(classifyBasketballMarket(real(113, "Regular Time Result", "1x2", "fulltime", 0, [[113, "X"], [114, "1"], [115, "2"]]))).toBeNull();
+  });
+});
+
 describe("odds-svar", () => {
   const map = buildMarketMap(fx.markets);
 

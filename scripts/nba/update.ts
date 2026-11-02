@@ -80,6 +80,12 @@ async function main() {
     try {
       const c = await captureNbaOdds(db, { closing, log: (m) => console.log(`   ${m}`) });
       console.log(`   ${c.matched}/${c.fixtures} matcher kopplade, ${c.saved} nya priser, ${c.propsSaved} nya prop-linjer`);
+      const sc = c.spreadCheck;
+      if (sc.compared) {
+        console.log(`   spread-kontroll mot DraftKings: ${sc.compared - sc.flipped}/${sc.compared} samma tecken (${sc.examples.join("; ")})`);
+        if (sc.flipped * 2 > sc.compared)
+          console.log("   ⚠ Spreadens tecken verkar omvänt — OddsPapis handicap gäller troligen bortalaget. Säg till, så vänder jag tolkningen.");
+      }
       if (c.propsUnmatched.length) console.log(`   prop-spelare utan ESPN-match: ${c.propsUnmatched.slice(0, 8).join(", ")}`);
       if (c.unmatched.length) console.log(`   ej kopplade: ${c.unmatched.slice(0, 5).join("; ")}${c.unmatched.length > 5 ? " …" : ""}`);
     } catch (e) {

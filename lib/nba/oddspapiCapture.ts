@@ -101,6 +101,12 @@ export interface CaptureResult {
   fixtures: number;
   matched: number;
   saved: number;
+  /**
+   * Kontroll av spreadens tecken mot DraftKings (ESPN) i samma match:
+   * OddsPapi dokumenterar inte om handicap gäller participant1. Om tecknen
+   * går åt olika håll i de flesta matcher är vår tolkning omvänd.
+   */
+  spreadCheck: { compared: number; flipped: number; examples: string[] };
   /** Nya prop-linjer och prop-spelare som inte gick att para med ESPN. */
   propsSaved: number;
   propsUnmatched: string[];
@@ -126,7 +132,15 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
     const learned = await learnTeams(db, named, tm);
     if (learned) log(`lärde in ${learned} lag-id från OddsPapi`);
   }
-  const res: CaptureResult = { fixtures: fixtures.length, matched: 0, saved: 0, propsSaved: 0, propsUnmatched: [], unmatched: [] };
+  const res: CaptureResult = {
+    fixtures: fixtures.length,
+    matched: 0,
+    saved: 0,
+    spreadCheck: { compared: 0, flipped: 0, examples: [] },
+    propsSaved: 0,
+    propsUnmatched: [],
+    unmatched: [],
+  };
   const propMarkets = ids.basketballPropMarkets ?? {};
   const hasPropMarkets = Object.keys(propMarkets).length > 0;
   const now = Date.now();
@@ -138,6 +152,16 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
     }
     res.matched++;
     const rows = orientRows(pickMainLines(extractLines(f, book, ids.basketballMarkets)), hit.p1IsHome);
+    const sp = rows.find((r) => r.kind === "spread");
+    if (sp?.line != null && Math.abs(sp.line) >= 1.5) {
+      const dk = await db.nbaOdds.findFirst({ where: { gameId: hit.game.id, market: "spread", source: "espn" }, orderBy: { capturedAt: "desc" } });
+      if (dk?.line != null && Math.abs(dk.line) >= 1.5) {
+        res.spreadCheck.compared++;
+        const flipped = Math.sign(dk.line) !== Math.sign(sp.line);
+        if (flipped) res.spreadCheck.flipped++;
+        if (res.spreadCheck.examples.length < 3) res.spreadCheck.examples.push(`hemma ${sp.line} hos ${book} / ${dk.line} hos ${dk.book}${flipped ? " ⚠" : ""}`);
+      }
+    }
     const closing = !!opts.closing && hit.game.startAt.getTime() - now < 3 * 3600e3 && hit.game.startAt.getTime() > now;
     for (const r of rows) {
       const saved = await saveOddsIfChanged(db, {
