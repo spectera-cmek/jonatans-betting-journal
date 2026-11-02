@@ -46,6 +46,8 @@ export function clvPoints(market: PickMarket, side: 1 | 2, locked: number, closi
 
 export interface GradedPick {
   edgePts: number;
+  /** 1 = hemma/över, 2 = borta/under. */
+  side?: 1 | 2;
   result: PickResult;
   /** Priset på vår sida, för ROI. Saknas det räknas −110. */
   price?: number | null;
@@ -107,4 +109,48 @@ export function bucketRecords(picks: GradedPick[]): BucketRecord[] {
       clvBeat: moved ? beat / moved : null,
     };
   });
+}
+
+export interface ClvSide {
+  n: number;
+  clv: number | null;
+  beat: number | null;
+}
+
+/** CLV för en grupp picks: snitt och andel som slog stängningen bland de som rörde sig. */
+function clvSide(xs: number[]): ClvSide {
+  const moved = xs.filter((x) => x !== 0);
+  return {
+    n: xs.length,
+    clv: xs.length ? xs.reduce((a, x) => a + x, 0) / xs.length : null,
+    beat: moved.length ? moved.filter((x) => x > 0).length / moved.length : null,
+  };
+}
+
+export interface ClvCheck {
+  /** Modellens picks, per sida. */
+  side1: ClvSide;
+  side2: ClvSide;
+  /** Att alltid spela sida 1 (hemma/över) — visar om linjen bara driver åt ett håll. */
+  always1: ClvSide;
+  /** Modellens snitt-CLV delat med medelfelet. |t| > 2 är svårt att få av slump. */
+  t: number | null;
+}
+
+/**
+ * Är CLV:n skicklighet eller bara drift? Om linjerna i snitt stiger och
+ * modellen mest spelar över blir CLV:n positiv utan att modellen vet något.
+ * `always1` är CLV:n för sida 1 i varje match (samma matcher).
+ */
+export function clvCheck(picks: GradedPick[], always1: number[]): ClvCheck {
+  const with1 = picks.filter((x) => x.clv != null && x.side === 1).map((x) => x.clv!);
+  const with2 = picks.filter((x) => x.clv != null && x.side === 2).map((x) => x.clv!);
+  const all = [...with1, ...with2];
+  let t: number | null = null;
+  if (all.length > 2) {
+    const mean = all.reduce((a, x) => a + x, 0) / all.length;
+    const sd = Math.sqrt(all.reduce((a, x) => a + (x - mean) ** 2, 0) / (all.length - 1));
+    t = sd > 0 ? mean / (sd / Math.sqrt(all.length)) : null;
+  }
+  return { side1: clvSide(with1), side2: clvSide(with2), always1: clvSide(always1), t };
 }

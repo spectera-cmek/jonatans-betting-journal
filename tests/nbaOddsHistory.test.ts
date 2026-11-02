@@ -100,3 +100,22 @@ describe("OddsPapi-historiken", () => {
     expect(f.marked).toEqual([]);
   });
 });
+
+describe("CLV-koll", () => {
+  it("skiljer modellens CLV per sida från ren linjedrift", async () => {
+    const { clvCheck } = await import("../lib/nba/picks");
+    const picks = [
+      { edgePts: 3, result: "W" as const, side: 1 as const, clv: 1 },
+      { edgePts: 3, result: "L" as const, side: 1 as const, clv: 0.5 },
+      { edgePts: 3, result: "W" as const, side: 2 as const, clv: 0.5 },
+      { edgePts: 3, result: "L" as const, side: 2 as const, clv: -0.5 },
+      { edgePts: 3, result: "L" as const, side: 2 as const, clv: 0 },
+    ];
+    const c = clvCheck(picks, [1, 0.5, -0.5, 0.5, 0]);
+    expect(c.side1).toEqual({ n: 2, clv: 0.75, beat: 1 });
+    expect(c.side2.n).toBe(3);
+    expect(c.side2.beat).toBe(0.5); // push (0) räknas inte som rörelse
+    expect(c.always1.clv).toBeCloseTo(0.3);
+    expect(c.t).toBeGreaterThan(0);
+  });
+});

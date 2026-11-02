@@ -10,7 +10,7 @@
 import { devigProportional } from "../fairOdds";
 import { blendProb } from "../shotModel";
 import { baseLineup, baselineMinutes, projectMinutes } from "./minutes";
-import { bucketRecords, clvPoints, gradePick, modelLine, pickFromLine, type BucketRecord, type GradedPick, type PickMarket } from "./picks";
+import { bucketRecords, clvCheck, clvPoints, gradePick, modelLine, pickFromLine, type BucketRecord, type ClvCheck, type GradedPick, type PickMarket } from "./picks";
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { fitRapm, type RapmFit, type StintRow } from "./rapm";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, isFlagged, type NbaModelParams } from "./params";
@@ -59,6 +59,8 @@ export interface BacktestResult {
   markets: Partial<Record<NbaMarket, MarketMetrics>>;
   /** Picks i poäng mot stängningslinjen, per edge-hink (alla, 3+, 6+). */
   ats: Partial<Record<PickMarket, BucketRecord[]>>;
+  /** Bara med closeLines: CLV per sida mot att alltid spela sida 1. */
+  clv?: Partial<Record<PickMarket, ClvCheck>>;
   books: string[];
 }
 
@@ -107,6 +109,7 @@ export function runBacktest(
   const ratingsByDay = new Map<number, RatingTable>();
   const rapmByWeek = new Map<number, RapmFit>();
   const picks: Record<PickMarket, GradedPick[]> = { spread: [], total: [] };
+  const always1: Record<PickMarket, number[]> = { spread: [], total: [] };
   const obs: Obs[] = [];
   const books = new Set<string>();
   const m = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
@@ -208,8 +211,10 @@ export function runBacktest(
         const ml = modelLine(q.market, s.homeMean, s.awayMean);
         const pk = pickFromLine(q.market, ml, q.line);
         const close = opts.closeLines?.get(g.id)?.find((c) => c.market === q.market && c.line != null);
+        if (close?.line != null) always1[q.market].push(clvPoints(q.market, 1, q.line, close.line));
         picks[q.market].push({
           edgePts: pk.edgePts,
+          side: pk.side,
           result: gradePick(q.market, pk.side, q.line, g.homeScore, g.awayScore),
           price: pk.side === 1 ? q.price1 : q.price2,
           clv: close?.line != null ? clvPoints(q.market, pk.side, q.line, close.line) : null,
@@ -274,6 +279,7 @@ export function runBacktest(
     total: fin(t),
     markets,
     ats: { spread: bucketRecords(picks.spread), total: bucketRecords(picks.total) },
+    clv: opts.closeLines ? { spread: clvCheck(picks.spread, always1.spread), total: clvCheck(picks.total, always1.total) } : undefined,
     books: [...books],
   };
 }

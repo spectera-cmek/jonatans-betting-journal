@@ -150,6 +150,17 @@ async function main() {
           .join("   ")
     );
   }
+  for (const [mk, c] of Object.entries(r.clv ?? {})) {
+    if (!c) continue;
+    const [a, b] = mk === "total" ? ["över", "under"] : ["hemma", "borta"];
+    const side = (x: { n: number; clv: number | null; beat: number | null }) =>
+      `${x.n} st, CLV ${x.clv == null ? "—" : `${x.clv >= 0 ? "+" : ""}${x.clv.toFixed(2)} p`}${x.beat == null ? "" : ` (${(x.beat * 100).toFixed(0)} %)`}`;
+    console.log(
+      `CLV-koll ${mk.padEnd(6)} modellens ${a}: ${side(c.side1)}   modellens ${b}: ${side(c.side2)}   ` +
+        `alltid ${a}: ${side(c.always1)}   t = ${c.t == null ? "—" : c.t.toFixed(1)}`
+    );
+  }
+  if (r.clv) console.log("CLV-koll: positiv CLV på båda sidorna och t > 2 = skicklighet. Bara på en sida, lika stor som \"alltid\" = linjerna driver bara.");
   console.log(
     betMode
       ? "Break-even vid −110 (1,91): 52,4 %. Picks mot Pinnacle vid speltid. CLV = poäng linjen rörde sig mot modellens sida till stängning — positiv CLV över många spel är det starkaste tecknet på en riktig edge."
