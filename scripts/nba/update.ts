@@ -92,7 +92,7 @@ async function main() {
         if (sc.flipped * 2 > sc.compared)
           console.log("   ⚠ Spreadens tecken verkar omvänt — OddsPapis handicap gäller troligen bortalaget. Säg till, så vänder jag tolkningen.");
       }
-      if (c.propsUnmatched.length) console.log(`   prop-spelare utan ESPN-match: ${c.propsUnmatched.slice(0, 8).join(", ")}`);
+      if (c.propsUnmatched.length) console.log(`   prop-spelare utan ESPN-match: ${c.propsUnmatched.slice(0, 8).join(" · ")}`);
       if (c.unmatched.length) console.log(`   ej kopplade: ${c.unmatched.slice(0, 5).join("; ")}${c.unmatched.length > 5 ? " …" : ""}`);
     } catch (e) {
       const msg = e instanceof OddspapiError && e.quotaExceeded ? "månadens kvot är slut" : e instanceof Error ? e.message : String(e);

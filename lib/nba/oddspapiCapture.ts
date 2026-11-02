@@ -142,6 +142,7 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
     unmatched: [],
   };
   const propMarkets = ids.basketballPropMarkets ?? {};
+  let allPlayers: Array<{ id: number; name: string }> | null = null;
   const hasPropMarkets = Object.keys(propMarkets).length > 0;
   const now = Date.now();
   for (const f of fixtures) {
@@ -186,9 +187,16 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
         });
         const byName = new Map(players.map((p) => [normalizeName(p.name), p.id]));
         for (const pr of props) {
-          const playerId = byName.get(normalizeName(pr.playerName));
+          let playerId = byName.get(normalizeName(pr.playerName));
+          // Reserv: spelaren står på ett annat lag i vår data (trejd, nyförvärv
+          // som inte spelat än) — sök i hela ligan om namnet bara finns en gång.
           if (!playerId) {
-            if (res.propsUnmatched.length < 20) res.propsUnmatched.push(pr.playerName);
+            allPlayers ??= await db.nbaPlayer.findMany({ select: { id: true, name: true } });
+            const hits = allPlayers.filter((p) => normalizeName(p.name) === normalizeName(pr.playerName));
+            if (hits.length === 1) playerId = hits[0].id;
+          }
+          if (!playerId) {
+            if (res.propsUnmatched.length < 20 && !res.propsUnmatched.includes(pr.playerName)) res.propsUnmatched.push(pr.playerName);
             continue;
           }
           const last = await db.nbaPropLine.findFirst({
