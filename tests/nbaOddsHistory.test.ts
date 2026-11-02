@@ -65,6 +65,35 @@ describe("OddsPapi-historiken", () => {
     expect(f.where()).not.toHaveProperty("oddsHistoryEmptyAt");
   });
 
+  it("nätverksfel (ETIMEDOUT) försöks igen, 4xx gör det inte", async () => {
+    const { oddspapiRetry, isNetworkError, OddspapiError } = await vi.importActual<typeof import("../lib/oddspapi")>("../lib/oddspapi");
+    const timeout = () => new TypeError("fetch failed", { cause: Object.assign(new AggregateError([{ code: "ETIMEDOUT" }]), { code: "ETIMEDOUT" }) });
+    expect(isNetworkError(timeout())).toBe(true);
+    expect(isNetworkError(new TypeError("x is not a function"))).toBe(false);
+
+    vi.useFakeTimers();
+    try {
+      let n = 0;
+      const msgs: string[] = [];
+      const p = oddspapiRetry(async () => (++n < 3 ? Promise.reject(timeout()) : "ok"), 5, (m) => msgs.push(m));
+      await vi.advanceTimersByTimeAsync(6000);
+      await expect(p).resolves.toBe("ok");
+      expect(msgs).toHaveLength(2);
+      expect(msgs[0]).toContain("ETIMEDOUT");
+
+      const failing = oddspapiRetry(() => Promise.reject(timeout()), 2);
+      const check = expect(failing).rejects.toThrow("Kom inte fram till OddsPapi (ETIMEDOUT) efter 2 försök");
+      await vi.advanceTimersByTimeAsync(3000);
+      await check;
+
+      let calls = 0;
+      await expect(oddspapiRetry(() => (calls++, Promise.reject(new OddspapiError(401, "X", "nej"))), 5)).rejects.toThrow("nej");
+      expect(calls).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("andra fel (t.ex. fel nyckel) stoppar körningen", async () => {
     const f = fakeDb([{ id: 3, oddspapiFixtureId: "broken" }]);
     await expect(captureHistoricalClosing(f.db, { from: new Date(0), to: new Date() })).rejects.toThrow("fel nyckel");

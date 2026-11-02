@@ -253,11 +253,12 @@ export async function captureHistoricalClosing(
   let saved = 0;
   let empty = 0;
   const betMs = (opts.betHours ?? 12) * 3600e3;
+  log(`${games.length} matcher att hämta historik för (≈ ${Math.ceil((games.length * 5.4) / 60)} min)`);
   const markEmpty = (id: number) => db.nbaGame.update({ where: { id }, data: { oddsHistoryEmptyAt: new Date() } });
   for (const [i, g] of games.entries()) {
     let h: Awaited<ReturnType<typeof getHistoricalOdds>>;
     try {
-      h = await oddspapiRetry(() => getHistoricalOdds(g.oddspapiFixtureId!, [book]));
+      h = await oddspapiRetry(() => getHistoricalOdds(g.oddspapiFixtureId!, [book]), 5, (m) => log(`match ${g.id}: ${m}`));
     } catch (e) {
       // 404 "No historical odds found" = OddsPapi har ingen historik för matchen. Hoppa över den.
       if (!(e instanceof OddspapiError && e.statusCode === 404)) throw e;

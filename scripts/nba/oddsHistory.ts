@@ -20,6 +20,9 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
+import net from "node:net";
+// Nodes standard (250 ms per adress) ger ETIMEDOUT på långsamma nät — ge varje adress 3 s.
+net.setDefaultAutoSelectFamilyAttemptTimeout(3000);
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
 import { hasOddspapiKey, oddspapiCallsThisRun } from "../../lib/oddspapi";
 import { captureHistoricalClosing, linkHistoricalFixtures } from "../../lib/nba/oddspapiCapture";
