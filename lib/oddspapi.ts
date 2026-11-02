@@ -77,7 +77,8 @@ export async function oddspapiGet<T>(
   params: Record<string, string | number | boolean | undefined> = {},
   init?: { headers?: Record<string, string> }
 ): Promise<T> {
-  const cooldown = COOLDOWN_MS[path] ?? DEFAULT_COOLDOWN_MS;
+  // Marginal ovanpå docs cooldown: servern räknar från sin sida, inte vår.
+  const cooldown = (COOLDOWN_MS[path] ?? DEFAULT_COOLDOWN_MS) + 400;
   const since = Date.now() - (lastCall.get(path) ?? 0);
   if (since < cooldown) await sleep(cooldown - since);
   lastCall.set(path, Date.now());
@@ -93,8 +94,13 @@ export async function oddspapiGet<T>(
     /* lämnas som null */
   }
   if (!res.ok) {
-    const b = (body ?? {}) as { code?: string; message?: string; details?: string; error?: string };
-    throw new OddspapiError(res.status, b.code ?? `HTTP_${res.status}`, `OddsPapi ${path}: ${b.details ?? b.message ?? b.error ?? res.statusText}`);
+    const b = (body ?? {}) as { code?: unknown; message?: unknown; details?: unknown; error?: unknown };
+    // Felet kan vara en sträng eller ett objekt ({ error: { code, message } } …) — skriv ut båda läsbart.
+    const text = (v: unknown) => (v == null ? null : typeof v === "string" ? v : JSON.stringify(v));
+    const inner = (b.error && typeof b.error === "object" ? (b.error as { code?: unknown; message?: unknown }) : null) ?? null;
+    const code = text(b.code) ?? text(inner?.code) ?? `HTTP_${res.status}`;
+    const detail = text(b.details) ?? text(b.message) ?? text(inner?.message) ?? text(b.error) ?? (text(body) || res.statusText);
+    throw new OddspapiError(res.status, code, `OddsPapi ${path} (${res.status} ${code}): ${detail}`);
   }
   return body as T;
 }

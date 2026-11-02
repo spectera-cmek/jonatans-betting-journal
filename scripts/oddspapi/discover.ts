@@ -6,7 +6,9 @@
  *
  *   npm run oddspapi:discover
  *
- * Kostar 3 anrop (tournaments ×2, markets). /account är gratis.
+ * Kostar högst 3 anrop (tournaments ×2, markets). /account är gratis.
+ * Turneringar som redan finns i ids.json hämtas inte igen (spara kvot);
+ * --refresh hämtar allt på nytt. Ett fel i ett steg stoppar inte de andra.
  * Kontrollera utskriften — särskilt att spread-linjerna har rätt tecken —
  * och checka in ids.json.
  */
@@ -15,6 +17,7 @@ config({ path: ".env.local" });
 config();
 import fs from "node:fs";
 import {
+  oddspapiRetry,
   getAccount,
   getMarkets,
   getTournaments,
@@ -24,7 +27,9 @@ import {
   SPORT_BASKETBALL,
   SPORT_SOCCER,
 } from "../../lib/oddspapi";
-import { buildMarketMap, buildPropMarketMap, IDS_PATH, type OddspapiIds } from "../../lib/oddspapi/markets";
+import { buildMarketMap, buildPropMarketMap, IDS_PATH, loadIds, type OddspapiIds } from "../../lib/oddspapi/markets";
+
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Fotbollsligorna den kommande fotbollsmodellen ska täcka: namn → [land/kategori, turneringsnamn]. */
 const FOOTBALL: Record<string, [RegExp, RegExp]> = {
@@ -53,20 +58,31 @@ async function main() {
     }
   }
 
-  const bt = await getTournaments(SPORT_BASKETBALL);
-  const nba = bt.find((t) => /^nba$/i.test(t.tournamentName)) ?? bt.find((t) => /\bnba\b/i.test(t.tournamentName) && /usa/i.test(t.categoryName));
-  console.log(nba ? `NBA: tournamentId ${nba.tournamentId} (${nba.categoryName} / ${nba.tournamentName})` : "⚠ hittade ingen NBA-turnering");
-  if (!nba) console.log(`  Basketturneringar med NBA i namnet: ${bt.filter((t) => /nba/i.test(t.tournamentName)).map((t) => `${t.tournamentId} ${t.tournamentName}`).join("; ")}`);
+  const refresh = process.argv.includes("--refresh");
+  const prev = loadIds();
 
-  const ft = await getTournaments(SPORT_SOCCER);
-  const footballTournaments: Record<string, number> = {};
-  for (const [name, [cat, tn]] of Object.entries(FOOTBALL)) {
-    const hit = ft.find((t) => cat.test(`${t.categoryName} ${t.categorySlug}`) && tn.test(t.tournamentName));
-    if (hit) footballTournaments[name] = hit.tournamentId;
-    console.log(`${name}: ${hit ? hit.tournamentId : "hittades inte"}`);
+  // 1. NBA-turneringen (återanvänds från ids.json om den redan finns).
+  let nba = refresh ? null : prev?.nba ?? null;
+  if (nba) console.log(`NBA: tournamentId ${nba.tournamentId} (sparad sedan tidigare)`);
+  else {
+    try {
+      const bt = await oddspapiRetry(() => getTournaments(SPORT_BASKETBALL));
+      const hit = bt.find((t) => /^nba$/i.test(t.tournamentName)) ?? bt.find((t) => /\bnba\b/i.test(t.tournamentName) && /usa/i.test(t.categoryName));
+      if (hit) nba = { tournamentId: hit.tournamentId, tournamentName: hit.tournamentName };
+      console.log(hit ? `NBA: tournamentId ${hit.tournamentId} (${hit.categoryName} / ${hit.tournamentName})` : "⚠ hittade ingen NBA-turnering");
+      if (!hit) console.log(`  Basketturneringar med NBA i namnet: ${bt.filter((t) => /nba/i.test(t.tournamentName)).map((t) => `${t.tournamentId} ${t.tournamentName}`).join("; ")}`);
+    } catch (e) {
+      console.log(`⚠ NBA-turneringen: ${errText(e)}`);
+    }
   }
 
-  const catalog = await getMarkets();
+  // 2. Marknadskatalogen — det viktiga för NBA och props.
+  let catalog: Awaited<ReturnType<typeof getMarkets>> = [];
+  try {
+    catalog = await oddspapiRetry(() => getMarkets());
+  } catch (e) {
+    console.log(`⚠ Marknadskatalogen: ${errText(e)}`);
+  }
   const markets = buildMarketMap(catalog);
   const byKind = { ml: 0, spread: 0, total: 0 };
   for (const m of Object.values(markets)) byKind[m.kind]++;
@@ -94,13 +110,31 @@ async function main() {
     for (const m of basketAll.slice(0, 25)) console.log(`  ${m.marketId} type=${m.marketType} period=${m.period} hc=${m.handicap} "${m.marketName}" [${m.outcomes.map((o) => o.outcomeName).join("/")}]`);
   }
 
+  // 3. Fotbollsligorna till nästa modell — ett fel här stoppar inte resten.
+  let footballTournaments: Record<string, number> = (!refresh && prev?.footballTournaments) || {};
+  if (Object.keys(footballTournaments).length) console.log(`Fotbollsligor: ${Object.keys(footballTournaments).length} sparade sedan tidigare`);
+  else {
+    try {
+      const ft = await oddspapiRetry(() => getTournaments(SPORT_SOCCER));
+      footballTournaments = {};
+      for (const [name, [cat, tn]] of Object.entries(FOOTBALL)) {
+        const hit = ft.find((t) => cat.test(`${t.categoryName} ${t.categorySlug}`) && tn.test(t.tournamentName));
+        if (hit) footballTournaments[name] = hit.tournamentId;
+        console.log(`${name}: ${hit ? hit.tournamentId : "hittades inte"}`);
+      }
+    } catch (e) {
+      console.log(`⚠ Fotbollsligorna (behövs inte för NBA): ${errText(e)}`);
+    }
+  }
+
+  // Behåll det som redan fanns om ett steg misslyckades.
   const ids: OddspapiIds = {
     generatedAt: new Date().toISOString(),
     bookmaker: book,
-    nba: nba ? { tournamentId: nba.tournamentId, tournamentName: nba.tournamentName } : null,
-    basketballMarkets: markets,
-    basketballPropMarkets: propMarkets,
-    bookHasPlayerProps: hasProps ?? undefined,
+    nba: nba ?? prev?.nba ?? null,
+    basketballMarkets: Object.keys(markets).length ? markets : prev?.basketballMarkets ?? {},
+    basketballPropMarkets: Object.keys(propMarkets).length ? propMarkets : prev?.basketballPropMarkets ?? {},
+    bookHasPlayerProps: hasProps ?? prev?.bookHasPlayerProps,
     footballTournaments,
   };
   fs.writeFileSync(IDS_PATH, JSON.stringify(ids, null, 1) + "\n");

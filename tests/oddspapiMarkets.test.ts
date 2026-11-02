@@ -81,3 +81,24 @@ describe("odds-svar", () => {
     expect(nickname("LA Clippers")).toBe(nickname("Los Angeles Clippers"));
   });
 });
+
+describe("OddsPapi-fel", () => {
+  it("skriver ut fel-objekt läsbart i stället för [object Object]", async () => {
+    const { oddspapiGet, OddspapiError } = await import("../lib/oddspapi");
+    const prevKey = process.env.ODDSPAPI_KEY;
+    const prevFetch = globalThis.fetch;
+    process.env.ODDSPAPI_KEY = "test";
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: { code: "COOLDOWN", message: "Wait 1000ms between requests" } }), { status: 429 })) as typeof fetch;
+    try {
+      await expect(oddspapiGet("/tournaments", { sportId: 10 })).rejects.toSatisfy((e: unknown) => {
+        if (!(e instanceof OddspapiError)) return false;
+        return e.code === "COOLDOWN" && e.statusCode === 429 && e.message.includes("Wait 1000ms") && !e.message.includes("[object Object]");
+      });
+    } finally {
+      globalThis.fetch = prevFetch;
+      if (prevKey === undefined) delete process.env.ODDSPAPI_KEY;
+      else process.env.ODDSPAPI_KEY = prevKey;
+    }
+  });
+});
