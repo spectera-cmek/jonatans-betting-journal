@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { I, IC, BrandMark } from "./icons";
+import { I, IC, SPORT_IC, BrandMark } from "./icons";
 import type { LucideIcon } from "lucide-react";
 import { GlobalActions } from "./GlobalActions";
 import { useMetrics } from "@/lib/useData";
@@ -22,6 +22,7 @@ const SECONDARY_NAV = [
   { href: "/insights", label: "Insikter", icon: IC.spark },
   { href: "/skott", label: "Skottmodell", icon: IC.bars },
   { href: "/cs2", label: "CS2", icon: IC.gamepad },
+  { href: "/nba", label: "NBA", icon: SPORT_IC.basketball },
   { href: "/fairodds", label: "Fair odds", icon: IC.percent },
   { href: "/verktyg", label: "Verktyg", icon: IC.wrench },
   { href: "/settings", label: "Inställningar", icon: IC.gear },
@@ -188,6 +189,7 @@ function secondaryDescription(href: string) {
   if (href === "/insights") return "Mönster, form och edge";
   if (href === "/skott") return "Skott och hörnor";
   if (href === "/cs2") return "Lag, spelare och props";
+  if (href === "/nba") return "Simulering mot marknaden";
   if (href === "/fairodds") return "Räkna ut rättvist odds";
   if (href === "/verktyg") return "Hedge, cashout och Kelly";
   return "Konto och konfiguration";

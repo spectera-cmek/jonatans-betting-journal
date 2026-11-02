@@ -1,0 +1,417 @@
+{
+ "markets": [
+  {
+   "marketId": 111,
+   "marketLength": 2,
+   "marketName": "Moneyline",
+   "playerProp": false,
+   "sportId": 11,
+   "handicap": 0,
+   "period": "fulltime",
+   "marketType": "12",
+   "outcomes": [
+    {
+     "outcomeId": 111,
+     "outcomeName": "1"
+    },
+    {
+     "outcomeId": 112,
+     "outcomeName": "2"
+    }
+   ]
+  },
+  {
+   "marketId": 1170,
+   "marketLength": 2,
+   "marketName": "Handicap -5.5",
+   "playerProp": false,
+   "sportId": 11,
+   "handicap": -5.5,
+   "period": "fulltime",
+   "marketType": "handicap",
+   "outcomes": [
+    {
+     "outcomeId": 1170,
+     "outcomeName": "1"
+    },
+    {
+     "outcomeId": 1171,
+     "outcomeName": "2"
+    }
+   ]
+  },
+  {
+   "marketId": 1172,
+   "marketLength": 2,
+   "marketName": "Handicap -6.5",
+   "playerProp": false,
+   "sportId": 11,
+   "handicap": -6.5,
+   "period": "fulltime",
+   "marketType": "handicap",
+   "outcomes": [
+    {
+     "outcomeId": 1172,
+     "outcomeName": "1"
+    },
+    {
+     "outcomeId": 1173,
+     "outcomeName": "2"
+    }
+   ]
+  },
+  {
+   "marketId": 1180,
+   "marketLength": 2,
+   "marketName": "Totals 224.5",
+   "playerProp": false,
+   "sportId": 11,
+   "handicap": 224.5,
+   "period": "fulltime",
+   "marketType": "totals",
+   "outcomes": [
+    {
+     "outcomeId": 1180,
+     "outcomeName": "Over"
+    },
+    {
+     "outcomeId": 1181,
+     "outcomeName": "Under"
+    }
+   ]
+  },
+  {
+   "marketId": 1182,
+   "marketLength": 2,
+   "marketName": "Totals 225.5",
+   "playerProp": false,
+   "sportId": 11,
+   "handicap": 225.5,
+   "period": "fulltime",
+   "marketType": "totals",
+   "outcomes": [
+    {
+     "outcomeId": 1182,
+     "outcomeName": "Over"
+    },
+    {
+     "outcomeId": 1183,
+     "outcomeName": "Under"
+    }
+   ]
+  },
+  {
+   "marketId": 2001,
+   "marketLength": 2,
+   "marketName": "1st Half Moneyline",
+   "playerProp": false,
+   "sportId": 11,
+   "handicap": 0,
+   "period": "1sthalf",
+   "marketType": "12",
+   "outcomes": [
+    {
+     "outcomeId": 2001,
+     "outcomeName": "1"
+    },
+    {
+     "outcomeId": 2002,
+     "outcomeName": "2"
+    }
+   ]
+  },
+  {
+   "marketId": 2002,
+   "marketLength": 2,
+   "marketName": "Home Team Total 110.5",
+   "playerProp": false,
+   "sportId": 11,
+   "handicap": 110.5,
+   "period": "fulltime",
+   "marketType": "totals",
+   "outcomes": [
+    {
+     "outcomeId": 2004,
+     "outcomeName": "Over"
+    },
+    {
+     "outcomeId": 2005,
+     "outcomeName": "Under"
+    }
+   ]
+  },
+  {
+   "marketId": 2003,
+   "marketLength": 2,
+   "marketName": "Player Points 25.5",
+   "playerProp": true,
+   "sportId": 11,
+   "handicap": 25.5,
+   "period": "fulltime",
+   "marketType": "totals",
+   "outcomes": [
+    {
+     "outcomeId": 2006,
+     "outcomeName": "Over"
+    },
+    {
+     "outcomeId": 2007,
+     "outcomeName": "Under"
+    }
+   ]
+  },
+  {
+   "marketId": 101,
+   "marketLength": 3,
+   "marketName": "Full Time Result",
+   "playerProp": false,
+   "sportId": 10,
+   "handicap": 0,
+   "period": "fulltime",
+   "marketType": "1x2",
+   "outcomes": [
+    {
+     "outcomeId": 101,
+     "outcomeName": "1"
+    },
+    {
+     "outcomeId": 102,
+     "outcomeName": "X"
+    },
+    {
+     "outcomeId": 103,
+     "outcomeName": "2"
+    }
+   ]
+  }
+ ],
+ "odds": [
+  {
+   "fixtureId": "id1100000000001",
+   "participant1Id": 1,
+   "participant2Id": 2,
+   "participant1Name": "Boston Celtics",
+   "participant2Name": "New York Knicks",
+   "sportId": 11,
+   "tournamentId": 132,
+   "statusId": 0,
+   "hasOdds": true,
+   "startTime": "2026-11-02T00:30:00.000Z",
+   "bookmakerOdds": {
+    "pinnacle": {
+     "bookmakerIsActive": true,
+     "suspended": false,
+     "markets": {
+      "111": {
+       "marketActive": true,
+       "outcomes": {
+        "111": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": "home",
+           "price": 1.4,
+           "playerName": null,
+           "mainLine": true
+          }
+         }
+        },
+        "112": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": "away",
+           "price": 3.1,
+           "playerName": null,
+           "mainLine": true
+          }
+         }
+        }
+       }
+      },
+      "1170": {
+       "marketActive": true,
+       "outcomes": {
+        "1170": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": "-5.5/home",
+           "price": 1.952,
+           "playerName": null,
+           "mainLine": true
+          }
+         }
+        },
+        "1171": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": "5.5/away",
+           "price": 1.952,
+           "playerName": null,
+           "mainLine": true
+          }
+         }
+        }
+       }
+      },
+      "1172": {
+       "marketActive": true,
+       "outcomes": {
+        "1172": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": null,
+           "price": 2.1,
+           "playerName": null,
+           "mainLine": false
+          }
+         }
+        },
+        "1173": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": null,
+           "price": 1.75,
+           "playerName": null,
+           "mainLine": false
+          }
+         }
+        }
+       }
+      },
+      "1180": {
+       "marketActive": true,
+       "outcomes": {
+        "1180": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": "224.5/over",
+           "price": 1.91,
+           "playerName": null,
+           "mainLine": true
+          }
+         }
+        },
+        "1181": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": "224.5/under",
+           "price": 1.91,
+           "playerName": null,
+           "mainLine": true
+          }
+         }
+        }
+       }
+      },
+      "1182": {
+       "marketActive": true,
+       "outcomes": {
+        "1182": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": null,
+           "price": 1.99,
+           "playerName": null,
+           "mainLine": false
+          }
+         }
+        },
+        "1183": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": null,
+           "price": 1.83,
+           "playerName": null,
+           "mainLine": false
+          }
+         }
+        }
+       }
+      },
+      "2001": {
+       "marketActive": true,
+       "outcomes": {
+        "2001": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": null,
+           "price": 1.5,
+           "playerName": null,
+           "mainLine": false
+          }
+         }
+        },
+        "2002": {
+         "players": {
+          "0": {
+           "active": true,
+           "bookmakerOutcomeId": null,
+           "price": 2.6,
+           "playerName": null,
+           "mainLine": false
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ ],
+ "history": {
+  "fixtureId": "id1100000000001",
+  "bookmakers": {
+   "pinnacle": {
+    "markets": {
+     "111": {
+      "outcomes": {
+       "111": {
+        "players": {
+         "0": [
+          {
+           "createdAt": "2026-03-01T01:00:00+00:00",
+           "price": 1.6,
+           "active": true
+          },
+          {
+           "createdAt": "2026-02-28T20:00:00+00:00",
+           "price": 1.55,
+           "active": true
+          },
+          {
+           "createdAt": "2026-02-28T10:00:00+00:00",
+           "price": 1.5,
+           "active": true
+          }
+         ]
+        }
+       },
+       "112": {
+        "players": {
+         "0": [
+          {
+           "createdAt": "2026-02-28T20:00:00+00:00",
+           "price": 2.55,
+           "active": true
+          }
+         ]
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

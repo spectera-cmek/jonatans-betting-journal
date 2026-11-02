@@ -32,7 +32,7 @@
     "dev": "next dev",
     "build": "npm run generate && next build",
     "postinstall": "npm run generate",
-    "generate": "prisma generate && prisma generate --schema prisma/shots.prisma && prisma generate --schema prisma/cs2.prisma",
+    "generate": "prisma generate && prisma generate --schema prisma/shots.prisma && prisma generate --schema prisma/cs2.prisma && prisma generate --schema prisma/nba.prisma",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
@@ -40,6 +40,7 @@
     "db:push": "prisma db push",
     "db:push:shots": "prisma db push --schema prisma/shots.prisma",
     "db:push:cs2": "prisma db push --schema prisma/cs2.prisma",
+    "db:push:nba": "prisma db push --schema prisma/nba.prisma",
     "db:migrate-users": "tsx scripts/migrateToMultiUser.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
@@ -71,7 +72,14 @@
     "cs2:update": "tsx scripts/cs2/update.ts",
     "cs2:lines": "tsx scripts/cs2/update.ts --only-lines",
     "cs2:backtest": "tsx scripts/cs2/backtest.ts",
-    "cs2:capture": "tsx scripts/cs2/capture.ts"
+    "cs2:capture": "tsx scripts/cs2/capture.ts",
+    "oddspapi:discover": "tsx scripts/oddspapi/discover.ts",
+    "nba:ingest": "tsx scripts/nba/ingest.ts",
+    "nba:update": "tsx scripts/nba/update.ts",
+    "nba:closing": "tsx scripts/nba/update.ts --closing",
+    "nba:odds-history": "tsx scripts/nba/oddsHistory.ts",
+    "nba:backtest": "tsx scripts/nba/backtest.ts",
+    "nba:props-backtest": "tsx scripts/nba/propsBacktest.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

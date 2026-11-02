@@ -115,6 +115,7 @@ immediately — replace them with your own from the **Logga bet** button.
 | **VM 2026** | Tournament hub for bets tagged with the World Cup league |
 | **Skottmodell** (Shot model) | Team-level shots & corners model, own database |
 | **CS2** | Teams, players, per-map gameplan (T/CT), match pricing and props angles, own database |
+| **NBA** | Player-based Monte Carlo simulation blended with the market (moneyline, spread, total), own database |
 | **Fair odds** | De-vig, combo, correlation and Poisson calculators |
 | **Verktyg** (Tools) | Cashout, hedge, Asian-handicap matrix, bonus value, Kelly |
 | **Inställningar** (Settings) | Unit value, currency, starting bankroll, sync |
@@ -250,6 +251,99 @@ metrics can be computed with `cs2:demos -- --confirm --reanalyze`.
   few hundred maps, treat the edges as hints, not bets.
 - Books differ on overtime and on maps 1–2 rules. Set "inkl. OT" per line.
 
+## 🏀 NBA module (`/nba`)
+
+A player-based simulation of every NBA game. It produces our own prices for moneyline,
+spread and total, blends them with the market and shows the edge against any price
+(Pinnacle via OddsPapi, DraftKings via ESPN, or your own book's odds entered by hand).
+
+**How the model works (`lib/nba/`, version nba-v2)**
+
+0. **Team ratings** (`teamRatings.ts`). Offensive and defensive efficiency (points per
+   100 possessions) and pace for every team, solved against the opponents each team has
+   actually faced. Recent games weigh most (25-day half-life). They set 60 % of the
+   scoring level and the pace; the player model below sets the other 40 % and adjusts for
+   tonight's lineup against the lineup the rating was built on.
+1. **Player rates** (`ratings.ts`). Each player gets per-minute rates (2PA, 3PA, FTA,
+   turnovers, offensive rebounds) and shooting percentages from his recent games.
+   Recent games weigh more, and each rate is shrunk toward his position's average.
+2. **Minutes** (`minutes.ts`). Each player's recent average, adjusted by ESPN's injury
+   list (Out = 0, Questionable = half) and then by your overrides on the match page.
+   The rest of the roster is rescaled so the team plays 240 minutes.
+3. **Team in this game** (`project.ts`). The players' rates, weighted by minutes, give
+   the team's offence. It is adjusted for the opponent's defence, home court, back-to-backs
+   and the usage/efficiency trade-off: a team missing its creators gets a penalty.
+4. **Simulation** (`sim.ts`). 20 000 games, possession by possession, with overtime. A
+   "rubber band" keeps the spread of the margin at NBA levels without moving the
+   favourite's expected margin. The overall scoring level is calibrated to the league's
+   actual points per possession.
+5. **Picks in points** (`picks.ts`). The model's spread and total are compared with the
+   market line, e.g. "model −7.2 vs market −6.5 → pick −6.5 (0.7)". The first line the
+   model sees is locked (`NbaPick`) and never re-priced. Results and CLV are graded
+   against that line and shown per edge bucket (all, 3+, 6+) in the Facit tab.
+6. **Player props** (`props.ts`, `propsPipeline.ts`). Points, rebounds, assists, threes
+   and PRA. Each player is simulated 5 000 times: minutes (±18 %), a nightly usage and
+   shooting form, Poisson attempts and binomial makes, scaled by the game's pace and the
+   opponent's defence. The match page shows the distribution over simulated nights
+   against the line, every book's price and a field for your own book's line. The
+   probability is blended 15 % with the de-vigged line, since no historical prop lines
+   exist to backtest against. Props come from OddsPapi in the same request as the game
+   odds, when your plan includes them.
+7. **Pricing** (`pricing.ts`). The simulated probability is blended with the de-vigged
+   market price (`priceTwoWay`, shared with CS2). Edge is EV per unit staked. Prices with
+   edge ≥ 5 % at odds ≤ 4.0 are flagged.
+
+**Data flow**
+
+```
+ESPN (free): scoreboard, box scores, injuries, DraftKings lines → NBA DB
+OddsPapi: 1 request/day = every NBA game's prices (Pinnacle)     → NBA DB
+NBA DB → ratings · minutes · simulation · blend → NbaProjection → /api/nba → /nba
+```
+
+**Setup (once)**
+
+1. Set `NBA_DATABASE_URL` / `NBA_DATABASE_URL_UNPOOLED` in `.env.local` (own Neon
+   database, or the CS2 endpoint with `&schema=nba`), plus `ODDSPAPI_KEY`.
+2. `npm run db:push:nba`
+3. `npm run oddspapi:discover`. It costs about 3 requests and writes
+   `lib/oddspapi/ids.json`: the NBA tournament id, the basketball market ids and the
+   football league ids for the next model. Check the output (especially that every market
+   type was found and which books your plan includes), then commit the file.
+4. `npm run nba:ingest`. It backfills from 2025-10-21 and takes about 15 minutes; it can
+   be resumed.
+
+**Running it**
+
+```bash
+npm run nba:update                    # daily: results, injuries, odds, projections, settle
+npm run nba:closing                   # ~1 h before tip-off: injuries + closing odds
+npm run nba:backtest -- --save        # walk-forward vs closing lines → Facit tab
+npm run nba:backtest -- --param usageK=0.8 --param rubberBand=0.05   # try parameters
+npm run nba:props-backtest            # props vs real box scores (no prop lines needed)
+npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle closing (free history)
+```
+
+Schedule `nba:update` in the morning and `nba:closing` in the evening (Swedish time)
+in Windows Task Scheduler. That is ~60 OddsPapi requests a month out of the free 250.
+
+**Status and caveats**
+
+- The backtest (1 026 games Dec 2025–Jun 2026 against DraftKings closing lines) shows
+  the model does **not** beat a closing line yet. nba-v2 cut margin MAE from 11.77 to
+  11.68 and total MAE from 16.0 to 15.64, against the market's 11.25 and 14.50. Picks
+  against the closing line hit 48.9 % on spreads (break-even 52.4 %), and the market
+  alone gives the lowest log loss. The blend weight is
+  therefore 10 %, so the model nudges the market price rather than replacing it. Raise it
+  (`DEFAULT_NBA_BLEND_W` in `lib/nba/params.ts`) only when a backtest says so.
+- Props backtest (5 414 player-games in 342 games, Dec 2025–Jun 2026): the model beats each player's
+  last-10 average on every stat, e.g. points MAE 4.99 vs 5.09 and log loss 0.669 vs 0.701
+  at a line on that average. It cannot be tested against real prop lines yet.
+- Edges mostly appear against soft prices, i.e. your own book's odds entered on the match
+  page, when they differ from Pinnacle.
+- The backtest knows which players played (as the injury list does before a real game),
+  but not their minutes.
+
 ## 🧪 Testing
 
 ```bash
@@ -379,6 +473,31 @@ En modell prissätter de linjer du lägger in för hand eller via skärmdump.
 Skrapning och demos körs bara lokalt. HLTV:s villkor tillåter inte skrapning, så behåll
 den låga takten. Lita inte på modellens edge förrän backtestet slår myntkast på några
 hundra kartor.
+
+### 🏀 NBA (`/nba`)
+
+En spelarbaserad simulering av varje NBA-match. Den ger egna priser på vinnare, spread
+och total, viktar dem mot marknaden och visar edge mot alla priser: Pinnacle via
+OddsPapi, DraftKings via ESPN eller ditt eget bolags odds.
+
+- Spelarnas takter (skott, straffar, turnovers, returer) viktas med förväntade minuter.
+  ESPN:s skadelista sätter minuterna automatiskt, och du kan ändra dem på matchsidan
+  och trycka **Simulera om**.
+- Matchen spelas 20 000 gånger, possession för possession, med förlängning.
+
+1. Lägg `NBA_DATABASE_URL`, `NBA_DATABASE_URL_UNPOOLED` och `ODDSPAPI_KEY` i `.env.local`.
+2. `npm run db:push:nba` och `npm run oddspapi:discover` (cirka 3 anrop, en gång).
+3. `npm run nba:ingest` läser in historik från ESPN, gratis.
+4. Schemalägg `npm run nba:update` på morgonen och `npm run nba:closing` på kvällen.
+5. `npm run nba:backtest -- --save` visar facit under fliken Facit.
+
+Props (poäng, returer, assist, trepoängare, PRA) simuleras 5 000 kvällar per spelare.
+Matchsidan visar fördelningen mot linjen, och fliken Props listar alla spelare.
+Backtesten mot riktiga boxscores slår spelarens snitt på alla fem.
+
+Ärligt läge: backtesten (1 026 matcher) visar att modellen inte slår DraftKings
+stängningslinje än. Modellvikten är därför 10 %. Edges dyker främst upp mot mjukare
+bolag som du matar in själv.
 
 ### ⚠️ Friskrivning
 
