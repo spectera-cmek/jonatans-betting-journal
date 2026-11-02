@@ -336,7 +336,7 @@ in Windows Task Scheduler. That is ~60 OddsPapi requests a month out of the free
   alone gives the lowest log loss. The blend weight is
   therefore 10 %, so the model nudges the market price rather than replacing it. Raise it
   (`DEFAULT_NBA_BLEND_W` in `lib/nba/params.ts`) only when a backtest says so.
-- Props backtest (1 803 player-games, Dec 2025–Jun 2026): the model beats each player's
+- Props backtest (5 414 player-games in 342 games, Dec 2025–Jun 2026): the model beats each player's
   last-10 average on every stat, e.g. points MAE 4.99 vs 5.09 and log loss 0.669 vs 0.701
   at a line on that average. It cannot be tested against real prop lines yet.
 - Edges mostly appear against soft prices, i.e. your own book's odds entered on the match
