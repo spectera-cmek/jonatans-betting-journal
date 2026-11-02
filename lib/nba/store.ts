@@ -4,7 +4,7 @@
 import type { NbaPrisma } from "../nbaDb";
 import type { EspnGame, EspnInjury, EspnSummary } from "./espn";
 import type { StintParse } from "./stints";
-import type { StintRow } from "./rapm";
+import type { RapmFit, StintRow } from "./rapm";
 import { buildHistory, type History, type PlayerGameRow, type TeamGameRow } from "./ratings";
 
 export async function upsertGames(db: NbaPrisma, games: EspnGame[]): Promise<number> {
@@ -165,6 +165,20 @@ export async function loadStints(db: NbaPrisma, since: Date): Promise<StintRow[]
     select: { homeIds: true, awayIds: true, homePts: true, awayPts: true, poss: true, game: { select: { startAt: true } } },
   });
   return rows.map((r) => ({ t: r.game.startAt.getTime(), homeIds: r.homeIds, awayIds: r.awayIds, homePts: r.homePts, awayPts: r.awayPts, poss: r.poss }));
+}
+
+/** Sparar spelarnas RAPM (ersätter tabellen). */
+export async function savePlayerImpact(db: NbaPrisma, fit: RapmFit): Promise<number> {
+  const data = [...fit.players.entries()].map(([playerId, p]) => ({ playerId, off: p.off, def: p.def, poss: p.poss }));
+  await db.$transaction([db.nbaPlayerImpact.deleteMany({}), db.nbaPlayerImpact.createMany({ data })]);
+  return data.length;
+}
+
+/** Läser senast sparade RAPM, eller undefined om tabellen är tom. */
+export async function loadPlayerImpact(db: NbaPrisma): Promise<RapmFit | undefined> {
+  const rows = await db.nbaPlayerImpact.findMany();
+  if (!rows.length) return undefined;
+  return { players: new Map(rows.map((r) => [r.playerId, { off: r.off, def: r.def, poss: r.poss }])), ortg: 112, stints: 0 };
 }
 
 /** All historik från och med `since` som modellen räknar på. */

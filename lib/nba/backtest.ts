@@ -53,8 +53,9 @@ export interface MarketMetrics {
 
 export interface BacktestResult {
   games: number;
-  margin: { maeModel: number; maeMarket: number | null; bias: number; residualSd: number; simSd: number };
-  total: { maeModel: number; maeMarket: number | null; bias: number; residualSd: number; simSd: number };
+  /** maeModelSame = modellens MAE på exakt de matcher som har en marknadslinje (rättvis jämförelse). */
+  margin: { maeModel: number; maeModelSame: number | null; maeMarket: number | null; bias: number; residualSd: number; simSd: number };
+  total: { maeModel: number; maeModelSame: number | null; maeMarket: number | null; bias: number; residualSd: number; simSd: number };
   markets: Partial<Record<NbaMarket, MarketMetrics>>;
   /** Picks i poäng mot stängningslinjen, per edge-hink (alla, 3+, 6+). */
   ats: Partial<Record<PickMarket, BucketRecord[]>>;
@@ -102,8 +103,8 @@ export function runBacktest(
   const picks: Record<PickMarket, GradedPick[]> = { spread: [], total: [] };
   const obs: Obs[] = [];
   const books = new Set<string>();
-  const m = { absModel: 0, absMarket: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
-  const t = { absModel: 0, absMarket: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
+  const m = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
+  const t = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
   let n = 0;
 
   for (const [i, g] of games.entries()) {
@@ -183,10 +184,12 @@ export function runBacktest(
       books.add(q.book);
       if (q.market === "spread" && q.line != null) {
         m.absMarket += Math.abs(margin + q.line);
+        m.absModelSame += Math.abs(margin - s.marginMean);
         m.nMarket++;
       }
       if (q.market === "total" && q.line != null) {
         t.absMarket += Math.abs(total - q.line);
+        t.absModelSame += Math.abs(total - s.totalMean);
         t.nMarket++;
       }
       if ((q.market === "spread" || q.market === "total") && q.line != null) {
@@ -247,6 +250,7 @@ export function runBacktest(
 
   const fin = (x: typeof m) => ({
     maeModel: n ? x.absModel / n : 0,
+    maeModelSame: x.nMarket ? x.absModelSame / x.nMarket : null,
     maeMarket: x.nMarket ? x.absMarket / x.nMarket : null,
     bias: n ? x.err / n : 0,
     residualSd: n ? Math.sqrt(x.sq / n) : 0,

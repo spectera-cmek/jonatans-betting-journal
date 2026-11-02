@@ -115,8 +115,8 @@ async function main() {
   console.log("\n");
   const f = (x: number | null | undefined, d = 2) => (x == null ? "—" : x.toFixed(d));
   console.log(`Matcher: ${r.games}   Stängningspris från: ${r.books.join(", ") || "—"}`);
-  console.log(`Marginal  MAE modell ${f(r.margin.maeModel)}  marknad ${f(r.margin.maeMarket)}  bias ${f(r.margin.bias)}  spridning verklig ${f(r.margin.residualSd)} / sim ${f(r.margin.simSd)}`);
-  console.log(`Total     MAE modell ${f(r.total.maeModel)}  marknad ${f(r.total.maeMarket)}  bias ${f(r.total.bias)}  spridning verklig ${f(r.total.residualSd)} / sim ${f(r.total.simSd)}`);
+  console.log(`Marginal  MAE modell ${f(r.margin.maeModel)} (samma matcher som marknaden: ${f(r.margin.maeModelSame)})  marknad ${f(r.margin.maeMarket)}  bias ${f(r.margin.bias)}  spridning verklig ${f(r.margin.residualSd)} / sim ${f(r.margin.simSd)}`);
+  console.log(`Total     MAE modell ${f(r.total.maeModel)} (samma matcher som marknaden: ${f(r.total.maeModelSame)})  marknad ${f(r.total.maeMarket)}  bias ${f(r.total.bias)}  spridning verklig ${f(r.total.residualSd)} / sim ${f(r.total.simSd)}`);
   console.log("");
   for (const [m, x] of Object.entries(r.markets)) {
     if (!x) continue;

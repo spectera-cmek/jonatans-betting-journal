@@ -271,6 +271,17 @@ model NbaStint {
   @@index([gameId])
 }
 
+/// Spelarnas påverkan (RAPM) — räknas av nba:update, läses av övriga körningar och appen.
+model NbaPlayerImpact {
+  playerId  Int      @id
+  /// Poäng per 100 possessions laget gör mer med spelaren på planen.
+  off       Float
+  /// Poäng per 100 possessions motståndarna gör mindre.
+  def       Float
+  poss      Float
+  updatedAt DateTime @updatedAt
+}
+
 /// Kvällens startfemma, när ESPN publicerat den (ungefär 30 min före start).
 model NbaStarter {
   gameId    Int

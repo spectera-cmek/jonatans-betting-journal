@@ -11,7 +11,8 @@ import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, isFlagged, 
 import { fairLine, priceMarket, settle, type MarketPrice, type MarketQuote, type NbaMarket } from "./pricing";
 import { leagueAverages, type History, type League } from "./ratings";
 import { projectGame, type Projection } from "./project";
-import { loadHistory } from "./store";
+import { loadHistory, loadPlayerImpact, loadStints, savePlayerImpact } from "./store";
+import { fitRapm, type RapmFit } from "./rapm";
 import type { SimSummary } from "./sim";
 
 /** Hur långt bakåt modellen läser historik. */
@@ -148,6 +149,8 @@ export async function projectStoredGame(
     h?: History;
     league?: League;
     ratings?: RatingTable;
+    /** Spelarnas RAPM; saknas den läses senast sparade. */
+    rapm?: RapmFit;
     params?: NbaModelParams;
     save?: boolean;
     /** Räkna props: true = utan fördelningskurvor, "hist" = med (för matchsidan). */
@@ -163,6 +166,7 @@ export async function projectStoredGame(
   const h = opts.h ?? (await loadHistory(db, new Date(t - HISTORY_DAYS * 864e5)));
   const league = opts.league ?? leagueAverages(h, t, p);
   const ratings = opts.ratings ?? (p.ratingMix > 0 ? fitTeamRatings(h, t, p) : undefined);
+  const rapm = opts.rapm ?? (p.rapmK > 0 ? await loadPlayerImpact(db) : undefined);
   const cache = { injuries: opts.injuries, names: opts.names ?? new Map<number, string>() };
   // Marknadens spread styr utklassningsrisken i minuterna — hämta priserna först.
   const quotes = await latestQuotes(db, g.id, g.status === "scheduled" ? undefined : g.startAt);
@@ -184,6 +188,7 @@ export async function projectStoredGame(
       awayLineup: away.rows.map((r) => ({ playerId: r.playerId, minutes: r.minutes })),
       homeBaseLineup: baseLineup(h, g.homeTeamId, t),
       awayBaseLineup: baseLineup(h, g.awayTeamId, t),
+      rapm,
     },
     p,
     league,
@@ -294,7 +299,10 @@ export async function projectStoredGame(
 }
 
 /** Projicerar alla matcher som startar inom `hours`. */
-export async function projectUpcoming(db: NbaPrisma, opts: { hours?: number; params?: NbaModelParams; log?: (m: string) => void } = {}) {
+export async function projectUpcoming(
+  db: NbaPrisma,
+  opts: { hours?: number; params?: NbaModelParams; refitRapm?: boolean; log?: (m: string) => void } = {}
+) {
   const log = opts.log ?? (() => {});
   const now = Date.now();
   const games = await db.nbaGame.findMany({
@@ -310,9 +318,19 @@ export async function projectUpcoming(db: NbaPrisma, opts: { hours?: number; par
   // Liga och lagrating ur samma historik för alla kvällens matcher.
   const league = leagueAverages(h, now, params);
   const ratings = params.ratingMix > 0 ? fitTeamRatings(h, now, params) : undefined;
+  // RAPM: räknas om i dagskörningen (två säsonger stintar), annars läses den sparade.
+  let rapm: RapmFit | undefined;
+  if (params.rapmK > 0) {
+    if (opts.refitRapm) {
+      const stints = await loadStints(db, new Date(now - 800 * 864e5));
+      rapm = fitRapm(stints, now);
+      const n = await savePlayerImpact(db, rapm);
+      log(`RAPM: ${n} spelare ur ${rapm.stints} stintar`);
+    } else rapm = await loadPlayerImpact(db);
+  }
   let flagged = 0;
   for (const g of games) {
-    const r = await projectStoredGame(db, g.id, { h, league, ratings, params, save: true, injuries, names });
+    const r = await projectStoredGame(db, g.id, { h, league, ratings, rapm, params, save: true, injuries, names });
     if (!r) continue;
     const s = r.summary;
     const f = r.quotes.filter((q) => q.flagged);

@@ -109,7 +109,7 @@ async function main() {
   }
 
   console.log(`${closing ? "3/3" : "4/5"} Modellen`);
-  const p = await projectUpcoming(db, { hours, log: (m) => console.log(`   ${m}`) });
+  const p = await projectUpcoming(db, { hours, refitRapm: !closing, log: (m) => console.log(`   ${m}`) });
   console.log(`   ${p.games} matcher projicerade, ${p.flagged} priser med edge ≥ 5 %`);
 
   if (!closing) {

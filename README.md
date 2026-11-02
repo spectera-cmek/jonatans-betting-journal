@@ -257,18 +257,26 @@ A player-based simulation of every NBA game. It produces our own prices for mone
 spread and total, blends them with the market and shows the edge against any price
 (Pinnacle via OddsPapi, DraftKings via ESPN, or your own book's odds entered by hand).
 
-**How the model works (`lib/nba/`, version nba-v2)**
+**How the model works (`lib/nba/`, version nba-v3)**
 
 0. **Team ratings** (`teamRatings.ts`). Offensive and defensive efficiency (points per
    100 possessions) and pace for every team, solved against the opponents each team has
-   actually faced. Recent games weigh most (25-day half-life). They set 60 % of the
-   scoring level and the pace; the player model below sets the other 40 % and adjusts for
-   tonight's lineup against the lineup the rating was built on.
+   actually faced. Recent games weigh most (40-day half-life). They set 60 % of the
+   scoring level and the pace; the player model below sets the other 40 %. Playoff games
+   get lower pace and efficiency, and a team on a back-to-back loses 3 points per 100.
+0. **Player impact (RAPM)** (`stints.ts`, `rapm.ts`). Lineups are rebuilt from ESPN's
+   play-by-play, substitution by substitution, into stints (the same ten players on
+   court). Each stint is checked against the box score's minutes before it is saved. A
+   ridge regression over two seasons of stints gives every player's effect on offense
+   and defense. Tonight's lineup minus the lineup the ratings were built on adjusts the
+   scoring level, so a missing defender counts too.
 1. **Player rates** (`ratings.ts`). Each player gets per-minute rates (2PA, 3PA, FTA,
    turnovers, offensive rebounds) and shooting percentages from his recent games.
    Recent games weigh more, and each rate is shrunk toward his position's average.
 2. **Minutes** (`minutes.ts`). Each player's recent average, adjusted by ESPN's injury
    list (Out = 0, Questionable = half) and then by your overrides on the match page.
+   Starters play less when the spread is large (blowout risk). Once ESPN publishes the
+   starting five (~30 min before tip), each player's average in tonight's role is used.
    The rest of the roster is rescaled so the team plays 240 minutes.
 3. **Team in this game** (`project.ts`). The players' rates, weighted by minutes, give
    the team's offence. It is adjusted for the opponent's defence, home court, back-to-backs
@@ -318,10 +326,12 @@ NBA DB → ratings · minutes · simulation · blend → NbaProjection → /api/
 ```bash
 npm run nba:update                    # daily: results, injuries, odds, projections, settle
 npm run nba:closing                   # ~1 h before tip-off: injuries + closing odds
+npm run nba:lineups                   # free (ESPN only): starting fives, re-price near tip
 npm run nba:backtest -- --save        # walk-forward vs closing lines → Facit tab
 npm run nba:backtest -- --param usageK=0.8 --param rubberBand=0.05   # try parameters
 npm run nba:props-backtest            # props vs real box scores (no prop lines needed)
-npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle closing (free history)
+npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle at bet time + close (free history)
+npm run nba:backtest -- --line bet    # backtest vs Pinnacle 12 h before tip, with CLV
 ```
 
 Schedule both with `npm run install:nba-tasks` (Windows Task Scheduler): `nba:update`
@@ -332,11 +342,13 @@ before the first tip-off. Change the times with
 
 **Status and caveats**
 
-- The backtest (1 026 games Dec 2025–Jun 2026 against DraftKings closing lines) shows
-  the model does **not** beat a closing line yet. nba-v2 cut margin MAE from 11.77 to
-  11.68 and total MAE from 16.0 to 15.64, against the market's 11.25 and 14.50. Picks
-  against the closing line hit 48.9 % on spreads (break-even 52.4 %), and the market
-  alone gives the lowest log loss. The blend weight is
+- nba-v3 is calibrated on three seasons (backtest Nov 2024–Jun 2026, 2 471 games, of
+  which 1 066 have a DraftKings closing line). On the games with a line, margin MAE is
+  11.60 and total MAE 14.97, against the market's 11.20 and 14.58. The model does
+  **not** beat a closing line yet: the market alone gives the lowest log loss, and the
+  model's disagreements with the closing line carry no information about the result.
+  The real test is whether the model beats the line at *bet time* — run
+  `nba:odds-history` and `nba:backtest -- --line bet`, which measures CLV. The blend weight is
   therefore 10 %, so the model nudges the market price rather than replacing it. Raise it
   (`DEFAULT_NBA_BLEND_W` in `lib/nba/params.ts`) only when a backtest says so.
 - Props backtest (5 414 player-games in 342 games, Dec 2025–Jun 2026): the model beats each player's
