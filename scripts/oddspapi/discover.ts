@@ -24,7 +24,7 @@ import {
   SPORT_BASKETBALL,
   SPORT_SOCCER,
 } from "../../lib/oddspapi";
-import { buildMarketMap, IDS_PATH, type OddspapiIds } from "../../lib/oddspapi/markets";
+import { buildMarketMap, buildPropMarketMap, IDS_PATH, type OddspapiIds } from "../../lib/oddspapi/markets";
 
 /** Fotbollsligorna den kommande fotbollsmodellen ska täcka: namn → [land/kategori, turneringsnamn]. */
 const FOOTBALL: Record<string, [RegExp, RegExp]> = {
@@ -80,6 +80,14 @@ async function main() {
   console.log(`  ml:     ${sample("ml")}`);
   console.log(`  spread: ${sample("spread")}`);
   console.log(`  total:  ${sample("total")}`);
+  const propMarkets = buildPropMarketMap(catalog);
+  const propCount: Record<string, number> = {};
+  for (const m of Object.values(propMarkets)) propCount[m.stat] = (propCount[m.stat] ?? 0) + 1;
+  const hasProps = sub?.bookmakers?.[book]?.has_player_props;
+  console.log(
+    `Spelarprops: ${Object.keys(propMarkets).length} marknader (${Object.entries(propCount).map(([k, v]) => `${k} ${v}`).join(", ") || "inga"})` +
+      `${hasProps === false ? ` — men ${book} har INTE props i din plan` : hasProps ? ` — ${book} har props i din plan` : ""}`
+  );
   const basketAll = catalog.filter((m) => m.sportId === SPORT_BASKETBALL && !m.playerProp);
   if (!byKind.ml || !byKind.spread || !byKind.total) {
     console.log("⚠ Någon marknadstyp saknas. Basketmarknader i katalogen (de 25 första):");
@@ -91,6 +99,8 @@ async function main() {
     bookmaker: book,
     nba: nba ? { tournamentId: nba.tournamentId, tournamentName: nba.tournamentName } : null,
     basketballMarkets: markets,
+    basketballPropMarkets: propMarkets,
+    bookHasPlayerProps: hasProps ?? undefined,
     footballTournaments,
   };
   fs.writeFileSync(IDS_PATH, JSON.stringify(ids, null, 1) + "\n");

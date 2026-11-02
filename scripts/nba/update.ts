@@ -22,7 +22,7 @@ import { saveInjuries, saveSummary, upsertGames } from "../../lib/nba/store";
 import { ingestRange } from "./ingest";
 import { captureNbaOdds } from "../../lib/nba/oddspapiCapture";
 import { hasOddspapiKey, oddspapiCallsThisRun, OddspapiError, quotaLeft } from "../../lib/oddspapi";
-import { projectUpcoming, settlePicks, settleProjections } from "../../lib/nba/pipeline";
+import { projectUpcoming, settlePicks, settleProjections, settleProps } from "../../lib/nba/pipeline";
 
 function numberArg(flag: string, fallback: number): number {
   const i = process.argv.indexOf(flag);
@@ -79,7 +79,8 @@ async function main() {
   else {
     try {
       const c = await captureNbaOdds(db, { closing, log: (m) => console.log(`   ${m}`) });
-      console.log(`   ${c.matched}/${c.fixtures} matcher kopplade, ${c.saved} nya priser`);
+      console.log(`   ${c.matched}/${c.fixtures} matcher kopplade, ${c.saved} nya priser, ${c.propsSaved} nya prop-linjer`);
+      if (c.propsUnmatched.length) console.log(`   prop-spelare utan ESPN-match: ${c.propsUnmatched.slice(0, 8).join(", ")}`);
       if (c.unmatched.length) console.log(`   ej kopplade: ${c.unmatched.slice(0, 5).join("; ")}${c.unmatched.length > 5 ? " …" : ""}`);
     } catch (e) {
       const msg = e instanceof OddspapiError && e.quotaExceeded ? "månadens kvot är slut" : e instanceof Error ? e.message : String(e);
@@ -95,7 +96,9 @@ async function main() {
 
   if (!closing) {
     console.log("5/5 Facit");
-    console.log(`   ${await settleProjections(db)} projektioner och ${await settlePicks(db)} låsta picks rättade`);
+    console.log(
+      `   ${await settleProjections(db)} projektioner, ${await settlePicks(db)} låsta picks och ${await settleProps(db)} props rättade`
+    );
   }
 }
 

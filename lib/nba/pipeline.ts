@@ -6,6 +6,7 @@ import { oddspapiBookmaker } from "../oddspapi";
 import { baseLineup, baselineMinutes, projectMinutes, type MinutesInput, type MinutesRow } from "./minutes";
 import { clvPoints, gradePick, modelLine, pickFromLine, type PickMarket } from "./picks";
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
+import { gameProps, settleProps, type PlayerPropView } from "./propsPipeline";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, isFlagged, type NbaModelParams } from "./params";
 import { fairLine, priceMarket, settle, type MarketPrice, type MarketQuote, type NbaMarket } from "./pricing";
 import { leagueAverages, type History, type League } from "./ratings";
@@ -130,6 +131,8 @@ export interface GameProjection {
   targets: Projection["targets"];
   /** Alla sparade priser (alla böcker och dina egna), prissatta. */
   quotes: Array<MarketPrice & { id: number; source: string; capturedAt: string; flagged: boolean }>;
+  /** Spelarprops (bara när props begärs). */
+  props?: PlayerPropView[];
   projection: Projection;
 }
 
@@ -143,6 +146,8 @@ export async function projectStoredGame(
     ratings?: RatingTable;
     params?: NbaModelParams;
     save?: boolean;
+    /** Räkna props: true = utan fördelningskurvor, "hist" = med (för matchsidan). */
+    props?: boolean | "hist";
     injuries?: Map<number, { status: string; detail: string | null }>;
     names?: Map<number, string>;
   } = {}
@@ -241,8 +246,26 @@ export async function projectStoredGame(
       }
     }
   }
+  const props =
+    opts.props || opts.save
+      ? await gameProps(db, {
+          h,
+          league,
+          ratings,
+          gameId: g.id,
+          homeId: g.homeTeamId,
+          awayId: g.awayTeamId,
+          t,
+          home: home.rows,
+          away: away.rows,
+          params: p,
+          save: !!opts.save && g.status === "scheduled",
+          withHist: opts.props === "hist",
+        })
+      : undefined;
   return {
     gameId: g.id,
+    props,
     summary: proj.summary,
     fairSpread: fairLine(proj.sim, "spread"),
     fairTotal: fairLine(proj.sim, "total"),
@@ -309,6 +332,8 @@ export async function settleProjections(db: NbaPrisma): Promise<number> {
 }
 
 /** Facit och CLV för låsta picks i spelade matcher. */
+export { settleProps };
+
 export async function settlePicks(db: NbaPrisma): Promise<number> {
   const open = await db.nbaPick.findMany({ where: { result: null }, include: { game: true } });
   let n = 0;

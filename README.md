@@ -281,7 +281,15 @@ spread and total, blends them with the market and shows the edge against any pri
    market line, e.g. "model −7.2 vs market −6.5 → pick −6.5 (0.7)". The first line the
    model sees is locked (`NbaPick`) and never re-priced. Results and CLV are graded
    against that line and shown per edge bucket (all, 3+, 6+) in the Facit tab.
-6. **Pricing** (`pricing.ts`). The simulated probability is blended with the de-vigged
+6. **Player props** (`props.ts`, `propsPipeline.ts`). Points, rebounds, assists, threes
+   and PRA. Each player is simulated 5 000 times: minutes (±18 %), a nightly usage and
+   shooting form, Poisson attempts and binomial makes, scaled by the game's pace and the
+   opponent's defence. The match page shows the distribution over simulated nights
+   against the line, every book's price and a field for your own book's line. The
+   probability is blended 15 % with the de-vigged line, since no historical prop lines
+   exist to backtest against. Props come from OddsPapi in the same request as the game
+   odds, when your plan includes them.
+7. **Pricing** (`pricing.ts`). The simulated probability is blended with the de-vigged
    market price (`priceTwoWay`, shared with CS2). Edge is EV per unit staked. Prices with
    edge ≥ 5 % at odds ≤ 4.0 are flagged.
 
@@ -312,6 +320,7 @@ npm run nba:update                    # daily: results, injuries, odds, projecti
 npm run nba:closing                   # ~1 h before tip-off: injuries + closing odds
 npm run nba:backtest -- --save        # walk-forward vs closing lines → Facit tab
 npm run nba:backtest -- --param usageK=0.8 --param rubberBand=0.05   # try parameters
+npm run nba:props-backtest            # props vs real box scores (no prop lines needed)
 npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle closing (free history)
 ```
 
@@ -327,6 +336,9 @@ in Windows Task Scheduler. That is ~60 OddsPapi requests a month out of the free
   alone gives the lowest log loss. The blend weight is
   therefore 10 %, so the model nudges the market price rather than replacing it. Raise it
   (`DEFAULT_NBA_BLEND_W` in `lib/nba/params.ts`) only when a backtest says so.
+- Props backtest (1 803 player-games, Dec 2025–Jun 2026): the model beats each player's
+  last-10 average on every stat, e.g. points MAE 4.99 vs 5.09 and log loss 0.669 vs 0.701
+  at a line on that average. It cannot be tested against real prop lines yet.
 - Edges mostly appear against soft prices, i.e. your own book's odds entered on the match
   page, when they differ from Pinnacle.
 - The backtest knows which players played (as the injury list does before a real game),
@@ -478,6 +490,10 @@ OddsPapi, DraftKings via ESPN eller ditt eget bolags odds.
 3. `npm run nba:ingest` läser in historik från ESPN, gratis.
 4. Schemalägg `npm run nba:update` på morgonen och `npm run nba:closing` på kvällen.
 5. `npm run nba:backtest -- --save` visar facit under fliken Facit.
+
+Props (poäng, returer, assist, trepoängare, PRA) simuleras 5 000 kvällar per spelare.
+Matchsidan visar fördelningen mot linjen, och fliken Props listar alla spelare.
+Backtesten mot riktiga boxscores slår spelarens snitt på alla fem.
 
 Ärligt läge: backtesten (1 026 matcher) visar att modellen inte slår DraftKings
 stängningslinje än. Modellvikten är därför 10 %. Edges dyker främst upp mot mjukare

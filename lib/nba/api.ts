@@ -33,6 +33,9 @@ export interface GameDetailJson {
   away: GameProjection["away"];
   markets: GameProjection["markets"];
   quotes: GameProjection["quotes"];
+  modelSpread: number;
+  modelTotal: number;
+  props: NonNullable<GameProjection["props"]>;
 }
 
 export function detailJson(
@@ -61,5 +64,8 @@ export function detailJson(
     away: p.away,
     markets: p.markets,
     quotes: p.quotes,
+    modelSpread: p.modelSpread,
+    modelTotal: p.modelTotal,
+    props: p.props ?? [],
   };
 }

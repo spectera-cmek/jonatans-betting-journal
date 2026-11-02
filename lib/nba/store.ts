@@ -140,7 +140,7 @@ export async function loadHistory(db: NbaPrisma, since: Date): Promise<History> 
     db.nbaTeamGame.findMany({ where: { gameId: { in: ids } } }),
     db.nbaPlayerGame.findMany({
       where: { gameId: { in: ids } },
-      select: { gameId: true, playerId: true, teamId: true, minutes: true, fga2: true, fgm2: true, fga3: true, fgm3: true, fta: true, ftm: true, oreb: true, tov: true, dnp: true, dnpReason: true },
+      select: { gameId: true, playerId: true, teamId: true, minutes: true, fga2: true, fgm2: true, fga3: true, fgm3: true, fta: true, ftm: true, oreb: true, dreb: true, ast: true, tov: true, dnp: true, dnpReason: true },
     }),
     db.nbaPlayer.findMany({ select: { id: true, position: true } }),
   ]);

@@ -12,7 +12,16 @@ import {
   oddspapiBookmaker,
   type OpFixture,
 } from "../oddspapi";
-import { closingFromHistory, extractLines, loadIds, orientRows, pickMainLines, type MarketSpec } from "../oddspapi/markets";
+import {
+  closingFromHistory,
+  extractLines,
+  extractPropLines,
+  loadIds,
+  normalizeName,
+  orientRows,
+  pickMainLines,
+  type MarketSpec,
+} from "../oddspapi/markets";
 import { saveOddsIfChanged } from "./store";
 
 /** "Los Angeles Lakers" → "lakers", "Portland Trail Blazers" → "blazers". */
@@ -92,6 +101,9 @@ export interface CaptureResult {
   fixtures: number;
   matched: number;
   saved: number;
+  /** Nya prop-linjer och prop-spelare som inte gick att para med ESPN. */
+  propsSaved: number;
+  propsUnmatched: string[];
   unmatched: string[];
 }
 
@@ -114,7 +126,9 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
     const learned = await learnTeams(db, named, tm);
     if (learned) log(`lärde in ${learned} lag-id från OddsPapi`);
   }
-  const res: CaptureResult = { fixtures: fixtures.length, matched: 0, saved: 0, unmatched: [] };
+  const res: CaptureResult = { fixtures: fixtures.length, matched: 0, saved: 0, propsSaved: 0, propsUnmatched: [], unmatched: [] };
+  const propMarkets = ids.basketballPropMarkets ?? {};
+  const hasPropMarkets = Object.keys(propMarkets).length > 0;
   const now = Date.now();
   for (const f of fixtures) {
     const hit = await findGame(db, f, tm);
@@ -137,6 +151,31 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
         isClosing: closing,
       });
       if (saved) res.saved++;
+    }
+    // Spelarprops ur samma svar — kostar inget extra anrop.
+    if (hasPropMarkets) {
+      const props = extractPropLines(f, book, propMarkets);
+      if (props.length) {
+        const players = await db.nbaPlayer.findMany({
+          where: { teamId: { in: [hit.game.homeTeamId, hit.game.awayTeamId] } },
+          select: { id: true, name: true },
+        });
+        const byName = new Map(players.map((p) => [normalizeName(p.name), p.id]));
+        for (const pr of props) {
+          const playerId = byName.get(normalizeName(pr.playerName));
+          if (!playerId) {
+            if (res.propsUnmatched.length < 20) res.propsUnmatched.push(pr.playerName);
+            continue;
+          }
+          const last = await db.nbaPropLine.findFirst({
+            where: { gameId: hit.game.id, playerId, stat: pr.stat, book, source: "oddspapi" },
+            orderBy: { capturedAt: "desc" },
+          });
+          if (last && last.line === pr.line && last.over === pr.over && last.under === pr.under) continue;
+          await db.nbaPropLine.create({ data: { gameId: hit.game.id, playerId, stat: pr.stat, book, line: pr.line, over: pr.over, under: pr.under, source: "oddspapi" } });
+          res.propsSaved++;
+        }
+      }
     }
   }
   return res;

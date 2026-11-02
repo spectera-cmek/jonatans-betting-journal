@@ -24,6 +24,9 @@ export interface PlayerGameRow {
   ftm: number;
   oreb: number;
   tov: number;
+  /** Defensiva returer och assist — för props. Saknas i äldre testdata. */
+  dreb?: number;
+  ast?: number;
   dnp: boolean;
   dnpReason: string | null;
 }
@@ -136,6 +139,8 @@ export interface PlayerRates {
   fta: number;
   tov: number;
   oreb: number;
+  dreb: number;
+  ast: number;
   pct2: number;
   pct3: number;
   ftPct: number;
@@ -198,13 +203,13 @@ export function leagueAverages(h: History, asOf: number, p: NbaModelParams = DEF
 }
 
 function positionPriors(h: History, asOf: number, from: number, lg: OffenseProfile): Record<string, PlayerRates> {
-  const acc: Record<string, { min: number; a2: number; m2: number; a3: number; m3: number; fta: number; ftm: number; tov: number; oreb: number }> = {};
+  const acc: Record<string, { min: number; a2: number; m2: number; a3: number; m3: number; fta: number; ftm: number; tov: number; oreb: number; dreb: number; ast: number }> = {};
   for (let i = firstBefore(h.allPlayerRows, asOf); i < h.allPlayerRows.length; i++) {
     const r = h.allPlayerRows[i];
     if (r.t < from) break;
     if (r.minutes <= 0) continue;
     const k = r.position ?? "F";
-    const a = (acc[k] ??= { min: 0, a2: 0, m2: 0, a3: 0, m3: 0, fta: 0, ftm: 0, tov: 0, oreb: 0 });
+    const a = (acc[k] ??= { min: 0, a2: 0, m2: 0, a3: 0, m3: 0, fta: 0, ftm: 0, tov: 0, oreb: 0, dreb: 0, ast: 0 });
     a.min += r.minutes;
     a.a2 += r.fga2;
     a.m2 += r.fgm2;
@@ -214,8 +219,10 @@ function positionPriors(h: History, asOf: number, from: number, lg: OffenseProfi
     a.ftm += r.ftm;
     a.tov += r.tov;
     a.oreb += r.oreb;
+    a.dreb += r.dreb ?? 0;
+    a.ast += r.ast ?? 0;
   }
-  const fallback: PlayerRates = { a2: 0.4, a3: 0.3, fta: 0.18, tov: 0.1, oreb: 0.07, pct2: lg.pct2, pct3: lg.pct3, ftPct: lg.ftPct, sample: 0 };
+  const fallback: PlayerRates = { a2: 0.4, a3: 0.3, fta: 0.18, tov: 0.1, oreb: 0.07, dreb: 0.2, ast: 0.15, pct2: lg.pct2, pct3: lg.pct3, ftPct: lg.ftPct, sample: 0 };
   const out: Record<string, PlayerRates> = {};
   for (const k of ["G", "F", "C"]) {
     const a = acc[k];
@@ -227,6 +234,8 @@ function positionPriors(h: History, asOf: number, from: number, lg: OffenseProfi
             fta: a.fta / a.min,
             tov: a.tov / a.min,
             oreb: a.oreb / a.min,
+            dreb: a.dreb > 0 ? a.dreb / a.min : 0.2,
+            ast: a.ast > 0 ? a.ast / a.min : 0.15,
             pct2: a.a2 ? a.m2 / a.a2 : lg.pct2,
             pct3: a.a3 ? a.m3 / a.a3 : lg.pct3,
             ftPct: a.fta ? a.ftm / a.fta : lg.ftPct,
@@ -245,7 +254,7 @@ function positionPriors(h: History, asOf: number, from: number, lg: OffenseProfi
 export function playerRates(h: History, playerId: number, asOf: number, league: League, p: NbaModelParams = DEFAULT_NBA_PARAMS): PlayerRates {
   const rows = h.players.get(playerId) ?? [];
   let k = 0;
-  const s = { min: 0, a2: 0, m2: 0, a3: 0, m3: 0, fta: 0, ftm: 0, tov: 0, oreb: 0 };
+  const s = { min: 0, a2: 0, m2: 0, a3: 0, m3: 0, fta: 0, ftm: 0, tov: 0, oreb: 0, dreb: 0, ast: 0 };
   let pos: string | null = null;
   for (let i = firstBefore(rows, asOf); i < rows.length && k < 120; i++) {
     const r = rows[i];
@@ -262,6 +271,8 @@ export function playerRates(h: History, playerId: number, asOf: number, league: 
     s.ftm += w * r.ftm;
     s.tov += w * r.tov;
     s.oreb += w * r.oreb;
+    s.dreb += w * (r.dreb ?? 0);
+    s.ast += w * (r.ast ?? 0);
   }
   const prior = league.pos[pos ?? "F"] ?? league.pos.F;
   const pm = p.priorMinutes;
@@ -273,6 +284,8 @@ export function playerRates(h: History, playerId: number, asOf: number, league: 
     fta: rate(s.fta, prior.fta),
     tov: rate(s.tov, prior.tov),
     oreb: rate(s.oreb, prior.oreb),
+    dreb: rate(s.dreb, prior.dreb),
+    ast: rate(s.ast, prior.ast),
     pct2: pct(s.m2, s.a2, prior.pct2, p.pct2PriorAtt),
     pct3: pct(s.m3, s.a3, prior.pct3, p.pct3PriorAtt),
     ftPct: pct(s.ftm, s.fta, prior.ftPct, p.ftPriorAtt),

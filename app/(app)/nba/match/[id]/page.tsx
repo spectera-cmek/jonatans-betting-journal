@@ -8,6 +8,7 @@ import { InlineStat } from "@/components/stats";
 import { SPORT_IC } from "@/components/icons";
 import { api } from "@/lib/fetcher";
 import type { GameDetailJson } from "@/lib/nba/api";
+import { PropsPanel } from "@/components/nba/PropsPanel";
 import { MARKET_LABEL, NbaEmpty, NbaNoDb, dateLabel, dec, pct, sideLabel, signed, type Market } from "@/components/nba/common";
 
 type Resp = GameDetailJson | { dbConfigured: false };
@@ -276,8 +277,8 @@ export default function NbaMatchPage({ params }: { params: { id: string } }) {
           <InlineStat label="Modellens resultat" value={`${A} ${s.awayMean.toFixed(1)} – ${s.homeMean.toFixed(1)} ${H}`} />
           <InlineStat label={`${H} vinner`} value={`${pct(s.pHomeWin, 1)} · ${dec(1 / s.pHomeWin)}`} />
           <InlineStat label={`${A} vinner`} value={`${pct(1 - s.pHomeWin, 1)} · ${dec(1 / (1 - s.pHomeWin))}`} />
-          <InlineStat label={`Spread ${H}`} value={signed(d.fairSpread)} />
-          <InlineStat label="Total" value={String(d.fairTotal).replace(".", ",")} />
+          <InlineStat label={`Spread ${H}`} value={signed(d.modelSpread)} />
+          <InlineStat label="Total" value={String(d.modelTotal).replace(".", ",")} />
           <InlineStat label="Spridning marginal / total" value={`${s.marginSd.toFixed(1)} / ${s.totalSd.toFixed(1)}`} />
         </div>
         <details className="ap-fine">
@@ -335,6 +336,16 @@ export default function NbaMatchPage({ params }: { params: { id: string } }) {
         <MinutesCard title={`${d.game.away.name} (borta)`} lineup={d.away} edits={edits} resets={resets} setEdit={setEdit} />
         <MinutesCard title={`${d.game.home.name} (hemma)`} lineup={d.home} edits={edits} resets={resets} setEdit={setEdit} />
       </div>
+      <PropsPanel
+        gameId={d.game.id}
+        props={d.props}
+        teamAbbr={new Map([
+          [d.game.home.id, H],
+          [d.game.away.id, A],
+        ])}
+        editable={!final}
+        onChanged={load}
+      />
     </div>
   );
 }

@@ -478,7 +478,188 @@ function FacitTab() {
   );
 }
 
-type Tab = "kommande" | "spelade" | "facit";
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
+type PropStatKey = "pts" | "reb" | "ast" | "fg3" | "pra";
+const PROP_TABS: Array<[PropStatKey, string]> = [
+  ["pts", "Poäng"],
+  ["reb", "Returer"],
+  ["ast", "Assist"],
+  ["fg3", "Trepoängare"],
+  ["pra", "PRA"],
+];
+
+interface PropRow {
+  gameId: number;
+  startAt: string;
+  matchup: string;
+  team: string;
+  playerId: number;
+  name: string;
+  stat: PropStatKey;
+  minutes: number;
+  mean: number;
+  q10: number;
+  q90: number;
+  line: number | null;
+  book: string | null;
+  over: number | null;
+  under: number | null;
+  pModel: number | null;
+  pMarket: number | null;
+  edgeOver: number | null;
+  edgeUnder: number | null;
+}
+
+interface PropFacit {
+  stat: PropStatKey;
+  n: number;
+  mae: number | null;
+  coverage: number | null;
+  bets: number;
+  w: number;
+  l: number;
+  roi: number | null;
+}
+
+type PropsResp = { dbConfigured: false } | { dbConfigured: true; threshold: number; maxOdds: number; props: PropRow[]; facit: PropFacit[] };
+
+function PropsTab() {
+  const [data, setData] = useState<PropsResp | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [stat, setStat] = useState<PropStatKey>("pts");
+  const [onlyLines, setOnlyLines] = useState(true);
+  useEffect(() => {
+    api
+      .get<PropsResp>("/api/nba/props?days=2")
+      .then(setData)
+      .catch((e) => setError(e instanceof Error ? e.message : "Kunde inte hämta props"));
+  }, []);
+  if (error) return <NbaEmpty title="Kunde inte hämta props" hint={error} />;
+  if (!data) return <Card>Laddar…</Card>;
+  if (!data.dbConfigured) return <NbaNoDb />;
+  const best = (r: PropRow) => {
+    const eo = r.edgeOver ?? -9;
+    const eu = r.edgeUnder ?? -9;
+    return eo >= eu ? { side: "Över", edge: r.edgeOver, price: r.over } : { side: "Under", edge: r.edgeUnder, price: r.under };
+  };
+  const rows = data.props
+    .filter((r) => r.stat === stat && (!onlyLines || r.line != null))
+    .sort((a, b) => (best(b).edge ?? -9) - (best(a).edge ?? -9) || b.mean - a.mean);
+  const f = data.facit.find((x) => x.stat === stat);
+  const PG = "1.1fr 1.4fr 56px 70px 90px 1.3fr 80px";
+  return (
+    <>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        <div className="ap-seg">
+          {PROP_TABS.map(([k, l]) => (
+            <button key={k} className={stat === k ? "is-active" : ""} onClick={() => setStat(k)}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <div className="ap-seg">
+          <button className={onlyLines ? "is-active" : ""} onClick={() => setOnlyLines(true)}>
+            Med linje
+          </button>
+          <button className={!onlyLines ? "is-active" : ""} onClick={() => setOnlyLines(false)}>
+            Alla spelare
+          </button>
+        </div>
+      </div>
+      {f && f.n > 0 && (
+        <div className="ap-nba-tiles">
+          <div className="ap-card">
+            <small>Rättade projektioner</small>
+            <b className="ap-num">{f.n}</b>
+            <span style={{ fontSize: 12, color: "var(--dim2)" }}>medelfel {num(f.mae)}</span>
+          </div>
+          <div className="ap-card">
+            <small>Inom 10–90 % (mål 80 %)</small>
+            <b className="ap-num">{f.coverage == null ? "—" : pct(f.coverage, 0)}</b>
+          </div>
+          <div className="ap-card">
+            <small>Markerade spel</small>
+            <b className="ap-num">
+              {f.w}-{f.l}
+            </b>
+            <span style={{ fontSize: 12, color: "var(--dim2)" }}>{f.roi == null ? "—" : `ROI ${pct(f.roi, 1)}`}</span>
+          </div>
+        </div>
+      )}
+      {rows.length === 0 ? (
+        <NbaEmpty
+          title={onlyLines ? "Inga prop-linjer än" : "Inga projektioner än"}
+          hint={
+            onlyLines
+              ? "Linjer kommer från OddsPapi om din plan har props, annars lägger du in dem på matchsidan. Byt till Alla spelare för att se modellens projektioner."
+              : "Kör npm run nba:update på datorn."
+          }
+        />
+      ) : (
+        <Card style={{ padding: 0 }}>
+          <div className="ap-nba-scroll">
+            <div className="ap-table" style={{ minWidth: 720 }}>
+              <div className="ap-thead" style={{ gridTemplateColumns: PG }}>
+                <span>Match</span>
+                <span>Spelare</span>
+                <span className="ap-r">Min</span>
+                <span className="ap-r">Modell</span>
+                <span className="ap-r">10–90 %</span>
+                <span>Linje · bästa sida</span>
+                <span className="ap-r">Edge</span>
+              </div>
+              {rows.map((r) => {
+                const b = best(r);
+                const flagged = b.edge != null && b.price != null && b.edge >= data.threshold && b.price <= data.maxOdds;
+                return (
+                  <Link
+                    key={`${r.gameId}-${r.playerId}`}
+                    href={`/nba/match/${r.gameId}`}
+                    className={`ap-trow${flagged ? " ap-nba-flag" : ""}`}
+                    style={{ gridTemplateColumns: PG, color: "inherit", textDecoration: "none" }}
+                  >
+                    <span className="ap-ell" style={{ color: "var(--dim)" }}>
+                      {r.matchup}
+                    </span>
+                    <span className="ap-ell">
+                      <b>{r.name}</b> <span style={{ color: "var(--dim2)", fontSize: 11 }}>{r.team}</span>
+                    </span>
+                    <span className="ap-r ap-num">{num(r.minutes, 0)}</span>
+                    <span className="ap-r ap-num">
+                      <b>{num(r.mean)}</b>
+                    </span>
+                    <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>
+                      {num(r.q10, 0)}–{num(r.q90, 0)}
+                    </span>
+                    <span className="ap-ell ap-num">
+                      {r.line == null ? (
+                        <span style={{ color: "var(--dim2)" }}>ingen linje</span>
+                      ) : (
+                        <>
+                          {b.side} {String(r.line).replace(".", ",")} @ {num(b.price, 2)} <span style={{ color: "var(--dim2)" }}>{r.book}</span>
+                        </>
+                      )}
+                    </span>
+                    <span className={`ap-r ap-num ${b.edge == null ? "" : b.edge >= 0 ? "pos" : "neg"}`}>{b.edge == null ? "—" : `${(b.edge * 100).toFixed(1)} %`}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      )}
+      <p style={{ fontSize: 12, color: "var(--dim2)", marginTop: 10 }}>
+        Modellen simulerar 5 000 kvällar per spelare (minuter, skott, träff, returer, assist) och väger 15 % mot linjen efter att marginalen räknats
+        bort. Markeras vid edge ≥ {Math.round(data.threshold * 100)} % och odds ≤ {String(data.maxOdds).replace(".", ",")}. Klicka för fördelningen.
+      </p>
+    </>
+  );
+}
+
+type Tab = "kommande" | "spelade" | "props" | "facit";
 
 export default function NbaPage() {
   const [tab, setTab] = useState<Tab>("kommande");
@@ -492,12 +673,16 @@ export default function NbaPage() {
         <button className={tab === "spelade" ? "is-active" : ""} onClick={() => setTab("spelade")}>
           Spelade
         </button>
+        <button className={tab === "props" ? "is-active" : ""} onClick={() => setTab("props")}>
+          Props
+        </button>
         <button className={tab === "facit" ? "is-active" : ""} onClick={() => setTab("facit")}>
           Facit
         </button>
       </div>
       {tab === "kommande" && <GamesTab key="k" past={false} />}
       {tab === "spelade" && <GamesTab key="s" past />}
+      {tab === "props" && <PropsTab />}
       {tab === "facit" && <FacitTab />}
     </div>
   );

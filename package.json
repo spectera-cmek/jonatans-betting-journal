@@ -78,7 +78,8 @@
     "nba:update": "tsx scripts/nba/update.ts",
     "nba:closing": "tsx scripts/nba/update.ts --closing",
     "nba:odds-history": "tsx scripts/nba/oddsHistory.ts",
-    "nba:backtest": "tsx scripts/nba/backtest.ts"
+    "nba:backtest": "tsx scripts/nba/backtest.ts",
+    "nba:props-backtest": "tsx scripts/nba/propsBacktest.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

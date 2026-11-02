@@ -76,6 +76,8 @@ model NbaGame {
   projections NbaProjection[]
   overrides   NbaMinutesOverride[]
   picks       NbaPick[]
+  propLines   NbaPropLine[]
+  propProjs   NbaPropProjection[]
 
   @@index([startAt])
   @@index([status, startAt])
@@ -246,6 +248,58 @@ model NbaPick {
 
   @@unique([gameId, market])
   @@index([result])
+}
+
+/// Ett prop-pris: spelare, statistik, linje och över/under hos en bok.
+model NbaPropLine {
+  id         Int      @id @default(autoincrement())
+  gameId     Int
+  game       NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId   Int
+  /// pts | reb | ast | fg3 | pra
+  stat       String
+  book       String
+  line       Float
+  over       Float
+  under      Float
+  /// oddspapi | manual
+  source     String
+  capturedAt DateTime @default(now())
+
+  @@index([gameId, playerId, stat])
+}
+
+/// Modellens projektion för en spelare och statistik (senaste körningen),
+/// prissatt mot bästa linjen om det finns en.
+model NbaPropProjection {
+  id           Int      @id @default(autoincrement())
+  gameId       Int
+  game         NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId     Int
+  teamId       Int
+  stat         String
+  minutes      Float
+  mean         Float
+  median       Float
+  q10          Float
+  q90          Float
+  line         Float?
+  book         String?
+  over         Float?
+  under        Float?
+  pModel       Float?
+  pPush        Float?
+  pMarket      Float?
+  pFinal       Float?
+  edgeOver     Float?
+  edgeUnder    Float?
+  modelVersion String
+  /// Utfallet när matchen är spelad.
+  actual       Float?
+  updatedAt    DateTime @updatedAt
+
+  @@unique([gameId, playerId, stat])
+  @@index([stat, actual])
 }
 
 /// En sparad backtest-körning (npm run nba:backtest -- --save).

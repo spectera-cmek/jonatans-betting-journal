@@ -15,7 +15,7 @@ const API_PARAMS = { ...DEFAULT_NBA_PARAMS, sims: 10000 };
 async function respond(id: number, save: boolean) {
   const g = await nbaPrisma.nbaGame.findUnique({ where: { id } });
   if (!g) return NextResponse.json({ error: "Matchen finns inte" }, { status: 404 });
-  const p = await projectStoredGame(nbaPrisma, id, { params: API_PARAMS, save });
+  const p = await projectStoredGame(nbaPrisma, id, { params: API_PARAMS, save, props: "hist" });
   if (!p) return NextResponse.json({ error: "Kunde inte räkna matchen" }, { status: 500 });
   const teams = new Map((await nbaPrisma.nbaTeam.findMany({ where: { id: { in: [g.homeTeamId, g.awayTeamId] } } })).map((t) => [t.id, t]));
   return NextResponse.json(detailJson(g, teams, p));

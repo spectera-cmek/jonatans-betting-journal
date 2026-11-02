@@ -31,6 +31,10 @@ export interface OddspapiIds {
   nba: { tournamentId: number; tournamentName: string } | null;
   /** marketId → spec, bara basketmarknader för hela matchen inkl. förlängning. */
   basketballMarkets: Record<string, MarketSpec>;
+  /** marketId → spec för spelarprops (poäng, returer, assist, trepoängare, PRA). */
+  basketballPropMarkets?: Record<string, PropMarketSpec>;
+  /** Om boken har props i din plan (ur /v4/account). */
+  bookHasPlayerProps?: boolean;
   /** Fotbollsturneringar för nästa modell, namn → id. */
   footballTournaments?: Record<string, number>;
 }
@@ -196,4 +200,109 @@ export function orientRows(rows: LineRow[], participant1IsHome: boolean): LineRo
   return rows.map((r) =>
     r.kind === "total" ? r : { ...r, price1: r.price2, price2: r.price1, line: r.line == null ? null : -r.line }
   );
+}
+
+// ---------------------------------------------------------------------------
+// Spelarprops (basket)
+// ---------------------------------------------------------------------------
+
+export type PropStatKey = "pts" | "reb" | "ast" | "fg3" | "pra";
+
+export interface PropMarketSpec {
+  stat: PropStatKey;
+  /** Linjen ur katalogen, eller null om den står i bokens outcome-id. */
+  line: number | null;
+  /** outcomeId → 1 (över) / 2 (under). */
+  sides: Record<string, 1 | 2>;
+  name?: string;
+}
+
+/** Vilken statistik en prop-marknad gäller, ur namnet. */
+export function propStatOf(name: string): PropStatKey | null {
+  const n = name.toLowerCase();
+  if (/double|triple|first|1st|2nd|3rd|4th|quarter|half|steal|block|turnover|made field|free throw/.test(n)) return null;
+  const pts = /point|pts/.test(n);
+  const reb = /rebound|reb\b/.test(n);
+  const ast = /assist|ast\b/.test(n);
+  if (/three|3-?point|3pt|threes/.test(n) && !reb && !ast) return "fg3";
+  if (pts && reb && ast) return "pra";
+  if (/\bpra\b/.test(n)) return "pra";
+  if (pts && !reb && !ast) return "pts";
+  if (reb && !pts && !ast) return "reb";
+  if (ast && !pts && !reb) return "ast";
+  return null;
+}
+
+export function classifyBasketballProp(m: OpMarket): PropMarketSpec | null {
+  if (m.sportId !== 11 || !m.playerProp) return null;
+  if (!m.outcomes || m.outcomes.length !== 2) return null;
+  if (PARTIAL.test(m.period ?? "") || PARTIAL.test(m.marketName)) return null;
+  const stat = propStatOf(m.marketName);
+  if (!stat) return null;
+  const sides: Record<string, 1 | 2> = {};
+  for (const o of m.outcomes) {
+    const n = o.outcomeName.toLowerCase();
+    if (/over|^o$/.test(n)) sides[String(o.outcomeId)] = 1;
+    else if (/under|^u$/.test(n)) sides[String(o.outcomeId)] = 2;
+  }
+  if (Object.keys(sides).length !== 2) return null;
+  const hc = Number.isFinite(m.handicap) && m.handicap > 0 ? m.handicap : null;
+  return { stat, line: hc, sides, name: m.marketName };
+}
+
+export function buildPropMarketMap(catalog: OpMarket[]): Record<string, PropMarketSpec> {
+  const out: Record<string, PropMarketSpec> = {};
+  for (const m of catalog) {
+    const spec = classifyBasketballProp(m);
+    if (spec) out[String(m.marketId)] = spec;
+  }
+  return out;
+}
+
+export interface PropLineRow {
+  stat: PropStatKey;
+  playerName: string;
+  line: number;
+  over: number;
+  under: number;
+}
+
+/** Alla prop-linjer för en bok i ett odds-svar, en rad per spelare och linje. */
+export function extractPropLines(fx: OpFixtureOdds, book: string, markets: Record<string, PropMarketSpec>): PropLineRow[] {
+  const b = fx.bookmakerOdds?.[book];
+  if (!b || b.suspended || b.bookmakerIsActive === false) return [];
+  const out: PropLineRow[] = [];
+  for (const [marketId, mk] of Object.entries(b.markets ?? {})) {
+    const spec = markets[marketId];
+    if (!spec || mk.marketActive === false) continue;
+    // Spelarna står som "players" under varje utfall — para ihop över och under per spelare.
+    const byPlayer = new Map<string, { name: string; over?: number; under?: number; line: number | null }>();
+    for (const [outcomeId, oc] of Object.entries(mk.outcomes ?? {})) {
+      const side = spec.sides[outcomeId];
+      if (!side) continue;
+      for (const [key, pl] of Object.entries(oc.players ?? {})) {
+        if (!pl || pl.active === false || !okPrice(pl.price) || !pl.playerName) continue;
+        const e = byPlayer.get(key) ?? { name: pl.playerName, line: spec.line ?? lineFromOutcomeId(pl.bookmakerOutcomeId) };
+        if (side === 1) e.over = pl.price;
+        else e.under = pl.price;
+        byPlayer.set(key, e);
+      }
+    }
+    byPlayer.forEach((e) => {
+      if (e.over && e.under && e.line != null) out.push({ stat: spec.stat, playerName: e.name, line: e.line, over: e.over, under: e.under });
+    });
+  }
+  return out;
+}
+
+/** "Luka Dončić Jr." → "luka doncic" — för att para OddsPapi-namn med ESPN. */
+export function normalizeName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[.'’`-]/g, " ")
+    .replace(/\b(jr|sr|ii|iii|iv)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
