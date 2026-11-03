@@ -333,6 +333,10 @@ npm run nba:props-backtest            # props vs real box scores (no prop lines 
 npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle at bet time + close (free history)
 npm run nba:backtest -- --line bet    # backtest vs Pinnacle 12 h before tip, with CLV
 npm run nba:smarkets                  # free: Smarkets ladder + main lines (hourly via the tasks)
+npm run nba:stale-lines               # backtest: your books' price vs Pinnacle fair, no model
+npm run nba:lag-scan                  # every price change: how often/long books lag Pinnacle
+npm run nba:live-watch -- --once      # live: Kambi vs Pinnacle now (check the matching)
+npm run nba:live-watch                # live watch until 06:00, phone alerts via ntfy
 npm run oddspapi:books -- unibet betsson   # OddsPapi names of your books (free)
 npm run nba:odds-history -- --confirm --books unibet.se,betsson,bet365   # your books' history
 npm run nba:backtest -- --line bet --bet-books unibet.se,betsson,bet365  # picks at your books
@@ -367,6 +371,12 @@ as book `smarkets`, and the app prices it after Smarkets' 2 % commission.
 - The backtest knows which players played (as the injury list does before a real game),
   but not their minutes. Against the bet-time line (`--line bet`) it instead uses the
   team's previous game, since late scratches move the line after 13:00 and would fake CLV.
+- Slow lines (`nba:lag-scan`, Jan–Nov 2026, 862 games): windows where Kambi or Betsson
+  priced at least 2 % better than Pinnacle's fair price on the same line, open ≥ 5 min,
+  were worth +1.4 % (Kambi totals) to +5.7 % (Betsson spread) against Pinnacle's close,
+  t 3–14; Kambi caught up in 54–62 % of cases. `nba:live-watch` alerts on these live
+  (Kambi's and Pinnacle's public web APIs, every 30 s, task 12:00–06:00) and logs each
+  alert in `NbaLiveAlert` so its real value can be measured.
 - Bet-time test (Jan–Nov 2026, 693 games vs Pinnacle 12 h before tip, previous-game
   lineups): spread CLV ≈ 0 (no edge); totals CLV +0.34 points (+0.49 at edge 3+), with
   blend weight 0.3 best for totals. Check `CLV-koll`'s "modellens bidrag" before trusting

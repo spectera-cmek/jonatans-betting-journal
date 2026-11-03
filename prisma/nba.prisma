@@ -373,6 +373,36 @@ model NbaSmarketsQuote {
   @@index([gameId, market, capturedAt])
 }
 
+/// Ett larm från nba:live-watch: ett bolags pris bättre än Pinnacles rättvisa
+/// pris. Sparas för att i efterhand mäta värdet mot Pinnacles stängning.
+model NbaLiveAlert {
+  id         Int       @id @default(autoincrement())
+  /// Kambi-varumärke, t.ex. ubse (Unibet) eller pafse (Paf).
+  brand      String
+  eventId    String
+  /// NBA-matchen, när den kunde kopplas.
+  gameId     Int?
+  home       String
+  away       String
+  startAt    DateTime
+  /// ml | spread | total
+  market     String
+  line       Float?
+  /// 1 = hemma/över, 2 = borta/under.
+  side       Int
+  price      Float
+  fairPrice  Float
+  ev         Float
+  maxEv      Float
+  refLine    Float?
+  sameLine   Boolean
+  openedAt   DateTime  @default(now())
+  closedAt   DateTime?
+
+  @@index([openedAt])
+  @@index([gameId])
+}
+
 /// En sparad backtest-körning (npm run nba:backtest -- --save).
 model NbaBacktestRun {
   id           Int      @id @default(autoincrement())

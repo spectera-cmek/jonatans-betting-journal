@@ -81,6 +81,7 @@
     "nba:check-books": "tsx scripts/nba/checkBooks.ts",
     "nba:stale-lines": "tsx scripts/nba/staleLines.ts",
     "nba:lag-scan": "tsx scripts/nba/lagScan.ts",
+    "nba:live-watch": "tsx scripts/nba/liveWatch.ts",
     "nba:ingest": "tsx scripts/nba/ingest.ts",
     "nba:update": "tsx scripts/nba/update.ts",
     "nba:closing": "tsx scripts/nba/update.ts --closing",

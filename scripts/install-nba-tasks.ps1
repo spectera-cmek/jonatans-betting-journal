@@ -7,6 +7,8 @@
 #                              no OddsPapi request), re-prices games starting within 90 min
 #   BettingTracker-NbaSmarkets every hour 12:00-03:00 - Smarkets prices (free, no key),
 #                              builds our own Smarkets history
+#   BettingTracker-NbaLive     daily at 12:00, runs until 06:00 - live watch for slow
+#                              Kambi lines vs Pinnacle, phone alerts via ntfy (NTFY_TOPIC)
 #
 #   npm run install:nba-tasks
 #   npm run install:nba-tasks -- -UpdateAt 12:00 -ClosingAt 23:00
@@ -27,7 +29,8 @@ param(
   [string]$LineupsFrom = "00:00",
   [int]$LineupsHours = 4,
   [string]$SmarketsFrom = "12:00",
-  [int]$SmarketsHours = 15
+  [int]$SmarketsHours = 15,
+  [string]$LiveFrom = "12:00"
 )
 
 $ErrorActionPreference = "Stop"
@@ -80,6 +83,15 @@ $Tasks = @(
     RepeatHours = $SmarketsHours
     StartWhenAvailable = $false
     Description = "Betting Tracker: Smarkets NBA prices every hour (free) - our own Smarkets history."
+  },
+  @{
+    Name = "BettingTracker-NbaLive"
+    Job = "live-watch"
+    At = $LiveFrom
+    # Kors hela eftermiddagen och natten; skriptet stannar sjalv kl. 06.
+    ExecutionHours = 19
+    StartWhenAvailable = $true
+    Description = "Betting Tracker: live watch for slow Kambi NBA lines vs Pinnacle, phone alerts via ntfy."
   }
 )
 
@@ -91,12 +103,13 @@ foreach ($t in $Tasks) {
       -RepetitionInterval (New-TimeSpan -Minutes $t.RepeatMinutes) `
       -RepetitionDuration (New-TimeSpan -Hours $t.RepeatHours)).Repetition
   }
+  $Limit = if ($t.ExecutionHours) { New-TimeSpan -Hours $t.ExecutionHours } else { New-TimeSpan -Minutes 30 }
   if ($t.StartWhenAvailable) {
     $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
-      -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+      -MultipleInstances IgnoreNew -ExecutionTimeLimit $Limit
   } else {
     $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-      -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+      -MultipleInstances IgnoreNew -ExecutionTimeLimit $Limit
   }
   Register-ScheduledTask `
     -TaskName $t.Name `
@@ -106,7 +119,7 @@ foreach ($t in $Tasks) {
     -Principal $Principal `
     -Description $t.Description `
     -Force | Out-Null
-  $When = if ($t.RepeatMinutes) { "every $($t.RepeatMinutes) min for $($t.RepeatHours) h from $($t.At)" } else { "daily at $($t.At)" }
+  $When = if ($t.RepeatMinutes) { "every $($t.RepeatMinutes) min for $($t.RepeatHours) h from $($t.At)" } elseif ($t.ExecutionHours) { "daily from $($t.At), runs until 06:00" } else { "daily at $($t.At)" }
   Write-Host "Installed '$($t.Name)': npm run nba:$($t.Job) $When."
 }
 
@@ -119,3 +132,4 @@ Write-Host "Remove:  Unregister-ScheduledTask -TaskName BettingTracker-NbaUpdate
 Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaClosing -Confirm:`$false"
 Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaLineups -Confirm:`$false"
 Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaSmarkets -Confirm:`$false"
+Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaLive -Confirm:`$false"
