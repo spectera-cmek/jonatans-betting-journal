@@ -78,6 +78,7 @@
     "oddspapi:books": "tsx scripts/oddspapi/books.ts",
     "smarkets:discover": "tsx scripts/smarkets/discover.ts",
     "nba:smarkets": "tsx scripts/nba/smarkets.ts",
+    "nba:check-books": "tsx scripts/nba/checkBooks.ts",
     "nba:ingest": "tsx scripts/nba/ingest.ts",
     "nba:update": "tsx scripts/nba/update.ts",
     "nba:closing": "tsx scripts/nba/update.ts --closing",

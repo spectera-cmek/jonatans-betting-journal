@@ -63,6 +63,8 @@ export interface BacktestResult {
   clv?: Partial<Record<PickMarket, ClvCheck>>;
   /** Med betQuotes: hur många picks som spelades hos varje bolag. */
   betBooks?: Record<string, number>;
+  /** Med betQuotes: bolagslinjer som slängdes för att de låg orimligt långt från Pinnacles. */
+  suspicious?: Record<PickMarket, number>;
   books: string[];
 }
 
@@ -118,6 +120,7 @@ export function runBacktest(
   const picks: Record<PickMarket, GradedPick[]> = { spread: [], total: [] };
   const always1: Record<PickMarket, number[]> = { spread: [], total: [] };
   const betBooks: Record<string, number> = {};
+  const suspicious: Record<PickMarket, number> = { spread: 0, total: 0 };
   const obs: Obs[] = [];
   const books = new Set<string>();
   const m = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
@@ -220,7 +223,14 @@ export function runBacktest(
         const ml = modelLine(mk, s.homeMean, s.awayMean);
         const close = opts.closeLines?.get(g.id)?.find((c) => c.market === mk && c.line != null);
         // Utan betQuotes spelas picken på q (Pinnacle). Med betQuotes: bästa linjen bland dina bolag.
-        const cands = opts.betQuotes ? (opts.betQuotes.get(g.id) ?? []).filter((c) => c.market === mk && c.line != null) : [q];
+        let cands = opts.betQuotes ? (opts.betQuotes.get(g.id) ?? []).filter((c) => c.market === mk && c.line != null) : [q];
+        if (opts.betQuotes) {
+          // Bolagslinjer långt från Pinnacles vid samma tidpunkt är nästan alltid datafel
+          // (omvänt tecken, fel linje i stegen) och skulle ge falsk CLV.
+          const ok = cands.filter((c) => Math.abs(c.line! - q.line!) <= SUSPICIOUS_DIFF[mk]);
+          suspicious[mk] += cands.length - ok.length;
+          cands = ok;
+        }
         const chosen = bestPick(mk, ml, cands);
         if (chosen) {
           const { c, pk } = chosen;
@@ -305,8 +315,12 @@ export function runBacktest(
     clv: opts.closeLines ? { spread: clvCheck(picks.spread, always1.spread), total: clvCheck(picks.total, always1.total) } : undefined,
     books: [...books],
     betBooks: opts.betQuotes ? betBooks : undefined,
+    suspicious: opts.betQuotes ? suspicious : undefined,
   };
 }
+
+/** Största rimliga skillnad mot Pinnacles linje vid samma tidpunkt, i poäng. */
+export const SUSPICIOUS_DIFF: Record<PickMarket, number> = { spread: 3, total: 4 };
 
 /** Bästa linjen för modellen bland bolagens priser: störst edge i poäng, sedan bäst pris. */
 export function bestPick(market: PickMarket, model: number, cands: ClosingQuote[]) {

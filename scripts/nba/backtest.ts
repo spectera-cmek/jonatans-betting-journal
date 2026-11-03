@@ -181,6 +181,9 @@ async function main() {
       `Picks spelade hos ${betBookList.join(", ")} (bästa linjen, börsprovision avdragen): ` +
         (used.length ? used.map(([b, n]) => `${b} ${n}`).join(", ") : "inga — kör npm run nba:odds-history -- --confirm --books " + betBookList.join(","))
     );
+    const sus = r.suspicious;
+    if (sus && (sus.spread || sus.total))
+      console.log(`  ⚠ ${sus.spread} spread- och ${sus.total} total-linjer slängda: över 3/4 p från Pinnacle vid samma tid (troligen datafel) — npm run nba:check-books -- ${betBookList.join(" ")}`);
   }
   for (const [mk, buckets] of Object.entries(r.ats)) {
     if (!buckets) continue;
