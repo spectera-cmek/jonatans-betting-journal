@@ -164,7 +164,13 @@ export function extractLines(fx: OpFixtureOdds, book: string, markets: Record<st
  * utfall. Historiken säger inget om huvudlinje, så pickMainLines väljer den
  * jämnaste.
  */
-export function closingFromHistory(h: OpHistoricalOdds, book: string, markets: Record<string, MarketSpec>, startTime: Date): LineRow[] {
+export function closingFromHistory(
+  h: OpHistoricalOdds,
+  book: string,
+  markets: Record<string, MarketSpec>,
+  startTime: Date,
+  stats?: { suspended: number }
+): LineRow[] {
   const b = h?.bookmakers?.[book];
   if (!b) return [];
   const cutoff = startTime.getTime();
@@ -177,13 +183,16 @@ export function closingFromHistory(h: OpHistoricalOdds, book: string, markets: R
       const side = spec.sides[outcomeId];
       const series = oc.players?.["0"] ?? Object.values(oc.players ?? {})[0];
       if (!side || !Array.isArray(series)) continue;
-      let best: { t: number; price: number } | null = null;
+      // Senaste händelsen före tidpunkten. Var marknaden stängd då (active: false)
+      // gick priset inte att spela — ta inte ett äldre pris i stället.
+      let last: { t: number; price: number; active: boolean } | null = null;
       for (const e of series) {
         const t = Date.parse(e.createdAt);
-        if (!Number.isFinite(t) || t > cutoff || e.active === false || !okPrice(e.price)) continue;
-        if (!best || t > best.t) best = { t, price: e.price };
+        if (!Number.isFinite(t) || t > cutoff) continue;
+        if (!last || t > last.t) last = { t, price: e.price, active: e.active !== false };
       }
-      if (best) prices[side] = best.price;
+      if (last && !last.active && stats) stats.suspended++;
+      if (last?.active && okPrice(last.price)) prices[side] = last.price;
     }
     if (spec.kind === "total" && (spec.line ?? 0) < MIN_GAME_TOTAL) continue;
     if (prices[1] && prices[2] && (spec.kind === "ml" || spec.line != null)) {
