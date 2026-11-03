@@ -398,6 +398,9 @@ model NbaLiveAlert {
   sameLine   Boolean
   openedAt   DateTime  @default(now())
   closedAt   DateTime?
+  /// Pinnacles sista rättvisa pris för vår sida före start, och larmets värde mot det.
+  closeFairPrice Float?
+  evClose    Float?
 
   @@index([openedAt])
   @@index([gameId])

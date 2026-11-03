@@ -54,6 +54,22 @@ export function findEdges(book: LiveEvent, ref: LiveEvent, minEv: number): Edge[
   return out;
 }
 
+/**
+ * Värdet av ett redan taget pris mot Pinnacles nuvarande rättvisa pris
+ * (samma linje om den finns, annars huvudlinjen omräknad). För att mäta larm
+ * mot Pinnacles sista pris före start.
+ */
+export function valueAgainst(ref: LiveEvent, kind: LiveKind, line: number | null, side: 1 | 2, price: number): { fairPrice: number; ev: number } | null {
+  const same = ref.markets.find((r) => r.kind === kind && r.line === line);
+  const r = same ?? ref.markets.find((x) => x.kind === kind && !x.alt);
+  if (!r) return null;
+  // Bara vår sida spelar roll; den andra får ett låtsaspris.
+  const e = staleEv(kind, r, { line, price1: side === 1 ? price : 1.01, price2: side === 2 ? price : 1.01 });
+  if (!e) return null;
+  const win = side === 1 ? e.o.win1 : e.o.win2;
+  return { fairPrice: win > 0 ? (1 - e.o.push) / win : Infinity, ev: side === 1 ? e.ev1 : e.ev2 };
+}
+
 export interface OpenWindow {
   key: string;
   edge: Edge;

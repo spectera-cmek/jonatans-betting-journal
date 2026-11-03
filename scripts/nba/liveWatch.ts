@@ -21,7 +21,7 @@ import net from "node:net";
 net.setDefaultAutoSelectFamilyAttemptTimeout(3000);
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
 import { fetchKambiNba, fetchPinnacleNba, KAMBI_BRANDS, type LiveEvent } from "../../lib/live/books";
-import { describeEdge, edgeKey, findEdges, matchEvents, updateWindows, type OpenWindow } from "../../lib/live/edges";
+import { describeEdge, edgeKey, findEdges, matchEvents, updateWindows, valueAgainst, type OpenWindow } from "../../lib/live/edges";
 import { nickname } from "../../lib/nba/oddspapiCapture";
 
 function arg(flag: string): string | null {
@@ -72,11 +72,24 @@ async function main() {
 
   const open = new Map<string, OpenWindow>();
   const alertIds = new Map<string, number>();
+  // Larm som väntar på matchstart: Pinnacles senaste pris sparas som "stängning".
+  const tracked = new Map<number, { refId: string; start: number; kind: "ml" | "spread" | "total"; line: number | null; side: 1 | 2; price: number; last?: { fairPrice: number; ev: number } }>();
   let errors = 0;
 
   for (;;) {
     try {
       const ref = await fetchPinnacleNba();
+      // Uppdatera stängningsvärdet för larmade matcher och spara det vid start.
+      if (!once && hasNbaDb()) {
+        for (const [id, t] of tracked) {
+          const r = ref.find((x) => x.id === t.refId);
+          if (r && Date.now() < t.start) t.last = valueAgainst(r, t.kind, t.line, t.side, t.price) ?? t.last;
+          if (Date.now() >= t.start || !r) {
+            if (t.last) await db.nbaLiveAlert.update({ where: { id }, data: { closeFairPrice: t.last.fairPrice, evClose: t.last.ev } }).catch(() => null);
+            if (Date.now() >= t.start) tracked.delete(id);
+          }
+        }
+      }
       for (const brand of brands) {
         const book = await fetchKambiNba(brand);
         const pairs = matchEvents(book, ref).filter((p) => p.book.start > Date.now());
@@ -94,8 +107,9 @@ async function main() {
           }
           continue;
         }
-        const current = pairs.flatMap(({ book: b, ref: r }) => findEdges(b, r, minEv).map((edge) => ({ key: edgeKey(brand, b.id, edge), edge, ev: b })));
+        const current = pairs.flatMap(({ book: b, ref: r }) => findEdges(b, r, minEv).map((edge) => ({ key: edgeKey(brand, b.id, edge), edge, ev: b, refId: r.id })));
         const evByKey = new Map(current.map((c) => [c.key, c.ev]));
+        const refByKey = new Map(current.map((c) => [c.key, c.refId]));
         const { alert, closed } = updateWindows(
           open,
           current.map(({ key, edge }) => ({ key, edge })),
@@ -129,6 +143,7 @@ async function main() {
               },
             });
             alertIds.set(w.key, row.id);
+            tracked.set(row.id, { refId: refByKey.get(w.key)!, start: ev.start, kind: w.edge.kind, line: w.edge.line, side: w.edge.side, price: w.edge.price });
           } else if (alertIds.has(w.key)) {
             await db.nbaLiveAlert.update({ where: { id: alertIds.get(w.key)! }, data: { maxEv: w.maxEv } });
           }

@@ -94,3 +94,17 @@ describe("sega linjer live", () => {
     expect(open.size).toBe(0);
   });
 });
+
+describe("larmens värde mot stängningen", () => {
+  it("värderar ett taget pris mot Pinnacles senaste rättvisa pris", async () => {
+    const { valueAgainst } = await import("../lib/live/edges");
+    const pin = { id: "p", home: "Detroit Pistons", away: "Philadelphia 76ers", start: 0, markets: [{ kind: "spread" as const, line: -4.5, price1: 1.95, price2: 1.95 }] };
+    // Taget hemma −1,5 @ 1,92 medan Pinnacle stängde på −4,5: klart värde.
+    const v = valueAgainst(pin, "spread", -1.5, 1, 1.92)!;
+    expect(v.ev).toBeGreaterThan(0.05);
+    expect(v.fairPrice).toBeLessThan(1.92);
+    // Samma linje som stängningen till 1,95 (rättvist 2,00): negativt.
+    expect(valueAgainst(pin, "spread", -4.5, 1, 1.95)!.ev).toBeLessThan(0);
+    expect(valueAgainst(pin, "total", 220.5, 1, 1.9)).toBeNull();
+  });
+});
