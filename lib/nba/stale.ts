@@ -9,7 +9,6 @@
 // Heltalslinjer får push-sannolikhet (poängen är heltal).
 
 import { normalCdf } from "../variance";
-import { devigProportional } from "../fairOdds";
 import type { NbaMarket } from "./pricing";
 
 /** Spridning kring marknadens linje (NBA, efter linjen): marginal och total. */
@@ -26,6 +25,26 @@ export function invNormalCdf(p: number): number {
     else hi = mid;
   }
   return (lo + hi) / 2;
+}
+
+/**
+ * Rättvis P(sida 1) med power-metoden: (1/o1)^k + (1/o2)^k = 1. Drar mer marginal
+ * från underdogen än proportionell avviggning, som marknaden faktiskt prisar
+ * (favorite–longshot bias) — annars ser EV på långa odds för bra ut.
+ */
+export function devigPower(o1: number, o2: number): number | null {
+  if (!(o1 > 1) || !(o2 > 1)) return null;
+  const a = 1 / o1;
+  const b = 1 / o2;
+  let lo = 0.2;
+  let hi = 5;
+  for (let i = 0; i < 80; i++) {
+    const k = (lo + hi) / 2;
+    if (a ** k + b ** k > 1) lo = k;
+    else hi = k;
+  }
+  const k = (lo + hi) / 2;
+  return a ** k / (a ** k + b ** k);
 }
 
 export interface Outcome {
@@ -64,13 +83,13 @@ export interface Quote {
 
 /** EV per satsad enhet för båda sidor hos `book`, mot Pinnacles rättvisa pris `ref`. */
 export function staleEv(market: NbaMarket, ref: Quote, book: Quote): { ev1: number; ev2: number; o: Outcome } | null {
-  const dv = devigProportional(ref.price1, [ref.price2]);
-  if (!dv) return null;
+  const p = devigPower(ref.price1, ref.price2);
+  if (p == null) return null;
   let o: Outcome;
-  if (market === "ml") o = { win1: dv.p, push: 0, win2: 1 - dv.p };
+  if (market === "ml") o = { win1: p, push: 0, win2: 1 - p };
   else {
     if (ref.line == null || book.line == null) return null;
-    o = outcomeAt(market, ref.line, dv.p, book.line);
+    o = outcomeAt(market, ref.line, p, book.line);
   }
   return { ev1: book.price1 * o.win1 + o.push - 1, ev2: book.price2 * o.win2 + o.push - 1, o };
 }

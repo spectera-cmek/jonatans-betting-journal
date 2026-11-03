@@ -8,6 +8,9 @@
  *   npm run nba:stale-lines -- --books unibet.se,betsson --bet-hours 4
  *   npm run nba:stale-lines -- --from 2026-01-01 --to 2026-06-30
  *
+ * Rättvist pris med power-metoden (drar mer marginal från underdogen), och en
+ * stängd marknad vid speltiden räknas som inget pris.
+ *
  * Kräver bolagens och Pinnacles historik:
  *   npm run nba:odds-history -- --confirm --books unibet.se,betsson [--bet-hours N]
  */
@@ -124,7 +127,7 @@ async function main() {
       }
       const pct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)} %`;
       return (
-        `EV ≥ ${t * 100} %: ${s.length} spel ${w}-${l}-${p} ROI ${pct(profit / s.length)}  ` +
+        `EV ≥ ${t * 100} %: ${s.length} spel ${w}-${l}-${p} snittodds ${(s.reduce((a, x) => a + x.price, 0) / s.length).toFixed(2)} ROI ${pct(profit / s.length)}  ` +
         `EV mot stängning ${clMean == null ? "—" : pct(clMean)}${tv == null ? "" : ` (t ${tv.toFixed(1)})`}`
       );
     });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { invNormalCdf, outcomeAt, staleEv } from "../lib/nba/stale";
+import { devigPower, invNormalCdf, outcomeAt, staleEv } from "../lib/nba/stale";
+import { closingFromHistory, type MarketSpec } from "../lib/oddspapi/markets";
 import { normalCdf } from "../lib/variance";
 
 describe("sega linjer", () => {
@@ -40,5 +41,38 @@ describe("sega linjer", () => {
     expect(soft.ev1).toBeLessThan(0.015);
     expect(soft.ev2).toBeLessThan(0);
     expect(staleEv("ml", { line: null, price1: 1.5, price2: 2.8 }, { line: null, price1: 1.6, price2: 2.5 })!.ev1).toBeGreaterThan(0);
+  });
+
+  it("power-avviggning ger underdogen lägre chans än proportionell", () => {
+    // 1,25 / 4,20: proportionellt ≈ 22,9 % för underdogen.
+    const prop = (1 / 4.2) / (1 / 1.25 + 1 / 4.2);
+    const pow = 1 - devigPower(1.25, 4.2)!;
+    expect(pow).toBeLessThan(prop);
+    expect(devigPower(1.95, 1.95)).toBeCloseTo(0.5, 9);
+    expect(devigPower(1.9, 2.0)! + devigPower(2.0, 1.9)!).toBeCloseTo(1, 9);
+  });
+
+  it("stängd marknad vid tidpunkten ger inget pris — inte ett äldre", () => {
+    const markets: Record<string, MarketSpec> = { "111": { kind: "ml", line: null, sides: { "111": 1, "112": 2 } } };
+    const h = {
+      fixtureId: "x",
+      bookmakers: {
+        kambi: {
+          markets: {
+            "111": {
+              outcomes: {
+                "111": { players: { "0": [{ createdAt: "2026-03-01T10:00:00Z", price: 1.5, active: true }, { createdAt: "2026-03-01T12:00:00Z", price: 1.5, active: false }] } },
+                "112": { players: { "0": [{ createdAt: "2026-03-01T10:00:00Z", price: 2.6, active: true }] } },
+              },
+            },
+          },
+        },
+      },
+    };
+    const stats = { suspended: 0 };
+    expect(closingFromHistory(h as never, "kambi", markets, new Date("2026-03-01T13:00:00Z"), stats)).toEqual([]);
+    expect(stats.suspended).toBe(1);
+    // Före stängningen fanns priset.
+    expect(closingFromHistory(h as never, "kambi", markets, new Date("2026-03-01T11:00:00Z"))).toHaveLength(1);
   });
 });

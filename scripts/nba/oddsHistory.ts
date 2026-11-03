@@ -18,7 +18,8 @@
  * Historiken finns från januari 2026. Historik-endpointen har 5 s cooldown,
  * så 600 matcher tar runt en timme. Kan avbrytas och köras igen.
  * Matcher utan historik (404) hoppas över och frågas inte igen; --retry-empty
- * provar dem på nytt.
+ * provar dem på nytt. --refresh hämtar och räknar om allt i intervallet
+ * (efter en rättning i tolkningen av historiken).
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -66,9 +67,11 @@ async function main() {
     betHours,
     retryEmpty: process.argv.includes("--retry-empty"),
     books,
+    refresh: process.argv.includes("--refresh"),
     log: (m) => console.log(`  ${m}`),
   });
   console.log(`Klart: ${r.games} matcher, ${r.saved} priser (stängning + ${betHours} h före start), ${r.empty} utan historik. Debiterade anrop: ${oddspapiCallsThisRun()}`);
+  if (r.suspended) console.log(`${r.suspended} gånger var marknaden stängd vid tidpunkten — inget pris sparat för den sidan.`);
   console.log(`Matcher med priser per bolag: ${Object.entries(r.byBook).map(([b, n]) => `${b} ${n}`).join(", ")}`);
 }
 
