@@ -6,6 +6,9 @@
  *
  *   npm run nba:odds-history -- --from 2026-01-01 --to 2026-06-30 --confirm
  *   npm run nba:odds-history -- --confirm --bet-hours 10   # speltid 10 h före start
+ *   npm run nba:odds-history -- --confirm --books unibet,betsson,smarkets
+ *       # andra bolag (max 3 per körning, namn enligt npm run oddspapi:books) —
+ *       # jämförs mot Pinnacle med nba:backtest -- --line bet --bet-books …
  *
  * Kostnad: historiken är gratis, men matcherna måste först kopplas till
  * OddsPapi-fixtures via /fixtures, som är debiterat: ett anrop per 9 dagar
@@ -14,10 +17,15 @@
  *
  * Historiken finns från januari 2026. Historik-endpointen har 5 s cooldown,
  * så 600 matcher tar runt en timme. Kan avbrytas och köras igen.
+ * Matcher utan historik (404) hoppas över och frågas inte igen; --retry-empty
+ * provar dem på nytt.
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
+import net from "node:net";
+// Nodes standard (250 ms per adress) ger ETIMEDOUT på långsamma nät — ge varje adress 3 s.
+net.setDefaultAutoSelectFamilyAttemptTimeout(3000);
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
 import { hasOddspapiKey, oddspapiCallsThisRun } from "../../lib/oddspapi";
 import { captureHistoricalClosing, linkHistoricalFixtures } from "../../lib/nba/oddspapiCapture";
@@ -46,8 +54,22 @@ async function main() {
     console.log(`Kopplade ${l.linked} matcher med ${l.calls} anrop`);
   }
   const betHours = Number(arg("--bet-hours")) || 12;
-  const r = await captureHistoricalClosing(db, { from, to, betHours, log: (m) => console.log(`  ${m}`) });
+  const books = (arg("--books") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (books.length > 3) {
+    console.error("Max 3 bolag per körning (OddsPapi-gränsen) — kör flera gånger.");
+    process.exit(1);
+  }
+  if (books.length) console.log(`Bolag: ${books.join(", ")}`);
+  const r = await captureHistoricalClosing(db, {
+    from,
+    to,
+    betHours,
+    retryEmpty: process.argv.includes("--retry-empty"),
+    books,
+    log: (m) => console.log(`  ${m}`),
+  });
   console.log(`Klart: ${r.games} matcher, ${r.saved} priser (stängning + ${betHours} h före start), ${r.empty} utan historik. Debiterade anrop: ${oddspapiCallsThisRun()}`);
+  console.log(`Matcher med priser per bolag: ${Object.entries(r.byBook).map(([b, n]) => `${b} ${n}`).join(", ")}`);
 }
 
 main()

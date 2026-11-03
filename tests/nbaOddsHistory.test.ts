@@ -1,0 +1,133 @@
+import { describe, it, expect, vi } from "vitest";
+import fs from "node:fs";
+import type { OpHistoricalOdds, OpMarket } from "../lib/oddspapi";
+
+const fx = JSON.parse(fs.readFileSync("tests/fixtures/oddspapi-nba.json", "utf8")) as {
+  markets: OpMarket[];
+  history: OpHistoricalOdds;
+};
+
+// Historiken: fixture "missing" ger 404 som OddsPapi gör, "ok" ger fixturens historik.
+vi.mock("../lib/oddspapi", async (orig) => {
+  const real = await orig<typeof import("../lib/oddspapi")>();
+  return {
+    ...real,
+    oddspapiBookmaker: () => "pinnacle",
+    getHistoricalOdds: vi.fn(async (id: string) => {
+      if (id === "missing") throw new real.OddspapiError(404, "NOT_FOUND", "OddsPapi /historical-odds (404 NOT_FOUND): No historical odds found.");
+      if (id === "broken") throw new real.OddspapiError(401, "UNAUTHORIZED", "fel nyckel");
+      return fx.history;
+    }),
+  };
+});
+
+vi.mock("../lib/oddspapi/markets", async (orig) => {
+  const real = await orig<typeof import("../lib/oddspapi/markets")>();
+  return { ...real, loadIds: () => ({ nba: { tournamentId: 132 }, basketballMarkets: real.buildMarketMap(fx.markets) }) };
+});
+
+const { captureHistoricalClosing } = await import("../lib/nba/oddspapiCapture");
+
+function fakeDb(games: Array<{ id: number; oddspapiFixtureId: string }>) {
+  const marked: number[] = [];
+  const odds: unknown[] = [];
+  let lastWhere: Record<string, unknown> = {};
+  const db = {
+    nbaGame: {
+      findMany: async (q: { where: Record<string, unknown> }) => {
+        lastWhere = q.where;
+        return games.map((g) => ({ ...g, startAt: new Date("2026-03-01T00:30:00Z"), oddspapiP1Home: true }));
+      },
+      update: async (q: { where: { id: number } }) => marked.push(q.where.id),
+    },
+    nbaOdds: {
+      deleteMany: async () => ({ count: 0 }),
+      create: async (q: { data: unknown }) => odds.push(q.data),
+    },
+  };
+  return { db: db as never, marked, odds, where: () => lastWhere };
+}
+
+describe("OddsPapi-historiken", () => {
+  it("hoppar över matcher utan historik (404) och fortsätter med resten", async () => {
+    const f = fakeDb([
+      { id: 1, oddspapiFixtureId: "missing" },
+      { id: 2, oddspapiFixtureId: "ok" },
+    ]);
+    const r = await captureHistoricalClosing(f.db, { from: new Date(0), to: new Date() });
+    expect(r.games).toBe(2);
+    expect(r.empty).toBe(1);
+    expect(r.saved).toBeGreaterThan(0);
+    expect(f.marked).toEqual([1]);
+    // Tomma matcher frågas inte igen, om man inte ber om det.
+    expect(f.where()).toHaveProperty("oddsHistoryEmptyAt", null);
+    await captureHistoricalClosing(f.db, { from: new Date(0), to: new Date(), retryEmpty: true });
+    expect(f.where()).not.toHaveProperty("oddsHistoryEmptyAt");
+  });
+
+  it("nätverksfel (ETIMEDOUT) försöks igen, 4xx gör det inte", async () => {
+    const { oddspapiRetry, isNetworkError, OddspapiError } = await vi.importActual<typeof import("../lib/oddspapi")>("../lib/oddspapi");
+    const timeout = () => new TypeError("fetch failed", { cause: Object.assign(new AggregateError([{ code: "ETIMEDOUT" }]), { code: "ETIMEDOUT" }) });
+    expect(isNetworkError(timeout())).toBe(true);
+    expect(isNetworkError(new TypeError("x is not a function"))).toBe(false);
+
+    vi.useFakeTimers();
+    try {
+      let n = 0;
+      const msgs: string[] = [];
+      const p = oddspapiRetry(async () => (++n < 3 ? Promise.reject(timeout()) : "ok"), 5, (m) => msgs.push(m));
+      await vi.advanceTimersByTimeAsync(6000);
+      await expect(p).resolves.toBe("ok");
+      expect(msgs).toHaveLength(2);
+      expect(msgs[0]).toContain("ETIMEDOUT");
+
+      const failing = oddspapiRetry(() => Promise.reject(timeout()), 2);
+      const check = expect(failing).rejects.toThrow("Kom inte fram till OddsPapi (ETIMEDOUT) efter 2 försök");
+      await vi.advanceTimersByTimeAsync(3000);
+      await check;
+
+      let calls = 0;
+      await expect(oddspapiRetry(() => (calls++, Promise.reject(new OddspapiError(401, "X", "nej"))), 5)).rejects.toThrow("nej");
+      expect(calls).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("andra fel (t.ex. fel nyckel) stoppar körningen", async () => {
+    const f = fakeDb([{ id: 3, oddspapiFixtureId: "broken" }]);
+    await expect(captureHistoricalClosing(f.db, { from: new Date(0), to: new Date() })).rejects.toThrow("fel nyckel");
+    expect(f.marked).toEqual([]);
+  });
+});
+
+describe("CLV-koll", () => {
+  it("räknar modellens bidrag utöver en slumpad sida på samma linjer", async () => {
+    const { clvCheck } = await import("../lib/nba/picks");
+    const picks = [
+      { edgePts: 3, result: "W" as const, side: 1 as const, clv: 1, base: 0.5 },
+      { edgePts: 3, result: "L" as const, side: 1 as const, clv: 0.5, base: 0.5 },
+      { edgePts: 3, result: "W" as const, side: 2 as const, clv: 0.5, base: 0 },
+      { edgePts: 3, result: "L" as const, side: 2 as const, clv: -0.5, base: 0 },
+      { edgePts: 3, result: "L" as const, side: 2 as const, clv: 0, base: 0 },
+    ];
+    const c = clvCheck(picks, [1, 0.5, -0.5, 0.5, 0]);
+    expect(c.side1).toEqual({ n: 2, clv: 0.75, beat: 1 });
+    expect(c.side2.n).toBe(3);
+    expect(c.side2.beat).toBe(0.5); // push (0) räknas inte som rörelse
+    expect(c.always1.clv).toBeCloseTo(0.3);
+    expect(c.base).toBeCloseTo(0.2);
+    expect(c.skill).toBeCloseTo(0.1); // 0,3 i snitt − 0,2 som en slumpad sida också fått
+    expect(c.t).not.toBeNull();
+  });
+
+  it("väljer bästa linjen bland bolagen för modellens sida", async () => {
+    const { bestPick } = await import("../lib/nba/backtest");
+    const q = (book: string, line: number, p1 = 1.9, p2 = 1.9) => ({ market: "total" as const, line, price1: p1, price2: p2, book });
+    // Modellen 224: över är rätt sida, och lägst total är bäst för över.
+    expect(bestPick("total", 224, [q("a", 221.5), q("b", 220.5), q("c", 222)])!.c.book).toBe("b");
+    // Samma linje: högst pris vinner.
+    expect(bestPick("total", 224, [q("a", 220.5, 1.87), q("b", 220.5, 1.95)])!.c.book).toBe("b");
+    expect(bestPick("total", 224, [])).toBeNull();
+  });
+});

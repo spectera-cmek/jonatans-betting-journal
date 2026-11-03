@@ -7,6 +7,10 @@
  *   npm run nba:backtest -- --book pinnacle            # bara en boks stängning
  *   npm run nba:backtest -- --line bet                 # mot Pinnacles pris 12 h före start + CLV
  *                                                      (kräver npm run nba:odds-history först)
+ *   npm run nba:backtest -- --line bet --bet-hours 4  # speltid 4 h före start (hämtat med samma --bet-hours)
+ *   npm run nba:backtest -- --line bet --bet-books unibet.se,betsson,bet365
+ *                                                      # picks hos dina bolag (bästa linjen), CLV mot Pinnacle
+ *   npm run nba:backtest -- --line bet --lineup actual # som ovan, men modellen vet vilka som spelade (fusk)
  *   npm run nba:backtest -- --sims 8000 --save         # spara körningen (visas under Facit)
  *   npm run nba:backtest -- --param usageK=0.4 --param rubberBand=0.05   # prova andra parametrar
  *
@@ -21,6 +25,19 @@ import { loadHistory, loadStints } from "../../lib/nba/store";
 import { runBacktest, type BacktestGame, type ClosingQuote } from "../../lib/nba/backtest";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, type NbaModelParams } from "../../lib/nba/params";
 import type { NbaMarket } from "../../lib/nba/pricing";
+import { oddspapiBookmaker } from "../../lib/oddspapi";
+import { betSource } from "../../lib/nba/oddspapiCapture";
+
+/** Börsens provision på nettovinsten — priset räknas om till vad du faktiskt får. */
+const COMMISSION: Array<[RegExp, number]> = [
+  [/smarkets/i, 0.02],
+  [/betfair/i, 0.05],
+  [/matchbook/i, 0.02],
+];
+function netPrice(book: string, price: number): number {
+  const c = COMMISSION.find(([re]) => re.test(book))?.[1] ?? 0;
+  return 1 + (price - 1) * (1 - c);
+}
 
 function arg(flag: string): string | null {
   const i = process.argv.indexOf(flag);
@@ -41,7 +58,6 @@ function paramOverrides(): NbaModelParams {
 
 const SOURCE_RANK: Record<string, number> = { "oddspapi-history": 0, oddspapi: 1, espn: 2 };
 /** --line bet: utvärdera mot speltidspriset, med stängningen som facit för CLV. */
-const BET_RANK: Record<string, number> = { "oddspapi-bet": 0 };
 
 async function main() {
   if (!hasNbaDb()) {
@@ -53,9 +69,27 @@ async function main() {
   const defFrom = new Date(Date.UTC(to.getUTCMonth() >= 9 ? to.getUTCFullYear() : to.getUTCFullYear() - 1, 11, 1));
   const from = arg("--from") ? new Date(`${arg("--from")}T00:00:00Z`) : defFrom;
   const sims = Number(arg("--sims")) || 4000;
-  const book = arg("--book");
   const betMode = arg("--line") === "bet";
+  // Speltid: timmar före start (hämtat med nba:odds-history -- --bet-hours N). 12 h ≈ kl. 13.
+  const betHours = Number(arg("--bet-hours")) || 12;
+  const BET = betSource(betHours);
+  const BET_RANK: Record<string, number> = { [BET]: 0 };
+  // Mot speltidspriset ska facit vara en enda skarp bok, annars blandas bolagen.
+  const book = arg("--book") ?? (betMode ? oddspapiBookmaker() : null);
+  const betBookList = (arg("--bet-books") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (betBookList.length && !betMode) {
+    console.error("--bet-books kräver --line bet");
+    process.exit(1);
+  }
   const evalRank = betMode ? BET_RANK : SOURCE_RANK;
+  // Mot speltidspriset är det ärliga att bara veta det som var känt på morgonen.
+  const lineupArg = arg("--lineup");
+  const lineup: "actual" | "prev" = lineupArg === "actual" || lineupArg === "prev" ? lineupArg : betMode ? "prev" : "actual";
+  console.log(
+    lineup === "prev"
+      ? "Laguppställning: förra matchens spelare (inga besked från matchdagen) — --lineup actual för de som faktiskt spelade"
+      : "Laguppställning: de som faktiskt spelade (vet sena strykningar)"
+  );
   const params = paramOverrides();
   const changed = Object.entries(params).filter(([k, v]) => (DEFAULT_NBA_PARAMS as unknown as Record<string, number>)[k] !== v);
   if (changed.length) console.log(`Parametrar: ${changed.map(([k, v]) => `${k}=${v}`).join(", ")}`);
@@ -73,6 +107,7 @@ async function main() {
   const list: BacktestGame[] = [];
   const closing = new Map<number, ClosingQuote[]>();
   const closeLines = new Map<number, ClosingQuote[]>();
+  const betQuotes = new Map<number, ClosingQuote[]>();
   const pick = (g: (typeof games)[number], m: NbaMarket, rank: Record<string, number>) =>
     g.odds
       .filter((o) => o.market === m && o.capturedAt <= g.startAt && o.source in rank && (!book || o.book === book))
@@ -93,11 +128,22 @@ async function main() {
     }
     closing.set(g.id, q);
     if (betMode) closeLines.set(g.id, cl);
+    if (betBookList.length) {
+      const bq: ClosingQuote[] = [];
+      for (const b of betBookList)
+        for (const m of ["spread", "total"] as NbaMarket[]) {
+          const o = g.odds
+            .filter((x) => x.book === b && x.market === m && x.source === BET && x.capturedAt <= g.startAt)
+            .sort((x, y) => y.capturedAt.getTime() - x.capturedAt.getTime())[0];
+          if (o) bq.push({ market: m, line: o.line, price1: netPrice(b, o.price1), price2: netPrice(b, o.price2), book: b });
+        }
+      betQuotes.set(g.id, bq);
+    }
   }
   console.log(`${list.length} matcher ${from.toISOString().slice(0, 10)} → ${to.toISOString().slice(0, 10)}, ${sims} simuleringar per match`);
   let last = 0;
   if (betMode && !list.length) {
-    console.log("Inga matcher med speltidspris — kör npm run nba:odds-history -- --confirm först.");
+    console.log(`Inga matcher med speltidspris ${betHours} h före start — kör npm run nba:odds-history -- --confirm${betHours === 12 ? "" : ` --bet-hours ${betHours}`} först.`);
     return;
   }
   const r = runBacktest(h, list, closing, {
@@ -105,6 +151,8 @@ async function main() {
     params,
     closeLines: betMode ? closeLines : undefined,
     stints,
+    lineup,
+    betQuotes: betBookList.length ? betQuotes : undefined,
     onProgress: (d, n) => {
       if (d - last >= 100 || d === n) {
         last = d;
@@ -127,6 +175,16 @@ async function main() {
     console.log(`        ${x.blend.map((b) => `${b.w}:${b.logLoss.toFixed(4)}`).join("  ")}`);
   }
   console.log("");
+  if (r.betBooks) {
+    const used = Object.entries(r.betBooks).sort((a, b) => b[1] - a[1]);
+    console.log(
+      `Picks spelade hos ${betBookList.join(", ")} (bästa linjen, börsprovision avdragen): ` +
+        (used.length ? used.map(([b, n]) => `${b} ${n}`).join(", ") : "inga — kör npm run nba:odds-history -- --confirm --books " + betBookList.join(","))
+    );
+    const sus = r.suspicious;
+    if (sus && (sus.spread || sus.total))
+      console.log(`  ⚠ ${sus.spread} spread- och ${sus.total} total-linjer slängda: över 3/4 p från Pinnacle vid samma tid (troligen datafel) — npm run nba:check-books -- ${betBookList.join(" ")}`);
+  }
   for (const [mk, buckets] of Object.entries(r.ats)) {
     if (!buckets) continue;
     console.log(
@@ -140,9 +198,25 @@ async function main() {
           .join("   ")
     );
   }
+  for (const [mk, c] of Object.entries(r.clv ?? {})) {
+    if (!c) continue;
+    const [a, b] = mk === "total" ? ["över", "under"] : ["hemma", "borta"];
+    const side = (x: { n: number; clv: number | null; beat: number | null }) =>
+      `${x.n} st, CLV ${x.clv == null ? "—" : `${x.clv >= 0 ? "+" : ""}${x.clv.toFixed(2)} p`}${x.beat == null ? "" : ` (${(x.beat * 100).toFixed(0)} %)`}`;
+    console.log(
+      `CLV-koll ${mk.padEnd(6)} modellens ${a}: ${side(c.side1)}   modellens ${b}: ${side(c.side2)}   ` +
+        `alltid ${a}: ${side(c.always1)}`
+    );
+    const sg = (x: number | null) => (x == null ? "—" : `${x >= 0 ? "+" : ""}${x.toFixed(2)} p`);
+    console.log(`         ${"".padEnd(6)} slumpad sida på samma linjer ${sg(c.base)}   modellens bidrag ${sg(c.skill)}   t = ${c.t == null ? "—" : c.t.toFixed(1)}`);
+  }
+  if (r.clv)
+    console.log(
+      "CLV-koll: \"modellens bidrag\" = CLV utöver en slumpad sida på samma linjer (rensat från drift och linjeshopping). Bidrag > 0 med t > 2 = skicklighet."
+    );
   console.log(
     betMode
-      ? "Break-even vid −110 (1,91): 52,4 %. Picks mot Pinnacle vid speltid. CLV = poäng linjen rörde sig mot modellens sida till stängning — positiv CLV över många spel är det starkaste tecknet på en riktig edge."
+      ? `Break-even vid −110 (1,91): 52,4 %. Picks vid speltid (${betHours} h före start). CLV = poäng linjen rörde sig mot modellens sida till stängning — positiv CLV över många spel är det starkaste tecknet på en riktig edge.`
       : "Break-even vid −110 (1,91): 52,4 %. Picks räknas mot stängningslinjen — svårare än första linjen."
   );
   console.log("");

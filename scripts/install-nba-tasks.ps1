@@ -1,10 +1,12 @@
-# Install (or update) two Windows Scheduled Tasks for the NBA model:
+# Install (or update) the Windows Scheduled Tasks for the NBA model:
 #
 #   BettingTracker-NbaUpdate   daily at 13:00 - last night's results and settlement,
 #                              injuries, odds, projections and locked picks
 #   BettingTracker-NbaClosing  daily at 23:30 - injuries + closing odds before tip-off
 #   BettingTracker-NbaLineups  every 30 min 00:00-04:00 - starting fives from ESPN (free,
 #                              no OddsPapi request), re-prices games starting within 90 min
+#   BettingTracker-NbaSmarkets every hour 12:00-03:00 - Smarkets prices (free, no key),
+#                              builds our own Smarkets history
 #
 #   npm run install:nba-tasks
 #   npm run install:nba-tasks -- -UpdateAt 12:00 -ClosingAt 23:00
@@ -23,7 +25,9 @@ param(
   [string]$UpdateAt = "13:00",
   [string]$ClosingAt = "23:30",
   [string]$LineupsFrom = "00:00",
-  [int]$LineupsHours = 4
+  [int]$LineupsHours = 4,
+  [string]$SmarketsFrom = "12:00",
+  [int]$SmarketsHours = 15
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,6 +70,16 @@ $Tasks = @(
     RepeatHours = $LineupsHours
     StartWhenAvailable = $false
     Description = "Betting Tracker: NBA starting fives from ESPN (free) and re-pricing near tip-off."
+  },
+  @{
+    Name = "BettingTracker-NbaSmarkets"
+    Job = "smarkets"
+    At = $SmarketsFrom
+    # Varje timme under dagen och kvallen - du spelar hela dagen, och Smarkets saknar historik.
+    RepeatMinutes = 60
+    RepeatHours = $SmarketsHours
+    StartWhenAvailable = $false
+    Description = "Betting Tracker: Smarkets NBA prices every hour (free) - our own Smarkets history."
   }
 )
 
@@ -104,3 +118,4 @@ Write-Host "Run now: Start-ScheduledTask -TaskName BettingTracker-NbaUpdate"
 Write-Host "Remove:  Unregister-ScheduledTask -TaskName BettingTracker-NbaUpdate -Confirm:`$false"
 Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaClosing -Confirm:`$false"
 Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaLineups -Confirm:`$false"
+Write-Host "         Unregister-ScheduledTask -TaskName BettingTracker-NbaSmarkets -Confirm:`$false"

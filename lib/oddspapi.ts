@@ -105,20 +105,44 @@ export async function oddspapiGet<T>(
   return body as T;
 }
 
-/** Försök igen på 429 (inte kvot-slut) och 5xx — aldrig på 4xx, det bränner bara kvot. */
-export async function oddspapiRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+const NETWORK_CODES = /^(ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|UND_ERR_\w+)$/;
+
+/** Nätet hackade (fetch kom aldrig fram eller bröts) — inget svar från OddsPapi. */
+export function isNetworkError(e: unknown): boolean {
+  if (!(e instanceof TypeError) || !/fetch failed/i.test(e.message)) return false;
+  const cause = (e as { cause?: { code?: unknown; errors?: Array<{ code?: unknown }> } }).cause;
+  const codes = [cause?.code, ...(cause?.errors ?? []).map((x) => x?.code)].filter((c): c is string => typeof c === "string");
+  return codes.length === 0 || codes.some((c) => NETWORK_CODES.test(c));
+}
+
+/**
+ * Försök igen på 429 (inte kvot-slut), 5xx och nätverksfel — aldrig på 4xx,
+ * det bränner bara kvot. Väntar 2 s, 4 s, 8 s … mellan försöken.
+ */
+export async function oddspapiRetry<T>(fn: () => Promise<T>, attempts = 3, onRetry?: (msg: string) => void): Promise<T> {
   let last: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (e) {
       last = e;
-      const transient = e instanceof OddspapiError && !e.quotaExceeded && (e.statusCode === 429 || e.statusCode >= 500);
-      if (!transient || i === attempts - 1) throw e;
-      await sleep(2000 * Math.pow(2, i));
+      const network = isNetworkError(e);
+      const transient = network || (e instanceof OddspapiError && !e.quotaExceeded && (e.statusCode === 429 || e.statusCode >= 500));
+      if (!transient || i === attempts - 1) {
+        if (network) throw new Error(`Kom inte fram till OddsPapi (${networkCode(e)}) efter ${i + 1} försök — kolla nätet och kör igen.`, { cause: e });
+        throw e;
+      }
+      const wait = 2000 * Math.pow(2, i);
+      onRetry?.(`${network ? `nätverksfel (${networkCode(e)})` : (e as Error).message} — försöker igen om ${wait / 1000} s`);
+      await sleep(wait);
     }
   }
   throw last;
+}
+
+function networkCode(e: unknown): string {
+  const cause = (e as { cause?: { code?: unknown } }).cause;
+  return typeof cause?.code === "string" ? cause.code : "fetch failed";
 }
 
 // ---------------------------------------------------------------------------

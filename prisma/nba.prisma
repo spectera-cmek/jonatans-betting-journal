@@ -70,6 +70,10 @@ model NbaGame {
   oddspapiP1Home    Boolean?
   /// När matchen senast söktes i OddsPapi:s fixtures (så att en miss inte kostar anrop igen).
   oddspapiLinkTried DateTime?
+  /// När OddsPapi-historiken visade sig tom för matchen (så att den inte frågas igen).
+  oddsHistoryEmptyAt DateTime?
+  /// Smarkets event-id, när matchen hittats där.
+  smarketsEventId   String?
   /// Stintar ur play-by-play: true = sparade, false = klarade inte kvalitetskontrollen,
   /// null = inte försökt (kör npm run nba:ingest -- --stints).
   stintsValid       Boolean?
@@ -85,9 +89,11 @@ model NbaGame {
   stints      NbaStint[]
   starters    NbaStarter[]
   propProjs   NbaPropProjection[]
+  smarkets    NbaSmarketsQuote[]
 
   @@index([startAt])
   @@index([status, startAt])
+  @@index([smarketsEventId])
 }
 
 /// Lagets boxscore i en match — underlag för tempo och försvar.
@@ -178,7 +184,7 @@ model NbaOdds {
   line       Float?
   price1     Float
   price2     Float
-  /// oddspapi | oddspapi-history | espn | manual
+  /// oddspapi | oddspapi-history | oddspapi-bet[-Nh] | smarkets | espn | manual
   source     String
   capturedAt DateTime @default(now())
   /// Senaste priset före matchstart.
@@ -346,6 +352,25 @@ model NbaPropProjection {
 
   @@unique([gameId, playerId, stat])
   @@index([stat, actual])
+}
+
+/// Smarkets hela stege (alla linjer) vid en tidpunkt. Sparas bara när något
+/// ändrats sedan förra ögonblicksbilden. Priser i decimalodds före provision.
+/// Sida 1 = hemma/över. line: hemmalagets handicap, totalen, null för vinnare.
+model NbaSmarketsQuote {
+  id         Int      @id @default(autoincrement())
+  gameId     Int
+  game       NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  /// ml | spread | total
+  market     String
+  line       Float?
+  back1      Float?
+  back2      Float?
+  lay1       Float?
+  lay2       Float?
+  capturedAt DateTime @default(now())
+
+  @@index([gameId, market, capturedAt])
 }
 
 /// En sparad backtest-körning (npm run nba:backtest -- --save).

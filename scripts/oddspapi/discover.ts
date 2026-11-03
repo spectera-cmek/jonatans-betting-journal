@@ -15,6 +15,9 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
+import net from "node:net";
+// Nodes standard (250 ms per adress) ger ETIMEDOUT på långsamma nät — ge varje adress 3 s.
+net.setDefaultAutoSelectFamilyAttemptTimeout(3000);
 import fs from "node:fs";
 import {
   oddspapiRetry,

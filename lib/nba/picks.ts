@@ -46,10 +46,14 @@ export function clvPoints(market: PickMarket, side: 1 | 2, locked: number, closi
 
 export interface GradedPick {
   edgePts: number;
+  /** 1 = hemma/över, 2 = borta/under. */
+  side?: 1 | 2;
   result: PickResult;
   /** Priset på vår sida, för ROI. Saknas det räknas −110. */
   price?: number | null;
   clv?: number | null;
+  /** CLV för en slumpad sida på samma linjer (snittet av sida 1 och 2 på bästa linjen) — jämförelse för `clv`. */
+  base?: number | null;
 }
 
 export interface BucketRecord {
@@ -107,4 +111,56 @@ export function bucketRecords(picks: GradedPick[]): BucketRecord[] {
       clvBeat: moved ? beat / moved : null,
     };
   });
+}
+
+export interface ClvSide {
+  n: number;
+  clv: number | null;
+  beat: number | null;
+}
+
+/** CLV för en grupp picks: snitt och andel som slog stängningen bland de som rörde sig. */
+function clvSide(xs: number[]): ClvSide {
+  const moved = xs.filter((x) => x !== 0);
+  return {
+    n: xs.length,
+    clv: xs.length ? xs.reduce((a, x) => a + x, 0) / xs.length : null,
+    beat: moved.length ? moved.filter((x) => x > 0).length / moved.length : null,
+  };
+}
+
+export interface ClvCheck {
+  /** Modellens picks, per sida. */
+  side1: ClvSide;
+  side2: ClvSide;
+  /** Att alltid spela sida 1 (hemma/över) — visar om linjen bara driver åt ett håll. */
+  always1: ClvSide;
+  /** CLV för en slumpad sida på samma linjer: vad linjeshopping och drift ger utan modell. */
+  base: number | null;
+  /** Modellens CLV utöver `base`, i poäng. Det här är modellens bidrag. */
+  skill: number | null;
+  /** `skill` delat med sitt medelfel. Över 2 är svårt att få av slump. */
+  t: number | null;
+}
+
+/**
+ * Är CLV:n skicklighet, eller bara drift och linjeshopping? Om linjerna i snitt
+ * stiger och modellen mest spelar över, eller om bästa linjen bland flera bolag
+ * väljs, blir CLV:n positiv utan att modellen vet något. Därför jämförs varje
+ * pick med en slumpad sida på samma linjer (`base`).
+ */
+export function clvCheck(picks: GradedPick[], always1: number[]): ClvCheck {
+  const withClv = picks.filter((x) => x.clv != null);
+  const with1 = withClv.filter((x) => x.side === 1).map((x) => x.clv!);
+  const with2 = withClv.filter((x) => x.side === 2).map((x) => x.clv!);
+  const paired = withClv.filter((x) => x.base != null);
+  const diffs = paired.map((x) => x.clv! - x.base!);
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, x) => a + x, 0) / xs.length : null);
+  const skill = mean(diffs);
+  let t: number | null = null;
+  if (diffs.length > 2 && skill != null) {
+    const sd = Math.sqrt(diffs.reduce((a, x) => a + (x - skill) ** 2, 0) / (diffs.length - 1));
+    t = sd > 0 ? skill / (sd / Math.sqrt(diffs.length)) : null;
+  }
+  return { side1: clvSide(with1), side2: clvSide(with2), always1: clvSide(always1), base: mean(paired.map((x) => x.base!)), skill, t };
 }
