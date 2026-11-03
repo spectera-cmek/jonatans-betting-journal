@@ -1,0 +1,44 @@
+import { describe, it, expect } from "vitest";
+import { invNormalCdf, outcomeAt, staleEv } from "../lib/nba/stale";
+import { normalCdf } from "../lib/variance";
+
+describe("sega linjer", () => {
+  it("Φ⁻¹ är inversen av Φ", () => {
+    for (const p of [0.05, 0.3, 0.5, 0.77, 0.99]) expect(normalCdf(invNormalCdf(p))).toBeCloseTo(p, 6);
+  });
+
+  it("samma linje ger Pinnacles rättvisa sannolikhet tillbaka", () => {
+    const o = outcomeAt("spread", -5.5, 0.5, -5.5);
+    expect(o.win1).toBeCloseTo(0.5, 6);
+    expect(outcomeAt("total", 224.5, 0.6, 224.5).win1).toBeCloseTo(0.6, 6);
+  });
+
+  it("en bättre siffra hos bolaget ger högre chans", () => {
+    // Pinnacle hemma −5,5 till 50 %. Bolaget hemma −4: hemma täcker oftare.
+    expect(outcomeAt("spread", -5.5, 0.5, -4.5).win1).toBeGreaterThan(0.5);
+    // Över 222,5 hos bolaget när Pinnacle har 224,5 till 50 %: över går oftare.
+    expect(outcomeAt("total", 224.5, 0.5, 222.5).win1).toBeGreaterThan(0.5);
+    // En poäng ≈ 2–3 procentenheter i NBA.
+    const d = outcomeAt("spread", -5.5, 0.5, -4.5).win1 - 0.5;
+    expect(d).toBeGreaterThan(0.02);
+    expect(d).toBeLessThan(0.035);
+  });
+
+  it("heltalslinjer får push", () => {
+    const o = outcomeAt("spread", -5.5, 0.5, -5);
+    expect(o.push).toBeGreaterThan(0.015);
+    expect(o.win1 + o.push + o.win2).toBeCloseTo(1, 9);
+  });
+
+  it("EV: samma linje och samma pris som Pinnacle utan marginal = 0; bättre odds = positiv", () => {
+    const pin = { line: -5.5, price1: 1.95, price2: 1.95 };
+    const fair = staleEv("spread", pin, { line: -5.5, price1: 2.0, price2: 2.0 })!;
+    expect(fair.ev1).toBeCloseTo(0, 6);
+    const soft = staleEv("spread", pin, { line: -4.5, price1: 1.91, price2: 1.91 })!;
+    // Hemma −4,5 till 1,91 när rättvist är −5,5: ≈ 52,8 % mot 52,4 % som 1,91 kräver → knappt +1 %.
+    expect(soft.ev1).toBeGreaterThan(0.005);
+    expect(soft.ev1).toBeLessThan(0.015);
+    expect(soft.ev2).toBeLessThan(0);
+    expect(staleEv("ml", { line: null, price1: 1.5, price2: 2.8 }, { line: null, price1: 1.6, price2: 2.5 })!.ev1).toBeGreaterThan(0);
+  });
+});
