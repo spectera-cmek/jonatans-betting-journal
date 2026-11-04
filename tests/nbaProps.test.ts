@@ -169,3 +169,28 @@ describe("OddsPapi-props", () => {
     expect(normalizeName("Jackson Jr., Jaren")).toBe("jaren jackson");
   });
 });
+
+describe("prop-minuter", () => {
+  it("räknar på minuterna om han spelar: skadelistan drar inte ner dem, din ändring gäller", async () => {
+    const { minutesIfPlaying } = await import("../lib/nba/minutes");
+    // Day-To-Day ×0,6: 21 förväntade minuter → 35 om han spelar.
+    expect(minutesIfPlaying({ minutes: 21, injuryStatus: "Day-To-Day", override: null })).toBeCloseTo(35, 6);
+    expect(minutesIfPlaying({ minutes: 30, injuryStatus: null, override: null })).toBe(30);
+    expect(minutesIfPlaying({ minutes: 0, injuryStatus: "Out", override: null })).toBe(0);
+    expect(minutesIfPlaying({ minutes: 20, injuryStatus: "Questionable", override: 24 })).toBe(24);
+    expect(minutesIfPlaying({ minutes: 30, injuryStatus: "Doubtful", override: null })).toBe(42); // tak
+  });
+});
+
+describe("frånvaro i minuthistoriken", () => {
+  it("bara tränarens val är en riktig nolla; kroppsdelar och sjukdom är frånvaro", async () => {
+    const { isAbsence } = await import("../lib/nba/minutes");
+    expect(isAbsence(true, "LOW BACK SORENESS")).toBe(true);
+    expect(isAbsence(true, "LEFT ACHILLES TENDON")).toBe(true);
+    expect(isAbsence(true, "INJURY/ILLNESS - LEFT KNEE")).toBe(true);
+    expect(isAbsence(true, "COACH'S DECISION")).toBe(false);
+    expect(isAbsence(true, "DND - COACH'S DECISION")).toBe(false);
+    expect(isAbsence(true, null)).toBe(false);
+    expect(isAbsence(false, "LOW BACK SORENESS")).toBe(false);
+  });
+});

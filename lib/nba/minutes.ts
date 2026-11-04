@@ -23,8 +23,18 @@ export function injuryFactor(status: string | null | undefined): number {
   return f ?? 1;
 }
 
-/** Skadad/frånvarande — en sådan match säger inget om rollen. */
-const ABSENT = /injur|illness|not with team|suspend|personal|rest|g league|conditioning/i;
+/** Tränarens val ("COACH'S DECISION", "DND - COACH'S DECISION") — en riktig nolla i rollen. */
+const COACH = /coach|decision/i;
+
+/**
+ * Var spelaren frånvarande (skada, sjukdom, vila, avstängning …)? En sådan match
+ * säger inget om rollen och räknas inte. ESPN skriver ofta bara kroppsdelen
+ * ("LOW BACK SORENESS", "LEFT ACHILLES TENDON"), så allt utom tränarens val
+ * räknas som frånvaro. Saknas skäl räknas det som tränarens val.
+ */
+export function isAbsence(dnp: boolean, reason: string | null | undefined): boolean {
+  return dnp && !!reason && !COACH.test(reason);
+}
 
 export interface MinutesInput {
   playerId: number;
@@ -72,6 +82,19 @@ export function roleBaseline(h: History, playerId: number, asOf: number, starter
   return w * avg + (1 - w) * baseline;
 }
 
+/**
+ * Minuter *om spelaren spelar* — för props. En prop på en spelare som inte
+ * spelar blir ogiltig (insatsen tillbaka), så skadelistans sannolikhet att han
+ * sitter ska inte dra ner hans minuter: Day-To-Day ×0,6 skulle annars göra
+ * varje under-linje till en falsk edge. Din egen minut-ändring gäller som den är.
+ */
+export function minutesIfPlaying(r: { minutes: number; injuryStatus: string | null; override: number | null }, cap = MAX_PLAYER_MINUTES): number {
+  if (r.override != null) return r.override;
+  const f = injuryFactor(r.injuryStatus);
+  if (f <= 0 || f >= 1 || r.minutes <= 0) return r.minutes;
+  return Math.min(cap, r.minutes / f);
+}
+
 export function blowoutFactor(absSpread: number | null | undefined, baseline: number): number {
   if (absSpread == null || baseline < STARTER_MINUTES) return 1;
   return Math.max(0.85, 1 - BLOWOUT_PER_POINT * Math.max(0, absSpread - BLOWOUT_FROM));
@@ -112,7 +135,7 @@ export function baselineMinutes(
     let n = 0;
     for (let i = i0; i < rows.length && n < lookback; i++) {
       const r = rows[i];
-      if (r.dnp && ABSENT.test(r.dnpReason ?? "")) continue;
+      if (isAbsence(r.dnp, r.dnpReason)) continue;
       const w = Math.pow(0.5, n / halfLife);
       wSum += w;
       mSum += w * r.minutes;
@@ -144,12 +167,24 @@ export function projectMinutes(
         : x.baseline * injuryFactor(x.injuryStatus) * blowoutFactor(opts.absSpread, x.baseline),
   }));
   const fixed = new Set(rows.filter((r) => r.override != null).map((r) => r.playerId));
-  for (let iter = 0; iter < 12; iter++) {
+  for (let iter = 0; iter < 30; iter++) {
     const fixedSum = rows.filter((r) => fixed.has(r.playerId)).reduce((s, r) => s + r.minutes, 0);
     const free = rows.filter((r) => !fixed.has(r.playerId) && r.minutes > 0);
     const freeSum = free.reduce((s, r) => s + r.minutes, 0);
     const target = Math.max(0, total - fixedSum);
-    if (!free.length || freeSum <= 0) break;
+    if (!free.length || freeSum <= 0 || Math.abs(freeSum - target) < 0.01) break;
+    if (freeSum > target) {
+      // För många minuter (hela rotationen frisk): dra av överskottet viktat med m·(48−m),
+      // så att bänken med osäkra minuter tappar mest och stjärnorna minst. Bättre än
+      // proportionell skalning i backtestet (stjärnornas minutfel 4,76 → 4,59).
+      const excess = freeSum - target;
+      const w = free.map((r) => r.minutes * Math.max(0, 48 - r.minutes));
+      const ws = w.reduce((a, b) => a + b, 0);
+      if (ws <= 0) break;
+      free.forEach((r, i) => (r.minutes = Math.max(0, r.minutes - (excess * w[i]) / ws)));
+      continue;
+    }
+    // För få minuter (någon borta): fördela proportionellt, med tak.
     const k = target / freeSum;
     let capped = false;
     for (const r of free) {
