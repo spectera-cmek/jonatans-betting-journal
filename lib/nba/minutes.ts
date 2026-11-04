@@ -174,11 +174,12 @@ export function projectMinutes(
     const target = Math.max(0, total - fixedSum);
     if (!free.length || freeSum <= 0 || Math.abs(freeSum - target) < 0.01) break;
     if (freeSum > target) {
-      // För många minuter (hela rotationen frisk): dra av överskottet viktat med m·(48−m),
-      // så att bänken med osäkra minuter tappar mest och stjärnorna minst. Bättre än
-      // proportionell skalning i backtestet (stjärnornas minutfel 4,76 → 4,59).
+      // För många minuter (hela rotationen frisk): dra av överskottet viktat med m·(48−m)²,
+      // så att bänken med osäkra minuter tappar mest och stjärnorna minst. Två säsongers
+      // backtest: alla 5,06 → 5,00 min fel; stjärnor när laget har > 255 grundminuter
+      // 5,16 → 4,24 (snittfel −2,5 → −0,3). Proportionellt tryckte ner stjärnorna.
       const excess = freeSum - target;
-      const w = free.map((r) => r.minutes * Math.max(0, 48 - r.minutes));
+      const w = free.map((r) => r.minutes * Math.max(0, 48 - r.minutes) ** 2);
       const ws = w.reduce((a, b) => a + b, 0);
       if (ws <= 0) break;
       free.forEach((r, i) => (r.minutes = Math.max(0, r.minutes - (excess * w[i]) / ws)));

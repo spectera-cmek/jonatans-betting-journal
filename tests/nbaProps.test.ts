@@ -194,3 +194,16 @@ describe("frånvaro i minuthistoriken", () => {
     expect(isAbsence(false, "LOW BACK SORENESS")).toBe(false);
   });
 });
+
+describe("nedskalning till 240", () => {
+  it("när rotationen är frisk tappar bänken mest och stjärnan minst", async () => {
+    const { projectMinutes } = await import("../lib/nba/minutes");
+    const mk = (playerId: number, baseline: number) => ({ playerId, name: "", position: null, baseline, games: 10, injuryStatus: null, injuryDetail: null, override: null });
+    // Summa 274 som Lakers: stjärna 35,4, rotation, bänk.
+    const rows = projectMinutes([mk(1, 35.4), mk(2, 36.3), mk(3, 30.7), mk(4, 25.4), mk(5, 23.4), mk(6, 23.1), mk(7, 22.7), mk(8, 21.6), mk(9, 19.1), mk(10, 15.9), mk(11, 7.4), mk(12, 3.3), mk(13, 3.1), mk(14, 2.9), mk(15, 1.4), mk(16, 1.2), mk(17, 1.0)]);
+    const m = new Map(rows.map((r) => [r.playerId, r.minutes]));
+    expect(rows.reduce((s, r) => s + r.minutes, 0)).toBeCloseTo(240, 0);
+    expect(m.get(1)!).toBeGreaterThan(33.5); // Luka tappar under 2 minuter (proportionellt: 31)
+    expect(35.4 - m.get(1)!).toBeLessThan(21.6 - m.get(8)!); // rollspelaren tappar mer
+  });
+});
