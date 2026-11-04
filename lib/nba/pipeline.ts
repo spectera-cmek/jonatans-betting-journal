@@ -322,10 +322,16 @@ export async function projectUpcoming(
   let rapm: RapmFit | undefined;
   if (params.rapmK > 0) {
     if (opts.refitRapm) {
-      const stints = await loadStints(db, new Date(now - 800 * 864e5));
-      rapm = fitRapm(stints, now);
-      const n = await savePlayerImpact(db, rapm);
-      log(`RAPM: ${n} spelare ur ${rapm.stints} stintar`);
+      try {
+        const stints = await loadStints(db, new Date(now - 800 * 864e5), { log });
+        rapm = fitRapm(stints, now);
+        const n = await savePlayerImpact(db, rapm);
+        log(`RAPM: ${n} spelare ur ${rapm.stints} stintar`);
+      } catch (e) {
+        // Hellre gårdagens RAPM än ingen körning alls.
+        log(`RAPM kunde inte räknas om (${e instanceof Error ? e.message.split("\n").pop() : e}) — använder den senast sparade`);
+        rapm = await loadPlayerImpact(db);
+      }
     } else rapm = await loadPlayerImpact(db);
   }
   let flagged = 0;
