@@ -21,7 +21,7 @@ import {
 import { propEnv } from "./propEnv";
 import { playerRates, type History, type League } from "./ratings";
 import type { RatingTable } from "./teamRatings";
-import type { MinutesRow } from "./minutes";
+import { minutesIfPlaying, type MinutesRow } from "./minutes";
 
 /** Marknadsreferensen (går inte att spela på i Sverige) — väljs inte som bästa linje. */
 const REFERENCE_BOOK = process.env.ODDSPAPI_BOOKMAKER ?? "pinnacle";
@@ -112,10 +112,12 @@ export async function gameProps(
   ] as const) {
     const env = propEnv(opts.ratings, teamId, oppId);
     for (const r of rows) {
-      if (r.minutes < PROP_MIN_MINUTES) continue;
+      // Props prisas på minuterna om han spelar — spelar han inte blir spelet ogiltigt.
+      const minutes = minutesIfPlaying(r);
+      if (minutes < PROP_MIN_MINUTES) continue;
       const rates = playerRates(opts.h, r.playerId, opts.t, opts.league, p);
-      const samples: PropSamples = simulatePlayer(rates, r.minutes, env, pp, (opts.gameId * 31 + r.playerId) >>> 0);
-      const view: PlayerPropView = { playerId: r.playerId, name: r.name, teamId, minutes: r.minutes, stats: {} };
+      const samples: PropSamples = simulatePlayer(rates, minutes, env, pp, (opts.gameId * 31 + r.playerId) >>> 0);
+      const view: PlayerPropView = { playerId: r.playerId, name: r.name, teamId, minutes, stats: {} };
       for (const stat of PROP_STATS) {
         const x = samples[stat];
         const quotes: PropQuote[] = lines

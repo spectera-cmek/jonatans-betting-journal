@@ -169,3 +169,41 @@ describe("OddsPapi-props", () => {
     expect(normalizeName("Jackson Jr., Jaren")).toBe("jaren jackson");
   });
 });
+
+describe("prop-minuter", () => {
+  it("räknar på minuterna om han spelar: skadelistan drar inte ner dem, din ändring gäller", async () => {
+    const { minutesIfPlaying } = await import("../lib/nba/minutes");
+    // Day-To-Day ×0,6: 21 förväntade minuter → 35 om han spelar.
+    expect(minutesIfPlaying({ minutes: 21, injuryStatus: "Day-To-Day", override: null })).toBeCloseTo(35, 6);
+    expect(minutesIfPlaying({ minutes: 30, injuryStatus: null, override: null })).toBe(30);
+    expect(minutesIfPlaying({ minutes: 0, injuryStatus: "Out", override: null })).toBe(0);
+    expect(minutesIfPlaying({ minutes: 20, injuryStatus: "Questionable", override: 24 })).toBe(24);
+    expect(minutesIfPlaying({ minutes: 30, injuryStatus: "Doubtful", override: null })).toBe(42); // tak
+  });
+});
+
+describe("frånvaro i minuthistoriken", () => {
+  it("bara tränarens val är en riktig nolla; kroppsdelar och sjukdom är frånvaro", async () => {
+    const { isAbsence } = await import("../lib/nba/minutes");
+    expect(isAbsence(true, "LOW BACK SORENESS")).toBe(true);
+    expect(isAbsence(true, "LEFT ACHILLES TENDON")).toBe(true);
+    expect(isAbsence(true, "INJURY/ILLNESS - LEFT KNEE")).toBe(true);
+    expect(isAbsence(true, "COACH'S DECISION")).toBe(false);
+    expect(isAbsence(true, "DND - COACH'S DECISION")).toBe(false);
+    expect(isAbsence(true, null)).toBe(false);
+    expect(isAbsence(false, "LOW BACK SORENESS")).toBe(false);
+  });
+});
+
+describe("nedskalning till 240", () => {
+  it("när rotationen är frisk tappar bänken mest och stjärnan minst", async () => {
+    const { projectMinutes } = await import("../lib/nba/minutes");
+    const mk = (playerId: number, baseline: number) => ({ playerId, name: "", position: null, baseline, games: 10, injuryStatus: null, injuryDetail: null, override: null });
+    // Summa 274 som Lakers: stjärna 35,4, rotation, bänk.
+    const rows = projectMinutes([mk(1, 35.4), mk(2, 36.3), mk(3, 30.7), mk(4, 25.4), mk(5, 23.4), mk(6, 23.1), mk(7, 22.7), mk(8, 21.6), mk(9, 19.1), mk(10, 15.9), mk(11, 7.4), mk(12, 3.3), mk(13, 3.1), mk(14, 2.9), mk(15, 1.4), mk(16, 1.2), mk(17, 1.0)]);
+    const m = new Map(rows.map((r) => [r.playerId, r.minutes]));
+    expect(rows.reduce((s, r) => s + r.minutes, 0)).toBeCloseTo(240, 0);
+    expect(m.get(1)!).toBeGreaterThan(33.5); // Luka tappar under 2 minuter (proportionellt: 31)
+    expect(35.4 - m.get(1)!).toBeLessThan(21.6 - m.get(8)!); // rollspelaren tappar mer
+  });
+});
