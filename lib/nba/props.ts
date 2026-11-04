@@ -60,7 +60,10 @@ export const DEFAULT_PROP_PARAMS: PropParams = {
   rebSigma: 0.2,
   astSigma: 0.25,
   sims: 5000,
-  rateModel: 0,
+  // Box-score 2025-26 (5 453 spelare-matcher): MAE poäng 5,01 → 4,96, log loss alla fem bättre
+  // (t.ex. trepoängare 0,6232 → 0,6037), täckning oförändrad. Linjebacktest: modellens log loss
+  // vid Pinnacles linje 0,7100 → 0,7092 och snittnivån stämmer (andel över per stat ±0,3 %-enheter).
+  rateModel: 1,
   hlVolume: 25,
   hlPct: 60,
   hlReb: 20,

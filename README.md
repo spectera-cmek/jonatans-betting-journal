@@ -293,10 +293,14 @@ spread and total, blends them with the market and shows the edge against any pri
    and PRA. Each player is simulated 5 000 times: minutes (±18 %), a nightly usage and
    shooting form, Poisson attempts and binomial makes, scaled by the game's pace and the
    opponent's defence. The match page shows the distribution over simulated nights
-   against the line, every book's price and a field for your own book's line. The
-   probability is blended 15 % with the de-vigged line, since no historical prop lines
-   exist to backtest against. Props come from OddsPapi in the same request as the game
-   odds, when your plan includes them.
+   against the line, every book's price and a field for your own book's line.
+   **Pricing (props-v2) is anchored on Pinnacle**: Pinnacle's fair probability (captured
+   hourly from its public web API, `pinnacleProps.ts`) is moved to the book's line with the
+   model's spread (negative binomial, `propPricing.ts`), and the model tilts it in log-odds
+   with a per-stat weight set by the real-line backtest. Without a fresh Pinnacle line
+   (seen ≤ 90 min ago) a quote is priced against its own de-vigged price and never flagged.
+   Lines a book has pulled drop out (`NbaPropLine.seenAt`). The first flag per player and
+   stat is locked in `NbaPropPick` and graded with CLV against Pinnacle's fair close.
 7. **Pricing** (`pricing.ts`). The simulated probability is blended with the de-vigged
    market price (`priceTwoWay`, shared with CS2). Edge is EV per unit staked. Prices with
    edge ≥ 5 % at odds ≤ 4.0 are flagged.
@@ -330,6 +334,9 @@ npm run nba:lineups                   # free (ESPN only): starting fives, re-pri
 npm run nba:backtest -- --save        # walk-forward vs closing lines → Facit tab
 npm run nba:backtest -- --param usageK=0.8 --param rubberBand=0.05   # try parameters
 npm run nba:props-backtest            # props vs real box scores (no prop lines needed)
+npm run nba:props-history             # prop prices from the OddsPapi history cache → .claude/nba-props/
+npm run nba:props-map -- --dry        # OddsPapi player ids → ESPN players (report; drop --dry to save)
+npm run nba:props-line-backtest       # props vs real Pinnacle/Unibet lines (D1–D3, soft-book EV)
 npm run nba:odds-history -- --from 2026-01-01 --confirm   # Pinnacle at bet time + close (free history)
 npm run nba:backtest -- --line bet    # backtest vs Pinnacle 12 h before tip, with CLV
 npm run nba:smarkets                  # free: Smarkets ladder + main lines (hourly via the tasks)
@@ -367,9 +374,14 @@ as book `smarkets`, and the app prices it after Smarkets' 2 % commission.
   `nba:odds-history` and `nba:backtest -- --line bet`, which measures CLV. The blend weight is
   therefore 10 %, so the model nudges the market price rather than replacing it. Raise it
   (`DEFAULT_NBA_BLEND_W` in `lib/nba/params.ts`) only when a backtest says so.
-- Props backtest (5 414 player-games in 342 games, Dec 2025–Jun 2026): the model beats each player's
+- Props against **real lines** (`nba:props-history` → `nba:props-map` →
+  `nba:props-line-backtest`): OddsPapi's free price history holds Pinnacle, Unibet (Kambi)
+  and Betsson props for ~850 games Jan–Nov 2026, keyed by OddsPapi player ids. They are
+  mapped to ESPN players without using outcomes (precision 83/83 against price-matched
+  seeds, 81 % of Pinnacle's rows). See "NBA props — real-line results" below.
+- Box-score props backtest (5 414 player-games in 342 games, Dec 2025–Jun 2026): the model beats each player's
   last-10 average on every stat, e.g. points MAE 4.99 vs 5.09 and log loss 0.669 vs 0.701
-  at a line on that average. It cannot be tested against real prop lines yet.
+  at a line on that average.
 - Edges mostly appear against soft prices, i.e. your own book's odds entered on the match
   page, when they differ from Pinnacle.
 - The backtest knows which players played (as the injury list does before a real game),
@@ -382,9 +394,24 @@ as book `smarkets`, and the app prices it after Smarkets' 2 % commission.
   (Kambi's and Pinnacle's public web APIs, every 30 s, task 12:00–06:00) and logs each
   alert in `NbaLiveAlert` so its real value can be measured.
 - Bet-time test (Jan–Nov 2026, 693 games vs Pinnacle 12 h before tip, previous-game
-  lineups): spread CLV ≈ 0 (no edge); totals CLV +0.34 points (+0.49 at edge 3+), with
-  blend weight 0.3 best for totals. Check `CLV-koll`'s "modellens bidrag" before trusting
-  it: it removes line drift and line shopping.
+  lineups): spread CLV ≈ 0 (no edge); totals CLV +0.32 points beyond a random side
+  (t 4.0). **nba-v4** therefore prices every book against Pinnacle's fair price and shrinks
+  the model toward it (`DEFAULT_NBA_SHRINK_K`: ml 0, spread 0, total 0.2), fitted on the
+  first 60 % of dates: on the held-out 40 % totals log loss 0.6933 (Pinnacle) → 0.6888,
+  while any model weight made spread and moneyline worse. Pinnacle's game lines are
+  captured hourly from its public web API (`book pinnacle, source arcadia`).
+
+**NBA props — real-line results** (842 games, 35 097 player-stat-games, `--split 0.6`)
+
+| Test | Result |
+|---|---|
+| D1 devig method on Pinnacle's close | prop/power/Shin/logit identical (log loss 0.6865) |
+| D2 model + Pinnacle at the close, lineups known | w 0.10: Δ log loss −0.0015 [−0.0027, −0.0004] on the held-out dates |
+| D2 at the close, previous-game lineups | no gain (Δ −0.0001, CI spans 0) |
+| D3 model edge at bet time → Pinnacle's move to the close | t 4.7–6.8 with previous-game lineups (threes t 10 at the open) |
+| Unibet ≥ 3 % vs Pinnacle fair at bet time | +2.4–4.3 % vs Pinnacle's fair close (t 6–14); ROI vs results ≈ 0 ± 6 % on ~1 000 bets — not confirmed yet |
+| Betsson history | broken rung lines (+80 % "EV" even against results) — excluded |
+| Model calibration at Pinnacle's line | overconfident (4 % → 42 %, 73 % → 56 %); the log-odds weight absorbs it |
 
 ## 🧪 Testing
 
@@ -535,11 +562,15 @@ OddsPapi, DraftKings via ESPN eller ditt eget bolags odds.
 
 Props (poäng, returer, assist, trepoängare, PRA) simuleras 5 000 kvällar per spelare.
 Matchsidan visar fördelningen mot linjen, och fliken Props listar alla spelare.
-Backtesten mot riktiga boxscores slår spelarens snitt på alla fem.
+Priset förankras i Pinnacles rättvisa pris (fångas varje timme), flyttat till bolagets
+linje, och modellen lutar med en vikt per statistik som backtesten mot riktiga linjer
+satt. Utan färsk Pinnacle-linje flaggas inget. Första flaggan låses (`NbaPropPick`) och
+rättas med CLV mot Pinnacles stängning.
 
-Ärligt läge: backtesten (1 026 matcher) visar att modellen inte slår DraftKings
-stängningslinje än. Modellvikten är därför 10 %. Edges dyker främst upp mot mjukare
-bolag som du matar in själv.
+Ärligt läge (nba-v4): matchmodellen slår inte Pinnacle på spread och vinnare — där är
+edgen bara sega linjer mot Pinnacles rättvisa pris. På totals krymps modellen 20 % mot
+Pinnacle (slog Pinnacle på testdelen). Props: modellens edge vid speltid förutsäger
+Pinnacles rörelse till stängningen (t 4,7–6,8), men ROI mot utfallen är inte bekräftad än.
 
 ### ⚠️ Friskrivning
 

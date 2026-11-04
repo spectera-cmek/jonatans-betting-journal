@@ -133,8 +133,15 @@ export function blendLogit(pModel: number, pAnchor: number, w: number): number {
 /** Sättet att ta bort Pinnacles marginal (D1). */
 export const PROP_DEVIG: DevigMethod = "power";
 
-/** Modellens vikt mot Pinnacles rättvisa pris per statistik, i log-odds (D2). */
-export const PROP_ANCHOR_W: Record<PropStatKey, number> = { pts: 0.1, reb: 0.1, ast: 0.1, fg3: 0.1, pra: 0.1 };
+/**
+ * Modellens vikt mot Pinnacles rättvisa pris per statistik, i log-odds (D2 vid
+ * speltid, nba:props-line-backtest --split 0.6, tvånivå-takter): trimmad på 60 %
+ * av datumen jan–nov 2026, testdelen −6h: alla w 0,15 Δ −0,0024 [−0,0038, −0,0007],
+ * poäng w 0,20 Δ −0,0032, returer w 0,05 Δ −0,0014, assist w 0, trepoängare w 0,5
+ * (KI spänner över 0 — sänkt till 0,3). PRA för få linjer: 0,05.
+ * Usage-omfördelning (β 0,6) prövad och bortvald: modellens log loss 0,7100 → 0,7431.
+ */
+export const PROP_ANCHOR_W: Record<PropStatKey, number> = { pts: 0.15, reb: 0.05, ast: 0.05, fg3: 0.3, pra: 0.05 };
 
 /** Äldsta Pinnacle-pris som får förankra (minuter sedan det senast sågs). */
 export const ANCHOR_MAX_AGE_MIN = 90;
