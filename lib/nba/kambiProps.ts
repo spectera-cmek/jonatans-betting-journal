@@ -6,6 +6,7 @@ import type { NbaPrisma } from "../nbaDb";
 import { fetchKambiNba } from "../live/books";
 import { normalizeName, type PropStatKey } from "../oddspapi/markets";
 import { nickname } from "./oddspapiCapture";
+import { savePropLines } from "./store";
 
 export const KAMBI_PROP_BOOK = "kambi";
 
@@ -101,6 +102,7 @@ export async function captureKambiProps(
     if (!lines.length) continue;
     const players = await db.nbaPlayer.findMany({ where: { teamId: { in: [home, away] } }, select: { id: true, name: true } });
     const byName = new Map(players.map((p) => [normalizeName(p.name), p.id]));
+    const batch: Parameters<typeof savePropLines>[4] = [];
     for (const pr of lines) {
       let playerId = byName.get(normalizeName(pr.playerName));
       if (!playerId) {
@@ -112,16 +114,9 @@ export async function captureKambiProps(
         if (res.unmatched.length < 20 && !res.unmatched.includes(pr.playerName)) res.unmatched.push(pr.playerName);
         continue;
       }
-      const last = await db.nbaPropLine.findFirst({
-        where: { gameId: game.id, playerId, stat: pr.stat, book: KAMBI_PROP_BOOK, source: KAMBI_PROP_BOOK },
-        orderBy: { capturedAt: "desc" },
-      });
-      if (last && last.line === pr.line && last.over === pr.over && last.under === pr.under) continue;
-      await db.nbaPropLine.create({
-        data: { gameId: game.id, playerId, stat: pr.stat, book: KAMBI_PROP_BOOK, line: pr.line, over: pr.over, under: pr.under, source: KAMBI_PROP_BOOK },
-      });
-      res.saved++;
+      batch.push({ playerId, stat: pr.stat, line: pr.line, over: pr.over, under: pr.under });
     }
+    res.saved += await savePropLines(db, game.id, KAMBI_PROP_BOOK, KAMBI_PROP_BOOK, batch);
   }
   opts.log?.(`${res.matched}/${res.events} Kambi-matcher, ${res.saved} nya prop-linjer${res.unmatched.length ? ` (ej kopplade: ${res.unmatched.slice(0, 5).join(", ")})` : ""}`);
   return res;

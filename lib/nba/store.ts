@@ -2,6 +2,7 @@
 // modellen räknar på.
 
 import type { NbaPrisma } from "../nbaDb";
+import type { Prisma } from ".prisma/nba-client";
 import type { EspnGame, EspnInjury, EspnSummary } from "./espn";
 import type { StintParse } from "./stints";
 import type { RapmFit, StintRow } from "./rapm";
@@ -147,15 +148,93 @@ export async function saveOddsIfChanged(db: NbaPrisma, o: OddsInput): Promise<bo
   return true;
 }
 
+export interface PropLineInput {
+  gameId: number;
+  playerId: number;
+  stat: string;
+  book: string;
+  source: string;
+  line: number;
+  over: number;
+  under: number;
+  oddspapiPlayerId?: string | null;
+  maxStake?: number | null;
+}
+
+const propKey = (p: { playerId: number; stat: string; line: number }) => `${p.playerId}|${p.stat}|${p.line}`;
+
+/**
+ * Sparar en matchs prop-linjer från EN bok och källa i ett svep: ny rad när
+ * linjen eller priset ändrats sedan bokens senaste rad för spelaren på den
+ * linjen; annars bara "sedd nu" (seenAt), så att en indragen linje syns som
+ * gammal. Ett fåtal anrop per match i stället för två per rad — mot Neon i
+ * USA tog radvis sparande minuter. Returnerar antalet nya rader.
+ */
+export async function savePropLines(db: NbaPrisma, gameId: number, book: string, source: string, rows: Omit<PropLineInput, "gameId" | "book" | "source">[], now = new Date()): Promise<number> {
+  if (!rows.length) return 0;
+  const existing = await db.nbaPropLine.findMany({
+    where: { gameId, book, source },
+    orderBy: { capturedAt: "desc" },
+    select: { id: true, playerId: true, stat: true, line: true, over: true, under: true, maxStake: true, oddspapiPlayerId: true },
+  });
+  const latest = new Map<string, (typeof existing)[number]>();
+  for (const e of existing) if (!latest.has(propKey(e))) latest.set(propKey(e), e);
+  const create: Prisma.NbaPropLineCreateManyInput[] = [];
+  const touch: number[] = [];
+  const patch: Array<{ id: number; oddspapiPlayerId: string }> = [];
+  const done = new Set<string>();
+  for (const p of rows) {
+    const k = propKey(p);
+    if (done.has(k)) continue;
+    done.add(k);
+    const last = latest.get(k);
+    // En ändrad maxinsats (Pinnacle höjer gränsen mot start) räknas som ett nytt pris:
+    // hur skarp linjen var vid en viss tid är just det backtesten behöver.
+    const sameStake = p.maxStake == null || p.maxStake === last?.maxStake;
+    if (last && sameStake && Math.abs(last.over - p.over) < 1e-6 && Math.abs(last.under - p.under) < 1e-6) {
+      touch.push(last.id);
+      if (p.oddspapiPlayerId && !last.oddspapiPlayerId) patch.push({ id: last.id, oddspapiPlayerId: p.oddspapiPlayerId });
+      continue;
+    }
+    create.push({
+      gameId,
+      playerId: p.playerId,
+      stat: p.stat,
+      book,
+      source,
+      line: p.line,
+      over: p.over,
+      under: p.under,
+      capturedAt: now,
+      seenAt: now,
+      oddspapiPlayerId: p.oddspapiPlayerId ?? null,
+      maxStake: p.maxStake ?? null,
+    });
+  }
+  if (touch.length) await db.nbaPropLine.updateMany({ where: { id: { in: touch } }, data: { seenAt: now } });
+  for (const x of patch) await db.nbaPropLine.update({ where: { id: x.id }, data: { oddspapiPlayerId: x.oddspapiPlayerId } });
+  if (create.length) await db.nbaPropLine.createMany({ data: create });
+  return create.length;
+}
+
 export async function saveInjuries(db: NbaPrisma, list: EspnInjury[]): Promise<number> {
   const seen = new Set<number>();
   const rows = list.filter((i) => (seen.has(i.playerId) ? false : (seen.add(i.playerId), true)));
+  const before = await db.nbaInjury.findMany({ select: { playerId: true, teamId: true, status: true } });
   await db.$transaction([
     db.nbaInjury.deleteMany({}),
     db.nbaInjury.createMany({
       data: rows.map((i) => ({ playerId: i.playerId, teamId: i.teamId, playerName: i.playerName, status: i.status, detail: i.detail, reportedAt: i.reportedAt })),
     }),
   ]);
+  // Logga bara ändringar: ny/ändrad status, och "cleared" när spelaren försvann från listan.
+  const prev = new Map(before.map((b) => [b.playerId, b]));
+  const now = new Set(rows.map((r) => r.playerId));
+  const log = [
+    ...rows.filter((r) => prev.get(r.playerId)?.status !== r.status).map((r) => ({ playerId: r.playerId, teamId: r.teamId, status: r.status, detail: r.detail })),
+    ...before.filter((b) => !now.has(b.playerId)).map((b) => ({ playerId: b.playerId, teamId: b.teamId, status: "cleared", detail: null })),
+  ];
+  if (log.length) await db.nbaInjuryLog.createMany({ data: log });
   return rows.length;
 }
 

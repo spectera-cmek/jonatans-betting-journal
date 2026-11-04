@@ -31,6 +31,7 @@ import { hasOddspapiKey, oddspapiCallsThisRun, OddspapiError, quotaLeft } from "
 import { projectUpcoming, settlePicks, settleProjections, settleProps } from "../../lib/nba/pipeline";
 import { captureSmarkets } from "../../lib/nba/smarketsCapture";
 import { captureKambiProps } from "../../lib/nba/kambiProps";
+import { capturePinnacleProps } from "../../lib/nba/pinnacleProps";
 
 function numberArg(flag: string, fallback: number): number {
   const i = process.argv.indexOf(flag);
@@ -133,6 +134,13 @@ async function main() {
     await captureKambiProps(db, { hours: Math.max(hours, 4), log: (m) => console.log(`   Kambi-props: ${m}`) });
   } catch (e) {
     console.log(`   Kambi-props: hoppar över (${e instanceof Error ? e.message : String(e)})`);
+  }
+
+  // Pinnacles props (ankaret för prissättningen) — gratis, samma timme som Kambi.
+  try {
+    await capturePinnacleProps(db, { hours: Math.max(hours, 4), log: (m) => console.log(`   Pinnacle-props: ${m}`) });
+  } catch (e) {
+    console.log(`   Pinnacle-props: hoppar över (${e instanceof Error ? e.message : String(e)})`);
   }
 
   console.log(`${closing ? "3/3" : "4/5"} Modellen`);

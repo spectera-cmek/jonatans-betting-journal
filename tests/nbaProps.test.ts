@@ -155,7 +155,7 @@ describe("OddsPapi-props", () => {
       },
     } as unknown as OpFixtureOdds;
     const rows = extractPropLines(fx, "pinnacle", markets);
-    expect(rows).toEqual([{ stat: "pts", playerName: "Luka Dončić", line: 24.5, over: 1.9, under: 1.9 }]);
+    expect(rows).toEqual([{ stat: "pts", playerName: "Luka Dončić", oddspapiPlayerId: "11", line: 24.5, over: 1.9, under: 1.9 }]);
   });
 
   it("namn utan accenter och suffix", () => {

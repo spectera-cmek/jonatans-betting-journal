@@ -304,6 +304,8 @@ export function buildPropMarketMap(catalog: OpMarket[]): Record<string, PropMark
 export interface PropLineRow {
   stat: PropStatKey;
   playerName: string;
+  /** OddsPapi:s spelar-id (nyckeln under "players") — samma id som i historiken. */
+  oddspapiPlayerId: string;
   line: number;
   over: number;
   under: number;
@@ -330,8 +332,8 @@ export function extractPropLines(fx: OpFixtureOdds, book: string, markets: Recor
         byPlayer.set(key, e);
       }
     }
-    byPlayer.forEach((e) => {
-      if (e.over && e.under && e.line != null) out.push({ stat: spec.stat, playerName: e.name, line: e.line, over: e.over, under: e.under });
+    byPlayer.forEach((e, key) => {
+      if (e.over && e.under && e.line != null) out.push({ stat: spec.stat, playerName: e.name, oddspapiPlayerId: key, line: e.line, over: e.over, under: e.under });
     });
   }
   return out;
