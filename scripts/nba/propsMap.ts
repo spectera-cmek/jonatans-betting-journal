@@ -122,7 +122,7 @@ async function main() {
     if (!a) {
       a = { gameId: g.id, t: g.startAt.getTime(), homeTeamId: g.homeTeamId, awayTeamId: g.awayTeamId, lines: {} };
       appIdx.set(`${pid}|${gid}`, a);
-      apps.set(pid, [...(apps.get(pid) ?? []), a]);
+      { const l_ = apps.get(pid); if (l_) l_.push(a); else apps.set(pid, [a]); }
     }
     a.lines[stat as PropStatKey] = v.line;
   }

@@ -91,7 +91,8 @@
     "nba:backtest": "tsx scripts/nba/backtest.ts",
     "nba:props-backtest": "tsx scripts/nba/propsBacktest.ts",
     "nba:props-history": "tsx scripts/nba/propsHistory.ts",
-    "nba:props-map": "tsx scripts/nba/propsMap.ts"
+    "nba:props-map": "tsx scripts/nba/propsMap.ts",
+    "nba:props-line-backtest": "tsx scripts/nba/propsLineBacktest.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -8,7 +8,7 @@ import { clvPoints, gradePick, modelLine, pickFromLine, type PickMarket } from "
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { gameProps, settleProps, type PlayerPropView } from "./propsPipeline";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, isFlagged, type NbaModelParams } from "./params";
-import { fairLine, priceMarket, settle, type MarketPrice, type MarketQuote, type NbaMarket } from "./pricing";
+import { fairLine, priceMarketAnchored, settle, type MarketPrice, type MarketQuote, type NbaMarket } from "./pricing";
 import { leagueAverages, type History, type League } from "./ratings";
 import { projectGame, type Projection } from "./project";
 import { loadHistory, loadPlayerImpact, loadStints, savePlayerImpact } from "./store";
@@ -47,7 +47,8 @@ export async function latestQuotes(db: NbaPrisma, gameId: number, before?: Date)
 export function referenceQuote(quotes: LatestQuote[], market: NbaMarket, refBook = oddspapiBookmaker()): LatestQuote | null {
   const m = quotes.filter((q) => q.market === market);
   return (
-    m.find((q) => q.source.startsWith("oddspapi") && q.book === refBook) ??
+    // Referensboken (Pinnacle) — senaste priset, oavsett om det kom via OddsPapi eller Pinnacles webb-API.
+    m.find((q) => q.book === refBook && (q.source.startsWith("oddspapi") || q.source === "arcadia")) ??
     m.find((q) => q.source.startsWith("oddspapi")) ??
     m.find((q) => q.source === "espn") ??
     m.find((q) => q.source === "manual") ??
@@ -197,14 +198,22 @@ export async function projectStoredGame(
   const modelSpread = modelLine("spread", proj.summary.homeMean, proj.summary.awayMean);
   const modelTotal = modelLine("total", proj.summary.homeMean, proj.summary.awayMean);
   const markets: MarketPrice[] = [];
+  // Ankaret: Pinnacles rättvisa pris (bara när referensen verkligen är Pinnacle).
+  const anchorOf = (m: NbaMarket) => {
+    const r = referenceQuote(quotes, m);
+    return r && r.book === oddspapiBookmaker() && r.price1 != null && r.price2 != null ? { line: r.line, price1: r.price1, price2: r.price2 } : null;
+  };
   for (const m of MARKETS) {
     const ref = referenceQuote(quotes, m);
     if (m !== "ml" && !ref) continue;
-    markets.push(priceMarket(proj.sim, ref ?? { market: "ml", line: null, price1: null, price2: null }, DEFAULT_NBA_BLEND_W[m]));
+    const q = ref ?? { market: "ml" as const, line: null, price1: null, price2: null };
+    markets.push(priceMarketAnchored(proj.sim, q, anchorOf(m)));
   }
   const priced = quotes.map((q) => {
-    const mp = priceMarket(proj.sim, q, DEFAULT_NBA_BLEND_W[q.market]);
-    return { ...mp, id: q.id, source: q.source, capturedAt: q.capturedAt, flagged: isFlagged(mp.edge, mp.bestOdds) };
+    const anchor = anchorOf(q.market);
+    const mp = priceMarketAnchored(proj.sim, q, anchor);
+    // Flagga bara priser som förankrats i Pinnacle — mot bokens eget pris var flaggorna brus.
+    return { ...mp, id: q.id, source: q.source, capturedAt: q.capturedAt, flagged: !!anchor && q.book !== oddspapiBookmaker() && isFlagged(mp.edge, mp.bestOdds) };
   });
   if (opts.save) {
     for (const mp of markets) {

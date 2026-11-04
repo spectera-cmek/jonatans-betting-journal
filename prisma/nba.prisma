@@ -363,6 +363,8 @@ model NbaPropPick {
   /// Pinnacles rättvisa sannolikhet för vår sida på vår linje, när den fanns.
   pAnchor      Float?
   pPush        Float?
+  /// Varians/medel i modellens fördelning (för CLV på en annan linje än Pinnacles).
+  vmr          Float?
   edge         Float
   modelVersion String
   flaggedAt    DateTime @default(now())
@@ -417,6 +419,8 @@ model NbaPropProjection {
   edgeOver     Float?
   edgeUnder    Float?
   modelVersion String
+  /// Varians/medel i modellens fördelning — flyttar Pinnacles pris mellan linjer.
+  vmr          Float?
   /// pinnacle = prissatt mot Pinnacles rättvisa pris, own = mot bokens eget (ingen Pinnacle-linje).
   anchor       String?
   /// Pinnacles rättvisa P(över) översatt till bästa linjen.

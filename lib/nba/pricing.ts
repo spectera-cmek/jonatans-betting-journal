@@ -5,8 +5,9 @@
 // per satsad enhet med insatsen tillbaka vid push. Sida 1 = hemma/över.
 
 import { priceTwoWay, type Price } from "../cs2/pricing";
-import { DEFAULT_NBA_BLEND_W } from "./params";
+import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_SHRINK_K } from "./params";
 import { moneylineProb, spreadProb, totalProb, type SimResult } from "./sim";
+import { devigPower, impliedMean, outcomeFromMean, type Outcome } from "./stale";
 import { netPrice, SMARKETS_BOOK, SMARKETS_COMMISSION } from "../smarkets";
 
 /** Provision på nettovinst för börser. Edge räknas på vad du faktiskt får ut. */
@@ -49,6 +50,94 @@ export function priceMarket(sim: SimResult, q: MarketQuote, blendW = DEFAULT_NBA
   // Visa bolagets riktiga odds; edgen ovan är redan räknad efter provision.
   const bestOdds = price.bestSide === "over" ? q.price1 : price.bestSide === "under" ? q.price2 : null;
   return { ...price, bestOdds, market: q.market, line: q.line, blendW, book: q.book ?? null, price1: q.price1, price2: q.price2 };
+}
+
+const clampP = (p: number) => Math.min(1 - 1e-6, Math.max(1e-6, p));
+const logitP = (p: number) => Math.log(clampP(p) / (1 - clampP(p)));
+const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
+
+/**
+ * Sannolikheter på `line` när modellen krymps mot Pinnacle:
+ *   spread/total — i poäng: μ* = μ_Pinnacle + k·(μ_modell − μ_Pinnacle), Y ~ N(μ*, σ)
+ *                  (μ_Pinnacle ur rättvisa priset på Pinnacles linje, power-devig)
+ *   ml           — i log-odds: σ(k·logit p_modell + (1−k)·logit p_Pinnacle)
+ * k = 0 ger Pinnacles rättvisa pris översatt till linjen, k = 1 modellens väntevärde.
+ */
+export function anchoredOutcome(
+  market: NbaMarket,
+  ref: { line: number | null; price1: number; price2: number },
+  line: number | null,
+  model: { mean: number; pMl: number },
+  k: number
+): Outcome | null {
+  const pRef = devigPower(ref.price1, ref.price2);
+  if (pRef == null) return null;
+  if (market === "ml") {
+    const p = sigmoid(k * logitP(model.pMl) + (1 - k) * logitP(pRef));
+    return { win1: p, push: 0, win2: 1 - p };
+  }
+  if (ref.line == null || line == null) return null;
+  const muPin = impliedMean(market, ref.line, pRef);
+  return outcomeFromMean(market, muPin + k * (model.mean - muPin), line);
+}
+
+/**
+ * Pris mot ett bolag förankrat i Pinnacles rättvisa pris (`ref`), med modellen
+ * krympt k mot det. Utan Pinnacle-referens: den gamla blandningen mot bokens
+ * eget avviggade pris.
+ */
+export function priceMarketAnchored(
+  sim: SimResult,
+  q: MarketQuote,
+  ref: { line: number | null; price1: number; price2: number } | null,
+  k = DEFAULT_NBA_SHRINK_K[q.market]
+): MarketPrice {
+  const mean = q.market === "total" ? summarizeTotal(sim) : summarizeMargin(sim);
+  const o = ref ? anchoredOutcome(q.market, ref, q.line, { mean, pMl: moneylineProb(sim) }, k) : null;
+  if (!o) return priceMarket(sim, q);
+  const m = modelProb(sim, q.market, q.line);
+  const c = commissionOf(q.book);
+  const net = (x: number | null) => (x != null && c > 0 ? netPrice(x, c) : x);
+  const live = 1 - o.push;
+  const pFinal = clampP(live > 0 ? o.win1 / live : 0.5);
+  const anchorOnly = anchoredOutcome(q.market, ref!, q.line, { mean, pMl: moneylineProb(sim) }, 0)!;
+  const pMarket = anchorOnly.win1 / Math.max(1e-9, 1 - anchorOnly.push);
+  const p1 = net(q.price1);
+  const p2 = net(q.price2);
+  const edgeOver = p1 != null && p1 > 1 ? p1 * o.win1 + o.push - 1 : null;
+  const edgeUnder = p2 != null && p2 > 1 ? p2 * o.win2 + o.push - 1 : null;
+  const bestSide = edgeOver == null && edgeUnder == null ? null : (edgeOver ?? -Infinity) >= (edgeUnder ?? -Infinity) ? "over" : "under";
+  return {
+    pModel: m.p,
+    pMarket,
+    pFinal,
+    pPush: o.push,
+    fairOver: 1 / pFinal,
+    fairUnder: 1 / (1 - pFinal),
+    edgeOver,
+    edgeUnder,
+    bestSide,
+    bestOdds: bestSide === "over" ? q.price1 : bestSide === "under" ? q.price2 : null,
+    edge: bestSide === "over" ? edgeOver : bestSide === "under" ? edgeUnder : null,
+    market: q.market,
+    line: q.line,
+    blendW: k,
+    book: q.book ?? null,
+    price1: q.price1,
+    price2: q.price2,
+  };
+}
+
+function summarizeMargin(sim: SimResult): number {
+  let s = 0;
+  for (let i = 0; i < sim.sims; i++) s += sim.home[i] - sim.away[i];
+  return s / sim.sims;
+}
+
+function summarizeTotal(sim: SimResult): number {
+  let s = 0;
+  for (let i = 0; i < sim.sims; i++) s += sim.home[i] + sim.away[i];
+  return s / sim.sims;
 }
 
 /**

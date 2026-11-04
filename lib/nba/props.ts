@@ -28,6 +28,28 @@ export interface PropParams {
   rebSigma: number;
   astSigma: number;
   sims: number;
+  /** 0 = takter ur ratings.ts (krympta mot positionen), 1 = propRates.ts (tvånivå-prior, egen halveringstid per grupp). */
+  rateModel: number;
+  /** Halveringstider (spelarens matcher) för volym, träff, returer, assist — rateModel 1. */
+  hlVolume: number;
+  hlPct: number;
+  hlReb: number;
+  hlAst: number;
+  /** Krympning (minuter) av färsk takt mot spelarens lång sikt, och av lång sikt mot positionen. */
+  shortK: number;
+  longK: number;
+  /** Matcher i lång sikt. */
+  longGames: number;
+  /** Krympning (försök) av träffprocent: 2P, 3P, straffar. */
+  pct2K: number;
+  pct3K: number;
+  ftK: number;
+  /** Usage-omfördelning när ordinarie saknas: andel av plays, assist och returer som tas över. 0 = av. */
+  usageBeta: number;
+  astBeta: number;
+  rebBeta: number;
+  /** Vem tar över: vikt minuter · takt^γ. */
+  usageGamma: number;
 }
 
 export const DEFAULT_PROP_PARAMS: PropParams = {
@@ -38,15 +60,32 @@ export const DEFAULT_PROP_PARAMS: PropParams = {
   rebSigma: 0.2,
   astSigma: 0.25,
   sims: 5000,
+  rateModel: 0,
+  hlVolume: 25,
+  hlPct: 60,
+  hlReb: 20,
+  hlAst: 25,
+  shortK: 300,
+  longK: 400,
+  longGames: 120,
+  pct2K: 150,
+  pct3K: 250,
+  ftK: 60,
+  usageBeta: 0,
+  astBeta: 0,
+  rebBeta: 0,
+  usageGamma: 1,
 };
 
+/** Version för props-prissättningen (sparas på projektioner och picks). */
+export const PROP_MODEL_VERSION = "props-v2";
+
 /**
- * Modellvikt mot marknaden för props. Det finns inga historiska prop-linjer
- * att backtesta mot, så vikten är låg med flit (Sam's Models: 2 %, vår
- * skottmodell: 15 %). Höj den först när facit för props visar att modellen
- * slår linjerna.
+ * Reserv när ingen färsk Pinnacle-linje finns: modellvikt mot bokens EGET
+ * avviggade pris (den gamla vägen). Sådana priser flaggas aldrig — en flagga
+ * kräver ~35 %-enheters oenighet och var nästan alltid en modellbugg.
  */
-export const PROP_BLEND_W = 0.15;
+export const PROP_OWN_BLEND_W = 0.15;
 
 /** Matchens miljö för spelarens lag. */
 export interface PropEnv {

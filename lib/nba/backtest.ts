@@ -14,7 +14,7 @@ import { bucketRecords, clvCheck, clvPoints, gradePick, modelLine, pickFromLine,
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { fitRapm, type RapmFit, type StintRow } from "./rapm";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, isFlagged, type NbaModelParams } from "./params";
-import { modelProb, settle, type NbaMarket } from "./pricing";
+import { anchoredOutcome, modelProb, settle, type NbaMarket } from "./pricing";
 import { firstBefore, leagueAverages, type History, type League, type PlayerGameRow } from "./ratings";
 import { projectGame } from "./project";
 
@@ -49,6 +49,11 @@ export interface MarketMetrics {
   /** Flat 1 enhet på varje markerat spel (edge ≥ tröskeln, odds ≤ taket), mot stängningspriset. */
   bets: number;
   roi: number | null;
+  /**
+   * Krympning mot referenspriset (nba-v4): k trimmad på första delen av datumen
+   * (`split`), log loss på resten. k = 0 = referensens rättvisa pris (power-devig).
+   */
+  shrink?: { curve: Array<{ k: number; logLoss: number }>; bestK: number; nTrain: number; nTest: number; testMarket: number; testShrink: number; testModel: number };
 }
 
 export interface BacktestResult {
@@ -80,7 +85,14 @@ interface Obs {
   price1: number;
   price2: number;
   pPush: number;
+  t: number;
+  line: number | null;
+  /** Modellens väntevärde i Y-enheter (marginal eller total) och P(hemma vinner). */
+  mean: number;
+  pMl: number;
 }
+
+const K_GRID = [0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1];
 
 export function runBacktest(
   h: History,
@@ -104,6 +116,8 @@ export function runBacktest(
      * speltidspriser per match, bästa linjen för modellens sida väljs.
      */
     betQuotes?: Map<number, ClosingQuote[]>;
+    /** Andel av matchdagarna som trimmar krympningen k (resten rapporteras). */
+    split?: number;
     onProgress?: (done: number, total: number) => void;
   } = {}
 ): BacktestResult {
@@ -257,11 +271,25 @@ export function runBacktest(
       const dv = devigProportional(q.price1, [q.price2]);
       if (!dv) continue;
       const mp = modelProb(proj.sim, q.market, q.line);
-      obs.push({ market: q.market, pModel: mp.p, pMarket: dv.p, y, price1: q.price1, price2: q.price2, pPush: mp.push });
+      obs.push({
+        market: q.market,
+        pModel: mp.p,
+        pMarket: dv.p,
+        y,
+        price1: q.price1,
+        price2: q.price2,
+        pPush: mp.push,
+        t: g.t,
+        line: q.line,
+        mean: q.market === "total" ? s.totalMean : s.marginMean,
+        pMl: modelProb(proj.sim, "ml", null).p,
+      });
     }
     opts.onProgress?.(i + 1, games.length);
   }
 
+  const days = [...new Set(games.map((g) => Math.floor(g.t / 864e5)))].sort((a, b) => a - b);
+  const cut = days.length ? days[Math.min(days.length - 1, Math.floor(days.length * (opts.split ?? 0.6)))] * 864e5 : Infinity;
   const markets: Partial<Record<NbaMarket, MarketMetrics>> = {};
   for (const mk of ["ml", "spread", "total"] as NbaMarket[]) {
     const all = obs.filter((o) => o.market === mk);
@@ -285,7 +313,27 @@ export function runBacktest(
       const won = side === 1 ? x.y === 1 : x.y === 0;
       profit += won ? (side === 1 ? x.price1 : x.price2) - 1 : -1;
     }
+    const pAt = (x: Obs, k: number) => {
+      const oc = anchoredOutcome(mk, { line: x.line, price1: x.price1, price2: x.price2 }, x.line, { mean: x.mean, pMl: x.pMl }, k);
+      return oc ? oc.win1 / Math.max(1e-9, 1 - oc.push) : null;
+    };
+    const llK = (xs: Obs[], k: number) => {
+      let sum = 0;
+      let cnt = 0;
+      for (const x of xs) {
+        const pk = pAt(x, k);
+        if (pk == null) continue;
+        sum += ll(pk, x.y);
+        cnt++;
+      }
+      return cnt ? sum / cnt : NaN;
+    };
+    const train = o.filter((x) => x.t < cut);
+    const test = o.filter((x) => x.t >= cut);
+    const curve = K_GRID.map((k) => ({ k, logLoss: llK(train, k) }));
+    const bestK = train.length ? curve.reduce((a, b) => (b.logLoss < a.logLoss ? b : a)).k : 0;
     markets[mk] = {
+      shrink: train.length && test.length ? { curve, bestK, nTrain: train.length, nTest: test.length, testMarket: llK(test, 0), testShrink: llK(test, bestK), testModel: llK(test, 1) } : undefined,
       n: o.length,
       logLossModel: mean((x) => ll(x.pModel, x.y)),
       logLossMarket: mean((x) => ll(x.pMarket, x.y)),

@@ -104,7 +104,7 @@ export function seedFromLiveLines(
     const [[playerId, v]] = [...m];
     if (v < minVotes) continue;
     out.set(pid, { playerId, votes: v });
-    claimed.set(playerId, [...(claimed.get(playerId) ?? []), pid]);
+    { const l_ = claimed.get(playerId); if (l_) l_.push(pid); else claimed.set(playerId, [pid]); }
   }
   for (const pids of claimed.values()) if (pids.length > 1) for (const p of pids) out.delete(p);
   return out;

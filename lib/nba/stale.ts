@@ -57,15 +57,19 @@ export interface Outcome {
 const isWhole = (x: number) => Math.abs(x - Math.round(x)) < 1e-9;
 
 /**
- * Sannolikheter på linjen `line` utifrån Pinnacles rättvisa P(sida 1) på `refLine`.
- * Spread: hemmalagets handicap, sida 1 = hemma. Total: sida 1 = över.
+ * Marknadens väntevärde ur Pinnacles rättvisa P(sida 1) på `refLine`, i
+ * "Y-enheter": spread Y = hemmalagets marginal, total Y = totalen.
  */
-export function outcomeAt(market: "spread" | "total", refLine: number, pRef: number, line: number, sigma = STALE_SIGMA[market]): Outcome {
+export function impliedMean(market: "spread" | "total", refLine: number, pRef: number, sigma = STALE_SIGMA[market]): number {
   // Spread: hemma täcker när marginal + L > 0. Total: över när total − L > 0.
   // Skriv båda som Y − k > 0 med Y ~ N(μ, σ): spread Y = marginal, k = −L; total Y = total, k = L.
-  const k = (l: number) => (market === "spread" ? -l : l);
-  const mu = k(refLine) + sigma * invNormalCdf(pRef);
-  const kk = k(line);
+  const k = market === "spread" ? -refLine : refLine;
+  return k + sigma * invNormalCdf(pRef);
+}
+
+/** Sannolikheter på linjen `line` när Y ~ N(μ, σ). Heltalslinjer får push. */
+export function outcomeFromMean(market: "spread" | "total", mu: number, line: number, sigma = STALE_SIGMA[market]): Outcome {
+  const kk = market === "spread" ? -line : line;
   if (isWhole(line)) {
     const win1 = 1 - normalCdf((kk + 0.5 - mu) / sigma);
     const win2 = normalCdf((kk - 0.5 - mu) / sigma);
@@ -73,6 +77,14 @@ export function outcomeAt(market: "spread" | "total", refLine: number, pRef: num
   }
   const win1 = 1 - normalCdf((kk - mu) / sigma);
   return { win1, push: 0, win2: 1 - win1 };
+}
+
+/**
+ * Sannolikheter på linjen `line` utifrån Pinnacles rättvisa P(sida 1) på `refLine`.
+ * Spread: hemmalagets handicap, sida 1 = hemma. Total: sida 1 = över.
+ */
+export function outcomeAt(market: "spread" | "total", refLine: number, pRef: number, line: number, sigma = STALE_SIGMA[market]): Outcome {
+  return outcomeFromMean(market, impliedMean(market, refLine, pRef, sigma), line, sigma);
 }
 
 export interface Quote {

@@ -8,10 +8,10 @@
 // (maxStake): låg insats = tidig, mjuk linje.
 
 import type { NbaPrisma } from "../nbaDb";
-import { americanToDecimal, getJson, PINNACLE_NBA_LEAGUE } from "../live/books";
+import { americanToDecimal, getJson, parsePinnacle, PINNACLE_NBA_LEAGUE } from "../live/books";
 import { normalizeName, type PropStatKey } from "../oddspapi/markets";
 import { nickname } from "./oddspapiCapture";
-import { savePropLines } from "./store";
+import { saveOddsIfChanged, savePropLines } from "./store";
 
 export const PINNACLE_PROP_BOOK = "pinnacle";
 export const PINNACLE_PROP_SOURCE = "arcadia";
@@ -109,24 +109,47 @@ export function parsePinnacleProps(matchups: PinPropMatchup[], markets: PinPropM
   return out;
 }
 
-export async function fetchPinnacleProps(leagueId = PINNACLE_NBA_LEAGUE): Promise<PinPropLine[]> {
+/** Hela NBA-tavlan hos Pinnacle: matcher (med props som specials) och marknader. */
+export async function fetchPinnacleBoard(leagueId = PINNACLE_NBA_LEAGUE): Promise<{ matchups: PinPropMatchup[]; markets: PinPropMarket[] }> {
   const base = `https://guest.api.arcadia.pinnacle.com/0.1/leagues/${leagueId}`;
   // Ett anrop i taget — parallella anrop har gett tillfälliga 401.
   const matchups = await getJson<PinPropMatchup[]>(`${base}/matchups?brandId=0`);
   const markets = await getJson<PinPropMarket[]>(`${base}/markets/straight`);
-  return parsePinnacleProps(matchups, markets);
+  return { matchups, markets };
 }
 
+/**
+ * Pinnacles huvudlinjer (vinnare, spread, total) och spelarprops — ett och samma
+ * anrop. Matchlinjerna sparas i NbaOdds (book pinnacle, source arcadia) och är
+ * ankaret som bolagens priser prissätts mot.
+ */
 export async function capturePinnacleProps(
   db: NbaPrisma,
   opts: { hours?: number; log?: (m: string) => void } = {}
-): Promise<{ games: number; matched: number; saved: number; unmatched: string[] }> {
-  const res = { games: 0, matched: 0, saved: 0, unmatched: [] as string[] };
+): Promise<{ games: number; matched: number; saved: number; gameLines: number; unmatched: string[] }> {
+  const res = { games: 0, matched: 0, saved: 0, gameLines: 0, unmatched: [] as string[] };
   const now = Date.now();
   const horizon = now + (opts.hours ?? 36) * 3600e3;
-  const lines = (await fetchPinnacleProps()).filter((l) => l.start > now && l.start <= horizon);
+  const board = await fetchPinnacleBoard();
+  const teams0 = await db.nbaTeam.findMany();
+  const nick0 = new Map(teams0.map((t) => [nickname(t.name), t.id]));
+  for (const ev of parsePinnacle(board.matchups as never, board.markets as never)) {
+    if (ev.start <= now || ev.start > horizon) continue;
+    const home = nick0.get(nickname(ev.home));
+    const away = nick0.get(nickname(ev.away));
+    if (!home || !away) continue;
+    const game = await db.nbaGame.findFirst({
+      where: { homeTeamId: home, awayTeamId: away, status: "scheduled", startAt: { gte: new Date(ev.start - 3 * 3600e3), lte: new Date(ev.start + 3 * 3600e3) } },
+    });
+    if (!game) continue;
+    for (const m of ev.markets.filter((x) => x.alt !== true)) {
+      const saved = await saveOddsIfChanged(db, { gameId: game.id, book: PINNACLE_PROP_BOOK, market: m.kind, line: m.line, price1: m.price1, price2: m.price2, source: PINNACLE_PROP_SOURCE });
+      if (saved) res.gameLines++;
+    }
+  }
+  const lines = parsePinnacleProps(board.matchups, board.markets).filter((l) => l.start > now && l.start <= horizon);
   const byParent = new Map<number, PinPropLine[]>();
-  for (const l of lines) byParent.set(l.parentId, [...(byParent.get(l.parentId) ?? []), l]);
+  for (const l of lines) { const l_ = byParent.get(l.parentId); if (l_) l_.push(l); else byParent.set(l.parentId, [l]); }
   res.games = byParent.size;
   if (!byParent.size) return res;
   const teams = await db.nbaTeam.findMany();
@@ -162,6 +185,6 @@ export async function capturePinnacleProps(
     }
     res.saved += await savePropLines(db, game.id, PINNACLE_PROP_BOOK, PINNACLE_PROP_SOURCE, batch, seenAt);
   }
-  opts.log?.(`${res.matched}/${res.games} Pinnacle-matcher, ${res.saved} nya prop-linjer${res.unmatched.length ? ` (ej kopplade: ${res.unmatched.slice(0, 5).join(", ")})` : ""}`);
+  opts.log?.(`${res.matched}/${res.games} Pinnacle-matcher, ${res.saved} nya prop-linjer, ${res.gameLines} nya matchlinjer${res.unmatched.length ? ` (ej kopplade: ${res.unmatched.slice(0, 5).join(", ")})` : ""}`);
   return res;
 }
