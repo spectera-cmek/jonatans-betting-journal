@@ -127,5 +127,5 @@ export function describeEdge(ev: LiveEvent, e: Edge): string {
       : e.kind === "ml"
         ? `${e.side === 1 ? ev.home : ev.away} vinner`
         : `${e.side === 1 ? ev.home : ev.away} ${signed(e.side === 1 ? e.line! : -e.line!)}`;
-  return `${who} @ ${dec(e.price)} (rättvist ${dec(e.fairPrice)}) +${dec(e.ev * 100, 1)} %`;
+  return `${who} @ ${dec(e.price)} (rättvist ${dec(e.fairPrice)}) ${e.ev >= 0 ? "+" : "−"}${dec(Math.abs(e.ev) * 100, 1)} %`;
 }

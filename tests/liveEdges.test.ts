@@ -77,6 +77,8 @@ describe("sega linjer live", () => {
     expect(edges[0].side).toBe(1);
     expect(edges[0].sameLine).toBe(false);
     expect(describeEdge(slow, edges[0])).toMatch(/^Detroit Pistons −1,5 @ 1,92 \(rättvist 1,\d\d\) \+\d+,\d %$/);
+    // Negativt värde skrivs med minus, inte "+-".
+    expect(describeEdge(slow, { ...edges[0], ev: -0.002 })).toMatch(/ −0,2 %$/);
     // Samma linje och normal marginal: inget larm.
     expect(findEdges(ev([{ kind: "spread", line: -4.5, price1: 1.91, price2: 1.91 }]), pin, 0.03)).toHaveLength(0);
   });
