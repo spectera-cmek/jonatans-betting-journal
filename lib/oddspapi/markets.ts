@@ -246,7 +246,10 @@ export function propStatOf(name: string): PropStatKey | null {
   const pts = /point|pts/.test(n);
   const reb = /rebound|reb\b/.test(n);
   const ast = /assist|ast\b/.test(n);
-  if (/three|3-?point|3pt|threes/.test(n) && !reb && !ast) return "fg3";
+  // "3 Point FG", "3-Pointers", "Three Pointers Made", "3PM" … mellanslag och bindestreck varierar.
+  if (/three|\b3\s*-?\s*p(?:oin)?t|\b3pm\b/.test(n) && !reb && !ast) return "fg3";
+  // Andra skottmarknader ("Field Goals Made") är inte poäng.
+  if (/field goal|\bfg\b|\bfgm\b/.test(n)) return null;
   if (pts && reb && ast) return "pra";
   if (/\bpra\b/.test(n)) return "pra";
   if (pts && !reb && !ast) return "pts";
@@ -270,6 +273,23 @@ export function classifyBasketballProp(m: OpMarket): PropMarketSpec | null {
   if (Object.keys(sides).length !== 2) return null;
   const hc = Number.isFinite(m.handicap) && m.handicap > 0 ? m.handicap : null;
   return { stat, line: hc, sides, name: m.marketName };
+}
+
+/**
+ * Tolkar om sparade prop-marknader (ids.json) med dagens regler, så att en
+ * rättning i propStatOf gäller utan att discover körs om. Utan namn: oförändrad.
+ */
+export function reclassifyPropMarkets(m: Record<string, PropMarketSpec> | undefined): Record<string, PropMarketSpec> {
+  const out: Record<string, PropMarketSpec> = {};
+  for (const [id, spec] of Object.entries(m ?? {})) {
+    if (!spec.name) {
+      out[id] = spec;
+      continue;
+    }
+    const stat = propStatOf(spec.name);
+    if (stat) out[id] = { ...spec, stat };
+  }
+  return out;
 }
 
 export function buildPropMarketMap(catalog: OpMarket[]): Record<string, PropMarketSpec> {

@@ -100,6 +100,13 @@ describe("OddsPapi-props", () => {
     expect(propStatOf("Player Rebounds")).toBe("reb");
     expect(propStatOf("Player Assists")).toBe("ast");
     expect(propStatOf("Player Threes Made")).toBe("fg3");
+    // Stavningar som tidigare blev "poäng" (Pinnacles trepoängare hamnade under Poäng).
+    expect(propStatOf("Player 3 Point Field Goals")).toBe("fg3");
+    expect(propStatOf("Player 3 Pointers Made")).toBe("fg3");
+    expect(propStatOf("3-Point Field Goals Made (incl. overtime)")).toBe("fg3");
+    expect(propStatOf("Player 3PM")).toBe("fg3");
+    expect(propStatOf("Player Field Goals Made")).toBeNull();
+    expect(propStatOf("Player Points (incl. overtime)")).toBe("pts");
     expect(propStatOf("Points + Rebounds + Assists")).toBe("pra");
     expect(propStatOf("Player Points 1st Quarter")).toBeNull();
     expect(propStatOf("Double Double")).toBeNull();

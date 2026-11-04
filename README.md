@@ -338,6 +338,9 @@ npm run nba:lag-scan                  # every price change: how often/long books
 npm run nba:live-watch -- --once      # live: Kambi vs Pinnacle now (check the matching)
 npm run nba:live-watch                # live watch until 06:00, phone alerts via ntfy
 npm run nba:live-report               # what the alerts were worth vs Pinnacle's close
+# Player props from Kambi (Unibet/Paf) are fetched free in nba:update and nba:smarkets
+# (book "kambi"); the props page picks the best line among books you can bet,
+# never Pinnacle (the reference) unless nothing else exists.
 npm run oddspapi:books -- unibet betsson   # OddsPapi names of your books (free)
 npm run nba:odds-history -- --confirm --books unibet.se,betsson,bet365   # your books' history
 npm run nba:backtest -- --line bet --bet-books unibet.se,betsson,bet365  # picks at your books

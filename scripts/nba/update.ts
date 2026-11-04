@@ -30,6 +30,7 @@ import { captureNbaOdds } from "../../lib/nba/oddspapiCapture";
 import { hasOddspapiKey, oddspapiCallsThisRun, OddspapiError, quotaLeft } from "../../lib/oddspapi";
 import { projectUpcoming, settlePicks, settleProjections, settleProps } from "../../lib/nba/pipeline";
 import { captureSmarkets } from "../../lib/nba/smarketsCapture";
+import { captureKambiProps } from "../../lib/nba/kambiProps";
 
 function numberArg(flag: string, fallback: number): number {
   const i = process.argv.indexOf(flag);
@@ -89,6 +90,13 @@ async function main() {
   const badOdds = await db.nbaOdds.deleteMany({ where: { market: "total", line: { lt: 150 } } });
   const badPicks = await db.nbaPick.deleteMany({ where: { market: "total", line: { lt: 150 }, result: null } });
   if (badOdds.count || badPicks.count) console.log(`   rensade ${badOdds.count} felaktiga total-linjer och ${badPicks.count} låsta picks mot dem`);
+  // Engångsstädning: Pinnacles trepoängsprops som tolkades som poäng (linjer 0,5–4,5).
+  const badProps = await db.nbaPropLine.deleteMany({ where: { source: "oddspapi", stat: "pts", line: { lt: 5 } } });
+  const badPropProj = await db.nbaPropProjection.updateMany({
+    where: { stat: "pts", line: { lt: 5 }, book: { notIn: ["kambi", "manual"] } },
+    data: { line: null, book: null, over: null, under: null, pMarket: null, pFinal: null, edgeOver: null, edgeUnder: null },
+  });
+  if (badProps.count || badPropProj.count) console.log(`   rensade ${badProps.count} trepoängsprops som sparats som poäng (${badPropProj.count} projektioner)`);
 
   console.log(`${closing ? "2/3" : "3/5"} OddsPapi${closing ? " (stängning)" : ""}`);
   if (process.argv.includes("--no-odds") || lineups) console.log(`   hoppar över (${lineups ? "--lineups är gratis" : "--no-odds"})`);
@@ -118,6 +126,13 @@ async function main() {
     await captureSmarkets(db, { hours: Math.max(hours, 4), closing, log: (m) => console.log(`   Smarkets: ${m}`) });
   } catch (e) {
     console.log(`   Smarkets: hoppar över (${e instanceof Error ? e.message : String(e)})`);
+  }
+
+  // Kambis spelarprops (Unibet/Paf) — gratis, svenska bolag.
+  try {
+    await captureKambiProps(db, { hours: Math.max(hours, 4), log: (m) => console.log(`   Kambi-props: ${m}`) });
+  } catch (e) {
+    console.log(`   Kambi-props: hoppar över (${e instanceof Error ? e.message : String(e)})`);
   }
 
   console.log(`${closing ? "3/3" : "4/5"} Modellen`);

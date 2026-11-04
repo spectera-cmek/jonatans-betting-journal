@@ -23,6 +23,9 @@ import { playerRates, type History, type League } from "./ratings";
 import type { RatingTable } from "./teamRatings";
 import type { MinutesRow } from "./minutes";
 
+/** Marknadsreferensen (går inte att spela på i Sverige) — väljs inte som bästa linje. */
+const REFERENCE_BOOK = process.env.ODDSPAPI_BOOKMAKER ?? "pinnacle";
+
 /** Spelare under så här många minuter får ingen projektion. */
 export const PROP_MIN_MINUTES = 8;
 
@@ -137,7 +140,10 @@ export async function gameProps(
               flagged: isFlagged(pr.edge, pr.bestOdds),
             };
           });
-        const best = quotes.reduce<PropQuote | null>((a, q) => (q.edge != null && (!a || (a.edge ?? -9) < q.edge) ? q : a), null);
+        // Bästa linjen bland bolag du kan spela på; Pinnacle (referensen) bara om inget annat finns.
+        const bettable = quotes.filter((q) => q.book !== REFERENCE_BOOK);
+        const pool = bettable.length ? bettable : quotes;
+        const best = pool.reduce<PropQuote | null>((a, q) => (q.edge != null && (!a || (a.edge ?? -9) < q.edge) ? q : a), null);
         view.stats[stat] = { ...summarizeSamples(x), hist: opts.withHist ? histogram(x) : [], quotes, best };
       }
       out.push(view);

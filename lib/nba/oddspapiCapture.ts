@@ -22,6 +22,7 @@ import {
   normalizeName,
   orientRows,
   pickMainLines,
+  reclassifyPropMarkets,
   type MarketSpec,
 } from "../oddspapi/markets";
 import { saveOddsIfChanged } from "./store";
@@ -143,7 +144,7 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
     propsUnmatched: [],
     unmatched: [],
   };
-  const propMarkets = ids.basketballPropMarkets ?? {};
+  const propMarkets = reclassifyPropMarkets(ids.basketballPropMarkets);
   let allPlayers: Array<{ id: number; name: string }> | null = null;
   const hasPropMarkets = Object.keys(propMarkets).length > 0;
   const now = Date.now();
