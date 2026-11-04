@@ -80,6 +80,19 @@ describe("matchmiljö ur lagratingen", () => {
   });
 });
 
+describe("namn", () => {
+  it("initialer och kända smeknamn kopplas till ESPN:s namn", async () => {
+    const { normalizeName } = await import("../lib/oddspapi/markets");
+    expect(normalizeName("A.J. Green")).toBe(normalizeName("AJ Green"));
+    expect(normalizeName("Green, A.J.")).toBe("aj green");
+    expect(normalizeName("Alexandre Sarr")).toBe(normalizeName("Alex Sarr"));
+    expect(normalizeName("Sarr, Alexandre")).toBe("alex sarr");
+    expect(normalizeName("Luka Dončić")).toBe("luka doncic");
+    expect(normalizeName("Jaren Jackson Jr.")).toBe("jaren jackson");
+    expect(normalizeName("Shai Gilgeous-Alexander")).toBe("shai gilgeous alexander");
+  });
+});
+
 describe("OddsPapi-props", () => {
   const mk = (id: number, name: string, hc: number, prop = true): OpMarket => ({
     marketId: id,
@@ -100,6 +113,13 @@ describe("OddsPapi-props", () => {
     expect(propStatOf("Player Rebounds")).toBe("reb");
     expect(propStatOf("Player Assists")).toBe("ast");
     expect(propStatOf("Player Threes Made")).toBe("fg3");
+    // Stavningar som tidigare blev "poäng" (Pinnacles trepoängare hamnade under Poäng).
+    expect(propStatOf("Player 3 Point Field Goals")).toBe("fg3");
+    expect(propStatOf("Player 3 Pointers Made")).toBe("fg3");
+    expect(propStatOf("3-Point Field Goals Made (incl. overtime)")).toBe("fg3");
+    expect(propStatOf("Player 3PM")).toBe("fg3");
+    expect(propStatOf("Player Field Goals Made")).toBeNull();
+    expect(propStatOf("Player Points (incl. overtime)")).toBe("pts");
     expect(propStatOf("Points + Rebounds + Assists")).toBe("pra");
     expect(propStatOf("Player Points 1st Quarter")).toBeNull();
     expect(propStatOf("Double Double")).toBeNull();

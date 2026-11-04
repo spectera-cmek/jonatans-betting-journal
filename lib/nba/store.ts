@@ -6,6 +6,7 @@ import type { EspnGame, EspnInjury, EspnSummary } from "./espn";
 import type { StintParse } from "./stints";
 import type { RapmFit, StintRow } from "./rapm";
 import { buildHistory, type History, type PlayerGameRow, type TeamGameRow } from "./ratings";
+import { withDbRetry } from "../nbaDbRetry";
 
 export async function upsertGames(db: NbaPrisma, games: EspnGame[]): Promise<number> {
   let n = 0;
@@ -158,13 +159,33 @@ export async function saveInjuries(db: NbaPrisma, list: EspnInjury[]): Promise<n
   return rows.length;
 }
 
-/** Stintar (för RAPM) från och med `since`. */
-export async function loadStints(db: NbaPrisma, since: Date): Promise<StintRow[]> {
-  const rows = await db.nbaStint.findMany({
-    where: { game: { startAt: { gte: since } } },
-    select: { homeIds: true, awayIds: true, homePts: true, awayPts: true, poss: true, game: { select: { startAt: true } } },
-  });
-  return rows.map((r) => ({ t: r.game.startAt.getTime(), homeIds: r.homeIds, awayIds: r.awayIds, homePts: r.homePts, awayPts: r.awayPts, poss: r.poss }));
+/**
+ * Stintar (för RAPM) från och med `since`. Läses i sidor om 20 000 rader med
+ * nytt försök vid tillfälliga fel — en enda fråga om 120 000 rader har fått
+ * Neon att stänga anslutningen.
+ */
+export async function loadStints(db: NbaPrisma, since: Date, opts: { pageSize?: number; log?: (m: string) => void } = {}): Promise<StintRow[]> {
+  const pageSize = opts.pageSize ?? 20000;
+  const out: StintRow[] = [];
+  let cursor: number | undefined;
+  for (;;) {
+    const rows = await withDbRetry(
+      db,
+      () =>
+        db.nbaStint.findMany({
+          where: { game: { startAt: { gte: since } } },
+          select: { id: true, homeIds: true, awayIds: true, homePts: true, awayPts: true, poss: true, game: { select: { startAt: true } } },
+          orderBy: { id: "asc" },
+          take: pageSize,
+          ...(cursor != null ? { cursor: { id: cursor }, skip: 1 } : {}),
+        }),
+      { label: "stintar", log: opts.log }
+    );
+    for (const r of rows) out.push({ t: r.game.startAt.getTime(), homeIds: r.homeIds, awayIds: r.awayIds, homePts: r.homePts, awayPts: r.awayPts, poss: r.poss });
+    if (rows.length < pageSize) break;
+    cursor = rows[rows.length - 1].id;
+  }
+  return out;
 }
 
 /** Sparar spelarnas RAPM (ersätter tabellen). */

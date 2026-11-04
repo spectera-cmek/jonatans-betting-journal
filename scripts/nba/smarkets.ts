@@ -18,6 +18,7 @@ import net from "node:net";
 net.setDefaultAutoSelectFamilyAttemptTimeout(3000);
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
 import { captureSmarkets } from "../../lib/nba/smarketsCapture";
+import { captureKambiProps } from "../../lib/nba/kambiProps";
 
 async function main() {
   if (!hasNbaDb()) {
@@ -29,6 +30,8 @@ async function main() {
   const r = await captureSmarkets(db, { hours, log: (m) => console.log(m) });
   if (!r.events) console.log("Inga kommande NBA-matcher på Smarkets just nu.");
   if (r.unmatched.length) console.log(`Ej kopplade (matchen saknas i databasen — kör nba:update): ${r.unmatched.slice(0, 5).join("; ")}`);
+  // Kambis spelarprops (svenska bolag) följer med i timkörningen — gratis.
+  await captureKambiProps(db, { hours, log: (m) => console.log(`Kambi-props: ${m}`) }).catch((e) => console.log(`Kambi-props: hoppar över (${e instanceof Error ? e.message : e})`));
 }
 
 main()
