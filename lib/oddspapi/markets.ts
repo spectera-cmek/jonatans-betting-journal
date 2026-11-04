@@ -338,16 +338,24 @@ export function extractPropLines(fx: OpFixtureOdds, book: string, markets: Recor
 }
 
 /** "Luka Dončić Jr." → "luka doncic" — för att para OddsPapi-namn med ESPN. */
+/** Bolagens namn → ESPN:s, där de skiljer sig mer än stavningen (efter normalisering). */
+const NAME_ALIASES: Record<string, string> = {
+  "alexandre sarr": "alex sarr",
+};
+
 export function normalizeName(name: string): string {
   // OddsPapi skriver "Reaves, Austin" — vänd till "Austin Reaves" som ESPN.
   const m = /^\s*([^,]+),\s*(.+)$/.exec(name);
   const ordered = m ? `${m[2]} ${m[1]}` : name;
-  return ordered
+  const n = ordered
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
+    // Initialer: "A.J." och "AJ" blir samma.
+    .replace(/\b([a-z])\.\s*(?=[a-z]\b\.?)/g, "$1")
     .replace(/[.'’`-]/g, " ")
     .replace(/\b(jr|sr|ii|iii|iv)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  return NAME_ALIASES[n] ?? n;
 }

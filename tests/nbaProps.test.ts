@@ -80,6 +80,19 @@ describe("matchmiljö ur lagratingen", () => {
   });
 });
 
+describe("namn", () => {
+  it("initialer och kända smeknamn kopplas till ESPN:s namn", async () => {
+    const { normalizeName } = await import("../lib/oddspapi/markets");
+    expect(normalizeName("A.J. Green")).toBe(normalizeName("AJ Green"));
+    expect(normalizeName("Green, A.J.")).toBe("aj green");
+    expect(normalizeName("Alexandre Sarr")).toBe(normalizeName("Alex Sarr"));
+    expect(normalizeName("Sarr, Alexandre")).toBe("alex sarr");
+    expect(normalizeName("Luka Dončić")).toBe("luka doncic");
+    expect(normalizeName("Jaren Jackson Jr.")).toBe("jaren jackson");
+    expect(normalizeName("Shai Gilgeous-Alexander")).toBe("shai gilgeous alexander");
+  });
+});
+
 describe("OddsPapi-props", () => {
   const mk = (id: number, name: string, hc: number, prop = true): OpMarket => ({
     marketId: id,
