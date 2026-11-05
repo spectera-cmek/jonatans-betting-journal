@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/fetcher";
 import type { PlayerPropView, PropQuote } from "@/lib/nba/propsPipeline";
+import { PROP_ANCHOR_W } from "@/lib/nba/propPricing";
 import { PROP_LABEL, type PropStat } from "@/lib/nba/props";
 import { dec, pct } from "./common";
 
@@ -204,12 +205,13 @@ export function PropsPanel({
     await api.del(`/api/nba/props?id=${id}`).catch(() => null);
     onChanged();
   };
-  const GRID = "1.6fr 60px 70px 1.3fr 90px 24px";
+  const GRID = "1.6fr 56px 64px 104px 1.3fr 84px 24px";
+  const w = Math.round(PROP_ANCHOR_W[stat] * 100);
   return (
     <Card style={{ padding: 0, marginBottom: 16 }}>
       <div className="ap-card-head">
         <span className="ap-card-title">Spelarprops</span>
-        <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>5 000 simulerade kvällar per spelare · modellen väger 15 % mot linjen</span>
+        <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>5 000 kvällar/spelare · modell {w} % · Pinnacle {100 - w} %</span>
       </div>
       <div style={{ padding: "10px 16px 0" }}>
         <div className="ap-seg">
@@ -221,11 +223,12 @@ export function PropsPanel({
         </div>
       </div>
       <div className="ap-nba-scroll">
-        <div className="ap-table" style={{ minWidth: 600 }}>
+        <div className="ap-table" style={{ minWidth: 680 }}>
           <div className="ap-thead" style={{ gridTemplateColumns: GRID }}>
             <span>Spelare</span>
             <span className="ap-r">Min</span>
             <span className="ap-r">Modell</span>
+            <span className="ap-r">Pinnacle</span>
             <span>Bästa linje</span>
             <span className="ap-r">Edge</span>
             <span />
@@ -256,6 +259,15 @@ export function PropsPanel({
                   <span className="ap-r ap-num">
                     <b>{num(s.mean)}</b>
                   </span>
+                  <span className="ap-r ap-num" title={s.pin ? `sedd för ${s.pin.ageMin} min sedan${s.pin.maxStake ? ` · maxinsats ${s.pin.maxStake}` : ""}` : "ingen Pinnacle-linje"}>
+                    {s.pin ? (
+                      <>
+                        {String(s.pin.line).replace(".", ",")} <span style={{ color: "var(--dim2)" }}>{s.pin.fair == null ? "" : pct(s.pin.fair, 0)}</span>
+                      </>
+                    ) : (
+                      <span style={{ color: "var(--dim2)" }}>—</span>
+                    )}
+                  </span>
                   <span className="ap-num ap-ell">
                     {b ? (
                       <>
@@ -281,7 +293,7 @@ export function PropsPanel({
                           <span className="ap-r">Linje</span>
                           <span className="ap-r">Över</span>
                           <span className="ap-r">Under</span>
-                          <span className="ap-r">Modell · marknad</span>
+                          <span className="ap-r">Modell · Pinnacle</span>
                           <span className="ap-r">Edge</span>
                           <span />
                         </div>
@@ -294,8 +306,8 @@ export function PropsPanel({
                             <span className="ap-r ap-num">{String(q.line).replace(".", ",")}</span>
                             <span className="ap-r ap-num">{dec(q.over)}</span>
                             <span className="ap-r ap-num">{dec(q.under)}</span>
-                            <span className="ap-r ap-num">
-                              {pct(q.pModel, 0)} · {q.pMarket == null ? "—" : pct(q.pMarket, 0)}
+                            <span className="ap-r ap-num" title={q.anchor === "own" ? "ingen färsk Pinnacle-linje — bokens eget pris, flaggas inte" : undefined}>
+                              {pct(q.pModel, 0)} · {q.pAnchor == null ? <span style={{ color: "var(--dim2)" }}>eget {q.pMarket == null ? "—" : pct(q.pMarket, 0)}</span> : pct(q.pAnchor, 0)}
                             </span>
                             <span className={`ap-r ap-num ${q.edge == null ? "" : q.edge >= 0 ? "pos" : "neg"}`}>
                               {q.edge == null ? "—" : `${(q.edge * 100).toFixed(1)} % ${sideText(q)}`}
@@ -312,7 +324,7 @@ export function PropsPanel({
                       </div>
                     )}
                     <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>
-                      Modellens P(över) vägs 15 % mot linjens pris efter att marginalen räknats bort — linjen bär resten. Spelare som inte spelar blir void.
+                      Pinnacles rättvisa pris flyttat till linjen · modell {w} % · utan färsk Pinnacle-linje: eget pris, ingen flagga · spelar han inte blir det void.
                     </div>
                     {editable && <AddPropLine gameId={gameId} playerId={p.playerId} stat={stat} onSaved={onChanged} />}
                   </div>

@@ -1,7 +1,7 @@
 // NBA-modellens parametrar på ett ställe. Backtesten (npm run nba:backtest)
 // är det som ska flytta dem — ändra versionen när modellens matte ändras.
 
-export const NBA_MODEL_VERSION = "nba-v3";
+export const NBA_MODEL_VERSION = "nba-v4";
 
 export interface NbaModelParams {
   /** Spelartakter: halveringstid i spelarens egna matcher. */
@@ -134,6 +134,26 @@ export const DEFAULT_NBA_BLEND_W: Record<"ml" | "spread" | "total", number> = {
   ml: 0.1,
   spread: 0.1,
   total: 0.1,
+};
+
+/**
+ * Krympning mot Pinnacle per marknad (nba-v4): spread/total i poäng,
+ * μ* = μ_Pinnacle + k·(μ_modell − μ_Pinnacle); ml i log-odds. Bolagens priser
+ * prissätts mot Pinnacles rättvisa pris (power-devig), inte mot sitt eget.
+ *
+ * Backtest vid speltid (nba:backtest --line bet --split 0.6), 693 matcher
+ * 14 jan–3 nov 2026 mot Pinnacle 12 h före start, förra matchens spelare.
+ * k trimmat på första 60 % av datumen, log loss på resten (≈160 matcher):
+ *   ml      k = 0   — Pinnacle 0,6022, ren modell 0,6271
+ *   spread  k = 0   — Pinnacle 0,6943, ren modell 0,7008
+ *   total   k = 0,2 — Pinnacle 0,6933, krympt 0,6888, ren modell 0,6904;
+ *                     CLV utöver slumpad sida +0,32 poäng (t = 4,0)
+ * Vid k = 0 är edgen ren "seg linje" mot Pinnacle (se nba:stale-lines).
+ */
+export const DEFAULT_NBA_SHRINK_K: Record<"ml" | "spread" | "total", number> = {
+  ml: 0,
+  spread: 0,
+  total: 0.2,
 };
 
 /** Edge (EV per satsad enhet) som markeras som spelvärd på /nba. */

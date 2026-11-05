@@ -4,6 +4,7 @@ import { nbaPrisma, hasNbaDb } from "@/lib/nbaDb";
 import { noNbaDb } from "@/lib/nba/api";
 import { NBA_EDGE_THRESHOLD, NBA_MAX_FLAG_ODDS } from "@/lib/nba/params";
 import { PROP_STATS } from "@/lib/nba/props";
+import { PROP_ANCHOR_W } from "@/lib/nba/propPricing";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function GET(req: Request) {
   if (!hasNbaDb()) return noNbaDb();
   const days = Math.min(7, Math.max(1, Number(new URL(req.url).searchParams.get("days")) || 2));
   const now = Date.now();
-  const [rows, settled, players, teams] = await Promise.all([
+  const [rows, settled, players, teams, picks] = await Promise.all([
     nbaPrisma.nbaPropProjection.findMany({
       where: { game: { status: "scheduled", startAt: { gte: new Date(now - 4 * 3600e3), lte: new Date(now + days * 864e5) } } },
       include: { game: { select: { id: true, startAt: true, homeTeamId: true, awayTeamId: true } } },
@@ -23,6 +24,7 @@ export async function GET(req: Request) {
     nbaPrisma.nbaPropProjection.findMany({ where: { actual: { not: null } }, select: { stat: true, mean: true, q10: true, q90: true, actual: true, line: true, over: true, under: true, edgeOver: true, edgeUnder: true } }),
     nbaPrisma.nbaPlayer.findMany({ select: { id: true, name: true } }),
     nbaPrisma.nbaTeam.findMany({ select: { id: true, abbr: true } }),
+    nbaPrisma.nbaPropPick.findMany({ where: { result: { in: ["W", "L", "P"] } }, select: { gameId: true, stat: true, result: true, price: true, evClose: true } }),
   ]);
   const name = new Map(players.map((p) => [p.id, p.name]));
   const abbr = new Map(teams.map((t) => [t.id, t.abbr]));
@@ -56,12 +58,29 @@ export async function GET(req: Request) {
         profit -= 1;
       }
     }
-    return { stat, n: l.length, mae: l.length ? ae / l.length : null, coverage: l.length ? cov / l.length : null, bets, w, l: lo, roi: bets ? profit / bets : null };
+    // Låsta picks (props-v2): första flaggan per spelare och statistik, med CLV mot Pinnacles stängning.
+    const pk = picks.filter((x) => x.stat === stat);
+    const pkProfit = pk.reduce((a, x) => a + (x.result === "W" ? x.price - 1 : x.result === "L" ? -1 : 0), 0);
+    const ev = pk.filter((x) => x.evClose != null).map((x) => x.evClose!);
+    const evMean = ev.length ? ev.reduce((a, b) => a + b, 0) / ev.length : null;
+    const evSd = ev.length > 1 && evMean != null ? Math.sqrt(ev.reduce((a, b) => a + (b - evMean) ** 2, 0) / (ev.length - 1)) : null;
+    return {
+      stat,
+      n: l.length,
+      mae: l.length ? ae / l.length : null,
+      coverage: l.length ? cov / l.length : null,
+      bets,
+      w,
+      l: lo,
+      roi: bets ? profit / bets : null,
+      picks: { n: pk.length, w: pk.filter((x) => x.result === "W").length, l: pk.filter((x) => x.result === "L").length, roi: pk.length ? pkProfit / pk.length : null, clv: evMean, clvT: evMean != null && evSd ? evMean / (evSd / Math.sqrt(ev.length)) : null },
+    };
   });
   return NextResponse.json({
     dbConfigured: true,
     threshold: NBA_EDGE_THRESHOLD,
     maxOdds: NBA_MAX_FLAG_ODDS,
+    weights: PROP_ANCHOR_W,
     facit,
     props: rows.map((r) => ({
       gameId: r.gameId,
@@ -83,6 +102,11 @@ export async function GET(req: Request) {
       pMarket: r.pMarket,
       edgeOver: r.edgeOver,
       edgeUnder: r.edgeUnder,
+      anchor: r.anchor,
+      pAnchor: r.pAnchor,
+      pinLine: r.pinLine,
+      pinOver: r.pinOver,
+      pinUnder: r.pinUnder,
     })),
   });
 }

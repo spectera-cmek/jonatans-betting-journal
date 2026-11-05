@@ -7,6 +7,8 @@ import { Card } from "@/components/ui";
 import { SPORT_IC } from "@/components/icons";
 import { api } from "@/lib/fetcher";
 import { NbaEmpty, NbaNoDb, dateLabel, pct, signed, sideLabel, type Market } from "@/components/nba/common";
+import { devigTwoWay } from "@/lib/nba/devig";
+import { PROP_DEVIG } from "@/lib/nba/propPricing";
 
 interface Proj {
   market: Market;
@@ -511,6 +513,11 @@ interface PropRow {
   pMarket: number | null;
   edgeOver: number | null;
   edgeUnder: number | null;
+  anchor: "pinnacle" | "own" | null;
+  pAnchor: number | null;
+  pinLine: number | null;
+  pinOver: number | null;
+  pinUnder: number | null;
 }
 
 interface PropFacit {
@@ -522,9 +529,13 @@ interface PropFacit {
   w: number;
   l: number;
   roi: number | null;
+  /** Låsta picks (props-v2) med CLV mot Pinnacles stängning. */
+  picks: { n: number; w: number; l: number; roi: number | null; clv: number | null; clvT: number | null };
 }
 
-type PropsResp = { dbConfigured: false } | { dbConfigured: true; threshold: number; maxOdds: number; props: PropRow[]; facit: PropFacit[] };
+type PropsResp =
+  | { dbConfigured: false }
+  | { dbConfigured: true; threshold: number; maxOdds: number; weights: Record<PropStatKey, number>; props: PropRow[]; facit: PropFacit[] };
 
 function PropsTab() {
   const [data, setData] = useState<PropsResp | null>(null);
@@ -549,7 +560,8 @@ function PropsTab() {
     .filter((r) => r.stat === stat && (!onlyLines || r.line != null))
     .sort((a, b) => (best(b).edge ?? -9) - (best(a).edge ?? -9) || b.mean - a.mean);
   const f = data.facit.find((x) => x.stat === stat);
-  const PG = "1.1fr 1.4fr 56px 70px 90px 1.3fr 80px";
+  const wPct = Math.round((data.weights?.[stat] ?? 0) * 100);
+  const PG = "1.1fr 1.4fr 56px 64px 84px 96px 1.3fr 80px";
   return (
     <>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
@@ -581,11 +593,16 @@ function PropsTab() {
             <b className="ap-num">{f.coverage == null ? "—" : pct(f.coverage, 0)}</b>
           </div>
           <div className="ap-card">
-            <small>Markerade spel</small>
+            <small>Låsta spel (mot Pinnacle)</small>
             <b className="ap-num">
-              {f.w}-{f.l}
+              {f.picks.w}-{f.picks.l}
             </b>
-            <span style={{ fontSize: 12, color: "var(--dim2)" }}>{f.roi == null ? "—" : `ROI ${pct(f.roi, 1)}`}</span>
+            <span style={{ fontSize: 12, color: "var(--dim2)" }}>{f.picks.roi == null ? "—" : `ROI ${pct(f.picks.roi, 1)}`}</span>
+          </div>
+          <div className="ap-card">
+            <small>CLV mot Pinnacles stängning</small>
+            <b className={`ap-num ${f.picks.clv == null ? "" : f.picks.clv >= 0 ? "pos" : "neg"}`}>{f.picks.clv == null ? "—" : pct(f.picks.clv, 1)}</b>
+            <span style={{ fontSize: 12, color: "var(--dim2)" }}>{f.picks.clvT == null ? `${f.picks.n} spel` : `t ${num(f.picks.clvT, 1)} · ${f.picks.n} spel`}</span>
           </div>
         </div>
       )}
@@ -608,12 +625,15 @@ function PropsTab() {
                 <span className="ap-r">Min</span>
                 <span className="ap-r">Modell</span>
                 <span className="ap-r">10–90 %</span>
+                <span className="ap-r">Pinnacle</span>
                 <span>Linje · bästa sida</span>
                 <span className="ap-r">Edge</span>
               </div>
               {rows.map((r) => {
                 const b = best(r);
-                const flagged = b.edge != null && b.price != null && b.edge >= data.threshold && b.price <= data.maxOdds;
+                // Bara priser förankrade i Pinnacle flaggas (props-v2).
+                const flagged = r.anchor === "pinnacle" && b.edge != null && b.price != null && b.edge >= data.threshold && b.price <= data.maxOdds;
+                const pinFair = r.pinOver != null && r.pinUnder != null ? devigTwoWay(r.pinOver, r.pinUnder, PROP_DEVIG) : null;
                 return (
                   <Link
                     key={`${r.gameId}-${r.playerId}`}
@@ -634,6 +654,15 @@ function PropsTab() {
                     <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>
                       {num(r.q10, 0)}–{num(r.q90, 0)}
                     </span>
+                    <span className="ap-r ap-num">
+                      {r.pinLine == null ? (
+                        <span style={{ color: "var(--dim2)" }}>—</span>
+                      ) : (
+                        <>
+                          {String(r.pinLine).replace(".", ",")} <span style={{ color: "var(--dim2)" }}>{pinFair == null ? "" : pct(pinFair, 0)}</span>
+                        </>
+                      )}
+                    </span>
                     <span className="ap-ell ap-num">
                       {r.line == null ? (
                         <span style={{ color: "var(--dim2)" }}>ingen linje</span>
@@ -652,8 +681,8 @@ function PropsTab() {
         </Card>
       )}
       <p style={{ fontSize: 12, color: "var(--dim2)", marginTop: 10 }}>
-        Modellen simulerar 5 000 kvällar per spelare (minuter, skott, träff, returer, assist) och väger 15 % mot linjen efter att marginalen räknats
-        bort. Markeras vid edge ≥ {Math.round(data.threshold * 100)} % och odds ≤ {String(data.maxOdds).replace(".", ",")}. Klicka för fördelningen.
+        Pinnacles rättvisa pris flyttat till bolagets linje · modell {wPct} % · flagga vid edge ≥ {Math.round(data.threshold * 100)} % och odds ≤{" "}
+        {String(data.maxOdds).replace(".", ",")} · utan färsk Pinnacle-linje ingen flagga.
       </p>
     </>
   );

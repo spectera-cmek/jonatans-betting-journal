@@ -23,7 +23,7 @@ config();
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
 import { loadHistory, loadStints } from "../../lib/nba/store";
 import { runBacktest, type BacktestGame, type ClosingQuote } from "../../lib/nba/backtest";
-import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, type NbaModelParams } from "../../lib/nba/params";
+import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_SHRINK_K, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, type NbaModelParams } from "../../lib/nba/params";
 import type { NbaMarket } from "../../lib/nba/pricing";
 import { oddspapiBookmaker } from "../../lib/oddspapi";
 import { betSource } from "../../lib/nba/oddspapiCapture";
@@ -153,6 +153,7 @@ async function main() {
     stints,
     lineup,
     betQuotes: betBookList.length ? betQuotes : undefined,
+    split: Number(arg("--split")) || 0.6,
     onProgress: (d, n) => {
       if (d - last >= 100 || d === n) {
         last = d;
@@ -173,6 +174,14 @@ async function main() {
         `bästa vikt ${x.bestW} (nu ${DEFAULT_NBA_BLEND_W[m as NbaMarket]})  spel ≥5 %: ${x.bets}${x.roi != null ? `, ROI ${(x.roi * 100).toFixed(1)} %` : ""}`
     );
     console.log(`        ${x.blend.map((b) => `${b.w}:${b.logLoss.toFixed(4)}`).join("  ")}`);
+    if (x.shrink) {
+      const sh = x.shrink;
+      console.log(
+        `        krympning mot referensen (nba-v4): bästa k ${sh.bestK} (nu ${DEFAULT_NBA_SHRINK_K[m as NbaMarket]}) på ${sh.nTrain} träning · testdelen n=${sh.nTest}: ` +
+          `referens ${f(sh.testMarket, 4)}  krympt ${f(sh.testShrink, 4)}  modell ${f(sh.testModel, 4)}`
+      );
+      console.log(`        träning: ${sh.curve.map((c) => `${c.k}:${c.logLoss.toFixed(4)}`).join("  ")}`);
+    }
   }
   console.log("");
   if (r.betBooks) {
