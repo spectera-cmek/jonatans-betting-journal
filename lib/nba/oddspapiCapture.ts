@@ -224,6 +224,19 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
 export const HISTORY_CLOSING = "oddspapi-history";
 export const HISTORY_BET = "oddspapi-bet";
 
+/**
+ * Bolag vars sparade OddsPapi-historik inte går att lita på. bet365: platta priser
+ * (1,9/1,9) över hela linjestegen gav godtyckliga alternativlinjer — 81 % av
+ * spreadarna har omvänt tecken mot Pinnacle (npm run nba:check-books -- bet365).
+ * pickMainLines hoppar nu över sådana stegar, men raderna som redan sparats finns kvar.
+ */
+export const UNRELIABLE_HISTORY_BOOKS = new Set(["bet365"]);
+
+/** true för en historikrad (stängning eller speltid) från ett bolag ovan. */
+export function isUnreliableHistory(source: string, book: string): boolean {
+  return source.startsWith(HISTORY_BET) || source === HISTORY_CLOSING ? UNRELIABLE_HISTORY_BOOKS.has(book) : false;
+}
+
 /** Källnamnet för speltidspriset: "oddspapi-bet" vid 12 h, annars t.ex. "oddspapi-bet-4h". */
 export function betSource(hours = 12): string {
   return hours === 12 ? HISTORY_BET : `${HISTORY_BET}-${hours}h`;

@@ -9,7 +9,7 @@
 
 import { devigProportional } from "../fairOdds";
 import { blendProb } from "../shotModel";
-import { baseLineup, baselineMinutes, projectMinutes } from "./minutes";
+import { baseLineup, baselineMinutes, ownBaseline, projectMinutes } from "./minutes";
 import { bucketRecords, clvCheck, clvPoints, gradePick, modelLine, pickFromLine, type BucketRecord, type ClvCheck, type GradedPick, type PickMarket } from "./picks";
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
 import { fitRapm, type RapmFit, type StintRow } from "./rapm";
@@ -17,6 +17,7 @@ import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, isFlagged, type NbaModelParams
 import { modelProb, settle, type NbaMarket } from "./pricing";
 import { firstBefore, leagueAverages, type History, type League, type PlayerGameRow } from "./ratings";
 import { projectGame } from "./project";
+import { fitMarketRatings, type MarketLine, type MarketRatings } from "./marketRatings";
 
 export interface BacktestGame {
   id: number;
@@ -54,8 +55,9 @@ export interface MarketMetrics {
 export interface BacktestResult {
   games: number;
   /** maeModelSame = modellens MAE på exakt de matcher som har en marknadslinje (rättvis jämförelse). */
-  margin: { maeModel: number; maeModelSame: number | null; maeMarket: number | null; bias: number; residualSd: number; simSd: number };
-  total: { maeModel: number; maeModelSame: number | null; maeMarket: number | null; bias: number; residualSd: number; simSd: number };
+  /** slope = utfallet regresserat på modellens snitt: 1 = rätt skala, över 1 = modellen trycker ihop skillnaderna. */
+  margin: { maeModel: number; maeModelSame: number | null; maeMarket: number | null; bias: number; residualSd: number; simSd: number; slope: number | null };
+  total: { maeModel: number; maeModelSame: number | null; maeMarket: number | null; bias: number; residualSd: number; simSd: number; slope: number | null };
   markets: Partial<Record<NbaMarket, MarketMetrics>>;
   /** Picks i poäng mot stängningslinjen, per edge-hink (alla, 3+, 6+). */
   ats: Partial<Record<PickMarket, BucketRecord[]>>;
@@ -65,7 +67,35 @@ export interface BacktestResult {
   betBooks?: Record<string, number>;
   /** Med betQuotes: bolagslinjer som slängdes för att de låg orimligt långt från Pinnacles. */
   suspicious?: Record<PickMarket, number>;
+  /** Med topEdges: de största edgarna för ren modell (vikt 1), störst först. */
+  edges?: EdgeRow[];
   books: string[];
+}
+
+/** Ett enskilt pris där modellen ser värde — för att granska de största edgarna. */
+export interface EdgeRow {
+  gameId: number;
+  t: number;
+  homeId: number;
+  awayId: number;
+  market: NbaMarket;
+  line: number | null;
+  book: string;
+  /** 1 = hemma/över, 2 = borta/under. */
+  side: 1 | 2;
+  price: number;
+  /** Modellens och marknadens (avviggade) P(den spelade sidan | ingen push). */
+  pModel: number;
+  pMarket: number;
+  /** EV per enhet med ren modell, och med standardvikten mot marknaden. */
+  edge: number;
+  edgeBlend: number;
+  homeMean: number;
+  awayMean: number;
+  homeScore: number;
+  awayScore: number;
+  /** 1 = sidan vann, 0 = förlorade, 0,5 = push. */
+  result: number;
 }
 
 const LOG_EPS = 1e-6;
@@ -73,6 +103,16 @@ const ll = (p: number, y: number) => -(y * Math.log(Math.max(LOG_EPS, p)) + (1 -
 const W_GRID = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1];
 
 interface Obs {
+  gameId: number;
+  t: number;
+  homeId: number;
+  awayId: number;
+  line: number | null;
+  book: string;
+  homeMean: number;
+  awayMean: number;
+  homeScore: number;
+  awayScore: number;
   market: NbaMarket;
   pModel: number;
   pMarket: number;
@@ -104,6 +144,10 @@ export function runBacktest(
      * speltidspriser per match, bästa linjen för modellens sida väljs.
      */
     betQuotes?: Map<number, ClosingQuote[]>;
+    /** Returnera så här många av de största edgarna (ren modell) i `edges`. */
+    topEdges?: number;
+    /** Stängningslinjer (spread) för spelade matcher, för marknadens lagrating (params.marketMix > 0). */
+    marketLines?: MarketLine[];
     onProgress?: (done: number, total: number) => void;
   } = {}
 ): BacktestResult {
@@ -117,14 +161,22 @@ export function runBacktest(
   const leagueByDay = new Map<number, League>();
   const ratingsByDay = new Map<number, RatingTable>();
   const rapmByWeek = new Map<number, RapmFit>();
+  const marketByDay = new Map<number, MarketRatings>();
   const picks: Record<PickMarket, GradedPick[]> = { spread: [], total: [] };
   const always1: Record<PickMarket, number[]> = { spread: [], total: [] };
   const betBooks: Record<string, number> = {};
   const suspicious: Record<PickMarket, number> = { spread: 0, total: 0 };
   const obs: Obs[] = [];
   const books = new Set<string>();
-  const m = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
-  const t = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0 };
+  // sx, sy, sxx, sxy: modellens snitt (x) mot utfallet (y), för lutningen.
+  const m = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0, sx: 0, sy: 0, sxx: 0, sxy: 0 };
+  const t = { absModel: 0, absMarket: 0, absModelSame: 0, nMarket: 0, err: 0, sq: 0, simVar: 0, sx: 0, sy: 0, sxx: 0, sxy: 0 };
+  const xy = (a: typeof m, x: number, y: number) => {
+    a.sx += x;
+    a.sy += y;
+    a.sxx += x * x;
+    a.sxy += x * y;
+  };
   let n = 0;
 
   for (const [i, g] of games.entries()) {
@@ -149,21 +201,23 @@ export function runBacktest(
         rapmByWeek.set(week, rapm);
       }
     }
+    let market: MarketRatings | undefined;
+    if ((p.marketMix ?? 0) > 0 && opts.marketLines?.length) {
+      // Bara linjer från matcher före den här (fitMarketRatings filtrerar på t < asOf).
+      market = marketByDay.get(day) ?? fitMarketRatings(opts.marketLines, day * 864e5);
+      marketByDay.set(day, market);
+    }
     const rows = played.get(g.id) ?? [];
     const lineup = (teamId: number) => {
       let who: Set<number>;
-      if (opts.lineup === "prev") {
-        // Förra matchens spelare — inga besked från matchdagen.
-        const teamRows = h.teams.get(teamId) ?? [];
-        const prev = teamRows[firstBefore(teamRows, g.t)];
-        who = new Set((prev ? played.get(prev.gameId) ?? [] : []).filter((r) => r.teamId === teamId && r.minutes > 0).map((r) => r.playerId));
-      } else who = new Set(rows.filter((r) => r.teamId === teamId && r.minutes > 0).map((r) => r.playerId));
+      if (opts.lineup === "prev") who = prevLineup(h, played, teamId, g.t);
+      else who = new Set(rows.filter((r) => r.teamId === teamId && r.minutes > 0).map((r) => r.playerId));
       const base = new Map(baselineMinutes(h, teamId, g.t, { activeDays: 400 }).map((b) => [b.playerId, b.baseline]));
       const inputs = [...who].map((playerId) => ({
         playerId,
         name: "",
         position: null,
-        baseline: Math.max(4, base.get(playerId) ?? 12),
+        baseline: Math.max(4, base.get(playerId) ?? ownBaseline(h, playerId, g.t) ?? 12),
         games: 0,
         injuryStatus: null,
         injuryDetail: null,
@@ -188,6 +242,7 @@ export function runBacktest(
         homeBaseLineup: baseLineup(h, g.homeId, g.t),
         awayBaseLineup: baseLineup(h, g.awayId, g.t),
         rapm,
+        market,
       },
       p,
       league,
@@ -201,10 +256,12 @@ export function runBacktest(
     m.err += margin - s.marginMean;
     m.sq += (margin - s.marginMean) ** 2;
     m.simVar += s.marginSd ** 2;
+    xy(m, s.marginMean, margin);
     t.absModel += Math.abs(total - s.totalMean);
     t.err += total - s.totalMean;
     t.sq += (total - s.totalMean) ** 2;
     t.simVar += s.totalSd ** 2;
+    xy(t, s.totalMean, total);
 
     for (const q of closing.get(g.id) ?? []) {
       books.add(q.book);
@@ -257,7 +314,25 @@ export function runBacktest(
       const dv = devigProportional(q.price1, [q.price2]);
       if (!dv) continue;
       const mp = modelProb(proj.sim, q.market, q.line);
-      obs.push({ market: q.market, pModel: mp.p, pMarket: dv.p, y, price1: q.price1, price2: q.price2, pPush: mp.push });
+      obs.push({
+        gameId: g.id,
+        t: g.t,
+        homeId: g.homeId,
+        awayId: g.awayId,
+        line: q.line,
+        book: q.book,
+        homeMean: s.homeMean,
+        awayMean: s.awayMean,
+        homeScore: g.homeScore,
+        awayScore: g.awayScore,
+        market: q.market,
+        pModel: mp.p,
+        pMarket: dv.p,
+        y,
+        price1: q.price1,
+        price2: q.price2,
+        pPush: mp.push,
+      });
     }
     opts.onProgress?.(i + 1, games.length);
   }
@@ -305,6 +380,7 @@ export function runBacktest(
     bias: n ? x.err / n : 0,
     residualSd: n ? Math.sqrt(x.sq / n) : 0,
     simSd: n ? Math.sqrt(x.simVar / n) : 0,
+    slope: n > 1 ? (n * x.sxy - x.sx * x.sy) / (n * x.sxx - x.sx * x.sx || 1) : null,
   });
   return {
     games: n,
@@ -314,9 +390,73 @@ export function runBacktest(
     ats: { spread: bucketRecords(picks.spread), total: bucketRecords(picks.total) },
     clv: opts.closeLines ? { spread: clvCheck(picks.spread, always1.spread), total: clvCheck(picks.total, always1.total) } : undefined,
     books: [...books],
+    edges: opts.topEdges ? topEdges(obs, opts.topEdges) : undefined,
     betBooks: opts.betQuotes ? betBooks : undefined,
     suspicious: opts.betQuotes ? suspicious : undefined,
   };
+}
+
+/** EV per enhet för sida 1 och 2 med sannolikheten p för sida 1 (betingad på ingen push). */
+function evs(x: Obs, p: number): [number, number] {
+  const live = 1 - x.pPush;
+  return [x.price1 * p * live + x.pPush - 1, x.price2 * (1 - p) * live + x.pPush - 1];
+}
+
+/** De n största edgarna för ren modell, en rad per pris (bästa sidan). */
+function topEdges(obs: Obs[], n: number): EdgeRow[] {
+  const rows: EdgeRow[] = obs.map((x) => {
+    const [e1, e2] = evs(x, x.pModel);
+    const side: 1 | 2 = e1 >= e2 ? 1 : 2;
+    const [b1, b2] = evs(x, blendProb(x.pModel, x.pMarket, DEFAULT_NBA_BLEND_W[x.market]));
+    return {
+      gameId: x.gameId,
+      t: x.t,
+      homeId: x.homeId,
+      awayId: x.awayId,
+      market: x.market,
+      line: x.line,
+      book: x.book,
+      side,
+      price: side === 1 ? x.price1 : x.price2,
+      pModel: side === 1 ? x.pModel : 1 - x.pModel,
+      pMarket: side === 1 ? x.pMarket : 1 - x.pMarket,
+      edge: side === 1 ? e1 : e2,
+      edgeBlend: side === 1 ? b1 : b2,
+      homeMean: x.homeMean,
+      awayMean: x.awayMean,
+      homeScore: x.homeScore,
+      awayScore: x.awayScore,
+      result: x.y === 0.5 ? 0.5 : side === 1 ? x.y : 1 - x.y,
+    };
+  });
+  return rows.sort((a, b) => b.edge - a.edge).slice(0, n);
+}
+
+/**
+ * Vilka som spelar enligt det som är känt på morgonen: förra matchens spelare,
+ * plus rotationsspelare som inte alls stod i förra matchens boxscore (vilade
+ * eller inaktiva) men spelade senast de stod med, inom lagets fem senaste
+ * matcher. Utan dem såg slutspelets första match ut som en match för bänken:
+ * på grundseriens sista dag vilade OKC, BOS och CLE hela startfemman, som inte
+ * ens står i boxscoren. Den som stod som DNP i förra matchen (skada, tränarens
+ * val, vila) räknas som borta.
+ */
+export function prevLineup(h: History, played: Map<number, PlayerGameRow[]>, teamId: number, t: number): Set<number> {
+  const teamRows = h.teams.get(teamId) ?? [];
+  const i0 = firstBefore(teamRows, t);
+  const prev = teamRows[i0];
+  if (!prev) return new Set();
+  const prevRows = (played.get(prev.gameId) ?? []).filter((r) => r.teamId === teamId);
+  const who = new Set(prevRows.filter((r) => r.minutes > 0).map((r) => r.playerId));
+  const listed = new Set(prevRows.map((r) => r.playerId));
+  const recent = new Set(teamRows.slice(i0, i0 + 5).map((r) => r.gameId));
+  for (const b of baselineMinutes(h, teamId, t, { activeDays: 45 })) {
+    if (listed.has(b.playerId)) continue;
+    const rows = h.players.get(b.playerId) ?? [];
+    const last = rows[firstBefore(rows, t)];
+    if (last && last.teamId === teamId && last.minutes > 0 && recent.has(last.gameId)) who.add(b.playerId);
+  }
+  return who;
 }
 
 /** Största rimliga skillnad mot Pinnacles linje vid samma tidpunkt, i poäng. */

@@ -211,7 +211,12 @@ export function pickMainLines(rows: LineRow[]): LineRow[] {
     const mains = c.filter((r) => r.mainLine);
     const pool = mains.length ? mains : c;
     const evenness = (r: LineRow) => Math.abs(1 / r.price1 - 1 / r.price2);
-    out.push(pool.reduce((a, b) => (evenness(b) < evenness(a) ? b : a)));
+    const best = pool.reduce((a, b) => (evenness(b) < evenness(a) ? b : a));
+    // Lika jämna priser på flera linjer (bet365 i OddsPapi-historiken: 1,9/1,9 på hela
+    // stegen) — huvudlinjen går inte att avgöra, och en godtycklig alternativlinje blev
+    // 81 % omvända spreadar mot Pinnacle. Hellre ingen linje för boken.
+    if (pool.some((r) => r.line !== best.line && Math.abs(evenness(r) - evenness(best)) < 1e-9)) continue;
+    out.push(best);
   }
   return out;
 }

@@ -257,19 +257,30 @@ A player-based simulation of every NBA game. It produces our own prices for mone
 spread and total, blends them with the market and shows the edge against any price
 (Pinnacle via OddsPapi, DraftKings via ESPN, or your own book's odds entered by hand).
 
-**How the model works (`lib/nba/`, version nba-v3)**
+**How the model works (`lib/nba/`, version nba-v4)**
 
 0. **Team ratings** (`teamRatings.ts`). Offensive and defensive efficiency (points per
    100 possessions) and pace for every team, solved against the opponents each team has
    actually faced. Recent games weigh most (40-day half-life). They set 60 % of the
    scoring level and the pace; the player model below sets the other 40 %. Playoff games
-   get lower pace and efficiency, and a team on a back-to-back loses 3 points per 100.
+   get lower pace and efficiency and 1.5 points per 100 of extra home court, and a team
+   on a back-to-back loses 3 points per 100. Both estimates are shrunk, so the blend
+   understates the gap between teams: the difference is stretched by 6 % (25 % more in
+   the playoffs, where rotations shorten). Home court and back-to-backs are not stretched.
+   Finally the level is pulled 40 % toward the **market's own rating** (`marketRatings.ts`):
+   team strengths solved from earlier games' closing spreads (Pinnacle, else DraftKings —
+   never tonight's line). The box-score level differed from the closing line by ~3 points
+   without saying anything about the result; tonight's lineup terms below go on top.
 0. **Player impact (RAPM)** (`stints.ts`, `rapm.ts`). Lineups are rebuilt from ESPN's
    play-by-play, substitution by substitution, into stints (the same ten players on
    court). Each stint is checked against the box score's minutes before it is saved. A
    ridge regression over two seasons of stints gives every player's effect on offense
    and defense. Tonight's lineup minus the lineup the ratings were built on adjusts the
-   scoring level, so a missing defender counts too.
+   scoring level (30 % of it), so a missing defender counts too. Two lineup terms come on
+   top: minutes going to players with little NBA data count as replacement level, not
+   league average (16 points per 100 for a lineup of only unknowns — tanking teams'
+   G-League call-ups), and each share of the normal rotation that sits out costs 8 points
+   per 100, since RAPM shrinks every player toward average.
 1. **Player rates** (`ratings.ts`). Each player gets per-minute rates (2PA, 3PA, FTA,
    turnovers, offensive rebounds) and shooting percentages from his recent games.
    Recent games weigh more, and each rate is shrunk toward his position's average.
@@ -277,14 +288,17 @@ spread and total, blends them with the market and shows the edge against any pri
    list (Out = 0, Questionable = half) and then by your overrides on the match page.
    Starters play less when the spread is large (blowout risk). Once ESPN publishes the
    starting five (~30 min before tip), each player's average in tonight's role is used.
-   The rest of the roster is rescaled so the team plays 240 minutes.
+   The rest of the roster is rescaled so the team plays 240 minutes: surplus minutes come
+   mostly off the bench (weight m·(48−m)²), and when players are out the bench takes most
+   of the freed minutes (weight (48−m)²) instead of stars going to the 42-minute cap.
 3. **Team in this game** (`project.ts`). The players' rates, weighted by minutes, give
    the team's offence. It is adjusted for the opponent's defence, home court, back-to-backs
    and the usage/efficiency trade-off: a team missing its creators gets a penalty.
 4. **Simulation** (`sim.ts`). 20 000 games, possession by possession, with overtime. A
    "rubber band" keeps the spread of the margin at NBA levels without moving the
-   favourite's expected margin. The overall scoring level is calibrated to the league's
-   actual points per possession.
+   favourite's expected margin, and pulls harder the larger the expected margin (lopsided
+   games have less spread: rested starters, garbage time). The overall scoring level is
+   calibrated to the league's actual points per possession.
 5. **Picks in points** (`picks.ts`). The model's spread and total are compared with the
    market line, e.g. "model −7.2 vs market −6.5 → pick −6.5 (0.7)". The first line the
    model sees is locked (`NbaPick`) and never re-priced. Results and CLV are graded
@@ -358,11 +372,15 @@ as book `smarkets`, and the app prices it after Smarkets' 2 % commission.
 
 **Status and caveats**
 
-- nba-v3 is calibrated on three seasons (backtest Nov 2024–Jun 2026, 2 471 games, of
-  which 1 066 have a DraftKings closing line). On the games with a line, margin MAE is
-  11.60 and total MAE 14.97, against the market's 11.20 and 14.58. The model does
-  **not** beat a closing line yet: the market alone gives the lowest log loss, and the
-  model's disagreements with the closing line carry no information about the result.
+- nba-v4 (backtest Jan 2025–Nov 2026, 2 272 games, 1 168 with a Pinnacle or DraftKings
+  closing line): margin MAE 11.10 over all games (market 11.19 on its games; 11.33 for
+  the model on the same games), and the result scales 1.00 with the model's margin
+  (nba-v3: 1.22, so underdogs got far too high a chance). The facit is Pinnacle (or
+  DraftKings) only: the OddsPapi history also holds bet365, whose lines there are often
+  reversed, and earlier runs picked it by accident — that, not the model, was the
+  spread "edge" in older backtests. The model does **not** beat a closing line yet:
+  the market alone gives the lowest log loss, and a 10 % model weight is break-even.
+  `npm run nba:backtest -- --top-edges 10` lists the largest edges game by game.
   The real test is whether the model beats the line at *bet time* — run
   `nba:odds-history` and `nba:backtest -- --line bet`, which measures CLV. The blend weight is
   therefore 10 %, so the model nudges the market price rather than replacing it. Raise it
