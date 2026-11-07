@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { injuryFactor, projectMinutes, baselineMinutes, type MinutesInput } from "../lib/nba/minutes";
+import { injuryFactor, projectMinutes, baselineMinutes, ownBaseline, type MinutesInput } from "../lib/nba/minutes";
 import { mulberry32, simulateGame, summarize, spreadProb, totalProb, moneylineProb, type TeamSimInput } from "../lib/nba/sim";
 import { buildHistory, leagueAverages, playerRates, possessions, teamProfile, type PlayerGameRow, type TeamGameRow } from "../lib/nba/ratings";
 import { fairLine, priceMarket, settle } from "../lib/nba/pricing";
-import { adjustForDefense, projectGame } from "../lib/nba/project";
-import { DEFAULT_NBA_PARAMS } from "../lib/nba/params";
+import { adjustForDefense, buildSimInput, missingShare, projectGame, unknownShare } from "../lib/nba/project";
+import { DEFAULT_NBA_PARAMS, RUBBER_BAND_MAX } from "../lib/nba/params";
+import type { RapmFit } from "../lib/nba/rapm";
+import { prevLineup } from "../lib/nba/backtest";
+import { fitMarketRatings, marketMargin, type MarketLine } from "../lib/nba/marketRatings";
 
 const AVG: TeamSimInput = { pTov: 0.124, pFt: 0.086, p3: 0.328, p2: 0.461, pct2: 0.545, pct3: 0.36, ftPct: 0.78, orebPct: 0.26, shotLogit: 0 };
 const base = { possMean: 99, possSd: 4, nightSigma: 0.03, sharedSigma: 0.04, rubberBand: 0.07, ftsPerTrip: 1 / 0.44, sims: 6000 };
@@ -47,6 +50,16 @@ describe("minuter", () => {
 
   it("ingen spelare får mer än taket", () => {
     const rows = projectMinutes([inp(1, 40), inp(2, 38), inp(3, 36), inp(4, 10), inp(5, 8), inp(6, 5)]);
+    expect(Math.max(...rows.map((r) => r.minutes))).toBeLessThanOrEqual(42);
+  });
+
+  it("decimerat lag: bänken tar de lediga minuterna, stjärnorna går bara upp lite", () => {
+    // Sju friska med 147 grundminuter: 93 minuter att fördela.
+    const rows = projectMinutes([inp(1, 34), inp(2, 32), inp(3, 28), inp(4, 20), inp(5, 15), inp(6, 10), inp(7, 8)]);
+    const m = (id: number) => rows.find((r) => r.playerId === id)!.minutes;
+    expect(rows.reduce((a, r) => a + r.minutes, 0)).toBeCloseTo(240, 0);
+    expect(m(1) - 34).toBeLessThan(m(6) - 10);
+    expect(m(1)).toBeLessThan(42);
     expect(Math.max(...rows.map((r) => r.minutes))).toBeLessThanOrEqual(42);
   });
 });
@@ -193,10 +206,101 @@ describe("ratings och matchbygge", () => {
     expect(adj.pTov + adj.pFt + adj.p3 + adj.p2).toBeCloseTo(1, 9);
   });
 
+  it("egna grundminuter oavsett lag, null utan historik", () => {
+    expect(ownBaseline(h, 100, asOf)).toBeCloseTo(30, 6);
+    expect(ownBaseline(h, 100, t0)).toBeNull();
+    expect(ownBaseline(h, 999, asOf)).toBeNull();
+  });
+
+  it("okända minuter och bortfall", () => {
+    const fit: RapmFit = { players: new Map([[1, { off: 0, def: 0, poss: 3000 }]]), ortg: 112, stints: 0 };
+    // Spelare 1 halvt känd (poss = K), spelare 2 helt okänd.
+    expect(unknownShare(fit, [{ playerId: 1, minutes: 120 }, { playerId: 2, minutes: 120 }], 3000)).toBeCloseTo(0.75, 9);
+    const base = [{ playerId: 1, minutes: 36 }, { playerId: 2, minutes: 24 }, { playerId: 3, minutes: 180 }];
+    // Bara den som inte spelar räknas — att bänken tappar minuter är ingen förlust.
+    expect(missingShare([{ playerId: 1, minutes: 40 }, { playerId: 3, minutes: 200 }], base)).toBeCloseTo(24 / 240, 9);
+    expect(missingShare([{ playerId: 1, minutes: 30 }, { playerId: 2, minutes: 10 }, { playerId: 3, minutes: 200 }], base)).toBe(0);
+  });
+
+  it("utsträckningen behåller totalen och rör inte hemmafördelen", () => {
+    const lineup = (teamId: number) => Array.from({ length: 8 }, (_, p) => ({ playerId: teamId * 100 + p, minutes: 30 }));
+    const ctx = { homeId: 2, awayId: 1, t: asOf, homeLineup: lineup(2), awayLineup: lineup(1) };
+    const p0 = { ...DEFAULT_NBA_PARAMS, marginStretch: 1, lowDataRtg: 0, missRtg: 0 };
+    const t = (q: typeof p0, neutral: boolean) => buildSimInput(h, { ...ctx, neutral }, q).targets;
+    const a = t(p0, false);
+    const b = t({ ...p0, marginStretch: 1.5 }, false);
+    expect(b.homeOrtg + b.awayOrtg).toBeCloseTo(a.homeOrtg + a.awayOrtg, 9);
+    const hca = p0.homeRtg;
+    expect(b.homeOrtg - b.awayOrtg - hca).toBeCloseTo(1.5 * (a.homeOrtg - a.awayOrtg - hca), 9);
+    // Neutral plan: ren utsträckning.
+    const an = t(p0, true);
+    const bn = t({ ...p0, marginStretch: 1.5 }, true);
+    expect(bn.homeOrtg - bn.awayOrtg).toBeCloseTo(1.5 * (an.homeOrtg - an.awayOrtg), 9);
+  });
+
+  it("rubberBand växer med förväntad marginal, med tak", () => {
+    const lineup = (teamId: number) => Array.from({ length: 8 }, (_, p) => ({ playerId: teamId * 100 + p, minutes: 30 }));
+    const ctx = { homeId: 2, awayId: 1, t: asOf, neutral: true, homeLineup: lineup(2), awayLineup: lineup(1) };
+    const flat = buildSimInput(h, ctx, { ...DEFAULT_NBA_PARAMS, rubberBandPerPt: 0 }).input.rubberBand!;
+    const grow = buildSimInput(h, ctx, DEFAULT_NBA_PARAMS).input.rubberBand!;
+    const huge = buildSimInput(h, ctx, { ...DEFAULT_NBA_PARAMS, rubberBandPerPt: 1 }).input.rubberBand!;
+    expect(flat).toBe(DEFAULT_NBA_PARAMS.rubberBand);
+    expect(grow).toBeGreaterThan(flat);
+    expect(huge).toBe(RUBBER_BAND_MAX);
+  });
+
   it("laget som skjuter bättre blir favorit", () => {
     const lineup = (teamId: number) => Array.from({ length: 8 }, (_, p) => ({ playerId: teamId * 100 + p, minutes: 30 }));
     const proj = projectGame(h, { homeId: 2, awayId: 1, t: asOf, neutral: true, homeLineup: lineup(2), awayLineup: lineup(1) }, { ...DEFAULT_NBA_PARAMS, sims: 4000 });
     expect(proj.summary.pHomeWin).toBeLessThan(0.45);
     expect(proj.summary.marginMean).toBeLessThan(0);
+  });
+});
+
+describe("morgonens uppställning i backtestet", () => {
+  // Lag 1, tre matcher. Spelare 1–5 startar alltid; i sista matchen vilar 1–3 (står inte i
+  // boxscoren), 6–8 spelar, och 9 står som DNP med skada.
+  const day = 864e5;
+  const t0 = Date.UTC(2026, 3, 1);
+  const players: PlayerGameRow[] = [];
+  const teams: TeamGameRow[] = [];
+  const box = { fga2: 50, fgm2: 27, fga3: 36, fgm3: 13, fta: 22, ftm: 17, oreb: 10, dreb: 34, tov: 13 };
+  for (let g = 0; g < 3; g++) {
+    const t = t0 + g * day;
+    for (const [teamId, oppId] of [[1, 2], [2, 1]] as const) teams.push({ gameId: g, t, teamId, oppId, home: teamId === 1, pts: 106, ...box, oppDreb: 34, periods: 4 });
+    const who = g < 2 ? [1, 2, 3, 4, 5, 6, 7, 9] : [4, 5, 6, 7, 8];
+    for (const id of who) players.push({ gameId: g, t, playerId: id, teamId: 1, position: "G", minutes: 30, fga2: 6, fgm2: 3, fga3: 4, fgm3: 1, fta: 2, ftm: 2, oreb: 1, tov: 1, dnp: false, dnpReason: null });
+    if (g === 2) players.push({ gameId: g, t, playerId: 9, teamId: 1, position: "G", minutes: 0, fga2: 0, fgm2: 0, fga3: 0, fgm3: 0, fta: 0, ftm: 0, oreb: 0, tov: 0, dnp: true, dnpReason: "LEFT ANKLE" });
+  }
+  const h = buildHistory(players, teams);
+  const played = new Map<number, PlayerGameRow[]>();
+  for (const r of h.allPlayerRows) played.set(r.gameId, [...(played.get(r.gameId) ?? []), r]);
+
+  it("vilade stjärnor räknas med, skadade och DNP-listade inte", () => {
+    const who = prevLineup(h, played, 1, t0 + 3 * day);
+    expect([...who].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+});
+
+describe("marknadens lagrating", () => {
+  // Tre lag med styrka +4, 0, −4 och hemmafördel 2,5; linjerna är exakta.
+  const r: Record<number, number> = { 1: 4, 2: 0, 3: -4 };
+  const lines: MarketLine[] = [];
+  const t0 = Date.UTC(2026, 0, 1);
+  let g = 0;
+  for (let d = 0; d < 30; d++)
+    for (const [h, a] of [[1, 2], [2, 3], [3, 1], [2, 1], [3, 2], [1, 3]]) lines.push({ t: t0 + d * 864e5 + g++, homeId: h, awayId: a, neutral: false, line: -(2.5 + r[h] - r[a]) });
+  const asOf = t0 + 31 * 864e5;
+
+  it("återfår lagens styrka och hemmafördelen", () => {
+    const m = fitMarketRatings(lines, asOf, { halfLifeDays: 30, ridge: 0.01, maxAgeDays: 120 });
+    expect(m.hca).toBeCloseTo(2.5, 2);
+    expect(marketMargin(m, 1, 3, false)!).toBeCloseTo(2.5 + 8, 1);
+    expect(marketMargin(m, 1, 3, true)!).toBeCloseTo(8, 1);
+  });
+
+  it("använder bara linjer före asOf och saknar svar utan underlag", () => {
+    expect(fitMarketRatings(lines, t0).teams.size).toBe(0);
+    expect(marketMargin(fitMarketRatings(lines, t0 + 3), 1, 3, false)).toBeNull(); // två matcher per lag
   });
 });

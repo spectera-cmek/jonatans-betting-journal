@@ -5,6 +5,7 @@ import type { NbaPrisma } from "../nbaDb";
 import type { EspnGame, EspnInjury, EspnSummary } from "./espn";
 import type { StintParse } from "./stints";
 import type { RapmFit, StintRow } from "./rapm";
+import type { MarketLine } from "./marketRatings";
 import { buildHistory, type History, type PlayerGameRow, type TeamGameRow } from "./ratings";
 import { withDbRetry } from "../nbaDbRetry";
 
@@ -184,6 +185,37 @@ export async function loadStints(db: NbaPrisma, since: Date, opts: { pageSize?: 
     for (const r of rows) out.push({ t: r.game.startAt.getTime(), homeIds: r.homeIds, awayIds: r.awayIds, homePts: r.homePts, awayPts: r.awayPts, poss: r.poss });
     if (rows.length < pageSize) break;
     cursor = rows[rows.length - 1].id;
+  }
+  return out;
+}
+
+/**
+ * Stängningsspreadar för spelade matcher i [from, to) — underlaget för marknadens
+ * lagrating. Per match: referensbokens (Pinnacle) senaste pris före start ur
+ * OddsPapi-historiken, annars ESPN:s DraftKings-linje.
+ */
+export async function loadMarketLines(db: NbaPrisma, from: Date, to: Date, refBook: string): Promise<MarketLine[]> {
+  const rows = await withDbRetry(
+    db,
+    () =>
+      db.nbaGame.findMany({
+        where: { status: "final", startAt: { gte: from, lt: to } },
+        select: {
+          startAt: true,
+          homeTeamId: true,
+          awayTeamId: true,
+          neutral: true,
+          odds: { where: { market: "spread", OR: [{ source: "oddspapi-history", book: refBook }, { source: "espn" }] }, select: { source: true, line: true, capturedAt: true } },
+        },
+      }),
+    { label: "stängningslinjer" }
+  );
+  const out: MarketLine[] = [];
+  for (const g of rows) {
+    const o = g.odds
+      .filter((x) => x.line != null && x.capturedAt <= g.startAt)
+      .sort((a, b) => (a.source === "espn" ? 1 : 0) - (b.source === "espn" ? 1 : 0) || b.capturedAt.getTime() - a.capturedAt.getTime())[0];
+    if (o) out.push({ t: g.startAt.getTime(), homeId: g.homeTeamId, awayId: g.awayTeamId, neutral: g.neutral, line: o.line! });
   }
   return out;
 }

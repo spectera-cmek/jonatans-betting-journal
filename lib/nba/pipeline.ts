@@ -3,6 +3,7 @@
 
 import type { NbaPrisma } from "../nbaDb";
 import { oddspapiBookmaker } from "../oddspapi";
+import { isUnreliableHistory } from "./oddspapiCapture";
 import { baseLineup, baselineMinutes, projectMinutes, roleBaseline, type MinutesInput, type MinutesRow } from "./minutes";
 import { clvPoints, gradePick, modelLine, pickFromLine, type PickMarket } from "./picks";
 import { fitTeamRatings, type RatingTable } from "./teamRatings";
@@ -11,7 +12,8 @@ import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, isFlagged, 
 import { fairLine, priceMarket, settle, type MarketPrice, type MarketQuote, type NbaMarket } from "./pricing";
 import { leagueAverages, type History, type League } from "./ratings";
 import { projectGame, type Projection } from "./project";
-import { loadHistory, loadPlayerImpact, loadStints, savePlayerImpact } from "./store";
+import { loadHistory, loadMarketLines, loadPlayerImpact, loadStints, savePlayerImpact } from "./store";
+import { fitMarketRatings, MARKET_LINE_DAYS, type MarketRatings } from "./marketRatings";
 import { fitRapm, type RapmFit } from "./rapm";
 import type { SimSummary } from "./sim";
 
@@ -35,6 +37,7 @@ export async function latestQuotes(db: NbaPrisma, gameId: number, before?: Date)
   const seen = new Set<string>();
   const out: LatestQuote[] = [];
   for (const r of rows) {
+    if (isUnreliableHistory(r.source, r.book)) continue;
     const k = `${r.book}|${r.market}|${r.source === "manual" ? r.id : ""}`;
     if (seen.has(k)) continue;
     seen.add(k);
@@ -151,6 +154,8 @@ export async function projectStoredGame(
     ratings?: RatingTable;
     /** Spelarnas RAPM; saknas den läses senast sparade. */
     rapm?: RapmFit;
+    /** Marknadens lagrating; saknas den räknas den ur tidigare stängningslinjer. */
+    market?: MarketRatings;
     params?: NbaModelParams;
     save?: boolean;
     /** Räkna props: true = utan fördelningskurvor, "hist" = med (för matchsidan). */
@@ -167,6 +172,7 @@ export async function projectStoredGame(
   const league = opts.league ?? leagueAverages(h, t, p);
   const ratings = opts.ratings ?? (p.ratingMix > 0 ? fitTeamRatings(h, t, p) : undefined);
   const rapm = opts.rapm ?? (p.rapmK > 0 ? await loadPlayerImpact(db) : undefined);
+  const market = opts.market ?? (p.marketMix > 0 ? await marketRatingsAt(db, t) : undefined);
   const cache = { injuries: opts.injuries, names: opts.names ?? new Map<number, string>() };
   // Marknadens spread styr utklassningsrisken i minuterna — hämta priserna först.
   const quotes = await latestQuotes(db, g.id, g.status === "scheduled" ? undefined : g.startAt);
@@ -189,6 +195,7 @@ export async function projectStoredGame(
       homeBaseLineup: baseLineup(h, g.homeTeamId, t),
       awayBaseLineup: baseLineup(h, g.awayTeamId, t),
       rapm,
+      market,
     },
     p,
     league,
@@ -298,6 +305,12 @@ export async function projectStoredGame(
   };
 }
 
+/** Marknadens lagrating vid t ur tidigare matchers stängningslinjer (bara matcher före t). */
+export async function marketRatingsAt(db: NbaPrisma, t: number): Promise<MarketRatings> {
+  const lines = await loadMarketLines(db, new Date(t - MARKET_LINE_DAYS * 864e5), new Date(t), oddspapiBookmaker());
+  return fitMarketRatings(lines, t);
+}
+
 /** Projicerar alla matcher som startar inom `hours`. */
 export async function projectUpcoming(
   db: NbaPrisma,
@@ -334,9 +347,11 @@ export async function projectUpcoming(
       }
     } else rapm = await loadPlayerImpact(db);
   }
+  // Marknadens lagrating: samma för kvällens alla matcher (linjer från matcher som redan spelats).
+  const market = params.marketMix > 0 ? await marketRatingsAt(db, now) : undefined;
   let flagged = 0;
   for (const g of games) {
-    const r = await projectStoredGame(db, g.id, { h, league, ratings, rapm, params, save: true, injuries, names });
+    const r = await projectStoredGame(db, g.id, { h, league, ratings, rapm, market, params, save: true, injuries, names });
     if (!r) continue;
     const s = r.summary;
     const f = r.quotes.filter((q) => q.flagged);
