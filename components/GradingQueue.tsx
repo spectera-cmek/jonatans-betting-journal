@@ -129,7 +129,7 @@ export function GradingQueueCard({
   return (
     <Card style={{ padding: 0 }}>
       <div className="ap-card-head">
-        <span className="ap-card-title">{title}</span>
+        <span role="heading" aria-level={2} className="ap-card-title">{title}</span>
         {ready.length > 0 && (
           <button className="ap-btn" onClick={() => onApply(ready.map((item) => item.betId))}>
             Rätta {ready.length} säkra

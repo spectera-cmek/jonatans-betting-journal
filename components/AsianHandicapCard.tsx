@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "./ui";
+import { Card, Field } from "./ui";
 import { InlineStat } from "./stats";
 import { ahOutcome, ahProfit, type AhOutcome } from "@/lib/tools";
 import { devigProportional } from "@/lib/fairOdds";
@@ -55,8 +55,7 @@ export function AsianHandicapCard() {
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
-        <div className="ap-field" style={{ width: 110 }}>
-          <label>Din linje</label>
+        <Field label="Din linje" style={{ width: 110 }}>
           <div className="ap-select">
             <select value={line} onChange={(e) => setLine(e.target.value)}>
               {LINES.map((l) => (
@@ -66,19 +65,16 @@ export function AsianHandicapCard() {
               ))}
             </select>
           </div>
-        </div>
-        <div className="ap-field" style={{ width: 96 }}>
-          <label>Odds</label>
+        </Field>
+        <Field label="Odds" style={{ width: 96 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={odds} onChange={(e) => setOdds(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 100 }}>
-          <label>Insats (kr)</label>
+        </Field>
+        <Field label="Insats (kr)" style={{ width: 100 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 150 }}>
-          <label>Motsatt AH-odds (valfri)</label>
+        </Field>
+        <Field label="Motsatt AH-odds (valfri)" style={{ width: 150 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={oppOdds} placeholder="—" onChange={(e) => setOppOdds(e.target.value)} />
-        </div>
+        </Field>
       </div>
 
       {devig && (

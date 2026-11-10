@@ -153,7 +153,7 @@ function GroupsView({ groups }: { groups: WorldCupGroup[] }) {
     <div className="ap-wc-groups">
       {groups.map((group) => (
         <Card key={group.id} style={{ padding: 0 }}>
-          <div className="ap-card-head"><span className="ap-card-title">{group.name}</span></div>
+          <div className="ap-card-head"><span role="heading" aria-level={2} className="ap-card-title">{group.name}</span></div>
           <div className="ap-wc-table">
             <div><span>#</span><span>Lag</span><span>MS</span><span>V</span><span>O</span><span>F</span><span>+/-</span><b>P</b></div>
             {group.standings.map((row) => (
@@ -377,7 +377,7 @@ export function WorldCupCenter() {
 
       <div className="ap-wc-tabs">
         {TABS.map((item) => (
-          <button key={item.value} className={tab === item.value ? "is-active" : ""} onClick={() => setTab(item.value)}>
+          <button key={item.value} className={tab === item.value ? "is-active" : ""} aria-pressed={tab === item.value} onClick={() => setTab(item.value)}>
             {item.label}
           </button>
         ))}
@@ -395,7 +395,7 @@ export function WorldCupCenter() {
           </div>
           <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1.2fr .8fr" }}>
             <Card style={{ padding: 0 }}>
-              <div className="ap-card-head"><span className="ap-card-title">Nästa matcher</span><button className="ap-link" onClick={() => setTab("matches")}>Hela schemat →</button></div>
+              <div className="ap-card-head"><span role="heading" aria-level={2} className="ap-card-title">Nästa matcher</span><button className="ap-link" onClick={() => setTab("matches")}>Hela schemat →</button></div>
               <div className="ap-wc-match-list">
                 {upcoming.map((match) => (
                   <MatchCard key={match.id} match={match} bets={byMatch.get(match.id) ?? []} unit={unit} onAdd={addForMatch} onSettle={setSettling} />
@@ -415,9 +415,9 @@ export function WorldCupCenter() {
       ) : tab === "matches" ? (
         <>
           <div className="ap-wc-stage-filter">
-            <button className={stage === "all" ? "is-active" : ""} onClick={() => setStage("all")}>Alla</button>
+            <button className={stage === "all" ? "is-active" : ""} aria-pressed={stage === "all"} onClick={() => setStage("all")}>Alla</button>
             {TOURNAMENT_STAGES.map((value) => (
-              <button key={value} className={stage === value ? "is-active" : ""} onClick={() => setStage(value)}>
+              <button key={value} className={stage === value ? "is-active" : ""} aria-pressed={stage === value} onClick={() => setStage(value)}>
                 {TOURNAMENT_STAGE_LABELS[value]}
               </button>
             ))}

@@ -34,6 +34,8 @@ export function GlobalActions() {
       <SyncButton onDone={revalidateAll} />
       <button
         className="ap-btn"
+        aria-label="Logga bet"
+        aria-haspopup="dialog"
         onClick={() => {
           setMounted(true);
           setAdding(true);

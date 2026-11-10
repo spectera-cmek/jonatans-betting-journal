@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "./ui";
+import { Card, Field } from "./ui";
 import { MiniStat } from "./stats";
 import { bonusValue } from "@/lib/tools";
 import { krFmt, pctFmt } from "@/lib/format";
@@ -25,18 +25,15 @@ export function BonusCard() {
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
-        <div className="ap-field" style={{ width: 110 }}>
-          <label>Bonus (kr)</label>
+        <Field label="Bonus (kr)" style={{ width: 110 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={bonus} onChange={(e) => setBonus(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 150 }}>
-          <label>Omsättningskrav (ggr)</label>
+        </Field>
+        <Field label="Omsättningskrav (ggr)" style={{ width: 150 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={wager} onChange={(e) => setWager(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 150 }}>
-          <label>Marginal per spel %</label>
+        </Field>
+        <Field label="Marginal per spel %" style={{ width: 150 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={margin} onChange={(e) => setMargin(e.target.value)} />
-        </div>
+        </Field>
       </div>
 
       {b == null ? (

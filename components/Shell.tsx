@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialog } from "@/lib/useDialog";
 import { I, IC, SPORT_IC, BrandMark } from "./icons";
 import type { LucideIcon } from "lucide-react";
 import { GlobalActions } from "./GlobalActions";
@@ -49,7 +50,7 @@ function BankrollStrip() {
   const openCount = risk?.bets ?? 0;
 
   return (
-    <div className="ap-bankroll" title="Realiserat resultat, insats i öppna spel och antal öppna spel">
+    <div className="ap-bankroll" role="group" aria-label="Bankrulle" title="Realiserat resultat, insats i öppna spel och antal öppna spel">
       <div>
         <span style={{ color: "var(--dim2)" }}>
           <I p={IC.wallet} size={15} />
@@ -84,10 +85,39 @@ function BankrollStrip() {
 /** Sticky global header: brand + horizontal nav pills + bankroll + actions. */
 export function TopNav({ username }: { username?: string }) {
   const pathname = usePathname();
+  const moreRef = useRef<HTMLDetailsElement>(null);
+
+  // The "Mer" menu is a <details>: natively it only closes by clicking its own
+  // summary again. Close it on Escape (returning focus to the summary) and on
+  // any click or focus that lands outside it.
+  useEffect(() => {
+    const close = (refocus: boolean) => {
+      const el = moreRef.current;
+      if (!el?.open) return;
+      el.open = false;
+      if (refocus) el.querySelector("summary")?.focus();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close(moreRef.current?.contains(document.activeElement) ?? false);
+    };
+    const onOutside = (e: Event) => {
+      if (!moreRef.current?.contains(e.target as Node)) close(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onOutside);
+    document.addEventListener("focusin", onOutside);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onOutside);
+      document.removeEventListener("focusin", onOutside);
+    };
+  }, []);
+
   return (
     <header className="ap-topnav">
+      <a href="#innehall" className="ap-skip">Hoppa till innehållet</a>
       <div className="ap-topnav-inner">
-        <Link href="/" className="ap-brand" aria-label="Betting Översikt">
+        <Link href="/" className="ap-brand" aria-label="Betting Översikt – till startsidan">
           <span className="mark" aria-hidden="true">
             <BrandMark />
             <span className="pulse">
@@ -99,14 +129,19 @@ export function TopNav({ username }: { username?: string }) {
             Betting <em>Översikt</em>
           </span>
         </Link>
-        <nav className="ap-nav">
+        <nav className="ap-nav" aria-label="Huvudmeny">
           {PRIMARY_NAV.map((n) => (
-            <Link key={n.href} href={n.href} className={"ap-navitem" + (isActive(pathname, n.href) ? " is-active" : "")}>
+            <Link
+              key={n.href}
+              href={n.href}
+              className={"ap-navitem" + (isActive(pathname, n.href) ? " is-active" : "")}
+              aria-current={isActive(pathname, n.href) ? "page" : undefined}
+            >
               <I p={n.icon} size={15} />
               <span>{n.label}</span>
             </Link>
           ))}
-          <details key={pathname} className="ap-more">
+          <details key={pathname} ref={moreRef} className="ap-more">
             <summary className={"ap-navitem" + (SECONDARY_NAV.some((n) => isActive(pathname, n.href)) ? " is-active" : "")}>
               <I p={IC.menu} size={15} />
               <span>Mer</span>
@@ -114,7 +149,12 @@ export function TopNav({ username }: { username?: string }) {
             <div className="ap-more-menu">
               <span className="ap-more-label">Utforska</span>
               {SECONDARY_NAV.map((n) => (
-                <Link key={n.href} href={n.href} className={"ap-more-item" + (isActive(pathname, n.href) ? " is-active" : "")}>
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className={"ap-more-item" + (isActive(pathname, n.href) ? " is-active" : "")}
+                  aria-current={isActive(pathname, n.href) ? "page" : undefined}
+                >
                   <I p={n.icon} size={16} />
                   <span>{n.label}</span>
                 </Link>
@@ -125,7 +165,12 @@ export function TopNav({ username }: { username?: string }) {
         <div className="ap-topnav-actions">
           <BankrollStrip />
           <GlobalActions />
-          <Link href="/settings" className="ap-avatar" title={username ? username[0].toUpperCase() + username.slice(1) : "Konto"}>
+          <Link
+            href="/settings"
+            className="ap-avatar"
+            aria-label={username ? `Inställningar – inloggad som ${username}` : "Inställningar"}
+            title={username ? username[0].toUpperCase() + username.slice(1) : "Konto"}
+          >
             <I p={IC.user} size={15} />
           </Link>
         </div>
@@ -140,16 +185,17 @@ export function MobileNav() {
   const secondaryActive = SECONDARY_NAV.some((n) => isActive(pathname, n.href));
 
   useEffect(() => setMoreOpen(false), [pathname]);
+  const sheetRef = useDialog<HTMLDivElement>(moreOpen, () => setMoreOpen(false));
 
   return (
     <>
       {moreOpen && (
         <div className="ap-more-sheet-overlay" onClick={() => setMoreOpen(false)}>
-          <div className="ap-more-sheet" role="dialog" aria-modal="true" aria-label="Fler sidor" onClick={(e) => e.stopPropagation()}>
+          <div ref={sheetRef} tabIndex={-1} className="ap-more-sheet" role="dialog" aria-modal="true" aria-label="Fler sidor" onClick={(e) => e.stopPropagation()}>
             <div className="ap-more-sheet-head">
               <div>
-                <span className="ap-label">Betting Översikt</span>
-                <div className="ap-card-title" style={{ marginTop: 4 }}>Fler sidor</div>
+                <span className="ap-label" style={{ display: "block" }}>Betting Översikt</span>
+                <div role="heading" aria-level={2} className="ap-card-title" style={{ marginTop: 4 }}>Fler sidor</div>
               </div>
               <button className="ap-close" onClick={() => setMoreOpen(false)} aria-label="Stäng meny">
                 <I p={IC.x} size={16} />
@@ -157,7 +203,12 @@ export function MobileNav() {
             </div>
             <div className="ap-more-sheet-grid">
               {SECONDARY_NAV.map((n) => (
-                <Link key={n.href} href={n.href} className={"ap-more-sheet-item" + (isActive(pathname, n.href) ? " is-active" : "")}>
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className={"ap-more-sheet-item" + (isActive(pathname, n.href) ? " is-active" : "")}
+                  aria-current={isActive(pathname, n.href) ? "page" : undefined}
+                >
                   <span className="ap-more-sheet-icon"><I p={n.icon} size={19} /></span>
                   <span>
                     <strong>{n.label}</strong>
@@ -169,16 +220,31 @@ export function MobileNav() {
           </div>
         </div>
       )}
-      <div className="ap-mobnav">
+      {/* aria-label on each item: the visible label is display:none on the
+          narrowest phones, which would otherwise leave an unnamed icon link. */}
+      <nav className="ap-mobnav" aria-label="Huvudmeny">
         {PRIMARY_NAV.map((n) => (
-          <Link key={n.href} href={n.href} className={isActive(pathname, n.href) ? "is-active" : ""}>
+          <Link
+            key={n.href}
+            href={n.href}
+            aria-label={n.label}
+            aria-current={isActive(pathname, n.href) ? "page" : undefined}
+            className={isActive(pathname, n.href) ? "is-active" : ""}
+          >
             <I p={n.icon} size={20} /> <span className="ap-mobnav-label">{n.label}</span>
           </Link>
         ))}
-        <button className={moreOpen || secondaryActive ? "is-active" : ""} onClick={() => setMoreOpen(true)}>
+        <button
+          type="button"
+          aria-label="Fler sidor"
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
+          className={moreOpen || secondaryActive ? "is-active" : ""}
+          onClick={() => setMoreOpen(true)}
+        >
           <I p={IC.menu} size={20} /> <span className="ap-mobnav-label">Mer</span>
         </button>
-      </div>
+      </nav>
     </>
   );
 }
@@ -209,6 +275,12 @@ export function Topbar({
   icon?: LucideIcon;
   accent?: "emerald" | "sky" | "amber" | "purple" | "teal" | "pink";
 }) {
+  // Every page is a client component, so none of them can export `metadata`;
+  // the page header is the one place that knows the page's name.
+  useEffect(() => {
+    document.title = `${title} · Betting Översikt`;
+  }, [title]);
+
   return (
     <div className="ap-top">
       <div className="ap-top-main">
@@ -218,7 +290,7 @@ export function Topbar({
           </span>
         )}
         <div style={{ minWidth: 0 }}>
-          <div className="ap-h1">{title}</div>
+          <h1 className="ap-h1">{title}</h1>
           {sub && <div className="ap-sub">{sub}</div>}
         </div>
       </div>

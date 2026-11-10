@@ -237,7 +237,7 @@ export function BookmakerTable({ rows, unit }: { rows: Breakdown[]; unit: number
   return (
     <Card style={{ padding: 0, marginBottom: 12 }}>
       <div className="ap-card-head">
-        <span className="ap-card-title">Per bookmaker</span>
+        <span role="heading" aria-level={2} className="ap-card-title">Per bookmaker</span>
         <span style={{ color: "var(--dim2)", fontSize: 12 }}>{rows.length} bolag</span>
       </div>
       <div className="ap-table-wrap">

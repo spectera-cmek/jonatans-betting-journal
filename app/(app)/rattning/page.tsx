@@ -223,7 +223,7 @@ export default function RattningPage() {
 
       <Card style={{ padding: 0 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">
+          <span role="heading" aria-level={2} className="ap-card-title">
             <span className="ap-chip-icon is-sm is-sky" aria-hidden="true">
               <I p={IC.ticket} size={13} />
             </span>
@@ -233,7 +233,7 @@ export default function RattningPage() {
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {leagues.length > 1 && (
               <div className="ap-select" style={{ minWidth: 150 }}>
-                <select value={league} onChange={(e) => setLeague(e.target.value)}>
+                <select aria-label="Liga" value={league} onChange={(e) => setLeague(e.target.value)}>
                   <option value="">Alla ligor</option>
                   {leagues.map((l) => (
                     <option key={l} value={l}>
@@ -244,13 +244,14 @@ export default function RattningPage() {
               </div>
             )}
             <div className="ap-seg">
-              <button className={filter === "alla" ? "is-active" : ""} onClick={() => setFilter("alla")}>
+              <button className={filter === "alla" ? "is-active" : ""} aria-pressed={filter === "alla"} onClick={() => setFilter("alla")}>
                 Alla
               </button>
               {READINESS_ORDER.map((key) => (
                 <button
                   key={key}
                   className={filter === key ? "is-active" : ""}
+                  aria-pressed={filter === key}
                   onClick={() => setFilter(key)}
                 >
                   {READINESS_LABELS[key]}

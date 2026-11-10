@@ -71,7 +71,7 @@ function MinutesCard({
   return (
     <Card style={{ padding: 0 }}>
       <div className="ap-card-head">
-        <span className="ap-card-title">{title}</span>
+        <span role="heading" aria-level={2} className="ap-card-title">{title}</span>
         <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>{total.toFixed(0)} min</span>
       </div>
       <div className="ap-table">
@@ -295,7 +295,7 @@ export default function NbaMatchPage({ params }: { params: { id: string } }) {
 
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Priser</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Priser</span>
           <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Modell · marknad → viktad. Edge ≥ 5 % markeras.</span>
         </div>
         <div className="ap-nba-scroll">

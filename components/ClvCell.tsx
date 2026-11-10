@@ -240,7 +240,7 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSave
             fontWeight: 600,
             color: pct >= 0 ? "var(--pos)" : "var(--red)",
             textAlign: "inherit",
-            minWidth: 0,
+            minWidth: 24,
           }}
         >
           {pct >= 0 ? "+" : ""}
@@ -268,7 +268,7 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSave
           fontWeight: 500,
           color: "var(--dim2)",
           textAlign: "inherit",
-          minWidth: 0,
+          minWidth: 24,
         }}
       >
         {fetching ? "…" : "—"}

@@ -310,7 +310,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
   return (
     <Card style={{ padding: 0, marginBottom: 16 }}>
       <div className="ap-card-head">
-        <span className="ap-card-title">Bokens linjer</span>
+        <span role="heading" aria-level={2} className="ap-card-title">Bokens linjer</span>
         <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Modellvikt {Math.round(view.model.blendW * 100)} % mot bokens avviggade pris</span>
       </div>
       <div style={{ padding: "14px 20px" }}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "./ui";
+import { Card, Field } from "./ui";
 import { kellyAdvice, impliedProb, winProbFromEv } from "@/lib/staking";
 import { uFmt, krFmt, pctFmt } from "@/lib/format";
 
@@ -39,32 +39,27 @@ export function KellyCard({
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
-        <div className="ap-field" style={{ width: 96 }}>
-          <label>Odds</label>
+        <Field label="Odds" style={{ width: 96 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={odds} onChange={(e) => setOdds(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 230 }}>
-          <label>Edge anges som</label>
+        </Field>
+        <Field label="Edge anges som" style={{ width: 230 }}>
           <div className="ap-seg2">
-            <button className={mode === "ev" ? "is-active" : ""} onClick={() => setMode("ev")}>EV %</button>
-            <button className={mode === "prob" ? "is-active" : ""} onClick={() => setMode("prob")}>Vinstchans %</button>
+            <button className={mode === "ev" ? "is-active" : ""} aria-pressed={mode === "ev"} onClick={() => setMode("ev")}>EV %</button>
+            <button className={mode === "prob" ? "is-active" : ""} aria-pressed={mode === "prob"} onClick={() => setMode("prob")}>Vinstchans %</button>
           </div>
-        </div>
+        </Field>
         {mode === "ev" ? (
-          <div className="ap-field" style={{ width: 96 }}>
-            <label>EV (%)</label>
+          <Field label="EV (%)" style={{ width: 96 }}>
             <input className="ap-input ap-num" inputMode="decimal" value={evPct} onChange={(e) => setEvPct(e.target.value)} />
-          </div>
+          </Field>
         ) : (
-          <div className="ap-field" style={{ width: 130 }}>
-            <label>Din vinstchans (%)</label>
+          <Field label="Din vinstchans (%)" style={{ width: 130 }}>
             <input className="ap-input ap-num" inputMode="decimal" value={winPct} onChange={(e) => setWinPct(e.target.value)} />
-          </div>
+          </Field>
         )}
-        <div className="ap-field" style={{ width: 120 }}>
-          <label>Bankrulle (U)</label>
+        <Field label="Bankrulle (U)" style={{ width: 120 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={bankroll} onChange={(e) => setBankroll(e.target.value)} />
-        </div>
+        </Field>
       </div>
 
       {implied != null && (

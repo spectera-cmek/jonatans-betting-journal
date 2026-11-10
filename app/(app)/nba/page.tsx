@@ -188,16 +188,16 @@ function GamesTab({ past }: { past: boolean }) {
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <div className="ap-seg">
           {(past ? [3, 7, 14] : [1, 2, 7]).map((d) => (
-            <button key={d} className={days === d ? "is-active" : ""} onClick={() => setDays(d)}>
+            <button key={d} className={days === d ? "is-active" : ""} aria-pressed={days === d} onClick={() => setDays(d)}>
               {d === 1 ? "1 dag" : `${d} dagar`}
             </button>
           ))}
         </div>
         <div className="ap-seg">
-          <button className={!only3 ? "is-active" : ""} onClick={() => setOnly3(false)}>
+          <button className={!only3 ? "is-active" : ""} aria-pressed={!only3} onClick={() => setOnly3(false)}>
             Alla
           </button>
-          <button className={only3 ? "is-active" : ""} onClick={() => setOnly3(true)}>
+          <button className={only3 ? "is-active" : ""} aria-pressed={only3} onClick={() => setOnly3(true)}>
             Edge {BIG_EDGE}+
           </button>
         </div>
@@ -357,10 +357,10 @@ function FacitTab() {
     <>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <div className="ap-seg">
-          <button className={market === "spread" ? "is-active" : ""} onClick={() => setMarket("spread")}>
+          <button className={market === "spread" ? "is-active" : ""} aria-pressed={market === "spread"} onClick={() => setMarket("spread")}>
             Spread
           </button>
-          <button className={market === "total" ? "is-active" : ""} onClick={() => setMarket("total")}>
+          <button className={market === "total" ? "is-active" : ""} aria-pressed={market === "total"} onClick={() => setMarket("total")}>
             Total
           </button>
         </div>
@@ -448,7 +448,7 @@ function FacitTab() {
 
       <Card style={{ padding: 0 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Priser i procent — modellens sparade sannolikheter</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Priser i procent — modellens sparade sannolikheter</span>
           <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Lägre log loss = bättre</span>
         </div>
         <div className="ap-nba-scroll">
@@ -555,16 +555,16 @@ function PropsTab() {
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <div className="ap-seg">
           {PROP_TABS.map(([k, l]) => (
-            <button key={k} className={stat === k ? "is-active" : ""} onClick={() => setStat(k)}>
+            <button key={k} className={stat === k ? "is-active" : ""} aria-pressed={stat === k} onClick={() => setStat(k)}>
               {l}
             </button>
           ))}
         </div>
         <div className="ap-seg">
-          <button className={onlyLines ? "is-active" : ""} onClick={() => setOnlyLines(true)}>
+          <button className={onlyLines ? "is-active" : ""} aria-pressed={onlyLines} onClick={() => setOnlyLines(true)}>
             Med linje
           </button>
-          <button className={!onlyLines ? "is-active" : ""} onClick={() => setOnlyLines(false)}>
+          <button className={!onlyLines ? "is-active" : ""} aria-pressed={!onlyLines} onClick={() => setOnlyLines(false)}>
             Alla spelare
           </button>
         </div>
@@ -667,16 +667,16 @@ export default function NbaPage() {
     <div className="ap-nba">
       <Topbar title="NBA" sub="Lagrating + spelarjustering, simulerad och jämförd mot marknaden" icon={SPORT_IC.basketball} accent="amber" />
       <div className="ap-seg ap-nba-tabs">
-        <button className={tab === "kommande" ? "is-active" : ""} onClick={() => setTab("kommande")}>
+        <button className={tab === "kommande" ? "is-active" : ""} aria-pressed={tab === "kommande"} onClick={() => setTab("kommande")}>
           Kommande
         </button>
-        <button className={tab === "spelade" ? "is-active" : ""} onClick={() => setTab("spelade")}>
+        <button className={tab === "spelade" ? "is-active" : ""} aria-pressed={tab === "spelade"} onClick={() => setTab("spelade")}>
           Spelade
         </button>
-        <button className={tab === "props" ? "is-active" : ""} onClick={() => setTab("props")}>
+        <button className={tab === "props" ? "is-active" : ""} aria-pressed={tab === "props"} onClick={() => setTab("props")}>
           Props
         </button>
-        <button className={tab === "facit" ? "is-active" : ""} onClick={() => setTab("facit")}>
+        <button className={tab === "facit" ? "is-active" : ""} aria-pressed={tab === "facit"} onClick={() => setTab("facit")}>
           Facit
         </button>
       </div>

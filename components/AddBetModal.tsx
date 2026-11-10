@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialog } from "@/lib/useDialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/fetcher";
@@ -26,6 +27,7 @@ import { krFmt } from "@/lib/format";
 import { dayIso } from "@/lib/time";
 import { I, IC } from "./icons";
 import type { BetDTO, BetListDTO } from "@/lib/types";
+import { Field } from "./ui";
 
 // One parsed accumulator leg (bet365 import shape). outcome is the raw Swedish
 // token from the statement ("Vinst", "Förlust", "Pågående", "Annullerat"…).
@@ -173,6 +175,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
+  const dialogRef = useDialog<HTMLDivElement>(open, onClose);
 
   const [searchSport, setSearchSport] = useState("soccer_epl");
   const [searchQ, setSearchQ] = useState("");
@@ -197,14 +200,6 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
       setTimeout(() => firstField.current?.focus(), 50);
     }
   }, [open, bet, prefill]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && open) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
 
   /**
    * Recent history, fetched once per opened modal, used to turn the three
@@ -448,14 +443,22 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
 
   return createPortal(
     <div className="ap-overlay" onClick={onClose}>
-      <div className="ap-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="addbet-title"
+        className="ap-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="ap-modal-head">
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
             <span className="ap-chip-icon is-emerald" aria-hidden="true">
               <I p={editing ? IC.edit : IC.plus} size={17} />
             </span>
             <div style={{ minWidth: 0 }}>
-            <div className="ap-card-title" style={{ fontSize: 17 }}>{editing ? "Redigera bet" : "Logga ny bet"}</div>
+            <h2 id="addbet-title" className="ap-card-title" style={{ fontSize: 17 }}>{editing ? "Redigera bet" : "Logga ny bet"}</h2>
             <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 3 }}>
               {editing
                 ? "Bara ändrade fält sparas"
@@ -465,7 +468,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
             </div>
             </div>
           </div>
-          <button className="ap-close" onClick={onClose}><I p={IC.x} size={15} /></button>
+          <button className="ap-close" onClick={onClose} aria-label="Stäng"><I p={IC.x} size={15} /></button>
         </div>
 
         <div className="ap-modal-body">
@@ -499,18 +502,15 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           )}
 
           <div className="ap-x3">
-            <div className="ap-field">
-              <label>Datum</label>
+            <Field label="Datum">
               <input ref={firstField} className="ap-input" type="date" value={form.eventAt} onChange={(e) => set("eventAt", e.target.value)} />
-            </div>
-            <div className="ap-field">
-              <label>Sport</label>
+            </Field>
+            <Field label="Sport">
               <select className="ap-input" value={form.sport} onChange={(e) => set("sport", e.target.value)}>
                 {sportOpts.map((x) => <option key={x}>{x}</option>)}
               </select>
-            </div>
-            <div className="ap-field">
-              <label>Bookmaker</label>
+            </Field>
+            <Field label="Bookmaker">
               <select
                 className="ap-input"
                 value={form.bookmaker}
@@ -525,12 +525,11 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                   {prefill ? "Kunde inte läsas från kvittot — välj bookmaker" : "Välj bookmaker"}
                 </div>
               )}
-            </div>
+            </Field>
           </div>
 
           <div className="ap-x2">
-            <div className="ap-field">
-              <label>Match</label>
+            <Field label="Match">
               <input
                 className="ap-input"
                 list="ap-event-opts"
@@ -541,7 +540,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
               <datalist id="ap-event-opts">
                 {eventOpts.map((e) => <option key={e} value={e} />)}
               </datalist>
-            </div>
+            </Field>
             <div className="ap-field">
               <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span>Liga</span>
@@ -553,6 +552,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
               </label>
               <input
                 className="ap-input"
+                aria-label="Liga"
                 list="ap-league-opts"
                 placeholder="t.ex. Premier League"
                 value={form.league}
@@ -564,8 +564,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
             </div>
           </div>
 
-          <div className="ap-field">
-            <label>Spel / marknad</label>
+          <Field label="Spel / marknad">
             <input
               className="ap-input"
               list="ap-selection-opts"
@@ -578,10 +577,9 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
               {selectionChips.map((sc) => <option key={sc} value={sc} />)}
             </datalist>
 
-          </div>
+          </Field>
 
-          <div className="ap-field">
-            <label>Typ av spel</label>
+          <Field label="Typ av spel">
             <div className="ap-seg2">
               {BET_TYPES.map((t) => (
                 <button
@@ -594,30 +592,27 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 </button>
               ))}
             </div>
-          </div>
+          </Field>
 
           <div className="ap-x2">
-            <div className="ap-field">
-              <label>Marknad (detalj)</label>
+            <Field label="Marknad (detalj)">
               <select className="ap-input" value={form.marketCategory} onChange={(e) => set("marketCategory", e.target.value)}>
                 <option value="">— välj —</option>
                 {catOpts.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-            </div>
-            <div className="ap-field">
-              <label>Avser</label>
+            </Field>
+            <Field label="Avser">
               <select className="ap-input" value={form.marketScope} onChange={(e) => set("marketScope", e.target.value)}>
                 <option value="">—</option>
                 {SCOPES.map((sc) => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
               </select>
-            </div>
+            </Field>
           </div>
 
           {legs.length > 1 && (
-            <div className="ap-field">
-              <label>
+            <Field label={<>
                 Ben i kombinationen ({legs.length}){comboOdds > 1 ? ` · kombinerat odds ${comboOdds.toFixed(2)}` : ""}
-              </label>
+              </>}>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {legs.map((l, i) => {
                   const oc = legOutcome(l.outcome);
@@ -649,21 +644,20 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                   );
                 })}
               </div>
-            </div>
+            </Field>
           )}
 
           <div className="ap-moneygroup">
           <div className="ap-x2">
-            <div className="ap-field">
-              <label>Odds (decimal)</label>
+            <Field label="Odds (decimal)">
               <input className="ap-input ap-num" type="number" step="0.01" min="1.01" value={form.odds} onChange={(e) => set("odds", e.target.value)} />
-            </div>
+            </Field>
             <div className="ap-field">
               <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span>Insats (U)</span>
                 {s > 0 && <span className="ap-num" style={{ color: "var(--dim2)", fontWeight: 600 }}>{krFmt(s * unit)}</span>}
               </label>
-              <input className="ap-input ap-num" type="number" step="0.25" min="0" value={form.stakeUnits} onChange={(e) => set("stakeUnits", e.target.value)} />
+              <input className="ap-input ap-num" aria-label="Insats (U)" type="number" step="0.25" min="0" value={form.stakeUnits} onChange={(e) => set("stakeUnits", e.target.value)} />
               {/* One click instead of typing — covers almost every stake used. */}
               <div className="ap-quickchips">
                 {STAKE_PRESETS.map((p) => (
@@ -671,6 +665,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                     key={p}
                     type="button"
                     className={"ap-chip" + (s === p ? " is-active" : "")}
+                    aria-pressed={s === p}
                     onClick={() => set("stakeUnits", String(p))}
                   >
                     {p}U
@@ -700,14 +695,13 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           </div>
 
           {!editing && (
-            <div className="ap-field">
-              <label>Resultat</label>
+            <Field label="Resultat">
               <div className="ap-seg2">
                 {RESULT_SEG.map(([v, l]) => (
-                  <button key={v} className={form.outcome === v ? "is-active" : ""} onClick={() => set("outcome", v)}>{l}</button>
+                  <button key={v} className={form.outcome === v ? "is-active" : ""} aria-pressed={form.outcome === v} onClick={() => set("outcome", v)}>{l}</button>
                 ))}
               </div>
-            </div>
+            </Field>
           )}
 
           {/* Sällan ändrade fält — dolda så formuläret ryms på en skärm. */}
@@ -720,56 +714,49 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           {showAdvanced && (
             <div className="ap-advanced">
           <div className="ap-x2">
-            <div className="ap-field">
-              <label>Eventtyp</label>
+            <Field label="Eventtyp">
               <select className="ap-input" value={form.eventKind} onChange={(e) => set("eventKind", e.target.value)}>
                 {EVENT_KINDS.map((kind) => <option key={kind.value} value={kind.value}>{kind.label}</option>)}
               </select>
-            </div>
-            <div className="ap-field">
-              <label>Turneringsfas</label>
+            </Field>
+            <Field label="Turneringsfas">
               <select className="ap-input" value={form.tournamentStage} onChange={(e) => set("tournamentStage", e.target.value)}>
                 <option value="">— ej angiven —</option>
                 {TOURNAMENT_STAGES.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
               </select>
-            </div>
+            </Field>
           </div>
 
           <div className="ap-x2">
-            <div className="ap-field">
-              <label>Avräkning (auto-rättning)</label>
+            <Field label="Avräkning (auto-rättning)">
               <select className="ap-input" value={form.market} onChange={(e) => set("market", e.target.value)}>
                 {marketOpts.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
-            </div>
+            </Field>
             {sides.length > 0 ? (
-              <div className="ap-field">
-                <label>Sida</label>
+              <Field label="Sida">
                 {/* Tomt val = kvittot visade ingen sida; servern härleder den ur
                     selection-texten i stället för att fastna på "Home". */}
                 <select className="ap-input" value={form.selectionSide} onChange={(e) => set("selectionSide", e.target.value)}>
                   {!form.selectionSide && <option value="">— härleds från spelet —</option>}
                   {sides.map((sd) => <option key={sd.value} value={sd.value}>{sd.label}</option>)}
                 </select>
-              </div>
+              </Field>
             ) : (
-              <div className="ap-field">
-                <label>Linje</label>
+              <Field label="Linje">
                 <input className="ap-input ap-num" type="number" step="0.25" value={form.line} onChange={(e) => set("line", e.target.value)} placeholder="t.ex. 2.5" />
-              </div>
+              </Field>
             )}
           </div>
 
           {sides.length > 0 && (form.market === "totals" || form.market === "spreads") && (
-            <div className="ap-field">
-              <label>Linje</label>
+            <Field label="Linje">
               <input className="ap-input ap-num" type="number" step="0.25" value={form.line} onChange={(e) => set("line", e.target.value)} placeholder="2.5 / -1.5" />
-            </div>
+            </Field>
           )}
 
           <div className="ap-x2">
-            <div className="ap-field">
-              <label>Closing odds (valfritt)</label>
+            <Field label="Closing odds (valfritt)">
               <input
                 className="ap-input ap-num"
                 type="number"
@@ -779,9 +766,8 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 value={form.closingOdds}
                 onChange={(e) => set("closingOdds", e.target.value)}
               />
-            </div>
-            <div className="ap-field">
-              <label>CLV</label>
+            </Field>
+            <Field label="CLV">
               <div
                 className="ap-input ap-num"
                 style={{
@@ -793,11 +779,10 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
               >
                 {liveClvPct == null ? "—" : `${liveClvPct >= 0 ? "+" : ""}${liveClvPct.toFixed(1)}%`}
               </div>
-            </div>
+            </Field>
           </div>
 
-          <div className="ap-field">
-            <label>Anteckningar (valfritt)</label>
+          <Field label="Anteckningar (valfritt)">
             <textarea
               className="ap-input"
               rows={2}
@@ -805,7 +790,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
               value={form.notes}
               onChange={(e) => set("notes", e.target.value)}
             />
-          </div>
+          </Field>
 
             </div>
           )}
@@ -868,7 +853,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
               Länkad till {form.resultProvider || "resultatkälla"}-match {form.resultEventRef}.
             </div>
           )}
-          {error && <div style={{ fontSize: 13, color: "var(--red)" }}>{error}</div>}
+          {error && <div role="alert" style={{ fontSize: 13, color: "var(--red)" }}>{error}</div>}
 
         </div>
 

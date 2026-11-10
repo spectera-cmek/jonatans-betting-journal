@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Card } from "./ui";
+import { Card, Field } from "./ui";
 import { InlineStat, MiniStat } from "./stats";
 import { kellyAdvice } from "@/lib/staking";
 import {
@@ -227,8 +227,7 @@ export function FairOddsCalculator({
     onChange: (v: string) => void,
     opts?: { width?: number; placeholder?: string }
   ) => (
-    <div className="ap-field" style={{ width: opts?.width ?? 110 }}>
-      <label>{label}</label>
+    <Field label={label} style={{ width: opts?.width ?? 110 }}>
       <input
         className="ap-input ap-num"
         inputMode="decimal"
@@ -236,14 +235,13 @@ export function FairOddsCalculator({
         placeholder={opts?.placeholder ?? ""}
         onChange={(e) => onChange(e.target.value)}
       />
-    </div>
+    </Field>
   );
 
   const marginField = (l: LegState) => numField("Antagen marginal %", l.marginPct, (v) => patchLeg(l.id, { marginPct: v }), { width: 130 });
 
   const lineSelect = (label: string, value: string, lines: number[], onChange: (v: string) => void, width = 96) => (
-    <div className="ap-field" style={{ width }}>
-      <label>{label}</label>
+    <Field label={label} style={{ width }}>
       <div className="ap-select">
         <select value={value} onChange={(e) => onChange(e.target.value)}>
           {lines.map((k) => (
@@ -253,7 +251,7 @@ export function FairOddsCalculator({
           ))}
         </select>
       </div>
-    </div>
+    </Field>
   );
 
   return (
@@ -290,17 +288,16 @@ export function FairOddsCalculator({
         </details>
 
         {multi && (
-          <div className="ap-field" style={{ marginTop: 12, maxWidth: 360 }}>
-            <label>Spelet vinner om</label>
+          <Field label="Spelet vinner om" style={{ marginTop: 12, maxWidth: 360 }}>
             <div className="ap-seg2">
-              <button className={comboMode === "all" ? "is-active" : ""} onClick={() => setComboMode("all")}>
+              <button className={comboMode === "all" ? "is-active" : ""} aria-pressed={comboMode === "all"} onClick={() => setComboMode("all")}>
                 Alla ben går in
               </button>
-              <button className={comboMode === "any" ? "is-active" : ""} onClick={() => setComboMode("any")}>
+              <button className={comboMode === "any" ? "is-active" : ""} aria-pressed={comboMode === "any"} onClick={() => setComboMode("any")}>
                 Minst ett ben (eller)
               </button>
             </div>
-          </div>
+          </Field>
         )}
 
         {legs.map((l, i) => {
@@ -322,26 +319,23 @@ export function FairOddsCalculator({
               </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
-                <div className="ap-field" style={{ flex: "1 1 170px", minWidth: 140 }}>
-                  <label>Beskrivning (valfri)</label>
+                <Field label="Beskrivning (valfri)" style={{ flex: "1 1 170px", minWidth: 140 }}>
                   <input
                     className="ap-input"
                     value={l.desc}
                     placeholder={DESC_PLACEHOLDER[l.betType]}
                     onChange={(e) => patchLeg(l.id, { desc: e.target.value })}
                   />
-                </div>
-                <div className="ap-field" style={{ flex: "1 1 150px", minWidth: 130 }}>
-                  <label>Match</label>
+                </Field>
+                <Field label="Match" style={{ flex: "1 1 150px", minWidth: 130 }}>
                   <input
                     className="ap-input"
                     value={l.match}
                     placeholder="t.ex. Arsenal–Chelsea"
                     onChange={(e) => patchLeg(l.id, { match: e.target.value })}
                   />
-                </div>
-                <div className="ap-field" style={{ flex: "1 1 320px", minWidth: 260 }}>
-                  <label>Typ av spel</label>
+                </Field>
+                <Field label="Typ av spel" style={{ flex: "1 1 320px", minWidth: 260 }}>
                   <div className="ap-seg2">
                     {BET_TYPES.map((t) => (
                       <button
@@ -353,7 +347,7 @@ export function FairOddsCalculator({
                       </button>
                     ))}
                   </div>
-                </div>
+                </Field>
               </div>
 
               <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 8 }}>{TYPE_HINT[l.betType]}</div>
@@ -446,15 +440,14 @@ export function FairOddsCalculator({
                       key={si}
                       style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}
                     >
-                      <div className="ap-field" style={{ flex: "1 1 170px", minWidth: 140 }}>
-                        <label>Match/lag {si + 1}</label>
+                      <Field label={<>Match/lag {si + 1}</>} style={{ flex: "1 1 170px", minWidth: 140 }}>
                         <input
                           className="ap-input"
                           value={s.label}
                           placeholder="t.ex. Malmö FF–IFK Göteborg"
                           onChange={(e) => patchSource(l, si, { label: e.target.value })}
                         />
-                      </div>
+                      </Field>
                       {numField("Över", s.over, (v) => patchSource(l, si, { over: v }), { width: 96, placeholder: "1.66" })}
                       {numField("Under (valfri)", s.under, (v) => patchSource(l, si, { under: v }), { width: 118, placeholder: "—" })}
                       {lineSelect("Linje", s.line, SOURCE_LINES, (v) => patchSource(l, si, { line: v }), 90)}
@@ -552,8 +545,7 @@ export function FairOddsCalculator({
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
-          <div className="ap-field" style={{ width: 120 }}>
-            <label>Erbjudet odds</label>
+          <Field label="Erbjudet odds" style={{ width: 120 }}>
             <input
               className="ap-input ap-num"
               inputMode="decimal"
@@ -561,15 +553,13 @@ export function FairOddsCalculator({
               placeholder="16.00"
               onChange={(e) => setOffered(e.target.value)}
             />
-          </div>
-          <div className="ap-field" style={{ width: 96 }}>
-            <label>Insats (U)</label>
+          </Field>
+          <Field label="Insats (U)" style={{ width: 96 }}>
             <input className="ap-input ap-num" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} />
-          </div>
-          <div className="ap-field" style={{ width: 120 }}>
-            <label>Bankrulle (U)</label>
+          </Field>
+          <Field label="Bankrulle (U)" style={{ width: 120 }}>
             <input className="ap-input ap-num" inputMode="decimal" value={bankroll} onChange={(e) => setBankroll(e.target.value)} />
-          </div>
+          </Field>
         </div>
 
         {combo == null ? (

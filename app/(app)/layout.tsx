@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <TopNav username={user.username} />
-      <main className="ap-main">{children}</main>
+      <main id="innehall" tabIndex={-1} className="ap-main">{children}</main>
       <MobileNav />
     </>
   );

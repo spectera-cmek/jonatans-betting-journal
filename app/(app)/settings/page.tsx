@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card } from "@/components/ui";
+import { Card, Field } from "@/components/ui";
 import { SyncButton } from "@/components/SyncButton";
 import { ImportPanel } from "@/components/ImportPanel";
 import { api } from "@/lib/fetcher";
@@ -69,7 +69,7 @@ export default function SettingsPage() {
         <Card>
           <span className="ap-label">Utseende</span>
           <p style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 12, marginBottom: 16, lineHeight: 1.55 }}>
-            Editorial sportsbook använder en mörk grafitbas och blå accent. Grönt och rött är reserverat för resultat.
+            Accentfärgen styr menyer, knappar och aktiva val. Grönt och rött är reserverat för resultat.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
@@ -81,7 +81,8 @@ export default function SettingsPage() {
                     className={"ap-swatch" + (accent.hex === a.hex ? " is-active" : "")}
                     style={{ background: a.hex }}
                     title={a.label}
-                    aria-label={`Välj ${a.label}`}
+                    aria-label={`Accentfärg ${a.label}`}
+                    aria-pressed={accent.hex === a.hex}
                     onClick={() => setAccent(a.hex)}
                   />
                 ))}
@@ -92,7 +93,9 @@ export default function SettingsPage() {
               <button
                 className={"ap-switch" + (mode === "dark" ? " on" : "")}
                 onClick={() => setMode(mode === "dark" ? "light" : "dark")}
-                aria-label="Växla mörkt läge"
+                role="switch"
+                aria-checked={mode === "dark"}
+                aria-label="Mörkt läge"
               />
             </div>
             <div className="ap-toggle">
@@ -100,7 +103,9 @@ export default function SettingsPage() {
               <button
                 className={"ap-switch" + (glow ? " on" : "")}
                 onClick={() => setGlow(!glow)}
-                aria-label="Växla glöd"
+                role="switch"
+                aria-checked={glow}
+                aria-label="Bakgrundsglöd"
               />
             </div>
           </div>
@@ -111,17 +116,15 @@ export default function SettingsPage() {
         <Card>
           <span className="ap-label">Konfiguration</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
-            <div className="ap-field">
-              <label>Enhetsvärde (valuta per 1U)</label>
+            <Field label="Enhetsvärde (valuta per 1U)">
               <input className="ap-input ap-num" type="number" value={unitValue} onChange={(e) => setUnitValue(e.target.value)} />
-            </div>
-            <div className="ap-field">
-              <label>Valuta</label>
+            </Field>
+            <Field label="Valuta">
               <input className="ap-input" value={currency} onChange={(e) => setCurrency(e.target.value)} />
-            </div>
+            </Field>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <button className="ap-btn" onClick={save} disabled={saving}>{saving ? "Sparar…" : "Spara"}</button>
-              {saved && <span className="pos" style={{ fontSize: 13 }}>✓ Sparat</span>}
+              {saved && <span className="pos" role="status" style={{ fontSize: 13 }}>✓ Sparat</span>}
             </div>
           </div>
         </Card>
@@ -136,18 +139,16 @@ export default function SettingsPage() {
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="ap-x2">
-              <div className="ap-field">
-                <label>Dagsbudget (U)</label>
+              <Field label="Dagsbudget (U)">
                 <input className="ap-input ap-num" type="number" min="0" placeholder="av" value={dailyBudget} onChange={(e) => setDailyBudget(e.target.value)} />
-              </div>
-              <div className="ap-field">
-                <label>Veckobudget (U)</label>
+              </Field>
+              <Field label="Veckobudget (U)">
                 <input className="ap-input ap-num" type="number" min="0" placeholder="av" value={weeklyBudget} onChange={(e) => setWeeklyBudget(e.target.value)} />
-              </div>
+              </Field>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <button className="ap-btn" onClick={save} disabled={saving}>{saving ? "Sparar…" : "Spara"}</button>
-              {saved && <span className="pos" style={{ fontSize: 13 }}>✓ Sparat</span>}
+              {saved && <span className="pos" role="status" style={{ fontSize: 13 }}>✓ Sparat</span>}
             </div>
           </div>
         </Card>

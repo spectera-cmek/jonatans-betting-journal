@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "./ui";
+import { Card, Field } from "./ui";
 import { MiniStat } from "./stats";
 import { arbStakes, hedgeStake } from "@/lib/tools";
 import { krFmt, pctFmt, fmtOdds } from "@/lib/format";
@@ -42,29 +42,25 @@ export function HedgeCard() {
       </div>
 
       <div className="ap-seg2" style={{ marginTop: 14, maxWidth: 340 }}>
-        <button className={mode === "arb" ? "is-active" : ""} onClick={() => setMode("arb")}>Surebet</button>
-        <button className={mode === "hedge" ? "is-active" : ""} onClick={() => setMode("hedge")}>Hedga öppet spel</button>
+        <button className={mode === "arb" ? "is-active" : ""} aria-pressed={mode === "arb"} onClick={() => setMode("arb")}>Surebet</button>
+        <button className={mode === "hedge" ? "is-active" : ""} aria-pressed={mode === "hedge"} onClick={() => setMode("hedge")}>Hedga öppet spel</button>
       </div>
 
       {mode === "arb" ? (
         <>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 12 }}>
-            <div className="ap-field" style={{ width: 100 }}>
-              <label>Odds utfall A</label>
+            <Field label="Odds utfall A" style={{ width: 100 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={oddsA} placeholder="2.10" onChange={(e) => setOddsA(e.target.value)} />
-            </div>
-            <div className="ap-field" style={{ width: 100 }}>
-              <label>Odds utfall B</label>
+            </Field>
+            <Field label="Odds utfall B" style={{ width: 100 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={oddsB} placeholder="2.10" onChange={(e) => setOddsB(e.target.value)} />
-            </div>
-            <div className="ap-field" style={{ width: 110 }}>
-              <label>Utfall C (valfri)</label>
+            </Field>
+            <Field label="Utfall C (valfri)" style={{ width: 110 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={oddsC} placeholder="—" onChange={(e) => setOddsC(e.target.value)} />
-            </div>
-            <div className="ap-field" style={{ width: 110 }}>
-              <label>Budget (kr)</label>
+            </Field>
+            <Field label="Budget (kr)" style={{ width: 110 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} />
-            </div>
+            </Field>
           </div>
 
           {arb == null ? (
@@ -102,22 +98,18 @@ export function HedgeCard() {
       ) : (
         <>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 12 }}>
-            <div className="ap-field" style={{ width: 100 }}>
-              <label>Din insats (kr)</label>
+            <Field label="Din insats (kr)" style={{ width: 100 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} />
-            </div>
-            <div className="ap-field" style={{ width: 96 }}>
-              <label>Ditt odds</label>
+            </Field>
+            <Field label="Ditt odds" style={{ width: 96 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={myOdds} placeholder="2.50" onChange={(e) => setMyOdds(e.target.value)} />
-            </div>
-            <div className="ap-field" style={{ width: 130 }}>
-              <label>Motsatt odds nu</label>
+            </Field>
+            <Field label="Motsatt odds nu" style={{ width: 130 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={oppOdds} placeholder="1.60" onChange={(e) => setOppOdds(e.target.value)} />
-            </div>
-            <div className="ap-field" style={{ width: 150 }}>
-              <label>Cashout-bud (valfri)</label>
+            </Field>
+            <Field label="Cashout-bud (valfri)" style={{ width: 150 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={cashout} placeholder="—" onChange={(e) => setCashout(e.target.value)} />
-            </div>
+            </Field>
           </div>
 
           {h == null ? (

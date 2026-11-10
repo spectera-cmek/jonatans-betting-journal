@@ -5,7 +5,7 @@
 // kvällar, alla böckers priser och ett fält för ditt eget bolags linje.
 
 import { useMemo, useState } from "react";
-import { Card } from "@/components/ui";
+import { Card, Field } from "@/components/ui";
 import { api } from "@/lib/fetcher";
 import type { PlayerPropView, PropQuote } from "@/lib/nba/propsPipeline";
 import { PROP_LABEL, type PropStat } from "@/lib/nba/props";
@@ -150,22 +150,18 @@ function AddPropLine({ gameId, playerId, stat, onSaved }: { gameId: number; play
   };
   return (
     <div className="ap-nba-form" style={{ padding: "10px 0 0" }}>
-      <div className="ap-field">
-        <label>Bolag</label>
+      <Field label="Bolag">
         <input className="ap-input" value={book} onChange={(e) => setBook(e.target.value)} placeholder="t.ex. Unibet" />
-      </div>
-      <div className="ap-field">
-        <label>Linje</label>
+      </Field>
+      <Field label="Linje">
         <input className="ap-input" inputMode="decimal" value={line} onChange={(e) => setLine(e.target.value)} placeholder="22,5" />
-      </div>
-      <div className="ap-field">
-        <label>Över</label>
+      </Field>
+      <Field label="Över">
         <input className="ap-input" inputMode="decimal" value={over} onChange={(e) => setOver(e.target.value)} placeholder="1,87" />
-      </div>
-      <div className="ap-field">
-        <label>Under</label>
+      </Field>
+      <Field label="Under">
         <input className="ap-input" inputMode="decimal" value={under} onChange={(e) => setUnder(e.target.value)} placeholder="1,87" />
-      </div>
+      </Field>
       <button className="ap-btn" disabled={busy} onClick={save}>
         Lägg till
       </button>
@@ -208,13 +204,13 @@ export function PropsPanel({
   return (
     <Card style={{ padding: 0, marginBottom: 16 }}>
       <div className="ap-card-head">
-        <span className="ap-card-title">Spelarprops</span>
+        <span role="heading" aria-level={2} className="ap-card-title">Spelarprops</span>
         <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>5 000 simulerade kvällar per spelare · modellen väger 15 % mot linjen</span>
       </div>
       <div style={{ padding: "10px 16px 0" }}>
         <div className="ap-seg">
           {STATS.map((s) => (
-            <button key={s} className={stat === s ? "is-active" : ""} onClick={() => setStat(s)}>
+            <button key={s} className={stat === s ? "is-active" : ""} aria-pressed={stat === s} onClick={() => setStat(s)}>
               {PROP_LABEL[s]}
             </button>
           ))}

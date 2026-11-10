@@ -198,7 +198,7 @@ export default function AnalyticsPage() {
 
       {/* Per år */}
       <Card style={{ padding: 0, marginBottom: 12 }}>
-        <div className="ap-card-head"><span className="ap-card-title">Per år</span><span style={{ color: "var(--dim2)", fontSize: 12 }}>{rangeLabel}</span></div>
+        <div className="ap-card-head"><span role="heading" aria-level={2} className="ap-card-title">Per år</span><span style={{ color: "var(--dim2)", fontSize: 12 }}>{rangeLabel}</span></div>
         <div className="ap-table-wrap">
           <div className="ap-table">
             <div className="ap-thead" style={{ gridTemplateColumns: "1fr 90px 120px 90px 90px" }}>
@@ -275,9 +275,9 @@ export default function AnalyticsPage() {
       {/* Per månad med år-väljare */}
       <Card style={{ padding: 0 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Per månad</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Per månad</span>
           <div className="ap-select" style={{ minWidth: 110 }}>
-            <select value={activeYear} onChange={(e) => setYear(e.target.value)}>
+            <select aria-label="År" value={activeYear} onChange={(e) => setYear(e.target.value)}>
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>

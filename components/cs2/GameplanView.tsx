@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/fetcher";
 import type { GameplanReport, GameplanSection } from "@/lib/cs2/gameplan";
 import { mapLabel } from "@/lib/cs2/maps";
-import { Card } from "@/components/ui";
+import { Card, Field } from "@/components/ui";
 import { Cs2Empty, SampleWindowPicker, SideLegend } from "./common";
 
 interface GameplanResponse {
@@ -179,8 +179,7 @@ export function GameplanView({
               </select>
             </div>
           </div>
-          <div className="ap-field">
-            <label>Sida</label>
+          <Field label="Sida">
             <div className="ap-cs2-side" role="group" aria-label="Sida">
               <button type="button" className={`is-t ${side === "t" ? "is-active" : ""}`} onClick={() => setSide("t")}>
                 T SIDE
@@ -189,7 +188,7 @@ export function GameplanView({
                 CT SIDE
               </button>
             </div>
-          </div>
+          </Field>
           <SampleWindowPicker maps={win.maps} months={win.months} onChange={setWin} />
           {opponents.length > 0 && (
             <div className="ap-field">

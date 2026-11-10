@@ -215,7 +215,7 @@ export default function OverviewPage() {
           actions={
             <div className="ap-seg">
               {PERIODS.map((p) => (
-                <button key={p.key} className={period === p.key ? "is-active" : ""} onClick={() => setPeriod(p.key)}>
+                <button key={p.key} className={period === p.key ? "is-active" : ""} aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
                   {p.label}
                 </button>
               ))}
@@ -280,7 +280,7 @@ export default function OverviewPage() {
       {/* Recent bets */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">
+          <span role="heading" aria-level={2} className="ap-card-title">
             <span className="ap-chip-icon is-sm is-emerald" aria-hidden="true"><I p={IC.ticket} size={13} /></span>
             Senaste bets
           </span>

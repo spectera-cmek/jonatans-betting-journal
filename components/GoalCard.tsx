@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card } from "./ui";
+import { Card, Field } from "./ui";
 import { I, IC } from "./icons";
 import { uFmt, krShort } from "@/lib/format";
 import {
@@ -83,14 +83,12 @@ export function GoalCard({
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div className="ap-x2">
-                <div className="ap-field">
-                  <label>Månadsmål (U)</label>
+                <Field label="Månadsmål (U)">
                   <input className="ap-input ap-num" inputMode="decimal" placeholder="t.ex. 20" value={mInput} onChange={(e) => setMInput(e.target.value)} />
-                </div>
-                <div className="ap-field">
-                  <label>Årsmål (U)</label>
+                </Field>
+                <Field label="Årsmål (U)">
                   <input className="ap-input ap-num" inputMode="decimal" placeholder="t.ex. 200" value={yInput} onChange={(e) => setYInput(e.target.value)} />
-                </div>
+                </Field>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="ap-btn" onClick={save}>Spara mål</button>

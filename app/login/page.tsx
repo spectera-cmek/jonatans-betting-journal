@@ -53,6 +53,7 @@ export default function LoginPage() {
           autoComplete="username"
           autoCapitalize="none"
           placeholder="Användarnamn"
+          aria-label="Användarnamn"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoFocus
@@ -64,19 +65,20 @@ export default function LoginPage() {
           type="password"
           autoComplete="current-password"
           placeholder="Lösenord"
+          aria-label="Lösenord"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           style={{ marginTop: 10, width: "100%" }}
         />
 
-        {error && <div className="ap-login-err">{error}</div>}
+        {error && <div className="ap-login-err" role="alert">{error}</div>}
 
         <button className="ap-btn" type="submit" disabled={busy} style={{ marginTop: 14, width: "100%", justifyContent: "center" }}>
           {busy ? "Loggar in…" : "Logga in"}
         </button>
 
         <p className="ap-login-sub" style={{ marginTop: 14 }}>
-          Inget konto? <Link href="/register" style={{ color: "var(--accent, #7aa2ff)" }}>Skapa konto</Link>
+          Inget konto? <Link href="/register" className="ap-link" style={{ fontSize: "inherit" }}>Skapa konto</Link>
         </p>
       </form>
     </div>

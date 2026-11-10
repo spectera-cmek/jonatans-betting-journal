@@ -287,9 +287,9 @@ export default function BetsPage() {
     return computeMetrics(likes);
   }, [filtered]);
 
-  const sel = (val: string, set: (v: string) => void, opts: string[]) => (
+  const sel = (name: string, val: string, set: (v: string) => void, opts: string[]) => (
     <div className="ap-select">
-      <select value={val} onChange={(e) => set(e.target.value)}>
+      <select aria-label={name} value={val} onChange={(e) => set(e.target.value)}>
         {opts.map((o) => <option key={o}>{o}</option>)}
       </select>
     </div>
@@ -367,7 +367,7 @@ export default function BetsPage() {
   return (
     <div className="ap-ledger">
       <div className="ap-page-kicker">
-        <span>Ledger / Bet history</span>
+        <span>Spelhistorik</span>
         <em>{rangeLabel || new Date().getFullYear()}</em>
       </div>
       <Topbar
@@ -394,14 +394,14 @@ export default function BetsPage() {
       <div className="ap-filterbar">
         <div className="ap-search">
           <I p={IC.search} size={16} />
-          <input placeholder="Sök match, liga, spel eller bookmaker…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" aria-label="Sök bland bets" placeholder="Sök match, liga, spel eller bookmaker…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <button className={"ap-btn ghost ap-filter-toggle" + (advancedOpen ? " is-active" : "")} onClick={() => setAdvancedOpen((open) => !open)}>
+        <button className={"ap-btn ghost ap-filter-toggle" + (advancedOpen ? " is-active" : "")} aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>
           <I p={IC.menu} size={15} />
           Filter{advancedCount > 0 ? ` (${advancedCount})` : ""}
         </button>
         <div className="ap-select">
-          <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "desc" | "asc")}>
+          <select aria-label="Sortering" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "desc" | "asc")}>
             <option value="desc">Nyast först</option>
             <option value="asc">Äldst först</option>
           </select>
@@ -411,7 +411,7 @@ export default function BetsPage() {
       <div className="ap-filter-summary">
         <div className="ap-filters" style={{ marginBottom: 0 }}>
           {RES_CHIPS.map(([v, l]) => (
-            <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} onClick={() => setRes(v)}>{l}</button>
+            <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} aria-pressed={res === v} onClick={() => setRes(v)}>{l}</button>
           ))}
           {/* Arriving from Inställningar or the CLV card: show what was applied
               and make it one click to leave. */}
@@ -438,42 +438,42 @@ export default function BetsPage() {
         <div className="ap-filter-panel">
           <div className="ap-filter-panel-head">
             <div>
-              <div className="ap-card-title">Fler filter</div>
+              <div role="heading" aria-level={2} className="ap-card-title">Fler filter</div>
               <div className="ap-sub">Avgränsa sport, marknad, bookmaker eller datum.</div>
             </div>
             {advancedCount > 0 && <button className="ap-link" onClick={clearAdvanced}>Rensa alla</button>}
           </div>
           <div className="ap-filter-grid">
-            {sel(sport, setSport, ["Alla sporter", ...sports])}
+            {sel("Sport", sport, setSport, ["Alla sporter", ...sports])}
             <div className="ap-select">
-              <select value={league} onChange={(e) => setLeague(e.target.value)}>
+              <select aria-label="Liga eller turnering" value={league} onChange={(e) => setLeague(e.target.value)}>
                 <option value="">Alla ligor/turneringar</option>
                 {leagues.map((value) => <option key={value} value={value}>{value}</option>)}
               </select>
             </div>
-            {sel(book, setBook, ["Alla bookmakers", ...books])}
+            {sel("Bookmaker", book, setBook, ["Alla bookmakers", ...books])}
             <div className="ap-select">
-              <select value={market} onChange={(e) => setMarket(e.target.value)}>
+              <select aria-label="Marknad" value={market} onChange={(e) => setMarket(e.target.value)}>
                 <option value="">Alla marknader</option>
                 {markets.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             {scopes.length > 0 && (
               <div className="ap-select">
-                <select value={scope} onChange={(e) => setScope(e.target.value)}>
+                <select aria-label="Avser" value={scope} onChange={(e) => setScope(e.target.value)}>
                   <option value="">Spelare / lag / match</option>
                   {scopes.map((sc) => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
                 </select>
               </div>
             )}
             <div className="ap-select">
-              <select value={eventKind} onChange={(e) => setEventKind(e.target.value)}>
+              <select aria-label="Eventtyp" value={eventKind} onChange={(e) => setEventKind(e.target.value)}>
                 <option value="">Match + turneringsspel</option>
                 {EVENT_KINDS.map((kind) => <option key={kind.value} value={kind.value}>{kind.label}</option>)}
               </select>
             </div>
             <div className="ap-select">
-              <select value={stage} onChange={(e) => setStage(e.target.value)}>
+              <select aria-label="Turneringsfas" value={stage} onChange={(e) => setStage(e.target.value)}>
                 <option value="">Alla turneringsfaser</option>
                 {TOURNAMENT_STAGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
@@ -481,13 +481,14 @@ export default function BetsPage() {
             <div className="ap-select ap-date-filter">
               <input
                 type="date"
+                aria-label="Datum"
                 value={day}
                 onChange={(e) => setDay(e.target.value)}
               />
             </div>
-            {sel(year, setYear, ["Alla år", ...years])}
+            {sel("År", year, setYear, ["Alla år", ...years])}
             <div className="ap-select">
-              <select value={month} onChange={(e) => setMonth(e.target.value)} disabled={!!day}>
+              <select aria-label="Månad" value={month} onChange={(e) => setMonth(e.target.value)} disabled={!!day}>
                 <option value="Alla månader">Alla månader</option>
                 {MONTHS_SV.map((label, i) => <option key={label} value={String(i + 1)}>{label}</option>)}
               </select>

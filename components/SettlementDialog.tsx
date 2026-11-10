@@ -1,10 +1,12 @@
 "use client";
 
+import { useDialog } from "@/lib/useDialog";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/fetcher";
 import type { BetListDTO, BetSettlementDTO } from "@/lib/types";
 import type { Outcome } from "@/lib/betting";
 import { ResultBadge } from "./ResultBadge";
+import { Field } from "./ui";
 
 const OUTCOMES: { value: Exclude<Outcome, "pending">; label: string }[] = [
   { value: "win", label: "Vunnen" },
@@ -43,6 +45,7 @@ export function SettlementDialog({
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useDialog<HTMLDivElement>(!!bet, onClose);
 
   useEffect(() => {
     if (!bet) return;
@@ -107,12 +110,20 @@ export function SettlementDialog({
 
   return (
     <div className="ap-overlay" onClick={onClose}>
-      <div className="ap-modal" onClick={(event) => event.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settle-title"
+        className="ap-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="ap-modal-head">
           <div>
-            <div className="ap-card-title" style={{ fontSize: 17 }}>
+            <h2 id="settle-title" className="ap-card-title" style={{ fontSize: 17 }}>
               {correcting ? "Korrigera rättning" : "Rätta bet"}
-            </div>
+            </h2>
             <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 3 }}>
               {bet.event} — {bet.selection}
             </div>
@@ -121,8 +132,7 @@ export function SettlementDialog({
         </div>
 
         <div className="ap-modal-body">
-          <div className="ap-field">
-            <label>Utfall</label>
+          <Field label="Utfall">
             <div className="ap-settlement-options">
               {OUTCOMES.map((item) => (
                 <button
@@ -135,22 +145,20 @@ export function SettlementDialog({
                 </button>
               ))}
             </div>
-          </div>
+          </Field>
 
-          <div className="ap-field">
-            <label>
+          <Field label={<>
               Anledning {correcting ? "(krävs vid korrigering)" : "(valfritt)"}
-            </label>
+            </>}>
             <input
               className="ap-input"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               placeholder="t.ex. 2–1 efter fulltid, ESPN"
             />
-          </div>
+          </Field>
 
-          <div className="ap-field">
-            <label>Rättningshistorik</label>
+          <Field label="Rättningshistorik">
             {loadingHistory ? (
               <div style={{ color: "var(--dim2)", fontSize: 12.5 }}>Laddar…</div>
             ) : history.length === 0 ? (
@@ -176,9 +184,9 @@ export function SettlementDialog({
                 ))}
               </div>
             )}
-          </div>
+          </Field>
 
-          {error && <div style={{ color: "var(--red)", fontSize: 13 }}>{error}</div>}
+          {error && <div role="alert" style={{ color: "var(--red)", fontSize: 13 }}>{error}</div>}
 
           <div style={{ display: "flex", gap: 10 }}>
             {correcting && canUndo && (

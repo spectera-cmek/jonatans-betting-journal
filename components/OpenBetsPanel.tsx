@@ -71,7 +71,7 @@ export function OpenBetsPanel({
     <>
       <Card className="ap-livecenter" style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">
+          <span role="heading" aria-level={2} className="ap-card-title">
             <span className="ap-chip-icon is-sm is-sky" aria-hidden="true">
               <I p={IC.clock} size={13} />
             </span>

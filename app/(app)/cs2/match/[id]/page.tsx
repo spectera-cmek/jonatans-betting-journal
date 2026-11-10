@@ -114,7 +114,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
 
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Kartor</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Kartor</span>
           <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>{v.vetoManual ? "Kartorna inmatade för hand" : v.vetoKnown ? "Vetot klart" : "Sannolikhet per position ur vetot"}</span>
         </div>
         <div className="ap-cs2-scroll">
@@ -153,7 +153,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
 
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Spelare · modellens linjer</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Spelare · modellens linjer</span>
           <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Fair line = linjen där modellen ger ~50 %, inkl. övertid</span>
         </div>
         <div className="ap-cs2-scroll">
@@ -216,7 +216,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
 
       <Card style={{ marginBottom: 16 }}>
         <div className="ap-card-head" style={{ margin: "-20px -20px 14px" }}>
-          <span className="ap-card-title">Angles</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Angles</span>
           <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Datadrivna skäl att avvika från linjen — med urvalet bakom</span>
         </div>
         {v.angles.length === 0 && <div style={{ color: "var(--dim2)", fontSize: 13 }}>Inga angles över trösklarna för den här matchen.</div>}
@@ -234,10 +234,10 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
       </Card>
 
       <div className="ap-seg" style={{ marginBottom: 12 }}>
-        <button className={gpTeam === 1 ? "is-active" : ""} onClick={() => setGpTeam(1)}>
+        <button className={gpTeam === 1 ? "is-active" : ""} aria-pressed={gpTeam === 1} onClick={() => setGpTeam(1)}>
           Gameplan: {v.team1.name}
         </button>
-        <button className={gpTeam === 2 ? "is-active" : ""} onClick={() => setGpTeam(2)}>
+        <button className={gpTeam === 2 ? "is-active" : ""} aria-pressed={gpTeam === 2} onClick={() => setGpTeam(2)}>
           Gameplan: {v.team2.name}
         </button>
       </div>

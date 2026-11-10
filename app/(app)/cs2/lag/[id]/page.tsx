@@ -59,7 +59,7 @@ export default function Cs2TeamPage({ params }: { params: { id: string } }) {
       <div className="ap-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))", marginBottom: 16 }}>
         <Card style={{ padding: 0 }}>
           <div className="ap-card-head">
-            <span className="ap-card-title">Trupp</span>
+            <span role="heading" aria-level={2} className="ap-card-title">Trupp</span>
           </div>
           <div className="ap-cs2-scroll">
           <div className="ap-table" style={{ minWidth: 440 }}>
@@ -94,7 +94,7 @@ export default function Cs2TeamPage({ params }: { params: { id: string } }) {
 
         <Card style={{ padding: 0 }}>
           <div className="ap-card-head">
-            <span className="ap-card-title">Matcher</span>
+            <span role="heading" aria-level={2} className="ap-card-title">Matcher</span>
           </div>
           <div className="ap-cs2-scroll">
           <div className="ap-table" style={{ minWidth: 420 }}>
@@ -121,7 +121,7 @@ export default function Cs2TeamPage({ params }: { params: { id: string } }) {
 
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Kartpool · senaste {months} mån</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Kartpool · senaste {months} mån</span>
         </div>
         <div className="ap-cs2-scroll">
           <div className="ap-table" style={{ minWidth: 860 }}>

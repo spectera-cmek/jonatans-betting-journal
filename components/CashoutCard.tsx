@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "./ui";
+import { Card, Field } from "./ui";
 import { InlineStat, MiniStat } from "./stats";
 import { cashoutAdvice } from "@/lib/tools";
 import { devigOneSided } from "@/lib/fairOdds";
@@ -42,42 +42,35 @@ export function CashoutCard() {
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
-        <div className="ap-field" style={{ width: 100 }}>
-          <label>Insats (kr)</label>
+        <Field label="Insats (kr)" style={{ width: 100 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 96 }}>
-          <label>Ditt odds</label>
+        </Field>
+        <Field label="Ditt odds" style={{ width: 96 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={odds} placeholder="2.50" onChange={(e) => setOdds(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 200 }}>
-          <label>Chansen just nu</label>
+        </Field>
+        <Field label="Chansen just nu" style={{ width: 200 }}>
           <div className="ap-seg2">
-            <button className={mode === "live" ? "is-active" : ""} onClick={() => setMode("live")}>Live-odds</button>
-            <button className={mode === "own" ? "is-active" : ""} onClick={() => setMode("own")}>Egen chans</button>
+            <button className={mode === "live" ? "is-active" : ""} aria-pressed={mode === "live"} onClick={() => setMode("live")}>Live-odds</button>
+            <button className={mode === "own" ? "is-active" : ""} aria-pressed={mode === "own"} onClick={() => setMode("own")}>Egen chans</button>
           </div>
-        </div>
+        </Field>
         {mode === "live" ? (
           <>
-            <div className="ap-field" style={{ width: 100 }}>
-              <label>Live-odds</label>
+            <Field label="Live-odds" style={{ width: 100 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={liveOdds} placeholder="1.15" onChange={(e) => setLiveOdds(e.target.value)} />
-            </div>
-            <div className="ap-field" style={{ width: 110 }}>
-              <label>Marginal %</label>
+            </Field>
+            <Field label="Marginal %" style={{ width: 110 }}>
               <input className="ap-input ap-num" inputMode="decimal" value={liveMargin} onChange={(e) => setLiveMargin(e.target.value)} />
-            </div>
+            </Field>
           </>
         ) : (
-          <div className="ap-field" style={{ width: 110 }}>
-            <label>Din chans %</label>
+          <Field label="Din chans %" style={{ width: 110 }}>
             <input className="ap-input ap-num" inputMode="decimal" value={ownPct} placeholder="87" onChange={(e) => setOwnPct(e.target.value)} />
-          </div>
+          </Field>
         )}
-        <div className="ap-field" style={{ width: 130 }}>
-          <label>Erbjuden cashout</label>
+        <Field label="Erbjuden cashout" style={{ width: 130 }}>
           <input className="ap-input ap-num" inputMode="decimal" value={offered} placeholder="217" onChange={(e) => setOffered(e.target.value)} />
-        </div>
+        </Field>
       </div>
 
       {payout != null && (

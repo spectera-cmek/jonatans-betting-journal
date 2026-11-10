@@ -30,7 +30,7 @@ function MatchesTab() {
     <>
       <div className="ap-seg" style={{ marginBottom: 12 }}>
         {[2, 7, 14].map((d) => (
-          <button key={d} className={days === d ? "is-active" : ""} onClick={() => setDays(d)}>
+          <button key={d} className={days === d ? "is-active" : ""} aria-pressed={days === d} onClick={() => setDays(d)}>
             {d} dagar
           </button>
         ))}
@@ -184,16 +184,16 @@ export default function Cs2Page() {
         accent="purple"
       />
       <div className="ap-seg ap-cs2-tabs">
-        <button className={tab === "matcher" ? "is-active" : ""} onClick={() => setTab("matcher")}>
+        <button className={tab === "matcher" ? "is-active" : ""} aria-pressed={tab === "matcher"} onClick={() => setTab("matcher")}>
           Matcher
         </button>
-        <button className={tab === "lag" ? "is-active" : ""} onClick={() => setTab("lag")}>
+        <button className={tab === "lag" ? "is-active" : ""} aria-pressed={tab === "lag"} onClick={() => setTab("lag")}>
           Lag
         </button>
-        <button className={tab === "spelare" ? "is-active" : ""} onClick={() => setTab("spelare")}>
+        <button className={tab === "spelare" ? "is-active" : ""} aria-pressed={tab === "spelare"} onClick={() => setTab("spelare")}>
           Spelare
         </button>
-        <button className={tab === "facit" ? "is-active" : ""} onClick={() => setTab("facit")}>
+        <button className={tab === "facit" ? "is-active" : ""} aria-pressed={tab === "facit"} onClick={() => setTab("facit")}>
           Facit
         </button>
       </div>

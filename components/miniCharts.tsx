@@ -44,10 +44,10 @@ export function Spark({
     return { line, area: `${line} L${w},${h} L0,${h} Z` };
   }, [data, w, h]);
 
-  if (!geom) return <svg width={w} height={h} />;
+  if (!geom) return <svg width={w} height={h} aria-hidden="true" />;
   const { line, area } = geom;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} preserveAspectRatio="none" style={{ display: "block" }} aria-hidden="true">
       {fill && (
         <defs>
           <linearGradient id={`sp${gid}`} x1="0" y1="0" x2="0" y2="1">

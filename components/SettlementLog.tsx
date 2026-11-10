@@ -124,7 +124,7 @@ export function SettlementLog({
     <div id="rattade" style={{ scrollMarginTop: 80, marginTop: 16 }}>
     <Card style={{ padding: 0 }}>
       <div className="ap-card-head">
-        <span className="ap-card-title">
+        <span role="heading" aria-level={2} className="ap-card-title">
           <span className="ap-chip-icon is-sm is-emerald" aria-hidden="true">
             <I p={IC.checkCircle} size={13} />
           </span>

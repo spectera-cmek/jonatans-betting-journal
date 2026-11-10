@@ -57,6 +57,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem("bj.glow", g ? "1" : "0"); } catch {}
   }, []);
 
+  // Keep <html> in step with the chosen mode. The pre-paint script sets
+  // data-mode there once at load; without this a toggle in Settings left the
+  // root on the old mode until the next reload, so root-scoped rules
+  // (color-scheme, the overscroll canvas) and the browser's theme-color lagged.
+  useEffect(() => {
+    if (!ready) return;
+    document.documentElement.setAttribute("data-mode", mode);
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", mode === "light" ? "#ffffff" : "#0b1120");
+  }, [mode, ready]);
+
   const accent = useMemo(() => ACCENTS.find((a) => a.hex === accentHex) || ACCENTS[0], [accentHex]);
   const cc = useMemo(() => chartColors(accent.hex, mode), [accent.hex, mode]);
 

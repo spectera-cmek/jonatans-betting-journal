@@ -151,7 +151,7 @@ export function ManualShotOdds({
     return (
       <Card>
         <div className="ap-card-head">
-          <span className="ap-card-title">Räkna på egna odds</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Räkna på egna odds</span>
         </div>
         <div style={{ color: "var(--dim2)", fontSize: 13 }}>Laddar matcher…</div>
       </Card>
@@ -162,7 +162,7 @@ export function ManualShotOdds({
     return (
       <Card>
         <div className="ap-card-head">
-          <span className="ap-card-title">Räkna på egna odds</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Räkna på egna odds</span>
         </div>
         <div style={{ color: "var(--dim2)", fontSize: 13 }}>
           Inga kommande matcher med modell. Kör <code>npm run shots:ingest</code> först.
@@ -174,7 +174,7 @@ export function ManualShotOdds({
   return (
     <Card>
       <div className="ap-card-head">
-        <span className="ap-card-title">Räkna på egna odds</span>
+        <span role="heading" aria-level={2} className="ap-card-title">Räkna på egna odds</span>
         <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>
           För böcker API:et inte täcker — Betsson, Bethard, NordicBet
         </span>

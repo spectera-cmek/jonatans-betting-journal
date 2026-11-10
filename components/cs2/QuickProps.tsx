@@ -187,24 +187,24 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0" }}>
         <div className="ap-seg">
           {scopes.filter((s) => !isDuel || s !== "maps12").map((s) => (
-            <button key={s} className={s === scope ? "is-active" : ""} onClick={() => switchTo(s, market)}>
+            <button key={s} className={s === scope ? "is-active" : ""} aria-pressed={s === scope} onClick={() => switchTo(s, market)}>
               {CS2_SCOPE_LABEL[s]}
             </button>
           ))}
         </div>
         <div className="ap-seg">
           {(["kills", "headshots", "duel"] as const).map((m) => (
-            <button key={m} className={m === market ? "is-active" : ""} onClick={() => switchTo(scope, m)}>
+            <button key={m} className={m === market ? "is-active" : ""} aria-pressed={m === market} onClick={() => switchTo(scope, m)}>
               {MARKET_LABEL[m]}
             </button>
           ))}
         </div>
         {!isDuel && (
           <div className="ap-seg">
-            <button className={tab === "ladder" ? "is-active" : ""} onClick={() => setTab("ladder")}>
+            <button className={tab === "ladder" ? "is-active" : ""} aria-pressed={tab === "ladder"} onClick={() => setTab("ladder")}>
               Stege
             </button>
-            <button className={tab === "form" ? "is-active" : ""} onClick={() => setTab("form")}>
+            <button className={tab === "form" ? "is-active" : ""} aria-pressed={tab === "form"} onClick={() => setTab("form")}>
               Snabbformulär
             </button>
           </div>

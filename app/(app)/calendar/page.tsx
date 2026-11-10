@@ -40,10 +40,17 @@ export default function CalendarPage() {
     return map;
   }, [bets]);
 
-  // Default the view to the most recent bet month (fall back to today).
+  // Default the view to the most recent bet month that is not in the future
+  // (fall back to today). Futures — a league winner settling next summer — carry
+  // an eventAt months ahead, and would otherwise open the calendar on an empty
+  // month a year from now.
   const latest = useMemo(() => {
+    const now = Date.now();
     let t = 0;
-    for (const b of bets) t = Math.max(t, new Date(b.eventAt ?? b.placedAt).getTime());
+    for (const b of bets) {
+      const bt = new Date(b.eventAt ?? b.placedAt).getTime();
+      if (bt <= now) t = Math.max(t, bt);
+    }
     return t ? new Date(t) : new Date();
   }, [bets]);
 
@@ -142,6 +149,7 @@ export default function CalendarPage() {
                 key={c.iso}
                 onClick={() => setSelected(isSel ? "" : c.iso)}
                 className="ap-cal-day"
+                aria-pressed={isSel}
                 style={{
                   background: tint(a?.profit ?? 0, a?.settled ?? 0),
                   border: `1px solid ${isSel ? cc.acc : "var(--grid, rgba(255,255,255,.06))"}`,
@@ -170,7 +178,7 @@ export default function CalendarPage() {
       {selected && (
         <Card style={{ padding: 0, marginTop: 12 }}>
           <div className="ap-card-head">
-            <span className="ap-card-title">Spel {selected}</span>
+            <span role="heading" aria-level={2} className="ap-card-title">Spel {selected}</span>
             <span style={{ color: "var(--dim2)", fontSize: 12 }}>{dayBets.length} bets</span>
           </div>
           <div className="ap-table-wrap">
@@ -302,6 +310,15 @@ function YearHeatmap({
     el.scrollLeft = Math.max(0, 26 + (lastCol + 1) * (CELL + GAP) + 12 - el.clientWidth);
   }, [cells]);
 
+  // The cell that represents the grid in the tab order: the selected day if it
+  // is in this year, else the latest day with bets, else January 1st.
+  const tabStop = useMemo(() => {
+    if (cells.some((c) => c.iso === selected)) return selected;
+    let last: string | undefined;
+    for (const c of cells) if (c.agg?.count) last = c.iso;
+    return last ?? cells[0]?.iso;
+  }, [cells, selected]);
+
   return (
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -331,6 +348,24 @@ function YearHeatmap({
               ))}
             </div>
             <div
+              role="group"
+              aria-label={`Årsöversikt ${year} — piltangenterna flyttar mellan dagar`}
+              onKeyDown={(e) => {
+                // One tab stop for the whole year; arrows move day by day
+                // (up/down) and week by week (left/right), Home/End jump to
+                // the ends. Cells are laid out column-first, so ±7 is a week.
+                const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[e.key];
+                const btns = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
+                const at = btns.indexOf(document.activeElement as HTMLButtonElement);
+                if (at < 0) return;
+                let to = at;
+                if (step != null) to = at + step;
+                else if (e.key === "Home") to = 0;
+                else if (e.key === "End") to = btns.length - 1;
+                else return;
+                e.preventDefault();
+                btns[Math.max(0, Math.min(btns.length - 1, to))].focus();
+              }}
               style={{
                 display: "grid",
                 gridTemplateRows: `repeat(7, ${CELL}px)`,
@@ -344,7 +379,10 @@ function YearHeatmap({
                   key={c.iso}
                   onClick={() => onPick(c.iso)}
                   title={`${dateShort(c.iso)} · ${c.agg && c.agg.settled > 0 ? krFmt(c.agg.profit * unit, true) : "—"} · ${c.agg?.count ?? 0} bets`}
-                  aria-label={c.iso}
+                  aria-label={`${dateShort(c.iso)}: ${c.agg?.count ?? 0} bets${c.agg && c.agg.settled > 0 ? `, ${krFmt(c.agg.profit * unit, true)}` : ""}`}
+                  aria-pressed={selected === c.iso}
+                  // Roving tabindex: 365 cells would otherwise be 365 tab stops.
+                  tabIndex={c.iso === tabStop ? 0 : -1}
                   style={{
                     gridRow: c.row + 1,
                     gridColumn: c.col + 1,

@@ -2296,7 +2296,7 @@ select.ap-input {
 .ap-openbet-settle:focus-visible,
 .ap-swatch:focus-visible,
 .ap-switch:focus-visible {
-  outline: 2px solid var(--acc);
+  outline: 2px solid var(--acc-ink);
   outline-offset: 2px;
 }
 /* The search input clears its own outline — ring the whole field instead. */
@@ -2524,8 +2524,12 @@ select.ap-input {
   .ap-kpi-row {
     grid-template-columns: 1fr 1fr;
   }
+  /* Was display:none — meant for the dashboard's period picker, but it also
+     removed the queue filter on /rattning and the period picker on /insights
+     from phones. Segments now stay available and scroll sideways if needed. */
   .ap-seg {
-    display: none;
+    max-width: 100%;
+    overflow-x: auto;
   }
   .ap-filterbar {
     flex-wrap: wrap;
@@ -3754,4 +3758,131 @@ select.ap-input {
   .ap-nba-cards {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================
+   Accessibility layer
+   ============================================================ */
+
+/* Skip link: first tab stop on every page, visible only while focused. */
+.ap-skip {
+  position: absolute;
+  left: 12px;
+  top: -64px;
+  z-index: 2000;
+  padding: 10px 14px;
+  border-radius: var(--r-ctl);
+  background: var(--acc);
+  color: var(--acc-text);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: top 0.12s;
+}
+.ap-skip:focus {
+  top: 12px;
+}
+
+/* Keyboard focus ring for every focusable element. The per-class list further
+   up predates this and only covered the controls that existed then; links,
+   <summary>, calendar days and anything added later had no visible focus.
+   --acc-ink rather than --acc: the raw accent is under 3:1 on a white card. */
+.ap :where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--acc-ink);
+  outline-offset: 2px;
+}
+/* …except where a wrapper draws the ring (search, date filter), and on the
+   containers that only take focus programmatically (skip-link target, dialogs). */
+.ap .ap-search input:focus-visible,
+.ap .ap-date-filter input:focus-visible,
+.ap .ap-main:focus-visible,
+.ap [role="dialog"]:focus-visible {
+  outline: none;
+}
+.ap-date-filter:focus-within {
+  outline: 2px solid var(--acc-ink);
+  outline-offset: 2px;
+}
+
+/* Native controls (select popups, date pickers, scrollbars) follow the theme,
+   and the canvas behind the app matches it on overscroll. */
+:root[data-mode="dark"] {
+  color-scheme: dark;
+}
+:root[data-mode="light"] {
+  color-scheme: light;
+}
+:root[data-mode="light"],
+:root[data-mode="light"] body {
+  background: #f1f5f9;
+}
+
+/* Minimum pointer target of 24×24 CSS px (WCAG 2.2 — 2.5.8) for the compact
+   text buttons and inline help icons. */
+button.ap-link,
+.ap-clv-btn {
+  min-height: 24px;
+}
+.ap-clv-btn {
+  min-width: 24px;
+  text-align: right;
+}
+.ap-tip::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.ap-switch {
+  width: 40px;
+  height: 24px;
+}
+.ap-switch::after {
+  top: 3px;
+  left: 3px;
+}
+.ap-switch.on::after {
+  left: 19px;
+}
+.ap-fine summary {
+  padding-block: 3px;
+}
+
+/* Visually hidden, still read by screen readers. */
+.ap-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Reduced motion: the earlier block only stopped the skeleton shimmer and the
+   card lift. This covers the rest — pulse dot, spinners, sheet/hover transitions. */
+@media (prefers-reduced-motion: reduce) {
+  .ap *,
+  .ap *::before,
+  .ap *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A card head with controls (queue filters, year picker) wraps instead of
+   pushing the controls past the card edge on a phone. */
+.ap-card-head {
+  flex-wrap: wrap;
+}
+.ap-card-head > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.ap-seg {
+  max-width: 100%;
+  overflow-x: auto;
 }

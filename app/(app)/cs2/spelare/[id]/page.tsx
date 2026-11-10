@@ -89,7 +89,7 @@ export default function Cs2PlayerPage({ params }: { params: { id: string } }) {
 
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Per karta · HLTV · senaste {months} mån</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Per karta · HLTV · senaste {months} mån</span>
         </div>
         <div className="ap-cs2-scroll">
           <div className="ap-table" style={{ minWidth: 820 }}>
@@ -172,7 +172,7 @@ export default function Cs2PlayerPage({ params }: { params: { id: string } }) {
       {demoMaps.length > 0 && (
         <Card style={{ padding: 0, marginBottom: 16 }}>
           <div className="ap-card-head">
-            <span className="ap-card-title">Per karta och sida · ur demos</span>
+            <span role="heading" aria-level={2} className="ap-card-title">Per karta och sida · ur demos</span>
           </div>
           <div className="ap-table">
             <div className="ap-thead" style={{ gridTemplateColumns: "1fr 50px 60px 70px 70px 80px 1.6fr" }}>
@@ -205,7 +205,7 @@ export default function Cs2PlayerPage({ params }: { params: { id: string } }) {
 
       <Card style={{ padding: 0 }}>
         <div className="ap-card-head">
-          <span className="ap-card-title">Senaste kartor</span>
+          <span role="heading" aria-level={2} className="ap-card-title">Senaste kartor</span>
         </div>
         <div className="ap-table">
           <div className="ap-thead" style={{ gridTemplateColumns: "70px 1fr 1fr 60px 60px 60px 60px" }}>

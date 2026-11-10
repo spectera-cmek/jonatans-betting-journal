@@ -49,7 +49,7 @@ export function SyncButton({
   };
 
   const status = result ? (
-    <div style={{ fontSize: 12.5, color: result.ok ? "var(--dim)" : "var(--red)", marginTop: showResult ? 10 : 0 }}>
+    <div role="status" style={{ fontSize: 12.5, color: result.ok ? "var(--dim)" : "var(--red)", marginTop: showResult ? 10 : 0 }}>
       <div>{result.message}</div>
       {showResult && result.details?.length > 0 && (
         <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--dim2)", lineHeight: 1.45 }}>
@@ -69,6 +69,8 @@ export function SyncButton({
           className="ap-btn ghost"
           onClick={run}
           disabled={busy}
+          aria-label={busy ? "Synkar…" : label}
+          aria-busy={busy}
           title={result?.message || "Synka rättning + CLV"}
         >
           <span
@@ -82,11 +84,10 @@ export function SyncButton({
           </span>
           <span className="ap-hide-sm">{busy ? "Synkar…" : label}</span>
         </button>
-        {result && !busy && (
-          <span style={{ fontSize: 11, color: result.ok ? "var(--dim)" : "var(--red)", maxWidth: 220 }}>
-            {result.message}
-          </span>
-        )}
+        {/* Always mounted so a screen reader announces the result when it arrives. */}
+        <span role="status" style={{ fontSize: 11, color: result?.ok ? "var(--dim)" : "var(--red)", maxWidth: 220 }}>
+          {result && !busy ? result.message : ""}
+        </span>
       </div>
     );
   }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card, Skeleton, SkeletonCard, SectionHead } from "@/components/ui";
+import { Card, Skeleton, SkeletonCard, SectionHead, Field } from "@/components/ui";
 import { HBar, CompareChart, type TimePoint } from "@/components/charts";
 import { KellyCard } from "@/components/KellyCard";
 import { ReportCard } from "@/components/ReportCard";
@@ -420,7 +420,7 @@ function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: C
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
         {allCats.map((c) => (
-          <button key={c} className={"ap-chip" + (cats.has(c) ? " is-active" : "")} onClick={() => toggleCat(c)}>
+          <button key={c} className={"ap-chip" + (cats.has(c) ? " is-active" : "")} aria-pressed={cats.has(c)} onClick={() => toggleCat(c)}>
             {c}
           </button>
         ))}
@@ -430,19 +430,16 @@ function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: C
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 12 }}>
-        <div className="ap-field" style={{ width: 92 }}>
-          <label>Odds från</label>
+        <Field label="Odds från" style={{ width: 92 }}>
           <input className="ap-input ap-num" inputMode="decimal" placeholder="alla" value={oddsMin} onChange={(e) => setOddsMin(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 92 }}>
-          <label>Odds till</label>
+        </Field>
+        <Field label="Odds till" style={{ width: 92 }}>
           <input className="ap-input ap-num" inputMode="decimal" placeholder="alla" value={oddsMax} onChange={(e) => setOddsMax(e.target.value)} />
-        </div>
-        <div className="ap-field" style={{ width: 110 }}>
-          <label>Max insats (U)</label>
+        </Field>
+        <Field label="Max insats (U)" style={{ width: 110 }}>
           <input className="ap-input ap-num" inputMode="decimal" placeholder="ingen" value={maxStake} onChange={(e) => setMaxStake(e.target.value)} />
-        </div>
-        <button className={"ap-chip" + (singlesOnly ? " is-active" : "")} style={{ marginBottom: 4 }} onClick={() => setSinglesOnly(!singlesOnly)}>
+        </Field>
+        <button className={"ap-chip" + (singlesOnly ? " is-active" : "")} aria-pressed={singlesOnly} style={{ marginBottom: 4 }} onClick={() => setSinglesOnly(!singlesOnly)}>
           Endast singlar
         </button>
       </div>

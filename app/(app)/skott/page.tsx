@@ -384,7 +384,20 @@ export default function ShotsPage() {
             const key = `${r.matchId}|${r.metric}|${r.side}|${r.line}`;
             const open = openRow === key;
             return (
-              <div key={key} className="ap-betcard" onClick={() => setOpenRow(open ? null : key)}>
+              <div
+                key={key}
+                className="ap-betcard"
+                role="button"
+                tabIndex={0}
+                aria-expanded={open}
+                onClick={() => setOpenRow(open ? null : key)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setOpenRow(open ? null : key);
+                  }
+                }}
+              >
                 <div className="ap-betcard-top">
                   <span className="ap-betcard-date">
                     <span className="ap-num">{kickoffLabel(r.kickoffAt)}</span>
@@ -422,7 +435,7 @@ export default function ShotsPage() {
       {meta && trainedMatches > 0 && (
         <Card>
           <div className="ap-card-head">
-            <span className="ap-card-title">Modellens underlag</span>
+            <span role="heading" aria-level={2} className="ap-card-title">Modellens underlag</span>
           </div>
           <div className="ap-shot-models">
             {meta.leagues.map((l) => (

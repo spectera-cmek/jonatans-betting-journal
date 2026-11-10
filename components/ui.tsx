@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
 import { Spark } from "./miniCharts";
 import { I, IC, sportIcon } from "./icons";
 import type { LucideIcon } from "lucide-react";
@@ -20,6 +20,57 @@ export function Card({
   return (
     <div className={"ap-card " + className} style={style}>
       {children}
+    </div>
+  );
+}
+
+const CONTROL_TAGS = new Set(["input", "select", "textarea"]);
+
+/**
+ * A labelled form field: `.ap-field` wrapper + its `<label>`, wired together so
+ * the label is the control's accessible name and clicking it focuses the
+ * control. The first native input/select/textarea among the children (also one
+ * level down, e.g. inside an `.ap-select` wrapper) is given a generated id —
+ * or keeps its own. A field without a native control (segmented buttons, a
+ * custom picker) becomes a labelled group instead.
+ */
+export function Field({
+  label,
+  children,
+  className,
+  ...rest
+}: { label: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  const uid = useId();
+  let controlId: string | undefined;
+
+  const bind = (nodes: React.ReactNode, depth: number): React.ReactNode =>
+    Children.map(nodes, (child) => {
+      if (controlId || !isValidElement<{ id?: string; children?: React.ReactNode }>(child)) return child;
+      if (typeof child.type !== "string") return child;
+      if (CONTROL_TAGS.has(child.type)) {
+        controlId = child.props.id ?? uid;
+        return child.props.id ? child : cloneElement(child, { id: controlId });
+      }
+      if (depth < 2 && child.props.children != null) {
+        const bound = bind(child.props.children, depth + 1);
+        return controlId ? cloneElement(child, undefined, bound) : child;
+      }
+      return child;
+    });
+
+  const body = bind(children, 0);
+  const labelId = uid + "-label";
+
+  return (
+    <div
+      className={"ap-field" + (className ? " " + className : "")}
+      {...(controlId ? {} : { role: "group", "aria-labelledby": labelId })}
+      {...rest}
+    >
+      <label id={labelId} htmlFor={controlId}>
+        {label}
+      </label>
+      {body}
     </div>
   );
 }
@@ -158,7 +209,7 @@ export function PanelHead({
           </span>
         )}
         <div style={{ minWidth: 0 }}>
-          <div className="ap-panel-head-title">
+          <h2 className="ap-panel-head-title">
             {title}
             {hint && (
               <span className="ap-tip" tabIndex={0} role="note" style={{ marginLeft: 6 }}>
@@ -166,7 +217,7 @@ export function PanelHead({
                 <span className="ap-tip-body">{hint}</span>
               </span>
             )}
-          </div>
+          </h2>
           {sub && <div className="ap-panel-head-sub">{sub}</div>}
         </div>
       </div>
@@ -222,7 +273,7 @@ export function SectionHead({
           <I p={icon} size={15} />
         </div>
       )}
-      <div className="ap-sec-title">{title}</div>
+      <h2 className="ap-sec-title">{title}</h2>
       {sub && <div className="ap-sec-sub">{sub}</div>}
     </div>
   );

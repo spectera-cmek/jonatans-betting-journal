@@ -128,7 +128,7 @@ export function ManualVeto({ v, onSaved }: { v: MatchupView; onSaved: () => void
           </div>
         </div>
       )}
-      {error && <div style={{ marginTop: 8, color: "var(--neg, #ef4444)", fontSize: 12.5 }}>{error}</div>}
+      {error && <div role="alert" style={{ marginTop: 8, color: "var(--red)", fontSize: 12.5 }}>{error}</div>}
     </Card>
   );
 }

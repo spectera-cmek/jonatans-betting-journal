@@ -146,7 +146,19 @@ export function InteractiveLineChart({
       onPointerDown={onMove}
       onPointerLeave={() => setHover(null)}
     >
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        width="100%"
+        height={h}
+        preserveAspectRatio="none"
+        style={{ display: "block" }}
+        role="img"
+        aria-label={
+          pts.length > 1
+            ? `Linjediagram: ${formatValue(pts[0].v)} den ${formatDate(pts[0].t)} till ${formatValue(pts[pts.length - 1].v)} den ${formatDate(pts[pts.length - 1].t)}`
+            : "Linjediagram"
+        }
+      >
         <defs>
           <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={fill} />
@@ -275,7 +287,7 @@ export function CompareChart({
   }
   const { x, y, path, zero } = geom;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }} role="img" aria-label="Jämförelsediagram: verkligt utfall mot scenario">
       <line x1={pad} y1={zero} x2={w - pad} y2={zero} stroke={grid} strokeWidth="1.4" />
       <path d={path(sa)} fill="none" stroke={colorA} strokeWidth="1.8" strokeLinejoin="round" opacity="0.85" />
       {sb.length >= 2 && (
@@ -323,7 +335,7 @@ export function LineChart({
   const area = `${line} L${x(data.length - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
   const gridLines = [0.25, 0.5, 0.75].map((g) => pad + g * (h - pad * 2));
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }}>
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }} aria-hidden="true">
       <defs>
         <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={fill} />
@@ -370,7 +382,14 @@ export function PLBars({
   const zero = h * 0.62;
   const scale = (Math.min(zero, h - zero) - 18) / max;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{ display: "block" }}>
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      width="100%"
+      height={h}
+      style={{ display: "block" }}
+      role="img"
+      aria-label={"Stapeldiagram, resultat per period: " + data.map((d) => `${d.m} ${d.units >= 0 ? "+" : "−"}${Math.abs(d.units).toFixed(1)}U`).join(", ")}
+    >
       <defs>
         {/* solid at the bar tip, fading toward the zero line */}
         <linearGradient id={`pb${gid}p`} x1="0" y1="0" x2="0" y2="1">
@@ -435,7 +454,7 @@ export function Donut({
   const circ = 2 * Math.PI * r;
   let offset = 0;
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={[centerLabel, centerSub].filter(Boolean).join(" ") || "Cirkeldiagram"}>
       <circle cx={c} cy={c} r={r} fill="none" stroke={track} strokeWidth={thickness} />
       {data.map((d, i) => {
         // ~3° of separation between segments, matching the reference's
@@ -516,7 +535,7 @@ export function Ring({
   const circ = 2 * Math.PI * r;
   const len = (pct / 100) * circ;
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={`${Math.round(pct)} %${sub ? " " + sub : ""}`}>
       <circle cx={c} cy={c} r={r} fill="none" stroke={track} strokeWidth={thickness} />
       <circle
         cx={c}

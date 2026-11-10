@@ -60,6 +60,7 @@ export default function RegisterPage() {
           autoComplete="username"
           autoCapitalize="none"
           placeholder="Användarnamn (3–20 tecken)"
+          aria-label="Användarnamn (3–20 tecken)"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoFocus
@@ -71,6 +72,7 @@ export default function RegisterPage() {
           type="password"
           autoComplete="new-password"
           placeholder="Lösenord (minst 8 tecken)"
+          aria-label="Lösenord (minst 8 tecken)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           style={{ marginTop: 10, width: "100%" }}
@@ -81,6 +83,7 @@ export default function RegisterPage() {
           type="password"
           autoComplete="new-password"
           placeholder="Bekräfta lösenord"
+          aria-label="Bekräfta lösenord"
           value={passwordConfirm}
           onChange={(e) => setPasswordConfirm(e.target.value)}
           style={{ marginTop: 10, width: "100%" }}
@@ -92,19 +95,20 @@ export default function RegisterPage() {
           autoComplete="off"
           autoCapitalize="none"
           placeholder="Inbjudningskod"
+          aria-label="Inbjudningskod"
           value={inviteCode}
           onChange={(e) => setInviteCode(e.target.value)}
           style={{ marginTop: 10, width: "100%" }}
         />
 
-        {error && <div className="ap-login-err">{error}</div>}
+        {error && <div className="ap-login-err" role="alert">{error}</div>}
 
         <button className="ap-btn" type="submit" disabled={busy} style={{ marginTop: 14, width: "100%", justifyContent: "center" }}>
           {busy ? "Skapar konto…" : "Skapa konto"}
         </button>
 
         <p className="ap-login-sub" style={{ marginTop: 14 }}>
-          Har du redan ett konto? <Link href="/login" style={{ color: "var(--accent, #7aa2ff)" }}>Logga in</Link>
+          Har du redan ett konto? <Link href="/login" className="ap-link" style={{ fontSize: "inherit" }}>Logga in</Link>
         </p>
       </form>
     </div>

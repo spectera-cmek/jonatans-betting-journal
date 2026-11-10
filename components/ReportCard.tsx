@@ -80,7 +80,7 @@ export function ReportCard({
   return (
     <Card style={{ padding: 0 }}>
       <div className="ap-card-head">
-        <span className="ap-card-title">{title}</span>
+        <span role="heading" aria-level={2} className="ap-card-title">{title}</span>
         <span style={{ color: "var(--dim2)", fontSize: 12 }}>{periodLabel}</span>
       </div>
       <div className="ap-week-grid" style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, alignItems: "start" }}>

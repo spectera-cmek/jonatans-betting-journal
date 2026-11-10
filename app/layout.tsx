@@ -42,7 +42,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0a0b0f",
+  themeColor: "#0b1120",
 };
 
 // Applies the stored theme to <html> before first paint, so the app can render
