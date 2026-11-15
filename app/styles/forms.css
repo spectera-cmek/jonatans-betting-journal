@@ -474,3 +474,36 @@ select.ap-input {
 .ap-shot-filters .ap-select select {
   width: 100%;
 }
+
+/* Notice inside a dialog: a quiet box whose left rule says what kind it is. */
+.ap-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--dim2);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  font-size: var(--fs-md);
+  line-height: 1.45;
+}
+.ap-notice.is-pos {
+  border-color: var(--pos-line);
+  border-left-color: var(--pos);
+}
+.ap-notice.is-neg {
+  border-color: var(--red-line);
+  border-left-color: var(--red);
+}
+/* One leg of a combination, listed in the dialog. */
+.ap-legline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+}

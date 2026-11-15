@@ -617,19 +617,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 {legs.map((l, i) => {
                   const oc = legOutcome(l.outcome);
                   return (
-                    <div
-                      key={i}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "8px 10px",
-                        background: "var(--card2)",
-                        border: "1px solid var(--line)",
-                        borderRadius: "var(--r-ctl)",
-                      }}
-                    >
+                    <div key={i} className="ap-legline">
                       <div style={{ minWidth: 0 }}>
                         <div className="ap-ell" style={{ fontSize: "var(--fs-md)", fontWeight: 600 }}>{l.selection || "—"}</div>
                         {l.event && <div className="ap-ell" style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)" }}>{l.event}</div>}
@@ -796,18 +784,8 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           )}
 
           {verdict.notes.length > 0 && (
-            <div
-              style={{
-                borderRadius: "var(--r-ctl)",
-                padding: "10px 12px",
-                background: "var(--hover, rgba(255,255,255,.04))",
-                border: `1px solid ${verdict.level === "edge" ? "var(--pos)" : verdict.level === "warn" ? "var(--red)" : "var(--line, rgba(255,255,255,.08))"}33`,
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-              }}
-            >
-              <span style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+            <div className={"ap-notice" + (verdict.level === "edge" ? " is-pos" : verdict.level === "warn" ? " is-neg" : "")}>
+              <span className="ap-label">
                 Disciplinvakt
                 {metrics?.disciplineRules && (
                   <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>
@@ -827,16 +805,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           )}
 
           {!editing && prefill?.duplicate && (
-            <div
-              style={{
-                borderRadius: "var(--r-ctl)",
-                padding: "10px 12px",
-                background: "var(--hover, rgba(255,255,255,.04))",
-                border: "1px solid var(--red)55",
-                fontSize: "var(--fs-md)",
-                lineHeight: 1.45,
-              }}
-            >
+            <div className="ap-notice is-neg">
               <span style={{ color: "var(--red)", fontWeight: 600 }}>⚠ Redan loggad:</span>{" "}
               {prefill.duplicate.event} — {prefill.duplicate.selection}
               {prefill.importRef ? ` (Ref ${prefill.importRef})` : ""}. Spara ändå?
