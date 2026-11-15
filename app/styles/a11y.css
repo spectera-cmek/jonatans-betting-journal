@@ -1,0 +1,95 @@
+/* ---- accessibility layer ---- */
+
+/* Skip link: first tab stop on every page, visible only while focused. */
+.ap-skip {
+  position: absolute;
+  left: 12px;
+  top: -64px;
+  z-index: 2000;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--acc);
+  color: var(--acc-text);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  text-decoration: none;
+}
+.ap-skip:focus {
+  top: 8px;
+}
+
+/* Keyboard focus ring on every focusable element. --acc-ink, not --acc: the
+   raw amber is under 3:1 against paper in light mode. */
+.ap :where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--acc-ink);
+  outline-offset: 2px;
+}
+/* …except where a wrapper draws the ring, and on containers that only take
+   focus programmatically (skip-link target, dialogs). */
+.ap .ap-search input:focus-visible,
+.ap .ap-date-filter input:focus-visible,
+.ap .ap-cmdk-input input:focus-visible,
+.ap .ap-main:focus-visible,
+.ap [role="dialog"]:focus-visible {
+  outline: none;
+}
+.ap-search:focus-within,
+.ap-date-filter:focus-within {
+  outline: 2px solid var(--acc-ink);
+  outline-offset: 2px;
+}
+/* Rows and cells inside a ruled grid: draw the ring inside, or the neighbours
+   paint over it. */
+.ap .ap-navitem:focus-visible,
+.ap .ap-cal-day:focus-visible,
+.ap .ap-cmdk-trigger:focus-visible,
+.ap .ap-mobnav a:focus-visible,
+.ap .ap-mobnav button:focus-visible,
+.ap .ap-more-sheet-item:focus-visible,
+.ap .ap-seg button:focus-visible,
+.ap .ap-tabs > :focus-visible {
+  outline-offset: -2px;
+}
+
+.ap-btn:disabled,
+.ap-input:disabled,
+.ap-select select:disabled,
+.ap-seg2 button:disabled,
+.ap-iconbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Minimum 24×24 pointer target (WCAG 2.2 — 2.5.8) for compact text buttons. */
+button.ap-link,
+.ap-clv-btn {
+  min-height: 24px;
+}
+.ap-clv-btn {
+  min-width: 24px;
+  text-align: right;
+}
+
+/* Visually hidden, still read by screen readers. */
+.ap-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ap *,
+  .ap *::before,
+  .ap *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

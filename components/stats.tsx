@@ -3,61 +3,43 @@
 // Shared stat/breakdown building blocks used by Analys, VM 2026 and Insikter.
 // Extracted from the pages so the tournament view can't drift from the main one.
 
-import { Card, type Accent } from "./ui";
-import { I, IC } from "./icons";
-import type { LucideIcon } from "lucide-react";
+import { Card, Hint } from "./ui";
 import { HBar } from "./miniCharts";
 import { useTheme } from "./ThemeProvider";
 import { uFmt, pctFmt, krShort, krFmt, sportTag, dateShort } from "@/lib/format";
 import type { Breakdown } from "@/lib/betting";
 import type { LeaderboardEntry } from "@/lib/useData";
 
+/** KPI cell with a plain string value — the lighter sibling of ui.Kpi. */
 export function StatTile({
   label,
   value,
   sub,
   tone,
-  accent,
-  icon,
   hint,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone?: string;
-  /** Per-metric hue for the icon chip and the number. */
-  accent?: Accent;
-  /** Line icon (from IC) shown in a tinted chip on the right. */
-  icon?: LucideIcon;
   hint?: React.ReactNode;
 }) {
-  const hairline = tone === "pos" ? " is-pos" : tone === "neg" ? " is-neg" : "";
-  // An explicit win/loss tone wins over the decorative accent.
-  const valueTone = tone === "pos" ? "pos" : tone === "neg" ? "red" : accent;
+  const valueTone = tone === "pos" ? "t-pos" : tone === "neg" ? "t-red" : "";
   return (
-    <div className={"ap-card ap-kpi" + hairline}>
+    <div className="ap-card ap-kpi">
       <div className="ap-kpi-head">
         <span className="ap-label">
           {label}
-          {hint && (
-            <span className="ap-tip" tabIndex={0} role="note">
-              <I p={IC.helpCircle} size={12} />
-              <span className="ap-tip-body">{hint}</span>
-            </span>
-          )}
+          {hint && <Hint>{hint}</Hint>}
         </span>
-        {icon && (
-          <span className={"ap-chip-icon" + (accent ? ` is-${accent}` : "")} aria-hidden="true">
-            <I p={icon} size={16} />
-          </span>
-        )}
       </div>
-      <div className={"ap-num ap-kpi-val " + (valueTone ? `t-${valueTone}` : "")}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: "var(--dim)", marginTop: 8 }}>{sub}</div>}
+      <div className={"ap-num ap-kpi-val " + valueTone}>{value}</div>
+      {sub && <div className="ap-kpi-foot">{sub}</div>}
     </div>
   );
 }
 
+/** A ranked breakdown: one ledger row per segment, with a thin P/L bar under it. */
 export function BreakdownCard({
   title,
   rows,
@@ -73,33 +55,31 @@ export function BreakdownCard({
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.profitUnits)));
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span className="ap-label">{title}</span>
-        {sub && <span style={{ color: "var(--dim2)", fontSize: 11 }}>{sub}</span>}
+      <div className="ap-panel-head">
+        <h3 className="ap-card-title">{title}</h3>
+        {sub && <span className="ap-t-xs ap-t-dim2">{sub}</span>}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
-        {rows.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data</span>}
+      <div className="ap-bd">
+        {rows.length === 0 && <span className="ap-note">Ingen data</span>}
         {rows.map((r) => (
-          <div key={r.key}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-              <span>
-                {r.key}{" "}
-                <span style={{ color: "var(--dim2)", fontSize: 12 }}>
-                  · {r.bets} bets{r.winRatePct != null ? ` · ${pctFmt(r.winRatePct)}` : ""}
-                </span>
+          <div key={r.key} className="ap-bd-row">
+            <div className="ap-bd-line">
+              <span className="ap-bd-name">
+                <span className="ap-ell">{r.key}</span>
+                <small>
+                  {r.bets} bets{r.winRatePct != null ? ` · ${pctFmt(r.winRatePct)}` : ""}
+                </small>
               </span>
-              <span className="ap-num" style={{ fontWeight: 600 }}>
-                <em className={r.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>
-                  {krShort(r.profitUnits * unit, true)}
-                </em>
-                <span style={{ color: "var(--dim2)", marginLeft: 8 }}>{pctFmt(r.roiPct, true)}</span>
+              <span className="ap-num ap-bd-val">
+                <em className={r.profitUnits >= 0 ? "pos" : "neg"}>{krShort(r.profitUnits * unit, true)}</em>
+                <small>{pctFmt(r.roiPct, true)}</small>
               </span>
             </div>
             <HBar
-              pct={Math.max((Math.abs(r.profitUnits) / max) * 100, 3)}
-              color={r.profitUnits >= 0 ? cc.acc : cc.red}
+              pct={Math.max((Math.abs(r.profitUnits) / max) * 100, 2)}
+              color={r.profitUnits >= 0 ? cc.pos : cc.red}
               track={cc.grid}
-              h={7}
+              h={3}
             />
           </div>
         ))}
@@ -120,12 +100,12 @@ export function PerfCards({
   cap?: boolean;
 }) {
   return (
-    <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
+    <div className="ap-betcards is-flush">
       {rows.map((r) => (
         <div key={r.label} className="ap-betcard">
           <div className="ap-betcard-top">
             <span className="ap-betcard-event" style={cap ? { textTransform: "capitalize" } : undefined}>{r.label}</span>
-            <b className={"ap-num " + (r.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 700, fontSize: 15 }}>
+            <b className={"ap-num " + (r.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 500, fontSize: "var(--fs-lg)" }}>
               {krShort(r.profitUnits * unit, true)}
             </b>
           </div>
@@ -162,36 +142,26 @@ export function LeaderboardCard({
 }) {
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span className="ap-label">{title}</span>
-        {sub && <span style={{ color: "var(--dim2)", fontSize: 11 }}>{sub}</span>}
+      <div className="ap-panel-head">
+        <h3 className="ap-card-title">{title}</h3>
+        {sub && <span className="ap-t-xs ap-t-dim2">{sub}</span>}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-        {entries.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data</span>}
+      <div className="ap-lb">
+        {entries.length === 0 && <span className="ap-note">Ingen data</span>}
         {entries.map((e, i) => (
-          <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="ap-num" style={{ width: 16, textAlign: "center", color: "var(--dim2)", fontWeight: 700, fontSize: 13 }}>
-              {i + 1}
-            </span>
+          <div key={e.id} className="ap-lb-row">
+            <span className="ap-num ap-lb-rank">{i + 1}</span>
             <span className="ap-tag">{sportTag(e.sport)}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="ap-ell" style={{ fontSize: 13 }}>{e.event}</div>
-              <div className="ap-ell" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 2 }}>
-                {e.selection || "—"}
-              </div>
-              <div className="ap-ell" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>
+            <div className="ap-lb-main">
+              <div className="ap-ell">{e.event}</div>
+              <small className="ap-ell">{e.selection || "—"}</small>
+              <small className="ap-ell ap-num">
                 {dateShort(e.eventAt)} · odds {e.odds.toFixed(2)} · insats {uFmt(e.stakeUnits)} ({krFmt(e.stakeUnits * unit)})
-              </div>
+              </small>
             </div>
-            <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-              <div className="ap-num" style={{ fontWeight: 700 }}>
-                <em className={e.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>
-                  {krFmt(e.profitUnits * unit, true)}
-                </em>
-              </div>
-              <div className="ap-num" style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 2 }}>
-                {pctFmt(e.roiPct, true)} ROI
-              </div>
+            <div className="ap-lb-val ap-num">
+              <em className={e.profitUnits >= 0 ? "pos" : "neg"}>{krFmt(e.profitUnits * unit, true)}</em>
+              <small>{pctFmt(e.roiPct, true)} ROI</small>
             </div>
           </div>
         ))}
@@ -200,29 +170,23 @@ export function LeaderboardCard({
   );
 }
 
-/** Compact card2 stat block (simulator figures, open-bets strip…). */
+/** Compact recessed stat block (simulator figures, open-bets strip…). */
 export function MiniStat({ label, value, tone, sub }: { label: string; value: string; tone?: string; sub?: string }) {
   return (
-    <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
+    <div className="ap-ministat">
       <div className="ap-label">{label}</div>
-      <div className={"ap-num " + (tone ?? "")} style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
-        {value}
-      </div>
-      {sub && <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>{sub}</div>}
+      <div className={"ap-num ap-ministat-val " + (tone ?? "")}>{value}</div>
+      {sub && <div className="ap-ministat-sub">{sub}</div>}
     </div>
   );
 }
 
-/** Inline variant: tiny label over a bold number, several-in-a-row in a flex container. */
+/** Inline variant: tiny label over a number, several-in-a-row in a flex container. */
 export function InlineStat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <span style={{ display: "inline-flex", flexDirection: "column", gap: 3 }}>
-      <span className="ap-label" style={{ fontSize: 9.5 }}>
-        {label}
-      </span>
-      <span className={"ap-num " + (tone ?? "")} style={{ fontSize: 14.5, fontWeight: 700 }}>
-        {value}
-      </span>
+    <span className="ap-inlinestat">
+      <span className="ap-label">{label}</span>
+      <span className={"ap-num " + (tone ?? "")}>{value}</span>
     </span>
   );
 }
@@ -238,7 +202,7 @@ export function BookmakerTable({ rows, unit }: { rows: Breakdown[]; unit: number
     <Card style={{ padding: 0, marginBottom: 12 }}>
       <div className="ap-card-head">
         <span role="heading" aria-level={2} className="ap-card-title">Per bookmaker</span>
-        <span style={{ color: "var(--dim2)", fontSize: 12 }}>{rows.length} bolag</span>
+        <span className="ap-t-sm ap-t-dim2">{rows.length} bolag</span>
       </div>
       <div className="ap-table-wrap">
         <div className="ap-table">
@@ -252,14 +216,14 @@ export function BookmakerTable({ rows, unit }: { rows: Breakdown[]; unit: number
             <span />
           </div>
           {rows.length === 0 && (
-            <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--dim2)" }}>Ingen data än.</div>
+            <div className="ap-panel-empty">Ingen data än.</div>
           )}
           {rows.map((r) => (
             <div key={r.key} className="ap-trow" style={{ gridTemplateColumns: cols }}>
-              <span className="ap-ell" style={{ fontWeight: 600 }}>{r.key}</span>
+              <span className="ap-ell" style={{ fontWeight: 500 }}>{r.key}</span>
               <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{r.bets}</span>
               <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{krShort(r.stakedUnits * unit)}</span>
-              <span className="ap-r ap-num" style={{ fontWeight: 600 }}>
+              <span className="ap-r ap-num">
                 <em className={r.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>
                   {krShort(r.profitUnits * unit, true)}
                 </em>{" "}
@@ -276,7 +240,7 @@ export function BookmakerTable({ rows, unit }: { rows: Breakdown[]; unit: number
                   pct={Math.max((Math.abs(r.profitUnits) / max) * 100, 3)}
                   color={r.profitUnits >= 0 ? cc.pos : cc.red}
                   track={cc.grid}
-                  h={7}
+                  h={4}
                 />
               </span>
             </div>

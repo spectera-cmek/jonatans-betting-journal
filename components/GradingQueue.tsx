@@ -101,7 +101,7 @@ export function GradingRow({
           Granska
         </button>
       ) : (
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Väntar</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Väntar</span>
       )}
     </div>
   );

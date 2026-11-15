@@ -19,16 +19,16 @@ function BudgetBar({
 }) {
   const pct = Math.min(100, (used / budget) * 100);
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--dim)", marginBottom: 5 }}>
+    <div className="ap-meter">
+      <div className="ap-meter-head">
         <span>{label}</span>
-        <span className="ap-num" style={{ fontWeight: 600, color: "var(--txt)" }}>
+        <span className="ap-num">
           {used.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} u av {budget.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} u
-          <span style={{ color: "var(--dim2)", fontWeight: 500 }}> · {krFmt(used * unit)}</span>
+          <small> · {krFmt(used * unit)}</small>
         </span>
       </div>
-      <div style={{ height: 6, borderRadius: 4, background: "var(--hover)", overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 4 }} />
+      <div className="ap-meter-track">
+        <i style={{ width: `${pct}%`, background: color }} />
       </div>
     </div>
   );
@@ -38,7 +38,7 @@ function BudgetBar({
 export function TiltBanner({ tilt, unit }: { tilt: TiltStatus; unit: number }) {
   if (tilt.level === "ok") return null;
   const danger = tilt.level === "danger";
-  const barColor = danger ? "var(--red)" : "#f5a524";
+  const barColor = danger ? "var(--red)" : "var(--acc)";
   return (
     <div className={"ap-tilt " + (danger ? "danger" : "warn")} role="status">
       <div className="ap-tilt-head">
@@ -50,7 +50,7 @@ export function TiltBanner({ tilt, unit }: { tilt: TiltStatus; unit: number }) {
           <li key={i}>{n}</li>
         ))}
       </ul>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="ap-tilt-meters">
         {tilt.dailyBudgetUnits != null && (
           <BudgetBar label="Dagens insats" used={tilt.stakedTodayUnits} budget={tilt.dailyBudgetUnits} unit={unit} color={barColor} />
         )}

@@ -1,28 +1,45 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Sans_Condensed, IBM_Plex_Mono } from "next/font/google";
+// Order matters: Tailwind's reset first, then the app's own layers.
 import "./globals.css";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/shell.css";
+import "./styles/components.css";
+import "./styles/tables.css";
+import "./styles/forms.css";
+import "./styles/charts.css";
+import "./styles/pages/dashboard.css";
+import "./styles/pages/bets.css";
+import "./styles/pages/calendar.css";
+import "./styles/pages/queue.css";
+import "./styles/pages/skott.css";
+import "./styles/pages/vm.css";
+import "./styles/pages/cs2.css";
+import "./styles/pages/nba.css";
+import "./styles/pages/settings.css";
+import "./styles/pages/auth.css";
+import "./styles/a11y.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { ACCENTS } from "@/lib/theme";
+import { THEME_COLOR } from "@/lib/theme";
 
-// Self-hosted by Next and preloaded. These were previously pulled in by an
-// @import at the top of globals.css, which forced a serial render-blocking
-// chain: HTML -> globals.css -> fonts.googleapis.com -> fonts.gstatic.com.
-// Same three families, same weights.
-const sans = Manrope({
+// One superfamily, self-hosted by Next and preloaded: Sans for prose, Sans
+// Condensed (set in caps) for headings and labels, Mono for every number.
+const sans = IBM_Plex_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
   variable: "--font-sans",
   display: "swap",
 });
-const disp = Space_Grotesk({
+const disp = IBM_Plex_Sans_Condensed({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
   variable: "--font-disp",
   display: "swap",
 });
-const mono = JetBrains_Mono({
+const mono = IBM_Plex_Mono({
   subsets: ["latin"],
-  weight: ["500", "700", "800"],
+  weight: ["400", "500", "600"],
   variable: "--font-mono",
   display: "swap",
 });
@@ -42,22 +59,17 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0b1120",
+  themeColor: THEME_COLOR.dark,
 };
 
-// Applies the stored theme to <html> before first paint, so the app can render
-// its real content immediately instead of holding everything back until React
-// has hydrated. Storage keys and the accent table are the same ones the
-// ThemeProvider uses — ACCENTS is serialised from lib/theme so there is still
-// only one source of truth. An unknown stored accent is ignored, matching the
-// provider, and the CSS defaults on :root then stand.
+// Applies the stored preferences to <html> before first paint, so the app can
+// render its real content immediately instead of holding everything back until
+// React has hydrated: the colour mode, and whether the side panel is folded to
+// its icon rail. Storage keys are the ones ThemeProvider and Shell use.
 const THEME_INIT = `(function(){try{
 var d=document.documentElement,s=window.localStorage;
 d.setAttribute("data-mode",s.getItem("bj.mode")==="light"?"light":"dark");
-var a=s.getItem("bj.accent"),t=${JSON.stringify(
-  ACCENTS.map((a) => ({ hex: a.hex, soft: a.soft, text: a.text }))
-)};
-for(var i=0;i<t.length;i++){if(t[i].hex===a){d.style.setProperty("--acc",t[i].hex);d.style.setProperty("--acc-soft",t[i].soft);d.style.setProperty("--acc-text",t[i].text);break;}}
+if(s.getItem("bj.nav")==="rail")d.setAttribute("data-nav","rail");
 }catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

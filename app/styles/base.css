@@ -1,0 +1,142 @@
+/* ---- base: canvas, type, numbers and the small utility classes ---- */
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+}
+::selection {
+  background: var(--acc);
+  color: var(--acc-text);
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--dim2);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ap {
+  font-family: var(--sans);
+  font-size: var(--fs-md);
+  line-height: 1.45;
+  color: var(--txt);
+  background: var(--bg);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Every number in the app is monospace with tabular figures, so columns line
+   up digit for digit. Mono runs optically larger than the sans beside it. */
+.ap-num {
+  font-family: var(--mono);
+  font-feature-settings: "tnum" 1, "zero" 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  /* A monospace space is a whole cell, which tears "13 537 kr" apart. Pull the
+     thousands gap and the unit back in (applies to the no-break space too). */
+  word-spacing: -0.28em;
+}
+
+/* Micro-label: condensed caps. The one recurring "voice" of the board. */
+.ap-label {
+  font-family: var(--disp);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dim2);
+  line-height: 1.3;
+}
+
+/* Plex Sans and Mono are loaded up to 600. A browser asked for 700 would fake
+   it by smearing the 600, so emphasis tops out at the real weight. */
+.ap b,
+.ap strong {
+  font-weight: 600;
+}
+
+.pos {
+  color: var(--pos);
+}
+.neg {
+  color: var(--red);
+}
+.ap-r {
+  text-align: right;
+}
+.ap-c {
+  text-align: center;
+}
+.ap-ell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ap-row {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+/* Text utilities — replace the inline fontSize/color pairs scattered through
+   the pages, so everything lands on the seven-step scale. */
+.ap-t-dim {
+  color: var(--dim);
+}
+.ap-t-dim2 {
+  color: var(--dim2);
+}
+.ap-t-xs {
+  font-size: var(--fs-xs);
+}
+.ap-t-sm {
+  font-size: var(--fs-sm);
+}
+.ap-t-md {
+  font-size: var(--fs-md);
+}
+.ap-note {
+  font-size: var(--fs-sm);
+  color: var(--dim2);
+  line-height: 1.5;
+}
+
+/* Phones: looser rows and controls, and the small end of the type scale moves
+   up a pixel — the same seven steps, read at arm's length. */
+@media (max-width: 920px) {
+  :root {
+    --row-h: 40px;
+    --ctl-h: 38px;
+    --bar-h: 48px;
+    --pad-x: 12px;
+    --gap: 10px;
+    --fs-micro: 11px;
+    --fs-xs: 12px;
+    --fs-sm: 13px;
+    --fs-md: 14px;
+  }
+}
+
+/* Native checkboxes, radios and sliders take the signal colour, not browser blue. */
+.ap input[type="checkbox"],
+.ap input[type="radio"],
+.ap input[type="range"] {
+  accent-color: var(--acc);
+}

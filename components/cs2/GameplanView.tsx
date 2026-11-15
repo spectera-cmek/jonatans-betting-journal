@@ -64,7 +64,7 @@ function NoteEditor({
 
   if (!open) {
     return (
-      <button type="button" className="ap-btn ghost" style={{ marginTop: 10, padding: "5px 10px", fontSize: 11.5 }} onClick={() => setOpen(true)}>
+      <button type="button" className="ap-btn ghost" style={{ marginTop: 10, padding: "5px 10px", fontSize: "var(--fs-sm)" }} onClick={() => setOpen(true)}>
         + Egen anteckning
       </button>
     );

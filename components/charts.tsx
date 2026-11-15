@@ -1,56 +1,324 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
-// Reusable themeable SVG charts (no chart library). Ported from the Aurora kit.
+// Themeable SVG charts (no chart library). Colours default to CSS tokens
+// (--chart, --line2 …) so a chart is right in both modes without props.
+//
+// The plots stretch to their container (preserveAspectRatio="none"), which
+// would distort anything with a shape — so strokes are non-scaling, and
+// everything that must stay undistorted (axis labels, the last-value tag, the
+// marker, the tooltip) is HTML laid over the SVG.
 
 export interface TimePoint {
   t: number; // epoch ms
   v: number; // value (already in display currency)
 }
 
-/** min/max over a numeric array without spreading it into a call — the spread
- *  form is slower and overflows the stack on long series. */
-function minOf(arr: number[]): number {
-  let m = arr[0];
-  for (let i = 1; i < arr.length; i++) if (arr[i] < m) m = arr[i];
-  return m;
-}
-function maxOf(arr: number[]): number {
-  let m = arr[0];
-  for (let i = 1; i < arr.length; i++) if (arr[i] > m) m = arr[i];
-  return m;
-}
-
 // Cap the rendered point count — the full history is 8k+ points and the path
 // string alone would be ~100 kB. Hover still resolves to a real point.
-function downsample(points: TimePoint[], max = 600): TimePoint[] {
+function downsample<T>(points: T[], max = 600): T[] {
   if (points.length <= max) return points;
   const stride = Math.ceil(points.length / max);
-  const out: TimePoint[] = [];
+  const out: T[] = [];
   for (let i = 0; i < points.length; i += stride) out.push(points[i]);
   if (out[out.length - 1] !== points[points.length - 1]) out.push(points[points.length - 1]);
   return out;
 }
 
+/** Round tick values (1/2/5 × 10ⁿ) inside [min, max]. */
+function niceTicks(min: number, max: number, target = 4): number[] {
+  const span = max - min;
+  if (!(span > 0)) return [];
+  const raw = span / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const out: number[] = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) {
+    out.push(Math.round(v / step) * step);
+  }
+  return out;
+}
+
+const defaultDate = (t: number) =>
+  new Date(t).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
+
+function Empty({ h, children }: { h: number; children: React.ReactNode }) {
+  return (
+    <div className="ap-chart-empty" style={{ height: h }}>
+      {children}
+    </div>
+  );
+}
+
 /**
- * Line chart with hover crosshair + tooltip and max-drawdown shading.
- * X is index-spaced (one step per settled bet) like the static LineChart,
- * so idle weeks don't flatten the curve; the tooltip carries the date.
+ * Value scale in the right-hand gutter: round ticks, plus (optionally) a filled
+ * tag at the series' last value — the "price tag" of a dealing screen. Ticks
+ * that would collide with the tag are dropped rather than overlapped.
+ */
+function Axis({
+  ticks,
+  y,
+  h,
+  format,
+  last,
+}: {
+  ticks: number[];
+  y: (v: number) => number;
+  h: number;
+  format: (v: number) => string;
+  last?: number;
+}) {
+  const lastY = last != null ? y(last) : null;
+  // Labels are absolutely positioned, so the gutter is sized by an invisible
+  // copy of the widest one (see .ap-chart-axis::after).
+  let widest = last != null ? format(last) : "";
+  for (const t of ticks) {
+    const s = format(t);
+    if (s.length > widest.length) widest = s;
+  }
+  return (
+    <div className="ap-chart-axis" style={{ height: h }} data-w={widest} aria-hidden="true">
+      {ticks.map((t) => {
+        const ty = y(t);
+        if (ty < 5 || ty > h - 5) return null;
+        if (lastY != null && Math.abs(ty - lastY) < 13) return null;
+        return (
+          <span key={t} style={{ top: ty }}>
+            {format(t)}
+          </span>
+        );
+      })}
+      {lastY != null && (
+        <span className="ap-chart-last" style={{ top: Math.min(h - 8, Math.max(8, lastY)) }}>
+          {format(last!)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface LinePlotProps {
+  values: number[];
+  /** Epoch ms per value. Enables the date in the tooltip and the x-axis ends. */
+  times?: number[];
+  interactive: boolean;
+  /** Shade the deepest peak-to-trough fall. */
+  drawdown?: boolean;
+  w: number;
+  h: number;
+  stroke: string;
+  fill: string;
+  grid: string;
+  redSoft: string;
+  pad: number;
+  strokeW: number;
+  formatValue: (v: number) => string;
+  formatAxis: (v: number) => string;
+  formatDate: (t: number) => string;
+  emptyText: string;
+}
+
+function LinePlot({
+  values,
+  times,
+  interactive,
+  drawdown,
+  w,
+  h,
+  stroke,
+  fill,
+  grid,
+  redSoft,
+  pad,
+  strokeW,
+  formatValue,
+  formatAxis,
+  formatDate,
+  emptyText,
+}: LinePlotProps) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
+
+  // Max-drawdown segment (peak index -> trough index) over the visible range.
+  const dd = useMemo(() => {
+    if (!drawdown) return null;
+    let peak = -Infinity;
+    let peakI = 0;
+    let maxDd = 0;
+    let from = 0;
+    let to = 0;
+    values.forEach((v, i) => {
+      if (v > peak) {
+        peak = v;
+        peakI = i;
+      }
+      const drop = peak - v;
+      if (drop > maxDd) {
+        maxDd = drop;
+        from = peakI;
+        to = i;
+      }
+    });
+    return maxDd > 0 && to > from ? { from, to } : null;
+  }, [values, drawdown]);
+
+  // Geometry depends only on the series and the box, so a pointermove never
+  // rebuilds the path. min/max via a loop rather than Math.min(...arr) —
+  // spreading a long series into a call is slow and stack-limited.
+  const geom = useMemo(() => {
+    const n = values.length;
+    if (n < 2) return null;
+    let min = values[0];
+    let max = values[0];
+    for (let i = 1; i < n; i++) {
+      if (values[i] < min) min = values[i];
+      if (values[i] > max) max = values[i];
+    }
+    const range = max - min || 1;
+    const x = (i: number) => pad + (i / (n - 1)) * (w - pad * 2);
+    const y = (v: number) => pad + (1 - (v - min) / range) * (h - pad * 2);
+    const line = values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    const area = `${line} L${x(n - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
+    return { n, x, y, line, area, ticks: niceTicks(min, max), hasZero: min < 0 && max > 0 };
+  }, [values, w, h, pad]);
+
+  if (!geom) return <Empty h={h}>{emptyText}</Empty>;
+
+  const { n, x, y, line, area, ticks, hasZero } = geom;
+  const last = values[n - 1];
+
+  const onMove = (e: React.PointerEvent) => {
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return;
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    setHover(Math.round(frac * (n - 1)));
+  };
+
+  const at = hover ?? n - 1;
+  const frac = hover != null ? hover / (n - 1) : 0;
+  const hv = hover != null ? values[hover] : null;
+  // Change vs the start of the visible range. Skipped when the range starts
+  // at 0 (full cumulative series) — the diff would just repeat the value.
+  const diff = hv != null && values[0] !== 0 ? hv - values[0] : null;
+
+  const label =
+    times && n > 1
+      ? `Linjediagram: ${formatValue(values[0])} den ${formatDate(times[0])} till ${formatValue(last)} den ${formatDate(times[n - 1])}`
+      : `Linjediagram: från ${formatValue(values[0])} till ${formatValue(last)}`;
+
+  return (
+    <div className="ap-chart">
+      <div className="ap-chart-row">
+        <div
+          ref={boxRef}
+          className="ap-chart-plot"
+          style={{ height: h }}
+          {...(interactive
+            ? { onPointerMove: onMove, onPointerDown: onMove, onPointerLeave: () => setHover(null) }
+            : {})}
+        >
+          <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" role="img" aria-label={label}>
+            {ticks.map((t) => (
+              <line
+                key={t}
+                x1={0}
+                y1={y(t)}
+                x2={w}
+                y2={y(t)}
+                stroke={t === 0 && hasZero ? "var(--line)" : grid}
+                strokeWidth="1"
+                strokeDasharray={t === 0 && hasZero ? undefined : "1 3"}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            {dd && <rect x={x(dd.from)} y={0} width={x(dd.to) - x(dd.from)} height={h} fill={redSoft} />}
+            <path d={area} fill={fill} />
+            <path
+              d={line}
+              fill="none"
+              stroke={stroke}
+              strokeWidth={strokeW}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+            {hover != null && (
+              <line
+                x1={x(hover)}
+                y1={0}
+                x2={x(hover)}
+                y2={h}
+                stroke="var(--dim2)"
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+          </svg>
+          {dd && (
+            <span className="ap-chart-dd" style={{ left: `${((x(dd.from) + x(dd.to)) / 2 / w) * 100}%` }} aria-hidden="true">
+              Max DD
+            </span>
+          )}
+          {/* The marker: HTML so it stays a true square at any plot width. The
+              panel-coloured ring separates it from the line it sits on. */}
+          <i
+            className="ap-chart-dot"
+            style={{ left: `${(x(at) / w) * 100}%`, top: y(values[at]), background: stroke }}
+            aria-hidden="true"
+          />
+          {hv != null && (
+            <div
+              className="ap-chart-tip"
+              style={{
+                left: `${(x(at) / w) * 100}%`,
+                transform: `translateX(${frac > 0.72 ? "calc(-100% - 10px)" : "10px"})`,
+              }}
+            >
+              {times && <div className="ap-chart-tip-date">{formatDate(times[at])}</div>}
+              <div className="ap-num ap-chart-tip-val">
+                {formatValue(hv)}
+                {diff != null && diff !== 0 && (
+                  <span className={diff >= 0 ? "pos" : "neg"}>
+                    {diff >= 0 ? "+" : "−"}
+                    {formatValue(Math.abs(diff))}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        <Axis ticks={ticks} y={y} h={h} format={formatAxis} last={last} />
+      </div>
+      {times && (
+        <div className="ap-chart-x" aria-hidden="true">
+          <span>{formatDate(times[0])}</span>
+          <span>{formatDate(times[n - 1])}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Line chart with hover crosshair + tooltip, a value scale and max-drawdown
+ * shading. X is index-spaced (one step per settled bet), so idle weeks don't
+ * flatten the curve; the tooltip carries the date.
  */
 export function InteractiveLineChart({
   points,
   w = 640,
   h = 200,
-  stroke = "#22c55e",
-  fill = "rgba(34,197,94,0.14)",
-  grid = "rgba(255,255,255,0.06)",
-  redSoft = "rgba(244,63,94,0.07)",
+  stroke = "var(--chart)",
+  fill = "var(--chart-fill)",
+  grid = "var(--line)",
+  redSoft = "var(--red-soft)",
   pad = 6,
-  strokeW = 3,
+  strokeW = 1.75,
   formatValue = (v: number) => String(Math.round(v)),
-  formatDate = (t: number) =>
-    new Date(t).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" }),
+  formatAxis,
+  formatDate = defaultDate,
 }: {
   points: TimePoint[];
   w?: number;
@@ -62,184 +330,93 @@ export function InteractiveLineChart({
   pad?: number;
   strokeW?: number;
   formatValue?: (v: number) => string;
+  /** Shorter format for the scale; defaults to formatValue. */
+  formatAxis?: (v: number) => string;
   formatDate?: (t: number) => string;
 }) {
-  const gid = useId().replace(/:/g, "");
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<number | null>(null);
-
   const pts = useMemo(() => downsample(points), [points]);
-
-  // Max-drawdown segment (peak index -> trough index) over the visible range.
-  const dd = useMemo(() => {
-    let peak = -Infinity;
-    let peakI = 0;
-    let maxDd = 0;
-    let from = 0;
-    let to = 0;
-    pts.forEach((p, i) => {
-      if (p.v > peak) {
-        peak = p.v;
-        peakI = i;
-      }
-      const drop = peak - p.v;
-      if (drop > maxDd) {
-        maxDd = drop;
-        from = peakI;
-        to = i;
-      }
-    });
-    return maxDd > 0 ? { from, to } : null;
-  }, [pts]);
-
-  // Geometry depends only on the series and the box. It used to sit below the
-  // early return, so every pointermove re-ran three full sweeps over up to 600
-  // points and rebuilt the whole path string. min/max via a loop rather than
-  // Math.min(...arr) — spreading 600 elements into a call is slow and, on longer
-  // series, a stack-overflow risk.
-  const geom = useMemo(() => {
-    const n = pts.length;
-    if (n < 2) return null;
-    let min = pts[0].v;
-    let max = pts[0].v;
-    for (let i = 1; i < n; i++) {
-      if (pts[i].v < min) min = pts[i].v;
-      if (pts[i].v > max) max = pts[i].v;
-    }
-    const range = max - min || 1;
-    const x = (i: number) => pad + (i / (n - 1)) * (w - pad * 2);
-    const y = (v: number) => pad + (1 - (v - min) / range) * (h - pad * 2);
-    const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
-    const area = `${line} L${x(n - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
-    const gridLines = [0.25, 0.5, 0.75].map((g) => pad + g * (h - pad * 2));
-    return { n, x, y, line, area, gridLines };
-  }, [pts, w, h, pad]);
-
-  if (!geom) {
-    return (
-      <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>
-        Inte tillräckligt med data i perioden
-      </div>
-    );
-  }
-
-  const { n, x, y, line, area, gridLines } = geom;
-
-  const onMove = (e: React.PointerEvent) => {
-    const rect = boxRef.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0) return;
-    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    setHover(Math.round(frac * (n - 1)));
-  };
-
-  const hv = hover != null ? pts[hover] : null;
-  const frac = hover != null ? hover / (n - 1) : 0;
-  // Change vs the start of the visible range. Skipped when the range starts
-  // at 0 (full cumulative series) — the diff would just repeat the value.
-  const diff = hv && pts[0].v !== 0 ? hv.v - pts[0].v : null;
-
+  const values = useMemo(() => pts.map((p) => p.v), [pts]);
+  const times = useMemo(() => pts.map((p) => p.t), [pts]);
   return (
-    <div
-      ref={boxRef}
-      style={{ position: "relative", touchAction: "pan-y" }}
-      onPointerMove={onMove}
-      onPointerDown={onMove}
-      onPointerLeave={() => setHover(null)}
-    >
-      <svg
-        viewBox={`0 0 ${w} ${h}`}
-        width="100%"
-        height={h}
-        preserveAspectRatio="none"
-        style={{ display: "block" }}
-        role="img"
-        aria-label={
-          pts.length > 1
-            ? `Linjediagram: ${formatValue(pts[0].v)} den ${formatDate(pts[0].t)} till ${formatValue(pts[pts.length - 1].v)} den ${formatDate(pts[pts.length - 1].t)}`
-            : "Linjediagram"
-        }
-      >
-        <defs>
-          <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={fill} />
-            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-          </linearGradient>
-        </defs>
-        {gridLines.map((gy, i) => (
-          <line key={i} x1={pad} y1={gy} x2={w - pad} y2={gy} stroke={grid} strokeWidth="1" strokeDasharray="3 3" />
-        ))}
-        {dd && dd.to > dd.from && (
-          <rect
-            x={x(dd.from)}
-            y={pad}
-            width={x(dd.to) - x(dd.from)}
-            height={h - pad * 2}
-            fill={redSoft}
-          />
-        )}
-        <path d={area} fill={`url(#g${gid})`} />
-        {/* soft glow under the stroke (no SVG filters — just a fat translucent twin) */}
-        <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW * 3} strokeLinejoin="round" strokeLinecap="round" opacity="0.15" />
-        <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round" strokeLinecap="round" />
-        {hover != null && (
-          <line x1={x(hover)} y1={pad} x2={x(hover)} y2={h - pad} stroke={stroke} strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
-        )}
-        {/* White-filled dot ringed in the series colour — the reference's
-            active-point treatment; reads clearly over both fill and grid. */}
-        <circle
-          cx={x(hover ?? n - 1)}
-          cy={y(pts[hover ?? n - 1].v)}
-          r="4"
-          fill="var(--card)"
-          stroke={stroke}
-          strokeWidth="2.5"
-        />
-      </svg>
-      {hv && (
-        <div
-          style={{
-            position: "absolute",
-            top: 6,
-            left: `${frac * 100}%`,
-            transform: `translateX(${frac > 0.72 ? "-100%" : frac < 0.28 ? "0%" : "-50%"})`,
-            background: "var(--bg)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--r-ctl)",
-            padding: "8px 11px",
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-            boxShadow: "var(--shadow)",
-            zIndex: 5,
-          }}
-        >
-          <div style={{ fontSize: 11, color: "var(--dim)" }}>{formatDate(hv.t)}</div>
-          <div className="ap-num" style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>
-            {formatValue(hv.v)}
-            {diff != null && diff !== 0 && (
-              <span className={diff >= 0 ? "pos" : "neg"} style={{ fontSize: 11.5, marginLeft: 7, fontWeight: 600 }}>
-                {diff >= 0 ? "+" : "−"}{formatValue(Math.abs(diff))}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    <LinePlot
+      values={values}
+      times={times}
+      interactive
+      drawdown
+      w={w}
+      h={h}
+      stroke={stroke}
+      fill={fill}
+      grid={grid}
+      redSoft={redSoft}
+      pad={pad}
+      strokeW={strokeW}
+      formatValue={formatValue}
+      formatAxis={formatAxis ?? formatValue}
+      formatDate={formatDate}
+      emptyText="Inte tillräckligt med data i perioden"
+    />
+  );
+}
+
+/** Static line over an index axis, with the same value scale. */
+export function LineChart({
+  data,
+  w = 560,
+  h = 180,
+  stroke = "var(--chart)",
+  fill = "var(--chart-fill)",
+  grid = "var(--line)",
+  pad = 6,
+  strokeW = 1.75,
+  formatValue = (v: number) => String(Math.round(v)),
+}: {
+  data: number[];
+  w?: number;
+  h?: number;
+  stroke?: string;
+  fill?: string;
+  grid?: string;
+  pad?: number;
+  strokeW?: number;
+  formatValue?: (v: number) => string;
+}) {
+  const values = useMemo(() => downsample(data ?? []), [data]);
+  return (
+    <LinePlot
+      values={values}
+      interactive={false}
+      w={w}
+      h={h}
+      stroke={stroke}
+      fill={fill}
+      grid={grid}
+      redSoft="none"
+      pad={pad}
+      strokeW={strokeW}
+      formatValue={formatValue}
+      formatAxis={formatValue}
+      formatDate={defaultDate}
+      emptyText="Inte tillräckligt med data än"
+    />
   );
 }
 
 /**
  * Two cumulative series on a shared time axis — the what-if simulator's
- * "actual vs filtered" comparison. Series are downsampled independently.
+ * "actual vs filtered" comparison. Series are downsampled independently. The
+ * reference series is grey and thinner; the scenario is the one in colour.
  */
 export function CompareChart({
   a,
   b,
   w = 640,
   h = 210,
-  colorA = "#646b81",
-  colorB = "#22c55e",
-  grid = "rgba(255,255,255,0.06)",
+  colorA = "var(--dim2)",
+  colorB = "var(--chart)",
+  grid = "var(--line)",
   pad = 6,
+  formatValue = (v: number) => String(Math.round(v)),
 }: {
   a: TimePoint[]; // baseline (actual)
   b: TimePoint[]; // scenario (filtered)
@@ -249,12 +426,11 @@ export function CompareChart({
   colorB?: string;
   grid?: string;
   pad?: number;
+  formatValue?: (v: number) => string;
 }) {
   const sa = useMemo(() => downsample(a), [a]);
   const sb = useMemo(() => downsample(b), [b]);
-  // Bounds in one pass over the combined series (up to 1200 points) — the old
-  // Math.min(...all.map(...)) built four throwaway arrays and spread each into
-  // a call. Memoised so a parent re-render with the same data is free.
+  // Bounds in one pass over the combined series (up to 1200 points).
   const geom = useMemo(() => {
     if (sa.length < 2) return null;
     let tMin = Infinity;
@@ -275,156 +451,113 @@ export function CompareChart({
     const y = (v: number) => pad + (1 - (v - vMin) / vR) * (h - pad * 2);
     const path = (pts: TimePoint[]) =>
       pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
-    return { x, y, path, zero: y(0) };
+    return { y, path, ticks: niceTicks(vMin, vMax) };
   }, [sa, sb, w, h, pad]);
 
-  if (!geom) {
-    return (
-      <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>
-        Inte tillräckligt med data
-      </div>
-    );
-  }
-  const { x, y, path, zero } = geom;
+  if (!geom) return <Empty h={h}>Inte tillräckligt med data</Empty>;
+  const { y, path, ticks } = geom;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }} role="img" aria-label="Jämförelsediagram: verkligt utfall mot scenario">
-      <line x1={pad} y1={zero} x2={w - pad} y2={zero} stroke={grid} strokeWidth="1.4" />
-      <path d={path(sa)} fill="none" stroke={colorA} strokeWidth="1.8" strokeLinejoin="round" opacity="0.85" />
-      {sb.length >= 2 && (
-        <path d={path(sb)} fill="none" stroke={colorB} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
-      )}
-      {sb.length >= 2 && <circle cx={x(sb[sb.length - 1].t)} cy={y(sb[sb.length - 1].v)} r="3.5" fill={colorB} />}
-      <circle cx={x(sa[sa.length - 1].t)} cy={y(sa[sa.length - 1].v)} r="3" fill={colorA} />
-    </svg>
+    <div className="ap-chart">
+      <div className="ap-chart-row">
+        <div className="ap-chart-plot" style={{ height: h }}>
+          <svg
+            viewBox={`0 0 ${w} ${h}`}
+            width="100%"
+            height={h}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label="Jämförelsediagram: verkligt utfall mot scenario"
+          >
+            {ticks.map((t) => (
+              <line
+                key={t}
+                x1={0}
+                y1={y(t)}
+                x2={w}
+                y2={y(t)}
+                stroke={t === 0 ? "var(--line)" : grid}
+                strokeWidth="1"
+                strokeDasharray={t === 0 ? undefined : "1 3"}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            <path d={path(sa)} fill="none" stroke={colorA} strokeWidth="1.25" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            {sb.length >= 2 && (
+              <path
+                d={path(sb)}
+                fill="none"
+                stroke={colorB}
+                strokeWidth="2"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+          </svg>
+        </div>
+        <Axis ticks={ticks} y={y} h={h} format={formatValue} last={sb.length >= 2 ? sb[sb.length - 1].v : undefined} />
+      </div>
+    </div>
   );
 }
 
-export function LineChart({
-  data,
-  w = 560,
-  h = 180,
-  stroke = "#22c55e",
-  fill = "rgba(34,197,94,0.14)",
-  grid = "rgba(255,255,255,0.06)",
-  pad = 6,
-  strokeW = 2,
-}: {
-  data: number[];
-  w?: number;
-  h?: number;
-  stroke?: string;
-  fill?: string;
-  grid?: string;
-  pad?: number;
-  strokeW?: number;
-}) {
-  const gid = useId().replace(/:/g, "");
-  if (!data || data.length < 2) {
-    return (
-      <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>
-        Inte tillräckligt med data än
-      </div>
-    );
-  }
-  const min = minOf(data);
-  const max = maxOf(data);
-  const range = max - min || 1;
-  const x = (i: number) => pad + (i / (data.length - 1)) * (w - pad * 2);
-  const y = (v: number) => pad + (1 - (v - min) / range) * (h - pad * 2);
-  const line = data.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const area = `${line} L${x(data.length - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
-  const gridLines = [0.25, 0.5, 0.75].map((g) => pad + g * (h - pad * 2));
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: "block" }} aria-hidden="true">
-      <defs>
-        <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={fill} />
-          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-        </linearGradient>
-      </defs>
-      {gridLines.map((gy, i) => (
-        <line key={i} x1={pad} y1={gy} x2={w - pad} y2={gy} stroke={grid} strokeWidth="1" />
-      ))}
-      <path d={area} fill={`url(#g${gid})`} />
-      <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW * 3} strokeLinejoin="round" strokeLinecap="round" opacity="0.15" />
-      <path d={line} fill="none" stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={x(data.length - 1)} cy={y(data[data.length - 1])} r="3.5" fill={stroke} />
-    </svg>
-  );
-}
-
+/**
+ * Result per period as bars off a zero line. Plain HTML: the columns fill the
+ * panel's width at any size, and each bar is a real hover target with its value.
+ * Green above the line, red below — the direction says it as well as the hue.
+ */
 export function PLBars({
   data,
-  w = 560,
   h = 170,
-  pos = "#22c55e",
-  neg = "#ef4444",
-  labelColor = "rgba(255,255,255,0.5)",
-  track,
+  pos = "var(--pos)",
+  neg = "var(--red)",
+  formatValue = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}U`,
 }: {
   data: { m: string; units: number }[];
-  w?: number;
   h?: number;
   pos?: string;
   neg?: string;
-  labelColor?: string;
-  track?: string;
+  formatValue?: (v: number) => string;
 }) {
-  const gid = useId().replace(/:/g, "");
-  if (!data || !data.length) {
-    return <div style={{ height: h, display: "grid", placeItems: "center", color: "var(--dim2)", fontSize: 13 }}>Ingen data</div>;
+  if (!data || !data.length) return <Empty h={h}>Ingen data</Empty>;
+  let maxPos = 0;
+  let maxNeg = 0;
+  for (const d of data) {
+    if (d.units > maxPos) maxPos = d.units;
+    if (-d.units > maxNeg) maxNeg = -d.units;
   }
-  const vals = data.map((d) => d.units);
-  const max = maxOf(vals.map(Math.abs)) || 1;
-  const n = data.length;
-  const gap = 10;
-  const bw = (w - gap * (n - 1)) / n;
-  const zero = h * 0.62;
-  const scale = (Math.min(zero, h - zero) - 18) / max;
+  const span = maxPos + maxNeg || 1;
+  const zero = (maxPos / span) * 100; // % from the top of the plot
   return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      width="100%"
-      height={h}
-      style={{ display: "block" }}
+    <div
+      className="ap-plbars"
+      style={{ height: h }}
       role="img"
-      aria-label={"Stapeldiagram, resultat per period: " + data.map((d) => `${d.m} ${d.units >= 0 ? "+" : "−"}${Math.abs(d.units).toFixed(1)}U`).join(", ")}
+      aria-label={"Stapeldiagram, resultat per period: " + data.map((d) => `${d.m} ${formatValue(d.units)}`).join(", ")}
     >
-      <defs>
-        {/* solid at the bar tip, fading toward the zero line */}
-        <linearGradient id={`pb${gid}p`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={pos} />
-          <stop offset="100%" stopColor={pos} stopOpacity="0.45" />
-        </linearGradient>
-        <linearGradient id={`pb${gid}n`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={neg} stopOpacity="0.45" />
-          <stop offset="100%" stopColor={neg} />
-        </linearGradient>
-      </defs>
-      {track && <line x1="0" y1={zero} x2={w} y2={zero} stroke={track} strokeWidth="1" />}
-      {data.map((d, i) => {
-        const v = d.units;
-        const bh = Math.abs(v) * scale;
-        const bx = i * (bw + gap);
-        const by = v >= 0 ? zero - bh : zero;
-        return (
-          <g key={i}>
-            <rect
-              x={bx}
-              y={by}
-              width={bw}
-              height={Math.max(bh, 1)}
-              rx="4"
-              fill={v >= 0 ? `url(#pb${gid}p)` : `url(#pb${gid}n)`}
-              opacity={i === n - 1 ? 1 : 0.85}
-            />
-            <text x={bx + bw / 2} y={h - 2} textAnchor="middle" fontSize="11" fill={labelColor} fontFamily="inherit">
-              {d.m}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+      <div className="ap-plbars-plot">
+        <i className="ap-plbars-zero" style={{ top: `${zero}%` }} />
+        {data.map((d, i) => {
+          const size = (Math.abs(d.units) / span) * 100;
+          return (
+            <div key={i} className="ap-plbar" title={`${d.m}: ${formatValue(d.units)}`}>
+              <i
+                style={{
+                  top: `${d.units >= 0 ? zero - size : zero}%`,
+                  height: `max(${size}%, 1px)`,
+                  background: d.units >= 0 ? pos : neg,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="ap-plbars-x" aria-hidden="true">
+        {data.map((d, i) => (
+          <span key={i}>{d.m}</span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -433,11 +566,11 @@ export function Donut({
   size = 150,
   thickness = 22,
   colors,
-  track = "rgba(255,255,255,0.06)",
+  track = "var(--card2)",
   centerLabel,
   centerSub,
-  centerColor = "#fff",
-  centerSubColor = "rgba(255,255,255,0.5)",
+  centerColor = "var(--txt)",
+  centerSubColor = "var(--dim2)",
 }: {
   data: { pct: number }[];
   size?: number;
@@ -457,10 +590,10 @@ export function Donut({
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={[centerLabel, centerSub].filter(Boolean).join(" ") || "Cirkeldiagram"}>
       <circle cx={c} cy={c} r={r} fill="none" stroke={track} strokeWidth={thickness} />
       {data.map((d, i) => {
-        // ~3° of separation between segments, matching the reference's
-        // paddingAngle (skipped for slivers so they stay visible).
+        // A 2px gap of panel colour between segments (skipped for slivers so
+        // they stay visible).
         const len = (d.pct / 100) * circ;
-        const g = len > 6 ? (3 / 360) * circ : 0;
+        const g = len > 6 ? 2 : 0;
         const el = (
           <circle
             key={i}
@@ -480,30 +613,12 @@ export function Donut({
         return el;
       })}
       {centerLabel && (
-        <text
-          x={c}
-          y={c - 2}
-          textAnchor="middle"
-          fontSize={size * 0.19}
-          fontWeight="800"
-          fill={centerColor}
-          fontFamily="var(--mono)"
-          letterSpacing="-0.02em"
-        >
+        <text x={c} y={c - 2} textAnchor="middle" fontSize={size * 0.18} fontWeight="500" fill={centerColor} fontFamily="var(--mono)" letterSpacing="-0.02em">
           {centerLabel}
         </text>
       )}
       {centerSub && (
-        <text
-          x={c}
-          y={c + size * 0.14}
-          textAnchor="middle"
-          fontSize={size * 0.085}
-          fontWeight="700"
-          fill={centerSubColor}
-          fontFamily="inherit"
-          letterSpacing="0.07em"
-        >
+        <text x={c} y={c + size * 0.14} textAnchor="middle" fontSize={size * 0.08} fontWeight="600" fill={centerSubColor} fontFamily="var(--disp)" letterSpacing="0.1em">
           {centerSub}
         </text>
       )}
@@ -511,54 +626,6 @@ export function Donut({
   );
 }
 
-export function Ring({
-  pct,
-  size = 120,
-  thickness = 12,
-  color = "#22c55e",
-  track = "rgba(255,255,255,0.08)",
-  textColor = "#fff",
-  sub = "WIN RATE",
-  subColor = "rgba(255,255,255,0.5)",
-}: {
-  pct: number;
-  size?: number;
-  thickness?: number;
-  color?: string;
-  track?: string;
-  textColor?: string;
-  sub?: string;
-  subColor?: string;
-}) {
-  const r = (size - thickness) / 2;
-  const c = size / 2;
-  const circ = 2 * Math.PI * r;
-  const len = (pct / 100) * circ;
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={`${Math.round(pct)} %${sub ? " " + sub : ""}`}>
-      <circle cx={c} cy={c} r={r} fill="none" stroke={track} strokeWidth={thickness} />
-      <circle
-        cx={c}
-        cy={c}
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={thickness}
-        strokeDasharray={`${len} ${circ - len}`}
-        strokeDashoffset={0}
-        transform={`rotate(-90 ${c} ${c})`}
-        strokeLinecap="round"
-      />
-      <text x={c} y={c} textAnchor="middle" dominantBaseline="central" fontSize={size * 0.24} fontWeight="700" fill={textColor} fontFamily="inherit">
-        {pct.toFixed(1)}%
-      </text>
-      <text x={c} y={c + size * 0.22} textAnchor="middle" fontSize={size * 0.085} fill={subColor} letterSpacing="0.12em" fontFamily="inherit">
-        {sub}
-      </text>
-    </svg>
-  );
-}
-
-// Spark and HBar now live in ./miniCharts so that ui.tsx/stats.tsx can pull them
-// in without this module. Re-exported here so existing import sites keep working.
+// Spark and HBar live in ./miniCharts so that ui.tsx/stats.tsx can pull them in
+// without this module. Re-exported here so existing import sites keep working.
 export { Spark, HBar } from "./miniCharts";

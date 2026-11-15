@@ -38,7 +38,7 @@ export function HedgeCard() {
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Hedge &amp; surebet</span>
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Lås vinsten över flera bookies</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Lås vinsten över flera bookies</span>
       </div>
 
       <div className="ap-seg2" style={{ marginTop: 14, maxWidth: 340 }}>
@@ -64,7 +64,7 @@ export function HedgeCard() {
           </div>
 
           {arb == null ? (
-            <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
+            <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14 }}>
               Fyll i bästa odds per utfall (från olika bookies) och din budget.
             </div>
           ) : (
@@ -79,14 +79,14 @@ export function HedgeCard() {
                 <MiniStat label="Utbetalning" value={krFmt(arb.payout)} />
                 <MiniStat label="Låst resultat" value={krFmt(arb.profit, true)} tone={arb.profit >= 0 ? "pos" : "neg"} />
               </div>
-              <div style={{ fontSize: 13, marginTop: 14, lineHeight: 1.6 }}>
+              <div style={{ fontSize: "var(--fs-md)", marginTop: 14, lineHeight: 1.6 }}>
                 {arb.stakes.map((st, i) => (
                   <div key={i}>
                     Lägg <strong className="ap-num">{krFmt(st)}</strong> på utfall {labels[i]} @{" "}
                     <span className="ap-num">{fmtOdds(arbOdds[i])}</span>
                   </div>
                 ))}
-                <div className={"ap-num " + (arb.isArb ? "pos" : "neg")} style={{ marginTop: 8, fontSize: 14, fontWeight: 700 }}>
+                <div className={"ap-num " + (arb.isArb ? "pos" : "neg")} style={{ marginTop: 8, fontSize: "var(--fs-lg)", fontWeight: 600 }}>
                   {arb.isArb
                     ? "✓ Surebet — samma utbetalning oavsett utfall"
                     : `✗ Ingen arb · ${pctFmt(arb.impliedSum * 100)} implicit`}
@@ -113,7 +113,7 @@ export function HedgeCard() {
           </div>
 
           {h == null ? (
-            <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
+            <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14 }}>
               Fyll i ditt öppna spel och det motsatta oddset (hos valfri bookie).
             </div>
           ) : (
@@ -135,7 +135,7 @@ export function HedgeCard() {
                 )}
               </div>
               {hedgeVsCashout != null && (
-                <div className="ap-num pos" style={{ marginTop: 14, fontSize: 14, fontWeight: 700 }}>
+                <div className="ap-num pos" style={{ marginTop: 14, fontSize: "var(--fs-lg)", fontWeight: 600 }}>
                   {hedgeVsCashout >= 0
                     ? `→ Hedga · ${krFmt(hedgeVsCashout, true)} vs cashout`
                     : `→ Ta cashouten · ${krFmt(-hedgeVsCashout, true)} vs hedge`}

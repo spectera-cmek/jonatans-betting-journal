@@ -255,11 +255,12 @@ export function FairOddsCalculator({
   );
 
   return (
-    <>
-      <Card style={{ marginBottom: 12 }}>
+    // The bet on the left, what it is worth on the right; stacked on phones.
+    <div className="ap-board c21">
+      <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
           <span className="ap-label">Spelet</span>
-          <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Odds från spelbolagets marknad, per ben</span>
+          <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Odds från spelbolagets marknad, per ben</span>
         </div>
 
         <details className="ap-fine" style={{ marginTop: 6 }}>
@@ -303,13 +304,13 @@ export function FairOddsCalculator({
         {legs.map((l, i) => {
           const r = results[i];
           return (
-            <div key={l.id} style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px", marginTop: 10 }}>
+            <div key={l.id} className="ap-leg-block">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <span className="ap-label">Ben {i + 1}</span>
                 {legs.length > 1 && (
                   <button
                     className="ap-btn ghost"
-                    style={{ padding: "3px 10px", fontSize: 13, lineHeight: 1.4 }}
+                    style={{ padding: "3px 10px", fontSize: "var(--fs-md)", lineHeight: 1.4 }}
                     onClick={() => removeLeg(l.id)}
                     aria-label={`Ta bort ben ${i + 1}`}
                   >
@@ -350,7 +351,7 @@ export function FairOddsCalculator({
                 </Field>
               </div>
 
-              <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 8 }}>{TYPE_HINT[l.betType]}</div>
+              <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginTop: 8 }}>{TYPE_HINT[l.betType]}</div>
 
               {l.betType === "market" && (
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
@@ -367,14 +368,14 @@ export function FairOddsCalculator({
                   <div style={{ display: "flex", gap: 6 }}>
                     <button
                       className="ap-btn ghost"
-                      style={{ padding: "6px 10px", fontSize: 12 }}
+                      style={{ padding: "6px 10px", fontSize: "var(--fs-sm)" }}
                       onClick={() => patchLeg(l.id, { marginPct: "6" })}
                     >
                       Props 6 %
                     </button>
                     <button
                       className="ap-btn ghost"
-                      style={{ padding: "6px 10px", fontSize: 12 }}
+                      style={{ padding: "6px 10px", fontSize: "var(--fs-sm)" }}
                       onClick={() => patchLeg(l.id, { marginPct: "30" })}
                     >
                       Målskytt 30 %
@@ -397,7 +398,7 @@ export function FairOddsCalculator({
                         {l.players.length > 1 && (
                           <button
                             className="ap-btn ghost"
-                            style={{ padding: "6px 9px", fontSize: 13, lineHeight: 1.2 }}
+                            style={{ padding: "6px 9px", fontSize: "var(--fs-md)", lineHeight: 1.2 }}
                             onClick={() => removePlayer(l, pi)}
                             aria-label={`Ta bort spelare ${pi + 1}`}
                           >
@@ -408,7 +409,7 @@ export function FairOddsCalculator({
                     ))}
                     <button
                       className="ap-btn ghost"
-                      style={{ padding: "6px 10px", fontSize: 12 }}
+                      style={{ padding: "6px 10px", fontSize: "var(--fs-sm)" }}
                       onClick={() => addPlayer(l)}
                       disabled={l.players.length >= MAX_PLAYERS}
                     >
@@ -454,7 +455,7 @@ export function FairOddsCalculator({
                       {l.sources.length > 1 && (
                         <button
                           className="ap-btn ghost"
-                          style={{ padding: "6px 9px", fontSize: 13, lineHeight: 1.2 }}
+                          style={{ padding: "6px 9px", fontSize: "var(--fs-md)", lineHeight: 1.2 }}
                           onClick={() => removeSource(l, si)}
                           aria-label={`Ta bort match ${si + 1}`}
                         >
@@ -466,7 +467,7 @@ export function FairOddsCalculator({
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
                     <button
                       className="ap-btn ghost"
-                      style={{ padding: "6px 10px", fontSize: 12 }}
+                      style={{ padding: "6px 10px", fontSize: "var(--fs-sm)" }}
                       onClick={() => addSource(l)}
                       disabled={l.sources.length >= MAX_SOURCES}
                     >
@@ -492,7 +493,7 @@ export function FairOddsCalculator({
                   {r.q != null && <InlineStat label="Spelarandel/mål" value={pctFmt(r.q * 100)} />}
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>{TYPE_EMPTY[l.betType]}</div>
+                <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginTop: 8 }}>{TYPE_EMPTY[l.betType]}</div>
               )}
             </div>
           );
@@ -503,20 +504,10 @@ export function FairOddsCalculator({
             + Lägg till ben
           </button>
         </div>
-      </Card>
+
 
       {correlated && (
-        <div
-          style={{
-            border: "1px solid rgba(245, 165, 36, 0.45)",
-            background: "rgba(245, 165, 36, 0.07)",
-            borderRadius: 12,
-            padding: "12px 14px",
-            marginBottom: 12,
-            fontSize: 13,
-            lineHeight: 1.55,
-          }}
-        >
+        <div className="ap-alert" style={{ marginTop: 12 }}>
           <strong>⚠️ Samma match:</strong>{" "}
           {matchGroups.map((g) => `ben ${g.map((i) => i + 1).join(" & ")}`).join(", ")} — justera samvariationen.
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
@@ -530,18 +521,19 @@ export function FairOddsCalculator({
               aria-label="Korrelation mellan ben i samma match"
               style={{ accentColor: "var(--acc)", flex: "1 1 180px", maxWidth: 320 }}
             />
-            <span className="ap-num" style={{ fontWeight: 700 }}>
+            <span className="ap-num" style={{ fontWeight: 600 }}>
               ρ = {rho.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
-            <span style={{ fontSize: 11, color: "var(--dim2)" }}>0 oberoende · 0,3 måttlig · 0,5 stark</span>
+            <span style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)" }}>0 oberoende · 0,3 måttlig · 0,5 stark</span>
           </div>
         </div>
       )}
+      </Card>
 
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
           <span className="ap-label">Resultat</span>
-          <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Vad borde specialen betala — och är erbjudandet värt det?</span>
+          <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Vad borde specialen betala — och är erbjudandet värt det?</span>
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
@@ -563,19 +555,19 @@ export function FairOddsCalculator({
         </div>
 
         {combo == null ? (
-          <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
+          <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14 }}>
             Fyll i {multi ? "alla ben" : "benet"} ovan så räknas fair odds ut här.
           </div>
         ) : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 16 }}>
-              <div style={{ background: "var(--acc-soft)", borderRadius: 12, padding: "12px 14px" }}>
+              <div className="ap-ministat is-key">
                 <div className="ap-label">Fair odds</div>
-                <div className="ap-num" style={{ fontSize: 26, fontWeight: 800, marginTop: 4, letterSpacing: "-0.02em" }}>
+                <div className="ap-num" style={{ fontSize: "var(--fs-2xl)", fontWeight: 500, marginTop: 4, letterSpacing: "-0.02em" }}>
                   {fmtOdds(combo.fairOdds)}
                 </div>
                 {rhoActive && (
-                  <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>
+                  <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginTop: 3 }}>
                     utan korrelation {fmtOdds(combo.fairOddsIndependent)}
                   </div>
                 )}
@@ -605,11 +597,11 @@ export function FairOddsCalculator({
             </div>
 
             {edge == null ? (
-              <div style={{ fontSize: 12.5, color: "var(--dim2)", marginTop: 14 }}>
+              <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14 }}>
                 Ange erbjudet odds för edge, EV och Kelly.
               </div>
             ) : (
-              <div className={"ap-num " + (edge > 0 ? "pos" : "neg")} style={{ marginTop: 14, fontSize: 14, fontWeight: 700 }}>
+              <div className={"ap-num " + (edge > 0 ? "pos" : "neg")} style={{ marginTop: 14, fontSize: "var(--fs-lg)", fontWeight: 600 }}>
                 {edge > 0 ? "✓" : "✗"} {fmtOdds(O)} vs fair {fmtOdds(combo.fairOdds)} → {pctFmt(edge * 100, true)}
                 {edge <= 0 && " · lägg inget"}
               </div>
@@ -634,6 +626,6 @@ export function FairOddsCalculator({
           eller mindre än så.
         </details>
       </Card>
-    </>
+    </div>
   );
 }

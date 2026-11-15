@@ -311,9 +311,9 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
     <Card style={{ padding: 0, marginBottom: 16 }}>
       <div className="ap-card-head">
         <span role="heading" aria-level={2} className="ap-card-title">Bokens linjer</span>
-        <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Modellvikt {Math.round(view.model.blendW * 100)} % mot bokens avviggade pris</span>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Modellvikt {Math.round(view.model.blendW * 100)} % mot bokens avviggade pris</span>
       </div>
-      <div style={{ padding: "14px 20px" }}>
+      <div style={{ padding: "var(--pad-y) var(--pad-x)" }}>
         <div className="ap-cs2-controls">
           <div className="ap-field">
             <label htmlFor="ln-market">Marknad</label>
@@ -405,7 +405,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
             <label htmlFor="ln-book">Bok</label>
             <input id="ln-book" className="ap-input" value={book} onChange={(e) => setBook(e.target.value)} />
           </div>
-          <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12.5, color: "var(--dim)" }}>
+          <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: "var(--fs-md)", color: "var(--dim)" }}>
             <input type="checkbox" checked={includesOt} onChange={(e) => setIncludesOt(e.target.checked)} /> Övertid räknas
           </label>
           <button className="ap-btn" disabled={busy} onClick={submit}>
@@ -419,8 +419,8 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
           </button>
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
         </div>
-        {err && <div className="neg" style={{ fontSize: 12.5, marginTop: 8 }}>{err}</div>}
-        {busy && <div style={{ fontSize: 12.5, marginTop: 8, color: "var(--dim)" }}>{progress ?? "Arbetar…"}</div>}
+        {err && <div className="neg" style={{ fontSize: "var(--fs-md)", marginTop: 8 }}>{err}</div>}
+        {busy && <div style={{ fontSize: "var(--fs-md)", marginTop: 8, color: "var(--dim)" }}>{progress ?? "Arbetar…"}</div>}
 
         {parsed && (
           <div className="ap-cs2-warn" style={{ marginTop: 12 }}>
@@ -487,7 +487,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
                   <span className="ap-r ap-num">{k && k.hasEdge ? `${k.halfUnits.toFixed(2)} u` : "—"}</span>
                   <span className="ap-r" style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     {pr?.edge != null && pr.edge > 0 && (
-                      <button className="ap-btn" style={{ padding: "4px 9px", fontSize: 11 }} onClick={() => logBet(l)}>
+                      <button className="ap-btn" style={{ padding: "4px 9px", fontSize: "var(--fs-xs)" }} onClick={() => logBet(l)}>
                         Logga bet
                       </button>
                     )}
@@ -502,7 +502,7 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
         </div>
       )}
       {sorted.length === 0 && (
-        <div style={{ padding: "0 20px 16px", fontSize: 12.5, color: "var(--dim2)" }}>
+        <div style={{ padding: "0 20px 16px", fontSize: "var(--fs-md)", color: "var(--dim2)" }}>
           Inga linjer än. Skriv in bokens linje och odds, eller ladda upp en skärmdump av props-listan — modellens fair odds och edge räknas direkt.
         </div>
       )}

@@ -1,0 +1,1361 @@
+/* ---- shared components: panels, boards, KPI cells, buttons, marks ---- */
+
+/* ---- panel ---- */
+.ap-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--pad-y) var(--pad-x);
+}
+.ap-grid {
+  display: grid;
+  gap: var(--gap);
+}
+.ap-grid > *,
+.ap-two > *,
+.ap-three > *,
+.ap-kpi-row > *,
+.ap-kpi-grid > *,
+.ap-board > * {
+  min-width: 0;
+}
+
+/* ---- board: panels tiled on shared 1px rules ----
+   Each cell draws a 1px ring; neighbouring rings land in the same 1px gap, so
+   the rules are shared. A short last row simply leaves the page showing, which
+   a gap-on-a-coloured-background grid would fill with a grey block. */
+.ap-board,
+.ap-grid.ap-two,
+.ap-grid.ap-three,
+.ap-kpi-row,
+.ap-kpi-grid {
+  display: grid;
+  gap: 1px;
+  padding: 1px;
+  margin-bottom: var(--gap);
+}
+.ap-board > *,
+.ap-grid.ap-two > *,
+.ap-grid.ap-three > *,
+.ap-kpi-row > *,
+.ap-kpi-grid > * {
+  background: var(--card);
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.ap-board.c2,
+.ap-grid.ap-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ap-board.c3,
+.ap-grid.ap-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ap-board.c4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ap-board.c21 {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+.ap-board.c12 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+/* A cell that stacks several panels of its own. */
+.ap-board-stack {
+  display: flex;
+  flex-direction: column;
+}
+.ap-board-stack > * + * {
+  border-top: 1px solid var(--line);
+}
+.ap-board-stack > .ap-card {
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+}
+.ap-board-stack > .ap-card:first-child {
+  border-top: 0;
+}
+.ap-span-all {
+  grid-column: 1 / -1;
+}
+@media (max-width: 1100px) {
+  .ap-board.c3,
+  .ap-board.c4,
+  .ap-grid.ap-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 920px) {
+  .ap-board.c2,
+  .ap-board.c21,
+  .ap-board.c12,
+  .ap-two,
+  .ap-grid.ap-two {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .ap-week-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .ap-hide-sm {
+    display: none !important;
+  }
+}
+@media (max-width: 640px) {
+  .ap-board.c3,
+  .ap-board.c4,
+  .ap-three,
+  .ap-grid.ap-three {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* ---- KPI strip: cells in one ruled row ---- */
+.ap-kpi-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ap-kpi-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+@media (max-width: 1320px) {
+  .ap-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1080px) {
+  .ap-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .ap-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.ap-kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 10px var(--pad-x) 11px;
+}
+.ap-kpi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: 16px;
+}
+.ap-kpi-head .ap-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ap-kpi-val {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xl);
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  word-spacing: -0.3em;
+  white-space: nowrap;
+}
+.ap-kpi-val.t-pos {
+  color: var(--pos);
+}
+.ap-kpi-val.t-red {
+  color: var(--red);
+}
+.ap-kpi-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 1px 10px;
+  margin-top: 6px;
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.ap-kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.35;
+}
+.ap-kpi-trend svg {
+  flex-shrink: 0;
+}
+.ap-kpi-trend.pos {
+  color: var(--pos);
+}
+.ap-kpi-trend.neg {
+  color: var(--red);
+}
+.ap-kpi-trend.flat {
+  color: var(--dim);
+}
+.ap-kpi-meta {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--dim2);
+  line-height: 1.35;
+}
+/* The sparkline rides in the top-right corner instead of adding a row. */
+.ap-kpi-spark {
+  position: absolute;
+  top: 9px;
+  right: var(--pad-x);
+  line-height: 0;
+  pointer-events: none;
+}
+
+/* ---- headings ---- */
+/* Strip across the top of a padding-less panel. */
+.ap-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-height: 36px;
+  padding: 5px var(--pad-x);
+  border-bottom: 1px solid var(--line);
+}
+.ap-card-head > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.ap-card-title,
+.ap-panel-head-title,
+.ap-sec-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--disp);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--txt);
+}
+/* Title row inside a padded panel. */
+.ap-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+.ap-panel-head-main {
+  min-width: 0;
+}
+.ap-panel-head-sub {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--dim2);
+  font-family: var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+}
+.ap-panel-head-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+/* Rule between groups of panels: title left, note right. */
+.ap-sec {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  scroll-margin-top: calc(var(--bar-h) + 52px);
+}
+.ap-sec-title {
+  color: var(--acc-ink);
+}
+.ap-sec-sub {
+  font-size: var(--fs-sm);
+  color: var(--dim2);
+  text-align: right;
+}
+.ap-page-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 6px;
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--acc-ink);
+}
+.ap-page-kicker em {
+  color: var(--dim2);
+  font-style: normal;
+}
+
+/* ---- in-page tabs: underline, not a filled switch ---- */
+.ap-tabs,
+.ap-seg.ap-cs2-tabs,
+.ap-seg.ap-nba-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  max-width: 100%;
+  margin-bottom: var(--gap);
+  padding: 0;
+  overflow-x: auto;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+.ap-tabs > a,
+.ap-tabs > button,
+.ap-seg.ap-cs2-tabs > button,
+.ap-seg.ap-nba-tabs > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 34px;
+  margin-bottom: -1px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--dim);
+  font-family: var(--disp);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ap-tabs > a:hover,
+.ap-tabs > button:hover,
+.ap-seg.ap-cs2-tabs > button:hover,
+.ap-seg.ap-nba-tabs > button:hover {
+  color: var(--txt);
+}
+.ap-tabs > .is-active,
+.ap-seg.ap-cs2-tabs > button.is-active,
+.ap-seg.ap-nba-tabs > button.is-active {
+  background: none;
+  color: var(--txt);
+  border-bottom-color: var(--acc);
+}
+/* Anchor tabs that follow the page down under the status bar. */
+.ap-tabs.is-sticky {
+  position: sticky;
+  top: var(--bar-h);
+  z-index: 20;
+  background: var(--bg);
+}
+
+/* ---- segmented control: one bordered group, filled active cell ---- */
+.ap-seg {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+}
+.ap-seg button,
+.ap-segbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: none;
+  color: var(--dim);
+  font-family: var(--disp);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ap-seg button:last-child {
+  border-right: 0;
+}
+.ap-seg button:hover,
+.ap-segbtn:hover {
+  color: var(--txt);
+}
+.ap-seg button.is-active,
+.ap-segbtn.is-active {
+  background: var(--acc);
+  color: var(--acc-text);
+}
+.ap-seg .ap-num {
+  font-size: var(--fs-xs);
+}
+/* Form choice buttons: separate cells that share the row. */
+.ap-seg2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ap-seg2 button {
+  flex: 1;
+  min-width: 70px;
+  min-height: var(--ctl-h);
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  cursor: pointer;
+}
+.ap-seg2 button:hover {
+  color: var(--txt);
+  border-color: var(--dim2);
+}
+.ap-seg2 button.is-active {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--acc-text);
+  font-weight: 600;
+}
+
+/* ---- buttons ---- */
+.ap-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--ctl-h);
+  padding: 0 12px;
+  border: 1px solid var(--acc);
+  border-radius: var(--r-ctl);
+  background: var(--acc);
+  color: var(--acc-text);
+  font-family: var(--disp);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ap-btn:hover {
+  background: color-mix(in srgb, var(--acc) 86%, #fff);
+  border-color: color-mix(in srgb, var(--acc) 86%, #fff);
+}
+.ap-btn:active {
+  transform: translateY(1px);
+}
+.ap-btn.ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--txt);
+  font-weight: 600;
+}
+.ap-btn.ghost:hover {
+  background: var(--hover);
+  border-color: var(--dim2);
+}
+.ap-btn svg {
+  flex-shrink: 0;
+}
+/* Cancel is a quiet text action; Save carries the weight. */
+.ap-cancel {
+  min-height: var(--ctl-h);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--dim);
+  font-family: var(--disp);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ap-cancel:hover {
+  color: var(--txt);
+  background: var(--hover);
+}
+.ap-save {
+  flex: 1;
+  min-height: 36px;
+}
+.ap-iconbtn,
+.ap-close {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.ap-close {
+  width: 30px;
+  height: 30px;
+}
+.ap-iconbtn:hover,
+.ap-close:hover {
+  color: var(--txt);
+  border-color: var(--dim2);
+}
+.ap-iconbtn.w:hover {
+  color: var(--pos);
+  border-color: var(--pos);
+}
+.ap-iconbtn.l:hover,
+.ap-iconbtn.x:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+.ap-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acc-ink);
+  font-family: var(--sans);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ap-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- chips, pills, tags, badges ---- */
+.ap-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.ap-chip:hover {
+  color: var(--txt);
+  border-color: var(--dim2);
+}
+.ap-chip.is-active {
+  background: var(--acc-soft);
+  border-color: var(--acc-line);
+  color: var(--acc-ink);
+}
+.ap-quickchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.ap-quickchips .ap-chip {
+  min-height: 22px;
+  padding: 0 7px;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+}
+.ap-pill {
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ap-pill.pos {
+  color: var(--pos);
+  background: var(--pos-soft);
+}
+.ap-pill.neg {
+  color: var(--red);
+  background: var(--red-soft);
+}
+.ap-pill.flat {
+  color: var(--dim);
+  background: var(--hover);
+}
+.ap-tag {
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  color: var(--dim);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  line-height: 15px;
+  white-space: nowrap;
+}
+.ap-bet-tags {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-width: 0;
+}
+.ap-bet-tags .ap-tag {
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ap-bet-tags .ap-tag.is-accent {
+  color: var(--acc-ink);
+  border-color: var(--acc-line);
+}
+.ap-bet-tags .ap-tag.is-muted {
+  color: var(--dim2);
+}
+.ap-res {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+/* Result mark: a square tag in mono. Sign and icon carry the meaning too, so
+   it never rests on colour alone. */
+.ap-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 17px;
+  white-space: nowrap;
+  cursor: inherit;
+}
+.ap-badge svg {
+  flex-shrink: 0;
+}
+.ap-badge.won {
+  color: var(--pos);
+  background: var(--pos-soft);
+  border-color: var(--pos-line);
+}
+.ap-badge.lost {
+  color: var(--red);
+  background: var(--red-soft);
+  border-color: var(--red-line);
+}
+.ap-badge.open {
+  color: var(--info);
+  background: var(--info-soft);
+  border-color: var(--info-line);
+}
+.ap-badge.push {
+  color: var(--dim);
+  border-color: var(--line);
+}
+.ap-badge.cashout {
+  color: var(--acc-ink);
+  background: var(--acc-soft);
+  border-color: var(--acc-line);
+}
+.ap-count-badge {
+  padding: 0 6px;
+  border: 1px solid var(--info-line);
+  border-radius: var(--r-pill);
+  color: var(--info);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 16px;
+  text-transform: none;
+  white-space: nowrap;
+}
+.ap-timechip {
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--dim);
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 15px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ap-timechip.is-hot {
+  color: var(--info);
+  border-color: var(--info-line);
+}
+.ap-timechip.is-ready {
+  color: var(--acc-ink);
+  border-color: var(--acc-line);
+  background: var(--acc-soft);
+}
+
+/* Stragglers of the old tinted icon chip render as a plain dim icon. */
+.ap-chip-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--dim2);
+}
+
+/* ---- legends and label/value rows ---- */
+.ap-leg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+}
+.ap-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: var(--r-xs);
+}
+/* Ledger row: a dotted rule carries the eye from label to figure. */
+.ap-legrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dotted var(--line);
+  font-size: var(--fs-sm);
+}
+.ap-legrow:last-child {
+  border-bottom: 0;
+}
+.ap-sport {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--dim);
+  font-family: var(--disp);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ap-sport-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: var(--r-xs);
+  background: var(--dim2);
+}
+.ap-sport-ico {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+/* ---- hint tooltip (pure CSS) ---- */
+.ap-tip {
+  position: relative;
+  display: inline-flex;
+  color: var(--dim2);
+  cursor: help;
+  vertical-align: middle;
+}
+.ap-tip:hover {
+  color: var(--txt);
+}
+/* 24px pointer target around a 12px glyph. */
+.ap-tip::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.ap-tip > .ap-tip-body {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  z-index: 30;
+  width: 230px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: var(--card2);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-lift);
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+}
+.ap-tip:hover > .ap-tip-body,
+.ap-tip:focus-visible > .ap-tip-body {
+  display: block;
+}
+
+/* ---- empty states and loading ---- */
+.ap-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 36px 20px;
+  text-align: center;
+}
+.ap-empty-icon {
+  color: var(--dim2);
+  line-height: 0;
+}
+.ap-empty-title {
+  font-family: var(--disp);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.ap-empty-hint {
+  max-width: 380px;
+  font-size: var(--fs-sm);
+  color: var(--dim2);
+  line-height: 1.5;
+}
+.ap-panel-empty {
+  padding: 26px 16px;
+  color: var(--dim2);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+@keyframes ap-skel-pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}
+.ap-skel {
+  background: var(--card2);
+  border-radius: var(--r-xs);
+  animation: ap-skel-pulse 0.9s ease-in-out infinite alternate;
+}
+
+/* ---- notices ---- */
+.ap-tilt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--gap);
+  padding: 10px var(--pad-x);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--acc);
+  border-radius: var(--r-card);
+  background: var(--acc-soft);
+}
+.ap-tilt.warn {
+  border-color: var(--acc-line);
+  border-left-color: var(--acc);
+}
+.ap-tilt.danger {
+  border-color: var(--red-line);
+  border-left-color: var(--red);
+  background: var(--red-soft);
+}
+.ap-tilt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.ap-tilt-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  line-height: 1.45;
+}
+/* Discipline grade (week/month report). */
+.ap-grade {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  font-family: var(--disp);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+/* ---- switch: a square track, a square thumb ---- */
+.ap-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-md);
+  color: var(--txt);
+}
+.ap-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  cursor: pointer;
+}
+.ap-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-xs);
+  background: var(--dim2);
+}
+.ap-switch.on {
+  border-color: var(--acc-line);
+  background: var(--acc-soft);
+}
+.ap-switch.on::after {
+  left: 19px;
+  background: var(--acc);
+}
+
+/* ---- fine print on calculator panels: numbers first, prose on demand ---- */
+.ap-fine {
+  margin-top: 12px;
+  font-size: var(--fs-sm);
+  color: var(--dim2);
+  line-height: 1.55;
+}
+.ap-fine summary {
+  width: fit-content;
+  padding-block: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+.ap-fine summary:hover {
+  color: var(--txt);
+}
+.ap-fine[open] summary {
+  margin-bottom: 4px;
+}
+.ap-fine-details {
+  max-width: 68ch;
+}
+.ap-payout {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+}
+.ap-period-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: var(--gap);
+}
+.ap-period-bar > span:last-child {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+}
+@media (max-width: 620px) {
+  .ap-period-bar > span:last-child {
+    flex-basis: 100%;
+    text-align: left;
+  }
+}
+
+/* ---- stat blocks ---- */
+.ap-ministat {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+}
+.ap-ministat-val {
+  margin-top: 4px;
+  font-size: var(--fs-lg);
+  font-weight: 500;
+}
+.ap-ministat-sub {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--dim2);
+}
+.ap-inlinestat {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ap-inlinestat .ap-label {
+  font-size: var(--fs-micro);
+}
+.ap-inlinestat .ap-num {
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+/* Ranked breakdown: name and count on the left, P/L and ROI on the right, a
+   hair-thin bar under each row for the eye to compare. */
+.ap-bd {
+  display: flex;
+  flex-direction: column;
+}
+.ap-bd-row {
+  padding: 6px 0 7px;
+  border-bottom: 1px dotted var(--line);
+}
+.ap-bd-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+.ap-bd-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 5px;
+  font-size: var(--fs-md);
+}
+.ap-bd-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.ap-bd-name small,
+.ap-bd-val small {
+  flex-shrink: 0;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.ap-bd-val {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+}
+.ap-bd-val em,
+.ap-lb-val em {
+  font-style: normal;
+}
+.ap-bd-val small {
+  min-width: 48px;
+  text-align: right;
+}
+
+/* Leaderboard rows (largest wins / losses). */
+.ap-lb {
+  display: flex;
+  flex-direction: column;
+}
+.ap-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px dotted var(--line);
+}
+.ap-lb-row:last-child {
+  border-bottom: 0;
+}
+.ap-lb-rank {
+  width: 16px;
+  color: var(--dim2);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.ap-lb-main {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-md);
+}
+.ap-lb-main small {
+  display: block;
+  margin-top: 1px;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+.ap-lb-val {
+  text-align: right;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+}
+.ap-lb-val small {
+  display: block;
+  margin-top: 1px;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+
+/* ---- meter: label + figure over a thin square track ---- */
+.ap-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 5px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.ap-meter-head .ap-num {
+  color: var(--txt);
+}
+.ap-meter-head small,
+.ap-meter-foot {
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+.ap-meter em {
+  font-style: normal;
+}
+.ap-meter-track {
+  height: 4px;
+  background: var(--card2);
+}
+.ap-meter-track i {
+  display: block;
+  height: 100%;
+}
+.ap-meter-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  margin-top: 5px;
+}
+.ap-tilt-meters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ap-goal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ap-goal-form,
+.ap-goal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---- CLV cell: the figure is the button; the fetch icon stays quiet ---- */
+.ap-clv {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  width: 100%;
+}
+.ap-clv-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  text-align: inherit;
+  cursor: pointer;
+}
+.ap-clv-btn.is-empty {
+  color: var(--dim2);
+}
+.ap-clv-btn:hover {
+  text-decoration: underline;
+}
+.ap-clv-fetch {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--dim2);
+  cursor: pointer;
+}
+.ap-clv-fetch:hover {
+  color: var(--txt);
+  background: var(--hover);
+}
+.ap-clv-fetch.is-busy {
+  opacity: 0.5;
+}
+.ap-clv-fetch:disabled {
+  cursor: default;
+}
+.ap-clv-input {
+  min-width: 52px;
+  min-height: 24px;
+  padding: 1px 5px;
+  font-size: var(--fs-sm);
+  text-align: right;
+}
+.ap-clv-boost {
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+@media (max-width: 860px) {
+  .ap-clv {
+    justify-content: flex-start;
+  }
+  .ap-clv-fetch {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* A row of headline figures inside a panel. */
+.ap-figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 36px;
+}
+.ap-figs .ap-kpi-val {
+  margin-top: 0;
+}
+.ap-figs .ap-note {
+  margin-top: 3px;
+}
+/* Donut beside its legend; stacks when the panel is narrow. */
+.ap-outcomes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+}
+.ap-outcomes > svg {
+  flex-shrink: 0;
+}
+.ap-outcomes-legend {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+/* A micro-label that opens a padded panel is that panel's title — raise it to
+   the same weight as the strip titles, without touching the markup. */
+.ap-card:not(.ap-kpi) > .ap-label:first-child,
+.ap-card:not(.ap-kpi) > div:first-child > .ap-label:first-child {
+  color: var(--txt);
+  font-size: var(--fs-md);
+  letter-spacing: 0.1em;
+}
+/* The one tile in a row that is the recommendation. */
+.ap-ministat.is-key {
+  border-color: var(--acc-line);
+  background: var(--acc-soft);
+}
+/* Inline notice inside a panel. */
+.ap-alert {
+  padding: 8px 10px;
+  border: 1px solid var(--acc-line);
+  border-left: 2px solid var(--acc);
+  border-radius: var(--r-ctl);
+  background: var(--acc-soft);
+  color: var(--txt);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+.ap-alert.is-neg {
+  border-color: var(--red-line);
+  border-left-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red);
+}
+.ap-alert.is-pos {
+  border-color: var(--pos-line);
+  border-left-color: var(--pos);
+  background: var(--pos-soft);
+}
+
+/* Two columns inside one panel (no rules between them — it is one panel). */
+.ap-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 24px;
+}
+@media (max-width: 920px) {
+  .ap-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Panels on a board carry no margin of their own — the board spaces them. */
+.ap-board > .ap-card,
+.ap-kpi-row > .ap-card,
+.ap-kpi-grid > .ap-card {
+  margin: 0 !important;
+}
+/* One leg of a multi-leg calculation: a recessed block inside its panel. */
+.ap-leg-block {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+}
+
+/* A head strip inside a *padded* panel: bleed out to the panel's edges. */
+.ap-card-head.is-bleed {
+  margin: calc(-1 * var(--pad-y)) calc(-1 * var(--pad-x)) var(--pad-y);
+}

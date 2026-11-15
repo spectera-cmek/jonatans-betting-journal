@@ -1,15 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#8f74ff"/>
-      <stop offset="1" stop-color="#3fe0a8"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="#0b0d14"/>
-  <rect x="56" y="56" width="400" height="400" rx="96" fill="url(#g)"/>
-  <g stroke="#16102a" stroke-width="58" stroke-linecap="round" fill="none">
-    <path d="M 176 340 V 292"/>
-    <path d="M 256 340 V 232"/>
-    <path d="M 336 340 V 172"/>
+  <!-- Amber tile, three rising bars: the same mark as components/BrandMark.tsx.
+       The bars sit inside the central 56 %, clear of any maskable-icon crop. -->
+  <rect width="512" height="512" rx="64" fill="#ffb000"/>
+  <g fill="#171000">
+    <rect x="112" y="280" width="72" height="120"/>
+    <rect x="220" y="208" width="72" height="192"/>
+    <rect x="328" y="112" width="72" height="288"/>
   </g>
 </svg>

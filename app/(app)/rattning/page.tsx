@@ -167,8 +167,6 @@ export default function RattningPage() {
             ? "Kontrollerar resultat…"
             : `${suggestions.length} öppna spel · ${counts.ready} klara att rätta`
         }
-        icon={IC.zap}
-        accent="sky"
         actions={
           <button className="ap-btn ghost" onClick={load} disabled={loading || applying}>
             <I p={IC.refresh} size={14} /> Uppdatera
@@ -185,34 +183,24 @@ export default function RattningPage() {
             sub={key === "ready" ? "kontrollerade mot ESPN" : undefined}
             hint={READINESS_HINTS[key]}
             tone={key === "ready" ? "pos" : undefined}
-            icon={
-              key === "ready"
-                ? IC.checkCircle
-                : key === "waiting"
-                  ? IC.clock
-                  : key === "manual"
-                    ? IC.alert
-                    : IC.helpCircle
-            }
-            accent={key === "waiting" ? "sky" : key === "manual" ? "amber" : undefined}
           />
         ))}
       </div>
 
       {error && (
         <Card style={{ marginBottom: 12, borderColor: "var(--red)" }}>
-          <span className="neg" style={{ fontSize: 13 }}>{error}</span>
+          <span className="neg" style={{ fontSize: "var(--fs-md)" }}>{error}</span>
         </Card>
       )}
 
       {result && (
         <Card style={{ marginBottom: 12 }}>
           <span className="ap-label">Senaste rättning</span>
-          <div style={{ fontSize: 13, marginTop: 10 }}>
+          <div style={{ fontSize: "var(--fs-md)", marginTop: 10 }}>
             <b className="ap-num pos">{result.settled}</b> av {result.requested} spel rättades.
           </div>
           {result.details.length > 0 && (
-            <ul style={{ margin: "10px 0 0", paddingLeft: 18, color: "var(--dim)", fontSize: 12, lineHeight: 1.6 }}>
+            <ul style={{ margin: "10px 0 0", paddingLeft: 18, color: "var(--dim)", fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
               {result.details.slice(0, 12).map((d, i) => (
                 <li key={i}>{d}</li>
               ))}
@@ -266,7 +254,7 @@ export default function RattningPage() {
             <button className="ap-btn ghost" onClick={toggleAll}>
               {selectableIds.every((id) => selected.has(id)) ? "Avmarkera alla" : `Markera alla klara (${selectableIds.length})`}
             </button>
-            <span style={{ color: "var(--dim)", fontSize: 12.5 }}>
+            <span style={{ color: "var(--dim)", fontSize: "var(--fs-md)" }}>
               {selectedVisible.length > 0
                 ? `${selectedVisible.length} valda · ${krFmt(stakeSelected * unit)} i insats`
                 : "Kryssa i de spel du vill rätta"}

@@ -121,10 +121,10 @@ export function SettlementDialog({
       >
         <div className="ap-modal-head">
           <div>
-            <h2 id="settle-title" className="ap-card-title" style={{ fontSize: 17 }}>
+            <h2 id="settle-title" className="ap-card-title" style={{ fontSize: "var(--fs-xl)" }}>
               {correcting ? "Korrigera rättning" : "Rätta bet"}
             </h2>
-            <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 3 }}>
+            <div style={{ fontSize: "var(--fs-md)", color: "var(--dim)", marginTop: 3 }}>
               {bet.event} — {bet.selection}
             </div>
           </div>
@@ -160,9 +160,9 @@ export function SettlementDialog({
 
           <Field label="Rättningshistorik">
             {loadingHistory ? (
-              <div style={{ color: "var(--dim2)", fontSize: 12.5 }}>Laddar…</div>
+              <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>Laddar…</div>
             ) : history.length === 0 ? (
-              <div style={{ color: "var(--dim2)", fontSize: 12.5 }}>
+              <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>
                 Ingen tidigare auditerad rättning.
               </div>
             ) : (
@@ -186,7 +186,7 @@ export function SettlementDialog({
             )}
           </Field>
 
-          {error && <div role="alert" style={{ color: "var(--red)", fontSize: 13 }}>{error}</div>}
+          {error && <div role="alert" style={{ color: "var(--red)", fontSize: "var(--fs-md)" }}>{error}</div>}
 
           <div style={{ display: "flex", gap: 10 }}>
             {correcting && canUndo && (

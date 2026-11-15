@@ -1,31 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, Skeleton, SkeletonCard, CountUp, Kpi, PanelHead, SportMark } from "@/components/ui";
-import { I, IC } from "@/components/icons";
-import { InteractiveLineChart, PLBars, Donut, type TimePoint } from "@/components/charts";
+import { Topbar } from "@/components/Shell";
+import { InteractiveLineChart, PLBars, type TimePoint } from "@/components/charts";
 import { ResultBadge } from "@/components/ResultBadge";
 import { TiltBanner } from "@/components/TiltBanner";
 import { GoalCard } from "@/components/GoalCard";
 import { OpenBetsPanel } from "@/components/OpenBetsPanel";
 import { BetTags } from "@/components/BetTags";
 import { ClvCell, type ClvSaved } from "@/components/ClvCell";
-import { useTheme } from "@/components/ThemeProvider";
 import { useMetrics, useRecentBets } from "@/lib/useData";
 import { krFmt, krShort, uFmt, pctFmt, dateShort } from "@/lib/format";
 import type { BetListDTO } from "@/lib/types";
 import type { StreakInfo } from "@/lib/insights";
 import { CHART_PERIODS } from "@/lib/periods";
-import { useEffect } from "react";
 
-const RECENT_GRID = "66px 50px 1.7fr 1.2fr 100px 58px 64px 76px 84px";
+const RECENT_GRID = "58px 44px minmax(0,1.5fr) minmax(0,1.7fr) 96px 52px 78px 62px 92px";
 
 const PERIODS = CHART_PERIODS;
 type PeriodKey = string;
 
 export default function OverviewPage() {
-  const { cc, glow } = useTheme();
   const { data, loading, reload } = useMetrics();
   // Shared + deduped fetch. The previous effect keyed on `data` fired twice per
   // visit (once on mount, once when the metrics object identity changed) and
@@ -90,7 +87,10 @@ export default function OverviewPage() {
   const sportsWithPct = useMemo(() => {
     const sports = data?.bySport ?? [];
     const totalSportBets = sports.reduce((a, s) => a + s.bets, 0) || 1;
-    return sports.map((s) => ({ ...s, pct: Math.round((s.bets / totalSportBets) * 100) }));
+    // Largest share first: the bar shows share, so the list reads as a ranking.
+    return sports
+      .map((s) => ({ ...s, pct: Math.round((s.bets / totalSportBets) * 100) }))
+      .sort((a, b) => b.bets - a.bets);
   }, [data?.bySport]);
 
   const months = useMemo(
@@ -115,52 +115,57 @@ export default function OverviewPage() {
     ? `${username[0].toUpperCase() + username.slice(1)}s Betting Översikt`
     : "Betting Översikt";
 
+  const settled = (m?.settledBets ?? 0).toLocaleString("sv-SE");
+
   return (
     <div className="ap-dashboard">
-      {glow && <div className="ap-glow" />}
-      <header className="ap-terminal-head">
-        <div>
-          <h1>{title}</h1>
-          <p>{(data?.metrics.totalBets ?? 0).toLocaleString("sv-SE")} spel{rangeLabel ? ` sedan ${rangeLabel}` : " · ingen historik"}</p>
-        </div>
-        <div className="ap-terminal-status">
-          <span>Portfölj</span>
-          <strong>{risk ? krFmt(risk.stakeUnits * unit) : "—"} exponerat</strong>
-        </div>
-      </header>
+      <Topbar
+        title={title}
+        docTitle="Betting Översikt"
+        sub={
+          <>
+            {(data?.metrics.totalBets ?? 0).toLocaleString("sv-SE")} spel{rangeLabel ? ` sedan ${rangeLabel}` : " · ingen historik"}
+            {risk ? ` · ${krFmt(risk.stakeUnits * unit)} exponerat` : ""}
+          </>
+        }
+        actions={
+          // One period for the whole page: every figure and the curve follow it.
+          <div className="ap-seg" role="group" aria-label="Period">
+            {PERIODS.map((p) => (
+              <button key={p.key} className={period === p.key ? "is-active" : ""} aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {/* Tilt guard — only visible when budgets/chasing trip */}
       {data?.tilt && <TiltBanner tilt={data.tilt} unit={unit} />}
 
-      {/* Six KPI cards: one saturated hue each, sparkline where a trend exists */}
-      <section className="ap-kpi-grid">
+      {/* Six figures in one ruled strip. Colour only where the sign means something. */}
+      <section className="ap-kpi-grid" aria-label="Nyckeltal">
         {loading && !data
           ? Array.from({ length: 6 }, (_, i) => <SkeletonCard key={i} />)
           : (
             <>
               <Kpi
                 label="Nettoresultat"
-                accent={headlineKr >= 0 ? "emerald" : "red"}
-                icon={IC.coins}
+                tone={headlineKr >= 0 ? "pos" : "neg"}
                 value={<CountUp value={headlineKr} format={(n) => krFmt(n, true)} />}
                 spark={sparkPts}
                 trend={periodTrend}
-                trendTone={headlineKr >= 0 ? "pos" : "neg"}
                 meta={`${uFmt(m?.profitUnits ?? 0, true)}`}
               />
               <Kpi
                 label="ROI"
-                accent={(m?.roiPct ?? 0) >= 0 ? "sky" : "red"}
-                icon={IC.percent}
+                tone={m?.roiPct == null ? undefined : m.roiPct >= 0 ? "pos" : "neg"}
                 hint="Avkastning på insatt kapital: nettoresultat delat med totalt insatt belopp på avgjorda spel."
                 value={pctFmt(m?.roiPct ?? null, true)}
                 trend={`${krShort((m?.stakedUnits ?? 0) * unit, false)} insatt`}
-                trendTone="flat"
               />
               <Kpi
                 label="Träffprocent"
-                accent="amber"
-                icon={IC.flame}
                 value={pctFmt(m?.winRatePct ?? null)}
                 trend={streakText(ins?.streaks)}
                 trendTone={streakTone(ins?.streaks) ?? "flat"}
@@ -168,8 +173,7 @@ export default function OverviewPage() {
               />
               <Kpi
                 label="CLV"
-                accent="teal"
-                icon={IC.target}
+                tone={m?.clvPct == null ? undefined : m.clvPct >= 0 ? "pos" : "neg"}
                 hint="Closing line value: hur mycket bättre ditt odds var än stängningsoddset. Att slå stängningen över tid är den bästa indikatorn på edge."
                 value={pctFmt(m?.clvPct ?? null, true)}
                 trend={
@@ -177,130 +181,101 @@ export default function OverviewPage() {
                     ? `${Math.round(((m.clvBeatCount ?? 0) / m.clvSampleSize) * 100)} % slår stängning`
                     : "Ingen stängningsdata"
                 }
-                trendTone={(m?.clvPct ?? 0) > 0 ? "pos" : "flat"}
                 meta={m?.clvSampleSize ? `${m.clvSampleSize} spel` : undefined}
               />
               <Kpi
                 label="Medianodds"
-                accent="pink"
-                icon={IC.scale}
                 hint="Medianodds på avgjorda spel — inte snittet, som ett fåtal kombispel över 100x drar upp så att det slutar beskriva vad du faktiskt spelar. Placeholder-odds 1,01 räknas inte."
                 value={m?.medianOdds != null ? m.medianOdds.toFixed(2) : "—"}
                 trend={avgStakeU != null ? `${avgStakeU.toFixed(2)}U snittinsats` : "—"}
-                trendTone="flat"
               />
               <Kpi
                 label="Max drawdown"
-                accent="purple"
-                icon={IC.trendDown}
+                tone={ddU > 0 ? "neg" : undefined}
                 hint="Största fall från en topp till efterföljande botten inom vald period."
                 value={ddU > 0 ? krShort(-ddU * unit, false) : "—"}
                 trend={periodTrend}
-                trendTone="flat"
-                meta={`${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda`}
+                meta={`${settled} avgjorda`}
               />
             </>
           )}
       </section>
 
-      {/* Cumulative performance */}
-      <Card className="ap-chartcard">
-        <PanelHead
-          icon={IC.chart}
-          accent="emerald"
-          title="Resultatutveckling"
-          sub={
-            `${(m?.settledBets ?? 0).toLocaleString("sv-SE")} avgjorda · ${period === "all" ? "hela perioden" : periodLabel}`
-          }
-          actions={
-            <div className="ap-seg">
-              {PERIODS.map((p) => (
-                <button key={p.key} className={period === p.key ? "is-active" : ""} aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          }
-        />
-        {loading && !data ? (
-          <Skeleton h={220} />
-        ) : (
-          <InteractiveLineChart
-            points={pts}
-            w={1180}
-            h={220}
-            stroke={cc.acc}
-            fill={cc.fill}
-            grid={cc.grid}
-            formatValue={(v) => krFmt(v)}
-          />
-        )}
-      </Card>
-
-      {/* Open risk is the primary actionable section. */}
-      {data && risk && (
-        <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} onClvSaved={onClvSaved} onSettled={reload} />
-      )}
-
-      <div className="ap-section-rule">
-        <span>02</span>
-        <strong>Resultatfördelning</strong>
-        <em>Utveckling per månad och sport</em>
-      </div>
-
-      {/* Monthly bars + sport mix */}
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 360px", marginBottom: 16 }}>
-        <Card>
-          <PanelHead icon={IC.bars} accent="sky" title="P/L per månad" sub="Resultat i units, senaste månaderna" />
-          <PLBars data={months} w={400} h={150} pos={cc.pos} neg={cc.red} labelColor={cc.dim} track={cc.line} />
-        </Card>
-        <Card>
-          <PanelHead icon={IC.pie} accent="purple" title="Fördelning per sport" sub="Andel av alla spel" />
-          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            <Donut data={sportsWithPct} size={116} thickness={19} colors={cc.palette} track={cc.grid} centerLabel={String(m?.totalBets ?? 0)} centerSub="SPEL" centerColor={cc.txt} centerSubColor={cc.dim} />
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-              {sportsWithPct.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data än</span>}
-              {sportsWithPct.slice(0, 5).map((s, i) => (
-                <div key={s.key} className="ap-legrow">
-                  <span className="ap-dot" style={{ background: cc.palette[i % cc.palette.length] }} />
-                  <span className="ap-ell" style={{ flex: 1, color: "var(--dim)" }}>{s.key}</span>
-                  <span className="ap-num" style={{ fontWeight: 700 }}>{s.pct}%</span>
-                </div>
-              ))}
-            </div>
+      {/* The equity curve beside what needs doing right now. */}
+      <div className="ap-board c21">
+        <Card className="ap-chartcard" style={{ padding: 0 }}>
+          <div className="ap-card-head">
+            <h2 className="ap-card-title">Resultatutveckling</h2>
+            <span className="ap-t-sm ap-t-dim2">
+              {settled} avgjorda · {period === "all" ? "hela perioden" : periodLabel}
+            </span>
+          </div>
+          <div className="ap-chart-body">
+            {loading && !data ? (
+              <Skeleton h={300} />
+            ) : (
+              <InteractiveLineChart points={pts} w={900} h={300} formatValue={(v) => krFmt(v)} formatAxis={(v) => krShort(v)} />
+            )}
           </div>
         </Card>
+
+        {data && risk ? (
+          <OpenBetsPanel open={data.openBets ?? []} risk={risk} unit={unit} onClvSaved={onClvSaved} onSettled={reload} />
+        ) : (
+          <SkeletonCard chartH={220} />
+        )}
       </div>
 
-      {/* Goals & pace */}
-      {!loading && data && (
-        <GoalCard monthProfitUnits={monthProfitU} yearProfitUnits={yearProfitU} unit={unit} />
-      )}
+      {/* Where the result came from: by month, by sport, against the goal. */}
+      <div className="ap-board c3">
+        <Card>
+          <PanelHead title="P/L per månad" sub="Units, senaste månaderna" />
+          <PLBars data={months} h={150} />
+        </Card>
+        <Card>
+          <PanelHead title="Per sport" sub="Andel av spelen · resultat" />
+          <div className="ap-rank">
+            {sportsWithPct.length === 0 && <span className="ap-note">Ingen data än</span>}
+            {sportsWithPct.slice(0, 6).map((s) => (
+              <div key={s.key} className="ap-rank-row">
+                <SportMark sport={s.key} long />
+                <span className="ap-rank-bar" aria-hidden="true">
+                  <i style={{ width: `${s.pct}%`, background: "var(--dim2)" }} />
+                </span>
+                <span className="ap-num ap-r ap-t-dim">{s.pct}%</span>
+                <span className={"ap-num ap-r " + (s.profitUnits >= 0 ? "pos" : "neg")}>{krShort(s.profitUnits * unit, true)}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+        {!loading && data ? (
+          <GoalCard monthProfitUnits={monthProfitU} yearProfitUnits={yearProfitU} unit={unit} />
+        ) : (
+          <SkeletonCard />
+        )}
+      </div>
 
       {/* Recent bets */}
-      <Card style={{ padding: 0, overflow: "hidden" }}>
+      <Card style={{ padding: 0 }}>
         <div className="ap-card-head">
-          <span role="heading" aria-level={2} className="ap-card-title">
-            <span className="ap-chip-icon is-sm is-emerald" aria-hidden="true"><I p={IC.ticket} size={13} /></span>
-            Senaste bets
-          </span>
+          <h2 className="ap-card-title">Senaste bets</h2>
           <Link href="/bets" className="ap-link">Visa alla →</Link>
         </div>
         <div className="ap-table-wrap">
           <div className="ap-table">
             <div className="ap-thead" style={{ gridTemplateColumns: RECENT_GRID }}>
-              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">CLV</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
+              <span>Datum</span><span>Sport</span><span>Match</span><span>Spel</span><span>Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">CLV</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
             </div>
             {recent.map((b) => (
               <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: RECENT_GRID }}>
-                <span style={{ color: "var(--dim)" }} className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span>
+                <span className="ap-num ap-t-dim">{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span style={{ minWidth: 0 }}><SportMark sport={b.sport} /></span>
-                <span className="ap-ell">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</span>
-                <span className="ap-hide-sm" style={{ color: "var(--dim)", minWidth: 0 }}>
-                  <span className="ap-ell" style={{ display: "block" }}>{b.selection || "—"}</span>
+                <span className="ap-ell">{b.event}{b.league && <span className="ap-t-dim2"> · {b.league}</span>}</span>
+                <span className="ap-selcell">
+                  <span className="ap-ell">{b.selection || "—"}</span>
                   <BetTags bet={b} compact hideSport />
                 </span>
-                <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
+                <span className="ap-ell ap-t-dim">{b.bookmaker || "—"}</span>
                 <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
                 <span className="ap-r">
                   <ClvCell
@@ -316,21 +291,19 @@ export default function OverviewPage() {
                 <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
               </div>
             ))}
-            {recent.length === 0 && (
-              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Inga bets än — logga din första bet.</div>
-            )}
+            {recent.length === 0 && <div className="ap-panel-empty">Inga bets än — logga din första bet.</div>}
           </div>
         </div>
-        {/* Mobile: stacked cards instead of a sideways-scrolling 8-column table. */}
-        <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
-          {recent.length === 0 && <div className="ap-betcard-empty">Inga bets än — logga din första bet.</div>}
+        {/* Mobile: stacked cards instead of a sideways-scrolling 9-column table. */}
+        <div className="ap-betcards is-flush">
+          {recent.length === 0 && <div className="ap-panel-empty">Inga bets än — logga din första bet.</div>}
           {recent.map((b) => (
-            <div key={b.id} className="ap-betcard">
+            <div key={b.id} className={"ap-betcard" + (b.outcome === "pending" ? " is-open" : (b.profitUnits ?? 0) > 0 ? " is-win" : (b.profitUnits ?? 0) < 0 ? " is-loss" : "")}>
               <div className="ap-betcard-top">
                 <span className="ap-betcard-date"><SportMark sport={b.sport} /> <span className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span></span>
                 <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
               </div>
-              <div className="ap-betcard-event">{b.event}{b.league && <span style={{ color: "var(--dim2)" }}> · {b.league}</span>}</div>
+              <div className="ap-betcard-event">{b.event}{b.league && <span className="ap-t-dim2"> · {b.league}</span>}</div>
               <div className="ap-betcard-sel">{b.selection || "—"}</div>
               <div className="ap-betcard-stats">
                 <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
@@ -342,7 +315,7 @@ export default function OverviewPage() {
                       odds={b.odds}
                       closingOdds={b.closingOdds}
                       clvPctValue={b.clvPct}
-                    boosted={b.boosted}
+                      boosted={b.boosted}
                       onSaved={(next) => onClvSaved(b.id, next)}
                     />
                   </b>

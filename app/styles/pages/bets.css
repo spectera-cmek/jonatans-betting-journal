@@ -1,0 +1,114 @@
+/* ---- Bets: the toolbar sits on the list it filters ---- */
+.ap-ledger-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+.ap-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 8px var(--pad-x);
+  border-bottom: 1px solid var(--line);
+}
+.ap-toolbar .ap-search {
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+.ap-toolbar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ap-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.ap-toolbar-count {
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.ap-toolbar-count b {
+  color: var(--txt);
+  font-weight: 500;
+}
+/* Inside the ledger the filter panel is a recessed band, not a card of its own. */
+.ap-ledger-panel .ap-filter-panel {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--bg);
+}
+/* Row actions: quiet until the row is under the pointer, so six buttons per
+   row don't shout down the data. Keyboard focus brings them up too. */
+.ap-rowacts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+.ap-rowacts .ap-iconbtn {
+  width: 24px;
+  height: 24px;
+  border-color: transparent;
+  color: var(--dim2);
+}
+.ap-trow:hover .ap-rowacts .ap-iconbtn,
+.ap-rowacts .ap-iconbtn:focus-visible {
+  border-color: var(--line);
+  color: var(--dim);
+}
+.ap-rowacts .ap-iconbtn:hover {
+  color: var(--txt);
+  border-color: var(--dim2);
+}
+.ap-rowacts .ap-iconbtn.w:hover {
+  color: var(--pos);
+  border-color: var(--pos);
+}
+.ap-rowacts .ap-iconbtn.l:hover,
+.ap-rowacts .ap-iconbtn.x:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+/* A toggle that is on (e.g. the VM 2026 tag). */
+.ap-iconbtn.is-on,
+.ap-rowacts .ap-iconbtn.is-on {
+  color: var(--acc-ink);
+}
+.ap-betcard-tags {
+  margin-top: 6px;
+}
+.ap-ledger-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 860px) {
+  .ap-toolbar .ap-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .ap-toolbar-end {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .ap-toolbar-count {
+    margin-right: auto;
+  }
+  /* Phones scroll the status filter sideways instead of stacking it. */
+  .ap-toolbar-chips {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .ap-toolbar-chips .ap-chip {
+    flex-shrink: 0;
+    min-height: 32px;
+  }
+}

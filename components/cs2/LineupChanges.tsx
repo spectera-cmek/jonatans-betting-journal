@@ -12,7 +12,7 @@ export function LineupChanges({ v }: { v: MatchupView }) {
   return (
     <div className="ap-cs2-warn" style={{ marginBottom: 16 }}>
       <b>Ändrad uppställning</b>
-      <span style={{ color: "var(--dim)", fontSize: 12.5 }}>
+      <span style={{ color: "var(--dim)", fontSize: "var(--fs-md)" }}>
         {" "}
         — modellen räknar per lag och ser inte bytet. Väg in det själv.
       </span>
@@ -32,7 +32,7 @@ export function LineupChanges({ v }: { v: MatchupView }) {
         </div>
       ))}
       {!v.lineupKnown && (
-        <div style={{ marginTop: 6, fontSize: 12.5, color: "var(--dim)" }}>
+        <div style={{ marginTop: 6, fontSize: "var(--fs-md)", color: "var(--dim)" }}>
           Jämfört med truppen på lagsidan — matchens egen uppställning är inte publicerad än.
         </div>
       )}

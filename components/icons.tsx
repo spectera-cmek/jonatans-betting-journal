@@ -1,5 +1,4 @@
-// Icon set. UI icons come from lucide-react (the same library the reference
-// design uses); the sport glyphs are hand-drawn in the same 24×24 / stroke-1.8
+// Icon set. UI icons come from lucide-react; the sport glyphs are hand-drawn in the same 24×24 / stroke-1.8
 // language because lucide has no ball sports.
 
 import type { LucideIcon } from "lucide-react";
@@ -21,6 +20,7 @@ import {
   CircleMinus,
   CircleX,
   Clock,
+  CornerDownLeft,
   Coins,
   Download,
   Ellipsis,
@@ -35,6 +35,9 @@ import {
   LayoutGrid,
   List,
   Minus,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Percent,
   Plus,
@@ -43,6 +46,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Sun,
   Target,
   Ticket,
   TrendingDown,
@@ -126,6 +130,11 @@ export const IC = {
   arrowUpDown: ArrowUpDown,
   arrowUp: ArrowUp,
   arrowDown: ArrowDown,
+  sun: Sun,
+  moon: Moon,
+  panelClose: PanelLeftClose,
+  panelOpen: PanelLeftOpen,
+  enter: CornerDownLeft,
 } satisfies Record<string, LucideIcon>;
 
 /**

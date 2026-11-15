@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card, Skeleton, SkeletonCard, SectionHead, Field } from "@/components/ui";
+import { Card, Skeleton, SkeletonCard, SectionHead, Field, AnchorTabs } from "@/components/ui";
 import { HBar, CompareChart, type TimePoint } from "@/components/charts";
 import { KellyCard } from "@/components/KellyCard";
 import { ReportCard } from "@/components/ReportCard";
@@ -60,7 +60,7 @@ export default function InsightsPage() {
 
   return (
     <div>
-      <Topbar title="Insikter" sub="Din form, dina rekord och dina mönster" icon={IC.spark} />
+      <Topbar title="Insikter" sub="Din form, dina rekord och dina mönster" />
 
       {loading && !data && (
         <>
@@ -76,6 +76,18 @@ export default function InsightsPage() {
 
       {data && (
         <>
+          <AnchorTabs
+            label="Avsnitt"
+            items={[
+              { id: "rapporter", label: "Rapporter" },
+              { id: "lackor", label: "Läckor & edge" },
+              { id: "form", label: "Form" },
+              { id: "verktyg", label: "Verktyg" },
+            ]}
+          />
+
+          <SectionHead id="rapporter" title="Rapporter" sub="veckan och månaden mot föregående" />
+
           {(data.weekly || data.monthlyReport) && (
             <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
               {data.weekly && (
@@ -109,6 +121,8 @@ export default function InsightsPage() {
             </div>
           )}
 
+          <SectionHead id="lackor" title="Läckor & edge" sub="var du tappar och var du tjänar" />
+
           {!betsLoading && bets.length > 0 && (
             <>
               <div className="ap-period-bar">
@@ -124,7 +138,7 @@ export default function InsightsPage() {
                     </button>
                   ))}
                 </div>
-                <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>
+                <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>
                   {windowBets.length.toLocaleString("sv-SE")} spel · styr läckor, tur-index och simulatorn
                 </span>
               </div>
@@ -132,69 +146,59 @@ export default function InsightsPage() {
             </>
           )}
 
-          <div className="ap-kpi-row">
-            <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} icon={IC.flame} accent="amber" />
-            <StatTile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" icon={IC.trendUp} />
-            <StatTile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" icon={IC.trendDown} />
+          <SectionHead id="form" title="Form" sub="sviter, bästa och sämsta dag, veckodagar" />
+
+          <div className="ap-kpi-grid">
+            <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} />
+            <StatTile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" />
+            <StatTile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" />
             <StatTile
               label={mom ? `Månaden · ${monthLabel(mom.month)}` : "Den här månaden"}
               value={mom ? krShort(mom.profitUnits * unit, true) : "—"}
               tone={mom ? (mom.profitUnits >= 0 ? "pos" : "neg") : ""}
               sub={mom ? `${mom.bets} bets${momDelta != null ? ` · ${momDelta >= 0 ? "▲" : "▼"} ${uFmt(Math.abs(momDelta))} vs ${monthLabel(momPrev?.month)}` : ""}` : "ingen data"}
-              icon={IC.calendar}
-              accent="purple"
+            />
+            <StatTile
+              label="Bästa dag"
+              value={ins?.best ? krShort(ins.best.profitUnits * unit, true) : "—"}
+              tone={ins?.best ? "pos" : ""}
+              sub={ins?.best ? `${dateShort(ins.best.date)} · ${ins.best.bets} bets · ${uFmt(ins.best.profitUnits, true)}` : "ingen data"}
+            />
+            <StatTile
+              label="Sämsta dag"
+              value={ins?.worst ? krShort(ins.worst.profitUnits * unit, true) : "—"}
+              tone={ins?.worst ? "neg" : ""}
+              sub={ins?.worst ? `${dateShort(ins.worst.date)} · ${ins.worst.bets} bets · ${uFmt(ins.worst.profitUnits, true)}` : "ingen data"}
             />
           </div>
 
-          <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
-            <Card>
-              <span className="ap-label">Bästa dag 🟢</span>
-              {ins?.best ? (
-                <>
-                  <div className="ap-num" style={{ fontSize: 26, fontWeight: 700, marginTop: 10 }}>
-                    <span className="pos">{krShort(ins.best.profitUnits * unit, true)}</span>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>{dateShort(ins.best.date)} · {ins.best.bets} bets · {uFmt(ins.best.profitUnits, true)}</div>
-                </>
-              ) : <div style={{ color: "var(--dim2)", fontSize: 13, marginTop: 10 }}>Ingen data</div>}
-            </Card>
-
-            <Card>
-              <span className="ap-label">Sämsta dag 🔴</span>
-              {ins?.worst ? (
-                <>
-                  <div className="ap-num" style={{ fontSize: 26, fontWeight: 700, marginTop: 10 }}>
-                    <span className="neg">{krShort(ins.worst.profitUnits * unit, true)}</span>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 6 }}>{dateShort(ins.worst.date)} · {ins.worst.bets} bets · {uFmt(ins.worst.profitUnits, true)}</div>
-                </>
-              ) : <div style={{ color: "var(--dim2)", fontSize: 13, marginTop: 10 }}>Ingen data</div>}
-            </Card>
-
-          </div>
-
           <Card style={{ marginBottom: 12 }}>
-            <span className="ap-label">P/L per veckodag</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
-              {weekdays.every((w) => w.bets === 0) && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen data</span>}
+            <div className="ap-panel-head">
+              <h3 className="ap-card-title">P/L per veckodag</h3>
+            </div>
+            <div className="ap-bd">
+              {weekdays.every((w) => w.bets === 0) && <span className="ap-note">Ingen data</span>}
               {weekdays.map((w) => (
                 w.bets > 0 && (
-                  <div key={w.weekday}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                      <span>{WEEKDAYS[w.weekday]} <span style={{ color: "var(--dim2)", fontSize: 12 }}>· {w.bets} bets</span></span>
-                      <span className="ap-num" style={{ fontWeight: 600 }}>
-                        <em className={w.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{krShort(w.profitUnits * unit, true)}</em>
-                        <span style={{ color: "var(--dim2)", marginLeft: 8 }}>{pctFmt(w.roiPct, true)}</span>
+                  <div key={w.weekday} className="ap-bd-row">
+                    <div className="ap-bd-line">
+                      <span className="ap-bd-name">
+                        <span>{WEEKDAYS[w.weekday]}</span>
+                        <small>{w.bets} bets</small>
+                      </span>
+                      <span className="ap-num ap-bd-val">
+                        <em className={w.profitUnits >= 0 ? "pos" : "neg"}>{krShort(w.profitUnits * unit, true)}</em>
+                        <small>{pctFmt(w.roiPct, true)}</small>
                       </span>
                     </div>
-                    <HBar pct={Math.max((Math.abs(w.profitUnits) / maxWd) * 100, 3)} color={w.profitUnits >= 0 ? cc.acc : cc.red} track={cc.grid} h={7} />
+                    <HBar pct={Math.max((Math.abs(w.profitUnits) / maxWd) * 100, 2)} color={w.profitUnits >= 0 ? cc.pos : cc.red} track={cc.grid} h={3} />
                   </div>
                 )
               ))}
             </div>
           </Card>
 
-          <SectionHead icon={IC.gear} title="Verktyg" sub="Kelly, tur-index och simulatorn" />
+          <SectionHead id="verktyg" title="Verktyg" sub="Kelly, tur-index och simulatorn" />
 
           <KellyCard defaultBankrollUnits={bankrollU} unit={unit} />
 
@@ -254,15 +258,15 @@ function LuckCard({
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Tur eller skicklighet?</span>
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>{periodLabel.toLowerCase()}</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>{periodLabel.toLowerCase()}</span>
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
-        <span className="ap-num" style={{ fontSize: 30, fontWeight: 700 }}>
+        <span className="ap-num" style={{ fontSize: "var(--fs-2xl)", fontWeight: 600 }}>
           <span className={overall.z >= 0 ? "pos" : "neg"}>{zFmt(overall.z)}</span>
         </span>
-        <span style={{ fontSize: 13, color: "var(--dim)" }}>{luckVerdict(overall.z)}</span>
+        <span style={{ fontSize: "var(--fs-md)", color: "var(--dim)" }}>{luckVerdict(overall.z)}</span>
       </div>
-      <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>
+      <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginTop: 8 }}>
         Utfall {krFmt(overall.actualUnits * unit, true)} över {overall.n.toLocaleString("sv-SE")} avgjorda bets ·
         slumpens spann ±{krFmt(overall.sigmaUnits * unit)} (1σ) · percentil {overall.percentile != null ? Math.round(overall.percentile) : "—"}
       </div>
@@ -271,20 +275,20 @@ function LuckCard({
         <div style={{ display: "flex", flexDirection: "column", gap: 13, marginTop: 18 }}>
           {cats.map((c) => (
             <div key={c.key}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
-                <span>{c.key} <span style={{ color: "var(--dim2)", fontSize: 12 }}>· {c.n} bets</span></span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--fs-md)", marginBottom: 5 }}>
+                <span>{c.key} <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>· {c.n} bets</span></span>
                 <span className="ap-num" style={{ fontWeight: 600 }}>
                   <em className={(c.z ?? 0) >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{zFmt(c.z ?? 0)}</em>
                   <span style={{ color: "var(--dim2)", marginLeft: 8 }}>{krShort(c.actualUnits * unit, true)}</span>
                 </span>
               </div>
-              <HBar pct={Math.max((Math.abs(c.z ?? 0) / maxZ) * 100, 3)} color={(c.z ?? 0) >= 0 ? cc.pos : cc.red} track={cc.grid} h={7} />
+              <HBar pct={Math.max((Math.abs(c.z ?? 0) / maxZ) * 100, 3)} color={(c.z ?? 0) >= 0 ? cc.pos : cc.red} track={cc.grid} h={3} />
             </div>
           ))}
         </div>
       )}
 
-      <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 16, marginBottom: 0 }}>
+      <p style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", lineHeight: 1.55, marginTop: 16, marginBottom: 0 }}>
         Baslinjen antar att varje bet vinner med sannolikheten 1/odds (utan spelbolagsmarginal) — då är förväntat
         resultat exakt 0. En kategori som ligger flera σ över baslinjen efter hundratals bets är sannolikt skicklighet;
         samma siffra efter 30 bets är mest varians.
@@ -410,12 +414,12 @@ function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: C
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Tänk om-simulatorn</span>
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Spela om hela historiken med dina regler</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Spela om hela historiken med dina regler</span>
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-        <button className="ap-btn ghost" style={{ padding: "7px 12px", fontSize: 12 }} onClick={applyEdgePreset}>⚡ Edge-paketet</button>
-        <button className="ap-btn ghost" style={{ padding: "7px 12px", fontSize: 12 }} onClick={reset}>Nollställ filter</button>
+        <button className="ap-btn ghost" onClick={applyEdgePreset}>⚡ Edge-paketet</button>
+        <button className="ap-btn ghost" onClick={reset}>Nollställ filter</button>
       </div>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
@@ -425,7 +429,7 @@ function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: C
           </button>
         ))}
       </div>
-      <div style={{ fontSize: 11, color: "var(--dim2)", marginTop: 6 }}>
+      <div style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)", marginTop: 6 }}>
         {cats.size === 0 ? "Inga kategorichips valda = alla kategorier ingår." : `${cats.size} kategorier valda.`}
       </div>
 
@@ -451,22 +455,22 @@ function Simulator({ bets, unit, cc }: { bets: BetListDTO[]; unit: number; cc: C
         <MiniStat label="Träff" value={sim.winRatePct != null ? pctFmt(sim.winRatePct) : "—"} />
       </div>
 
-      <div style={{ fontSize: 13, color: "var(--dim)", marginTop: 14, lineHeight: 1.5 }}>
+      <div style={{ fontSize: "var(--fs-md)", color: "var(--dim)", marginTop: 14, lineHeight: 1.5 }}>
         Med de här reglerna hade du legat på{" "}
-        <span className={"ap-num " + (sim.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 700 }}>{krFmt(sim.profitUnits * unit, true)}</span>
+        <span className={"ap-num " + (sim.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 600 }}>{krFmt(sim.profitUnits * unit, true)}</span>
         {" — "}
-        <span className={"ap-num " + (diff >= 0 ? "pos" : "neg")} style={{ fontWeight: 700 }}>{krFmt(Math.abs(diff))}</span>{" "}
+        <span className={"ap-num " + (diff >= 0 ? "pos" : "neg")} style={{ fontWeight: 600 }}>{krFmt(Math.abs(diff))}</span>{" "}
         {diff >= 0 ? "bättre" : "sämre"} än ditt verkliga resultat.
       </div>
 
       <div style={{ marginTop: 14 }}>
-        <CompareChart a={sim.actual} b={sim.filtered} colorA={cc.dim} colorB={cc.acc} grid={cc.grid} h={210} />
+        <CompareChart a={sim.actual} b={sim.filtered} h={210} formatValue={(v) => krShort(v)} />
         <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
-          <span className="ap-leg" style={{ color: "var(--dim)", fontSize: 12 }}>
-            <span className="ap-dot" style={{ background: cc.dim }} /> Verklig P/L
+          <span className="ap-leg" style={{ color: "var(--dim)", fontSize: "var(--fs-sm)" }}>
+            <span className="ap-dot" style={{ background: "var(--dim2)" }} /> Verklig P/L
           </span>
-          <span className="ap-leg" style={{ color: "var(--dim)", fontSize: 12 }}>
-            <span className="ap-dot" style={{ background: cc.acc }} /> Scenario
+          <span className="ap-leg" style={{ color: "var(--dim)", fontSize: "var(--fs-sm)" }}>
+            <span className="ap-dot" style={{ background: "var(--chart)" }} /> Scenario
           </span>
         </div>
       </div>

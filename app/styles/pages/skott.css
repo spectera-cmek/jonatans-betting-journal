@@ -1,0 +1,112 @@
+/* ---- Skottmodellen: edge screen ---- */
+.ap-shot-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-3);
+  align-items: end;
+}
+.ap-shot-weight {
+  min-width: 170px;
+}
+.ap-shot-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line2);
+}
+.ap-shot-row:hover {
+  background: var(--hover);
+}
+/* Expanded detail sits inside the table flow, under its row. */
+.ap-shot-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--pad-x);
+  border-bottom: 1px solid var(--line2);
+  border-left: 2px solid var(--acc);
+  background: var(--bg);
+}
+.ap-shot-detail-stats,
+.ap-shot-detail-ratings,
+.ap-shot-model-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+.ap-shot-manual {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: end;
+}
+/* Warning when a line lacks a real market anchor. */
+.ap-shot-warn,
+.ap-cs2-warn {
+  max-width: 68ch;
+  padding: 7px 10px;
+  border: 1px solid var(--acc-line);
+  border-left: 2px solid var(--acc);
+  border-radius: var(--r-ctl);
+  background: var(--acc-soft);
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.ap-shot-books {
+  max-width: 420px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+}
+.ap-shot-books-head,
+.ap-shot-books-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 80px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: var(--fs-sm);
+}
+.ap-shot-books-head {
+  border-bottom: 1px solid var(--line);
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ap-shot-books-row + .ap-shot-books-row {
+  border-top: 1px solid var(--line2);
+}
+.ap-shot-models {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.ap-shot-model + .ap-shot-model {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line2);
+}
+.ap-shot-model-stats {
+  margin-top: var(--sp-2);
+}
+/* Inside a mobile card the detail block is already on panel ground. */
+.ap-betcard .ap-shot-detail {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line2);
+  background: none;
+}
+.ap-betcard .ap-shot-books {
+  max-width: none;
+}
+/* Opening a panel on its own, the summary needs no rule above it. */
+.ap-shot-summary:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}

@@ -26,7 +26,7 @@ function Calibration({ title, rows }: { title: string; rows: CalibrationBucket[]
     <div style={{ minWidth: 220 }}>
       <div className="ap-label" style={{ marginBottom: 6 }}>{title}</div>
       {rows.map((b) => (
-        <div key={b.from} className="ap-num" style={{ fontSize: 12.5, display: "flex", gap: 10 }}>
+        <div key={b.from} className="ap-num" style={{ fontSize: "var(--fs-md)", display: "flex", gap: 10 }}>
           <span style={{ width: 52, textAlign: "right" }}>{pct(b.predicted)}</span>
           <span style={{ color: "var(--dim2)" }}>→</span>
           <span style={{ width: 52, textAlign: "right", color: Math.abs(b.observed - b.predicted) > 0.1 && b.n >= 20 ? "var(--red)" : undefined }}>{pct(b.observed)}</span>
@@ -50,9 +50,9 @@ export function FacitPanel() {
   return (
     <>
       <Card style={{ marginBottom: 16 }}>
-        <div className="ap-card-head" style={{ margin: "-20px -20px 14px" }}>
+        <div className="ap-card-head is-bleed">
           <span role="heading" aria-level={2} className="ap-card-title">Backtest</span>
-          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
             {data.backtest ? `${new Date(data.backtest.createdAt).toLocaleDateString("sv-SE")} · ${data.backtest.modelVersion}` : "inte kört"}
           </span>
         </div>
@@ -87,12 +87,12 @@ export function FacitPanel() {
       </Card>
 
       <Card>
-        <div className="ap-card-head" style={{ margin: "-20px -20px 14px" }}>
+        <div className="ap-card-head is-bleed">
           <span role="heading" aria-level={2} className="ap-card-title">Prissatta linjer · utfall</span>
-          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>{l ? `${l.settled} avgjorda · ${l.open} öppna` : ""}</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>{l ? `${l.settled} avgjorda · ${l.open} öppna` : ""}</span>
         </div>
         {(!l || l.settled === 0) && (
-          <div style={{ color: "var(--dim2)", fontSize: 13 }}>
+          <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>
             Inga avgjorda linjer än. Varje linje du lägger in på en matchsida sparas med modellens pris och avgörs av{" "}
             <code>npm run cs2:update</code> när matchen är spelad.
           </div>
@@ -111,7 +111,7 @@ export function FacitPanel() {
               <InlineStat label="ROI" value={l.flat.roi != null ? pct(l.flat.roi, 1) : "—"} />
               <InlineStat label="Träff" value={l.flat.hitRate != null ? pct(l.flat.hitRate) : "—"} />
             </div>
-            <div style={{ marginTop: 12, fontSize: 12.5, color: "var(--dim)" }}>
+            <div style={{ marginTop: 12, fontSize: "var(--fs-md)", color: "var(--dim)" }}>
               {l.byMarket.map((m) => `${CS2_MARKET_LABEL[m.market as Cs2Market] ?? m.market}: ${m.n} linjer, ${m.flatBets} spel, ${m.units >= 0 ? "+" : ""}${dec(m.units, 2)} u`).join(" · ")}
             </div>
             {beats === false && (

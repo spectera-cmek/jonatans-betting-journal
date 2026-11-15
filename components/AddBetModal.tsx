@@ -433,11 +433,11 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
     ? [form.marketCategory, ...catBase]
     : catBase;
 
-  // The trigger lives inside .ap-topnav, which has a backdrop-filter — that makes
-  // it the containing block for position:fixed children and would clip the modal
-  // off-screen. Portal out to the theme root (.ap): that element is a direct
-  // child of <body> so the overlay is measured against the viewport, and it
-  // still carries the --card/--txt/--acc custom properties the modal needs.
+  // The trigger lives inside the sticky status bar. Portal out to the theme root
+  // (.ap) so the overlay is never positioned or stacked relative to that bar:
+  // .ap is a direct child of <body>, so the overlay is measured against the
+  // viewport, and it still carries the --card/--txt/--acc custom properties the
+  // modal needs.
   const portalTarget = typeof document === "undefined" ? null : document.querySelector(".ap") ?? document.body;
   if (!portalTarget) return null;
 
@@ -458,8 +458,8 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
               <I p={editing ? IC.edit : IC.plus} size={17} />
             </span>
             <div style={{ minWidth: 0 }}>
-            <h2 id="addbet-title" className="ap-card-title" style={{ fontSize: 17 }}>{editing ? "Redigera bet" : "Logga ny bet"}</h2>
-            <div style={{ fontSize: 12.5, color: "var(--dim)", marginTop: 3 }}>
+            <h2 id="addbet-title" className="ap-card-title" style={{ fontSize: "var(--fs-xl)" }}>{editing ? "Redigera bet" : "Logga ny bet"}</h2>
+            <div style={{ fontSize: "var(--fs-md)", color: "var(--dim)", marginTop: 3 }}>
               {editing
                 ? "Bara ändrade fält sparas"
                 : prefill
@@ -489,7 +489,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                       {searchResults.map((ev) => (
                         <button key={ev.id} className="ap-eventrow" onClick={() => pickEvent(ev)}>
                           <span>{ev.homeTeam} – {ev.awayTeam}</span>
-                          <span className="ap-num" style={{ color: "var(--dim2)", fontSize: 12 }}>
+                          <span className="ap-num" style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>
                             {ev.homePrice?.toFixed(2) ?? "—"} / {ev.drawPrice?.toFixed(2) ?? "—"} / {ev.awayPrice?.toFixed(2) ?? "—"}
                           </span>
                         </button>
@@ -521,7 +521,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 {bookOpts.map((x) => <option key={x}>{x}</option>)}
               </select>
               {bookWarn && (
-                <div style={{ fontSize: 11.5, color: "var(--red)", marginTop: 4 }}>
+                <div style={{ fontSize: "var(--fs-sm)", color: "var(--red)", marginTop: 4 }}>
                   {prefill ? "Kunde inte läsas från kvittot — välj bookmaker" : "Välj bookmaker"}
                 </div>
               )}
@@ -547,7 +547,7 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 <button
                   type="button"
                   onClick={() => set("league", form.league.trim() === VM_2026_LEAGUE ? "" : VM_2026_LEAGUE)}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, padding: 0, color: form.league.trim() === VM_2026_LEAGUE ? "var(--pos)" : "var(--dim2)" }}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "var(--fs-xs)", fontWeight: 600, padding: 0, color: form.league.trim() === VM_2026_LEAGUE ? "var(--pos)" : "var(--dim2)" }}
                 >VM 2026</button>
               </label>
               <input
@@ -617,25 +617,13 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 {legs.map((l, i) => {
                   const oc = legOutcome(l.outcome);
                   return (
-                    <div
-                      key={i}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "8px 10px",
-                        background: "var(--card2)",
-                        border: "1px solid var(--line)",
-                        borderRadius: 10,
-                      }}
-                    >
+                    <div key={i} className="ap-legline">
                       <div style={{ minWidth: 0 }}>
-                        <div className="ap-ell" style={{ fontSize: 12.5, fontWeight: 600 }}>{l.selection || "—"}</div>
-                        {l.event && <div className="ap-ell" style={{ fontSize: 11, color: "var(--dim2)" }}>{l.event}</div>}
+                        <div className="ap-ell" style={{ fontSize: "var(--fs-md)", fontWeight: 600 }}>{l.selection || "—"}</div>
+                        {l.event && <div className="ap-ell" style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)" }}>{l.event}</div>}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                        <span className="ap-num" style={{ fontSize: 12.5, color: "var(--dim)" }}>
+                        <span className="ap-num" style={{ fontSize: "var(--fs-md)", color: "var(--dim)" }}>
                           {Number(l.odds) > 1 ? Number(l.odds).toFixed(2) : "—"}
                         </span>
                         <span className={"ap-badge " + oc.badge}>{oc.label}</span>
@@ -796,18 +784,8 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           )}
 
           {verdict.notes.length > 0 && (
-            <div
-              style={{
-                borderRadius: 10,
-                padding: "10px 12px",
-                background: "var(--hover, rgba(255,255,255,.04))",
-                border: `1px solid ${verdict.level === "edge" ? "var(--pos)" : verdict.level === "warn" ? "var(--red)" : "var(--line, rgba(255,255,255,.08))"}33`,
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-              }}
-            >
-              <span style={{ fontSize: 11, color: "var(--dim2)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+            <div className={"ap-notice" + (verdict.level === "edge" ? " is-pos" : verdict.level === "warn" ? " is-neg" : "")}>
+              <span className="ap-label">
                 Disciplinvakt
                 {metrics?.disciplineRules && (
                   <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>
@@ -816,8 +794,8 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
                 )}
               </span>
               {verdict.notes.map((n, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.45 }}>
-                  <span className={n.tone === "info" ? "" : n.tone} style={{ fontWeight: 700, color: n.tone === "info" ? "var(--dim2)" : undefined }}>
+                <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "var(--fs-md)", lineHeight: 1.45 }}>
+                  <span className={n.tone === "info" ? "" : n.tone} style={{ fontWeight: 600, color: n.tone === "info" ? "var(--dim2)" : undefined }}>
                     {n.tone === "pos" ? "✓" : n.tone === "info" ? "•" : "⚠"}
                   </span>
                   <span style={{ color: n.tone === "pos" ? "var(--pos)" : n.tone === "info" ? "var(--dim)" : "var(--red)" }}>{n.text}</span>
@@ -827,33 +805,24 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
           )}
 
           {!editing && prefill?.duplicate && (
-            <div
-              style={{
-                borderRadius: 10,
-                padding: "10px 12px",
-                background: "var(--hover, rgba(255,255,255,.04))",
-                border: "1px solid var(--red)55",
-                fontSize: 12.5,
-                lineHeight: 1.45,
-              }}
-            >
-              <span style={{ color: "var(--red)", fontWeight: 700 }}>⚠ Redan loggad:</span>{" "}
+            <div className="ap-notice is-neg">
+              <span style={{ color: "var(--red)", fontWeight: 600 }}>⚠ Redan loggad:</span>{" "}
               {prefill.duplicate.event} — {prefill.duplicate.selection}
               {prefill.importRef ? ` (Ref ${prefill.importRef})` : ""}. Spara ändå?
             </div>
           )}
 
           {form.externalRef && !editing && (
-            <div style={{ fontSize: 12, color: "var(--pos)" }}>
+            <div style={{ fontSize: "var(--fs-sm)", color: "var(--pos)" }}>
               ✓ Länkad till event {form.externalRef.slice(0, 8)}… — kan auto-rättas vid synk.
             </div>
           )}
           {form.resultEventRef && (
-            <div style={{ fontSize: 12, color: "var(--pos)" }}>
+            <div style={{ fontSize: "var(--fs-sm)", color: "var(--pos)" }}>
               Länkad till {form.resultProvider || "resultatkälla"}-match {form.resultEventRef}.
             </div>
           )}
-          {error && <div role="alert" style={{ fontSize: 13, color: "var(--red)" }}>{error}</div>}
+          {error && <div role="alert" style={{ fontSize: "var(--fs-md)", color: "var(--red)" }}>{error}</div>}
 
         </div>
 

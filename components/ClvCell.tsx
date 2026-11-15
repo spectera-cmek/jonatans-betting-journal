@@ -138,19 +138,13 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSave
   const fetchBtn = !CLV_SCRAPE_AVAILABLE ? null : (
     <button
       type="button"
-      className="ap-iconbtn"
+      className={"ap-clv-fetch" + (fetching ? " is-busy" : "")}
       title={fetchDetail || "Hämta CLV från OddsPortal"}
       aria-label="Hämta CLV från OddsPortal"
       disabled={fetching || saving || editing}
       onClick={(e) => {
         e.stopPropagation();
         void fetchClv();
-      }}
-      style={{
-        width: 26,
-        height: 26,
-        flexShrink: 0,
-        opacity: fetching ? 0.55 : 1,
       }}
     >
       <I p={IC.refresh} size={12} />
@@ -162,10 +156,7 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSave
   // closing price that would only pollute the CLV average.
   if (boosted) {
     return (
-      <span
-        style={{ fontSize: 11.5, color: "var(--dim2)", whiteSpace: "nowrap" }}
-        title="Boostat odds räknas aldrig som CLV."
-      >
+      <span className="ap-clv-boost" title="Boostat odds räknas aldrig som CLV.">
         boost
       </span>
     );
@@ -173,10 +164,10 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSave
 
   if (editing) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 4, width: "100%" }}>
+      <div className="ap-clv">
         <input
           ref={inputRef}
-          className="ap-input ap-num"
+          className="ap-input ap-num ap-clv-input"
           type="number"
           step="0.01"
           min="1.01"
@@ -203,14 +194,6 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSave
             }
             void save();
           }}
-          style={{
-            padding: "4px 6px",
-            fontSize: 12.5,
-            borderRadius: 8,
-            width: "100%",
-            minWidth: 52,
-            textAlign: "right",
-          }}
         />
       </div>
     );
@@ -220,28 +203,16 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSave
 
   if (pct != null) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 4, width: "100%", justifyContent: "flex-end" }}>
+      <div className="ap-clv">
         <button
           type="button"
-          className="ap-clv-btn"
+          className={"ap-clv-btn ap-num " + (pct >= 0 ? "pos" : "neg")}
           title={
             localClosing != null
               ? `Closing ${localClosing.toFixed(2)} — klicka för att ändra${fetchDetail ? ` · ${fetchDetail}` : ""}`
               : "Ändra closing-odds"
           }
           onClick={startEdit}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            cursor: "pointer",
-            font: "inherit",
-            fontSize: 12.5,
-            fontWeight: 600,
-            color: pct >= 0 ? "var(--pos)" : "var(--red)",
-            textAlign: "inherit",
-            minWidth: 24,
-          }}
         >
           {pct >= 0 ? "+" : ""}
           {pct.toFixed(1)}%
@@ -252,24 +223,12 @@ export function ClvCell({ betId, odds, closingOdds, clvPctValue, boosted, onSave
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, width: "100%", justifyContent: "flex-end" }}>
+    <div className="ap-clv">
       <button
         type="button"
-        className="ap-clv-btn"
+        className="ap-clv-btn ap-num is-empty"
         title={fetchDetail || "Sätt closing-odds"}
         onClick={startEdit}
-        style={{
-          background: "none",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
-          font: "inherit",
-          fontSize: 12.5,
-          fontWeight: 500,
-          color: "var(--dim2)",
-          textAlign: "inherit",
-          minWidth: 24,
-        }}
       >
         {fetching ? "…" : "—"}
       </button>

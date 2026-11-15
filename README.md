@@ -31,6 +31,8 @@
 - **Analytics** — profit & loss broken down by market, league, sport and odds band.
 - **Insights & calendar** — streaks, best/worst days, average stake, and a calendar
   heatmap of results.
+- **Quick search** — `Ctrl`/`⌘` + `K` (or `/`) jumps to any page or runs an action
+  (log a bet, sync, switch between dark and light).
 - **Auto-settling, two ways:**
   - Import a **bet365 account-statement PDF** — parses every slip and settles from the
     *actual payout* (after tax), never recomputed.
