@@ -4,7 +4,7 @@
 // page or runs a global action. With thirteen destinations it is the fastest
 // way around, and it is the same list the side panel shows — lib/nav.ts.
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { useDialog } from "@/lib/useDialog";
@@ -44,37 +44,42 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const listId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const close = () => setOpen(false);
   const dialogRef = useDialog<HTMLDivElement>(open, close);
 
-  useCommand(CMD.palette, () => setOpen(true));
+  // A fresh box every time it opens. Reset here, in the same update that opens
+  // it — not in an effect afterwards, which would land after (and undo) an arrow
+  // key pressed straight after the shortcut.
+  const openFresh = useCallback(() => {
+    setQuery("");
+    setSel(0);
+    setOpen(true);
+  }, []);
+
+  useCommand(CMD.palette, openFresh);
+
+  // Latest open state for the document listener, without re-subscribing.
+  const openRef = useRef(open);
+  openRef.current = open;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setOpen((v) => !v);
+        if (openRef.current) setOpen(false);
+        else openFresh();
       } else if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !isTyping(document.activeElement)) {
         // Not while another dialog is up — "/" there belongs to that dialog.
         if (document.querySelector('[role="dialog"]')) return;
         e.preventDefault();
-        setOpen(true);
+        openFresh();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
-
-  // Fresh box every time it opens.
-  useEffect(() => {
-    if (!open) return;
-    setQuery("");
-    setSel(0);
-    inputRef.current?.focus();
-  }, [open]);
+  }, [openFresh]);
 
   const entries = useMemo<Entry[]>(() => {
     const go = (href: string) => () => router.push(href);
@@ -169,7 +174,8 @@ export function CommandPalette() {
         <div className="ap-cmdk-input">
           <I p={IC.search} size={17} />
           <input
-            ref={inputRef}
+            // Focused as it mounts, so typing and arrows work from the first key.
+            autoFocus
             type="text"
             role="combobox"
             aria-expanded="true"
