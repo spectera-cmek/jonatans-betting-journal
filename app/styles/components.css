@@ -1354,3 +1354,8 @@
   border-radius: var(--r-ctl);
   background: var(--bg);
 }
+
+/* A head strip inside a *padded* panel: bleed out to the panel's edges. */
+.ap-card-head.is-bleed {
+  margin: calc(-1 * var(--pad-y)) calc(-1 * var(--pad-x)) var(--pad-y);
+}

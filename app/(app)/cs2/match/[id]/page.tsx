@@ -213,7 +213,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
       <LinesPanel view={v} onChanged={load} />
 
       <Card style={{ marginBottom: 16 }}>
-        <div className="ap-card-head" style={{ margin: "-20px -20px 14px" }}>
+        <div className="ap-card-head is-bleed">
           <span role="heading" aria-level={2} className="ap-card-title">Angles</span>
           <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Datadrivna skäl att avvika från linjen — med urvalet bakom</span>
         </div>

@@ -469,3 +469,8 @@ select.ap-input {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* A select inside a labelled field fills the field. */
+.ap-field > .ap-select > select,
+.ap-shot-filters .ap-select select {
+  width: 100%;
+}

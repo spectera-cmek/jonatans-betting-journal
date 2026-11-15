@@ -320,7 +320,7 @@ export default function ShotsPage() {
             </div>
 
             {loading && (
-              <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: "var(--fs-lg)" }}>Laddar…</div>
+              <div className="ap-panel-empty">Laddar…</div>
             )}
 
             {!loading && rows.length === 0 && trainedMatches > 0 && !meta?.missingOdds && (

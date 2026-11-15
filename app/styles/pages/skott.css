@@ -104,3 +104,9 @@
 .ap-betcard .ap-shot-books {
   max-width: none;
 }
+/* Opening a panel on its own, the summary needs no rule above it. */
+.ap-shot-summary:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}

@@ -180,7 +180,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
   return (
     <Card style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <b>Snabbläge · spelarprops</b>
+        <h3 className="ap-card-title">Snabbläge · spelarprops</h3>
         <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>fair odds = modellen utan bokens pris · övertid räknas</span>
       </div>
 

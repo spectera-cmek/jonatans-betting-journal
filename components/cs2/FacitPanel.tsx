@@ -50,7 +50,7 @@ export function FacitPanel() {
   return (
     <>
       <Card style={{ marginBottom: 16 }}>
-        <div className="ap-card-head" style={{ margin: "-20px -20px 14px" }}>
+        <div className="ap-card-head is-bleed">
           <span role="heading" aria-level={2} className="ap-card-title">Backtest</span>
           <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
             {data.backtest ? `${new Date(data.backtest.createdAt).toLocaleDateString("sv-SE")} · ${data.backtest.modelVersion}` : "inte kört"}
@@ -87,7 +87,7 @@ export function FacitPanel() {
       </Card>
 
       <Card>
-        <div className="ap-card-head" style={{ margin: "-20px -20px 14px" }}>
+        <div className="ap-card-head is-bleed">
           <span role="heading" aria-level={2} className="ap-card-title">Prissatta linjer · utfall</span>
           <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>{l ? `${l.settled} avgjorda · ${l.open} öppna` : ""}</span>
         </div>
