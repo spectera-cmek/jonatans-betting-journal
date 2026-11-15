@@ -66,9 +66,9 @@ export function ImportPanel({ onDone }: { onDone?: () => void }) {
         läggs till. Inget raderas, och dina manuellt tillagda bets rörs inte.
       </p>
 
-      <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: "var(--r-ctl)", background: "var(--card2)", fontSize: "var(--fs-sm)" }}>
-        <div style={{ color: "var(--dim2)", fontSize: "var(--fs-xs)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Sökväg</div>
-        <code style={{ color: "var(--txt)", wordBreak: "break-all" }}>{info?.path ?? "…"}</code>
+      <div className="ap-ministat" style={{ marginTop: 10, fontSize: "var(--fs-sm)" }}>
+        <div className="ap-label">Sökväg</div>
+        <code className="ap-num" style={{ color: "var(--txt)", wordBreak: "break-all" }}>{info?.path ?? "…"}</code>
         {info?.exists && (
           <div style={{ color: "var(--dim)", marginTop: 4 }}>
             Senast ändrad {fmtDateTime(info.modified)} · {info.sizeKb} kB
@@ -91,8 +91,8 @@ export function ImportPanel({ onDone }: { onDone?: () => void }) {
       {err && <div style={{ fontSize: "var(--fs-md)", color: "var(--red)", marginTop: 12 }}>{err}</div>}
 
       {result && (
-        <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: "var(--r-ctl)", background: "var(--card2)" }}>
-          <div className="pos" style={{ fontSize: "var(--fs-md)", fontWeight: 600, marginBottom: 8 }}>✓ Klart — {result.parsedSlips} spel lästa</div>
+        <div className="ap-alert is-pos" style={{ marginTop: 14 }}>
+          <div className="pos" style={{ fontSize: "var(--fs-md)", fontWeight: 600, marginBottom: 6 }}>✓ Klart — {result.parsedSlips} spel lästa</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px", fontSize: "var(--fs-md)", color: "var(--dim)" }}>
             {result.wiped ? (
               <span>Importerade <strong style={{ color: "var(--txt)" }}>{result.added}</strong> bets (full återställning).</span>

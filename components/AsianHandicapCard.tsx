@@ -34,7 +34,7 @@ function marginLabel(m: number): string {
 
 // Asian handicap-hjälpen (bettingskolan kap. 9): kvartslinjer delar insatsen
 // på de två närmaste linjerna — utfallsmatrisen visar exakt vad som händer.
-export function AsianHandicapCard() {
+export function AsianHandicapCard({ className }: { className?: string } = {}) {
   const [line, setLine] = useState("-0.75");
   const [odds, setOdds] = useState("1.95");
   const [stake, setStake] = useState("100");
@@ -48,7 +48,7 @@ export function AsianHandicapCard() {
   const devig = oppOdds.trim() === "" ? null : devigProportional(o, [num(oppOdds)]);
 
   return (
-    <Card style={{ marginBottom: 12 }}>
+    <Card className={className} style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Asian handicap-hjälpen</span>
         <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Vad händer med insatsen vid varje slutresultat?</span>
@@ -94,18 +94,7 @@ export function AsianHandicapCard() {
             const pl = ahProfit(s, o, out);
             const tone = pl > 0 ? "pos" : pl < 0 ? "neg" : "";
             return (
-              <div
-                key={m}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  background: "var(--card2)",
-                  borderRadius: "var(--r-ctl)",
-                  padding: "9px 12px",
-                  fontSize: "var(--fs-md)",
-                }}
-              >
+              <div key={m} className="ap-legrow ap-t-md">
                 <span style={{ flex: "1 1 110px", minWidth: 0 }}>{marginLabel(m)}</span>
                 <span style={{ flex: "1 1 110px", color: tone === "" ? "var(--dim)" : undefined }} className={tone}>
                   {OUTCOME_LABEL[out]}

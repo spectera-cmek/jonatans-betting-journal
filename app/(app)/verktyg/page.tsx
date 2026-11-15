@@ -6,7 +6,6 @@ import { CashoutCard } from "@/components/CashoutCard";
 import { HedgeCard } from "@/components/HedgeCard";
 import { AsianHandicapCard } from "@/components/AsianHandicapCard";
 import { BonusCard } from "@/components/BonusCard";
-import { I, IC } from "@/components/icons";
 import { useMetrics } from "@/lib/useData";
 
 export default function ToolsPage() {
@@ -21,12 +20,15 @@ export default function ToolsPage() {
         title="Verktyg"
         sub="Kalkylatorer för vardagsbesluten — insats, cashout, hedge, handicap och bonusar"
       />
-      {/* Remount once metrics load so the bankroll prefill picks them up. */}
-      <KellyCard key={data ? "ready" : "loading"} defaultBankrollUnits={bankrollU} unit={unit} />
-      <CashoutCard />
-      <HedgeCard />
-      <AsianHandicapCard />
-      <BonusCard />
+      {/* Calculators side by side on a ruled board; one column on phones. */}
+      <div className="ap-board c2">
+        {/* Remount once metrics load so the bankroll prefill picks them up. */}
+        <KellyCard key={data ? "ready" : "loading"} defaultBankrollUnits={bankrollU} unit={unit} />
+        <CashoutCard />
+        <HedgeCard />
+        <BonusCard />
+        <AsianHandicapCard className="ap-span-all" />
+      </div>
     </div>
   );
 }

@@ -1339,3 +1339,18 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Panels on a board carry no margin of their own — the board spaces them. */
+.ap-board > .ap-card,
+.ap-kpi-row > .ap-card,
+.ap-kpi-grid > .ap-card {
+  margin: 0 !important;
+}
+/* One leg of a multi-leg calculation: a recessed block inside its panel. */
+.ap-leg-block {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+}
