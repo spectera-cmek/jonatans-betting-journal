@@ -2,14 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Topbar } from "@/components/Shell";
-import { Card, Skeleton } from "@/components/ui";
+import { Card, Empty, Skeleton, SportMark } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
 import { useTheme } from "@/components/ThemeProvider";
 import { useBets } from "@/lib/useData";
 import { hexA, type ChartColors } from "@/lib/theme";
-import { krShort, krFmt, uFmt, sportTag, dateShort } from "@/lib/format";
-import { I, IC } from "@/components/icons";
-import { BetTags } from "@/components/BetTags";
+import { krShort, krFmt, uFmt, dateShort } from "@/lib/format";
+import { IC } from "@/components/icons";
 import { settledProfit } from "@/lib/betting";
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
@@ -56,7 +55,12 @@ export default function CalendarPage() {
 
   const [view, setView] = useState<{ y: number; m: number } | null>(null);
   const cur = view ?? { y: latest.getFullYear(), m: latest.getMonth() };
-  const [selected, setSelected] = useState<string>("");
+  // "" = nothing picked. Until the user picks or pages, the day panel opens on
+  // the latest day that has bets, so the pane beside the month is never blank.
+  const [picked, setPicked] = useState<string | null>(null);
+  const latestIso = useMemo(() => (bets.length ? isoOf(latest) : ""), [bets.length, latest]);
+  const selected = picked ?? (view === null ? latestIso : "");
+  const setSelected = (iso: string) => setPicked(iso);
 
   const shift = (delta: number) => {
     const d = new Date(cur.y, cur.m + delta, 1);
@@ -91,15 +95,12 @@ export default function CalendarPage() {
     () => (selected ? bets.filter((b) => isoOf(new Date(b.eventAt ?? b.placedAt)) === selected) : []),
     [bets, selected]
   );
-
-  const tint = (profit: number, settled: number) => {
-    if (settled === 0) return "transparent";
-    return (profit >= 0 ? cc.pos : cc.red) + "22";
-  };
+  const dayAgg = selected ? byDay.get(selected) : undefined;
+  const todayIso = isoOf(new Date());
 
   return (
     <div>
-      <Topbar title="Kalender" sub={`${bets.length} bets · klicka på en dag för att se spelen`} />
+      <Topbar title="Kalender" sub={`${bets.length} bets · välj en dag för att se spelen`} />
 
       {loading && bets.length === 0 ? (
         <Card style={{ marginBottom: 12 }}>
@@ -124,119 +125,109 @@ export default function CalendarPage() {
         />
       )}
 
-      <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <button className="ap-iconbtn" onClick={() => shift(-1)} aria-label="Föregående månad">‹</button>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{MONTHS_SV[cur.m]} {cur.y}</div>
-            <div style={{ fontSize: 12, color: "var(--dim2)" }}>
-              {monthTotal.count} bets · <em className={monthTotal.profit >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal", fontWeight: 600 }}>{krShort(monthTotal.profit * unit, true)}</em> <span style={{ color: "var(--dim2)" }}>{uFmt(monthTotal.profit, true)}</span>
-            </div>
-          </div>
-          <button className="ap-iconbtn" onClick={() => shift(1)} aria-label="Nästa månad">›</button>
-        </div>
-
-        <div className="ap-cal-grid">
-          {WEEKDAYS.map((w) => (
-            <div key={w} style={{ textAlign: "center", fontSize: 11, color: "var(--dim2)", fontWeight: 600, paddingBottom: 4 }}>{w}</div>
-          ))}
-          {cells.map((c, i) => {
-            if (!c) return <div key={i} />;
-            const a = byDay.get(c.iso);
-            const isSel = selected === c.iso;
-            return (
-              <button
-                key={c.iso}
-                onClick={() => setSelected(isSel ? "" : c.iso)}
-                className="ap-cal-day"
-                aria-pressed={isSel}
-                style={{
-                  background: tint(a?.profit ?? 0, a?.settled ?? 0),
-                  border: `1px solid ${isSel ? cc.acc : "var(--grid, rgba(255,255,255,.06))"}`,
-                }}
-              >
-                <span className="ap-cal-num">{c.day}</span>
-                {a ? (
-                  <span className="ap-cal-body">
-                    <em className={a.settled === 0 ? "" : a.profit >= 0 ? "pos" : "neg"}>
-                      <span className="ap-cal-val-u">{a.settled === 0 ? "—" : uFmt(a.profit, true)}</span>
-                      <span className="ap-cal-val-kr">{a.settled === 0 ? "—" : krShort(Math.round(a.profit * unit), true)}</span>
-                    </em>
-                    <span className="ap-cal-sub">{a.count} {a.count === 1 ? "bet" : "bets"}{a.pending ? ` · ${a.pending} öppna` : ""}</span>
-                  </span>
-                ) : (
-                  <span />
-                )}
-                {a?.pending ? <span className="ap-cal-dot" /> : null}
-              </button>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Selected-day bets */}
-      {selected && (
-        <Card style={{ padding: 0, marginTop: 12 }}>
+      {/* The month beside the day it is showing. */}
+      <div className="ap-board c21">
+        <Card style={{ padding: 0 }}>
           <div className="ap-card-head">
-            <span role="heading" aria-level={2} className="ap-card-title">Spel {selected}</span>
-            <span style={{ color: "var(--dim2)", fontSize: 12 }}>{dayBets.length} bets</span>
-          </div>
-          <div className="ap-table-wrap">
-            <div className="ap-table">
-              <div className="ap-thead" style={{ gridTemplateColumns: "46px 1.4fr 1.1fr 70px 64px 96px" }}>
-                <span>Sport</span><span>Match</span><span>Spel</span><span className="ap-r">Odds</span><span className="ap-r">Insats</span><span className="ap-r">Resultat</span>
-              </div>
-              {dayBets.length === 0 && <div style={{ padding: "28px 20px", textAlign: "center", color: "var(--dim2)" }}>Inga spel den här dagen.</div>}
-              {dayBets.map((b) => (
-                <div key={b.id} className="ap-trow" style={{ gridTemplateColumns: "46px 1.4fr 1.1fr 70px 64px 96px" }}>
-                  <span><span className="ap-tag">{sportTag(b.sport)}</span></span>
-                  <span className="ap-ell">{b.event}{b.league ? <span style={{ color: "var(--dim2)" }}> · {b.league}</span> : null}</span>
-                  <span style={{ color: "var(--dim)", minWidth: 0 }}>
-                    <span className="ap-ell" style={{ display: "block" }}>{b.selection || "—"}</span>
-                    <BetTags bet={b} compact hideSport />
-                  </span>
-                  <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
-                  <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
-                  <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
-                </div>
-              ))}
+            <div className="ap-stepper">
+              <button className="ap-iconbtn" onClick={() => shift(-1)} aria-label="Föregående månad">‹</button>
+              <h2 className="ap-card-title">{MONTHS_SV[cur.m]} {cur.y}</h2>
+              <button className="ap-iconbtn" onClick={() => shift(1)} aria-label="Nästa månad">›</button>
             </div>
+            <span className="ap-t-sm ap-t-dim2">
+              {monthTotal.count} bets ·{" "}
+              <span className={"ap-num " + (monthTotal.profit >= 0 ? "pos" : "neg")}>{krShort(monthTotal.profit * unit, true)}</span>{" "}
+              <span className="ap-num">{uFmt(monthTotal.profit, true)}</span>
+            </span>
           </div>
-          <div className="ap-betcards" style={{ padding: "12px 14px 14px" }}>
-            {dayBets.length === 0 && <div className="ap-betcard-empty">Inga spel den här dagen.</div>}
-            {dayBets.map((b) => (
-              <div key={b.id} className="ap-betcard">
-                <div className="ap-betcard-top">
-                  <span className="ap-betcard-date"><span className="ap-tag">{sportTag(b.sport)}</span></span>
-                  <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
-                </div>
-                <div className="ap-betcard-event">
-                  {b.event}{b.league ? <span style={{ color: "var(--dim2)" }}> · {b.league}</span> : null}
-                </div>
-                <div className="ap-betcard-sel">{b.selection || "—"}</div>
-                <BetTags bet={b} compact />
-                <div className="ap-betcard-stats">
-                  <div><span>Odds</span><b className="ap-num">{b.odds.toFixed(2)}</b></div>
-                  <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
-                  <div>
-                    <span>P/L</span>
-                    <b className={"ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>
-                      {b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}
-                    </b>
-                  </div>
-                </div>
-              </div>
+
+          <div className="ap-cal-grid">
+            {WEEKDAYS.map((w) => (
+              <div key={w} className="ap-cal-head">{w}</div>
             ))}
+            {cells.map((c, i) => {
+              if (!c) return <div key={i} className="ap-cal-day is-out" aria-hidden="true" />;
+              const a = byDay.get(c.iso);
+              const isSel = selected === c.iso;
+              const tone = !a || a.settled === 0 ? "" : a.profit >= 0 ? " is-win" : " is-loss";
+              return (
+                <button
+                  key={c.iso}
+                  onClick={() => setSelected(isSel ? "" : c.iso)}
+                  className={"ap-cal-day" + tone + (isSel ? " is-sel" : "") + (c.iso === todayIso ? " is-today" : "")}
+                  aria-pressed={isSel}
+                >
+                  <span className="ap-cal-num">{c.day}</span>
+                  {a ? (
+                    <span className="ap-cal-body">
+                      <em className={a.settled === 0 ? "" : a.profit >= 0 ? "pos" : "neg"}>
+                        <span className="ap-cal-val-u">{a.settled === 0 ? "—" : uFmt(a.profit, true)}</span>
+                        <span className="ap-cal-val-kr">{a.settled === 0 ? "—" : krShort(Math.round(a.profit * unit), true)}</span>
+                      </em>
+                      <span className="ap-cal-sub">{a.count} {a.count === 1 ? "bet" : "bets"}{a.pending ? ` · ${a.pending} öppna` : ""}</span>
+                    </span>
+                  ) : (
+                    <span />
+                  )}
+                  {a?.pending ? <span className="ap-cal-dot" /> : null}
+                </button>
+              );
+            })}
           </div>
         </Card>
-      )}
 
-      {loading && <div style={{ padding: "24px", textAlign: "center", color: "var(--dim2)" }}>Laddar…</div>}
-      {!loading && !selected && (
-        <div style={{ marginTop: 12, textAlign: "center", color: "var(--dim2)", fontSize: 13, display: "flex", gap: 6, justifyContent: "center", alignItems: "center" }}>
-          <I p={IC.calendar} size={15} /> Klicka på en dag i kalendern för att se spelen.
-        </div>
-      )}
+        {/* Selected-day bets */}
+        <Card className="ap-daypanel" style={{ padding: 0 }}>
+          <div className="ap-card-head">
+            <h2 className="ap-card-title">{selected ? dateShort(selected) : "Dagens spel"}</h2>
+            {selected && (
+              <span className="ap-t-sm ap-t-dim2">
+                {dayBets.length} {dayBets.length === 1 ? "bet" : "bets"}
+                {dayAgg && dayAgg.settled > 0 ? (
+                  <>
+                    {" · "}
+                    <span className={"ap-num " + (dayAgg.profit >= 0 ? "pos" : "neg")}>{krShort(dayAgg.profit * unit, true)}</span>
+                  </>
+                ) : null}
+              </span>
+            )}
+          </div>
+          {loading && bets.length === 0 ? (
+            <div className="ap-panel-empty">Laddar…</div>
+          ) : !selected ? (
+            <Empty icon={IC.calendar} title="Ingen dag vald" hint="Välj en dag i månaden eller i årsöversikten för att se spelen." />
+          ) : dayBets.length === 0 ? (
+            <div className="ap-panel-empty">Inga spel den här dagen.</div>
+          ) : (
+            <ul className="ap-daybets">
+              {dayBets.map((b) => (
+                <li key={b.id} className="ap-openbet">
+                  <div className="ap-openbet-main">
+                    <div className="ap-openbet-sel" title={b.selection || undefined}>{b.selection || "—"}</div>
+                    <div className="ap-openbet-event" title={b.event}>
+                      {b.event}
+                      {b.league ? ` · ${b.league}` : ""}
+                    </div>
+                    <div className="ap-openbet-meta">
+                      <SportMark sport={b.sport} />
+                      <span className="ap-num">
+                        {b.stakeUnits.toFixed(2)}U @ {b.odds.toFixed(2)}
+                      </span>
+                      {b.bookmaker && <span>{b.bookmaker}</span>}
+                    </div>
+                  </div>
+                  <div className="ap-openbet-side">
+                    <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
+                    <span className={"ap-num ap-t-xs " + (b.outcome === "pending" ? "ap-t-dim2" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>
+                      {b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
@@ -263,7 +254,7 @@ function YearHeatmap({
   onShiftYear: (dy: number) => void;
   onPick: (iso: string) => void;
 }) {
-  const CELL = 12;
+  const CELL = 13;
   const GAP = 2;
 
   const { cells, monthCols, nCols, totals, scale } = useMemo(() => {
@@ -293,7 +284,7 @@ function YearHeatmap({
   }, [year, byDay]);
 
   const fill = (agg?: DayAgg): string => {
-    if (!agg || agg.count === 0) return "var(--hover)";
+    if (!agg || agg.count === 0) return "var(--card2)";
     if (agg.settled === 0) return "var(--line)"; // only open bets
     const alpha = 0.16 + 0.74 * Math.min(1, Math.abs(agg.profit) / scale);
     return hexA(agg.profit >= 0 ? cc.pos : cc.red, alpha);
@@ -320,23 +311,24 @@ function YearHeatmap({
   }, [cells, selected]);
 
   return (
-    <Card style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <button className="ap-iconbtn" onClick={() => onShiftYear(-1)} aria-label="Föregående år">‹</button>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>{year}</div>
-          <div style={{ fontSize: 12, color: "var(--dim2)" }}>
-            {totals.count} bets · <em className={totals.profit >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal", fontWeight: 600 }}>{krShort(totals.profit * unit, true)}</em>
-          </div>
+    <Card style={{ padding: 0, marginBottom: 12 }}>
+      <div className="ap-card-head">
+        <div className="ap-stepper">
+          <button className="ap-iconbtn" onClick={() => onShiftYear(-1)} aria-label="Föregående år">‹</button>
+          <h2 className="ap-card-title ap-num">{year}</h2>
+          <button className="ap-iconbtn" onClick={() => onShiftYear(1)} aria-label="Nästa år">›</button>
         </div>
-        <button className="ap-iconbtn" onClick={() => onShiftYear(1)} aria-label="Nästa år">›</button>
+        <span className="ap-t-sm ap-t-dim2">
+          {totals.count} bets · <span className={"ap-num " + (totals.profit >= 0 ? "pos" : "neg")}>{krShort(totals.profit * unit, true)}</span>
+        </span>
       </div>
 
+      <div className="ap-heat">
       <div ref={scrollRef} style={{ overflowX: "auto", paddingBottom: 4 }}>
         <div style={{ width: nCols * (CELL + GAP) + 26 }}>
           <div style={{ display: "flex", gap: GAP, marginLeft: 26, marginBottom: 4 }}>
             {Array.from({ length: nCols }, (_, c) => (
-              <span key={c} style={{ width: CELL, fontSize: 9.5, color: "var(--dim2)", overflow: "visible", whiteSpace: "nowrap" }}>
+              <span key={c} className="ap-heat-lbl" style={{ width: CELL }}>
                 {monthCols.get(c) ?? ""}
               </span>
             ))}
@@ -344,7 +336,7 @@ function YearHeatmap({
           <div style={{ display: "flex", gap: 4 }}>
             <div style={{ display: "grid", gridTemplateRows: `repeat(7, ${CELL}px)`, rowGap: GAP, width: 22, flexShrink: 0 }}>
               {["M", "", "O", "", "F", "", "S"].map((d, i) => (
-                <span key={i} style={{ fontSize: 9.5, color: "var(--dim2)", lineHeight: `${CELL}px` }}>{d}</span>
+                <span key={i} className="ap-heat-lbl" style={{ lineHeight: `${CELL}px` }}>{d}</span>
               ))}
             </div>
             <div
@@ -388,8 +380,12 @@ function YearHeatmap({
                     gridColumn: c.col + 1,
                     width: CELL,
                     height: CELL,
-                    borderRadius: 3,
-                    border: selected === c.iso ? `1.5px solid ${cc.acc}` : "1px solid transparent",
+                    borderRadius: 1,
+                    border: 0,
+                    // Selected: an amber frame drawn outside the cell, so the
+                    // day's own colour stays readable inside it.
+                    outline: selected === c.iso ? "2px solid var(--acc)" : undefined,
+                    outlineOffset: selected === c.iso ? 1 : undefined,
                     background: fill(c.agg),
                     cursor: "pointer",
                     padding: 0,
@@ -400,10 +396,11 @@ function YearHeatmap({
           </div>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, fontSize: 11, color: "var(--dim2)" }}>
-        <span style={{ width: 9, height: 9, borderRadius: 2, background: hexA(cc.red, 0.65), display: "inline-block" }} /> förlust
-        <span style={{ width: 9, height: 9, borderRadius: 2, background: "var(--hover)", display: "inline-block", marginLeft: 6 }} /> inga bets
-        <span style={{ width: 9, height: 9, borderRadius: 2, background: hexA(cc.pos, 0.65), display: "inline-block", marginLeft: 6 }} /> vinst
+      <div className="ap-heat-legend">
+        <i style={{ background: hexA(cc.red, 0.7) }} /> förlust
+        <i style={{ background: "var(--card2)" }} /> inga bets
+        <i style={{ background: hexA(cc.pos, 0.7) }} /> vinst
+      </div>
       </div>
     </Card>
   );

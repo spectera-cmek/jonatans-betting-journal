@@ -165,7 +165,7 @@
 }
 .ap-betcard-stats {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 10px 18px;
   margin-top: 9px;
@@ -190,6 +190,15 @@
   font-variant-numeric: tabular-nums;
   font-size: 14px;
   font-weight: 500;
+  line-height: 22px;
+}
+/* The CLV fetch button must not make its column taller than its neighbours. */
+.ap-betcard-stats .ap-clv-fetch {
+  width: 26px;
+  height: 22px;
+}
+.ap-betcard-stats .ap-clv-btn {
+  font-size: 14px;
 }
 /* Up to six actions for a pending bet don't fit beside the stats on a phone —
    they get their own full-width row. */
@@ -211,8 +220,17 @@
 }
 /* A card list that sits flush inside its own panel (no outer frame of its own). */
 .ap-betcards.is-flush .ap-betcard {
-  border-left-width: 0;
+  border-left-color: transparent;
   border-right: 0;
+}
+.ap-betcards.is-flush .ap-betcard.is-win {
+  border-left-color: var(--pos);
+}
+.ap-betcards.is-flush .ap-betcard.is-loss {
+  border-left-color: var(--red);
+}
+.ap-betcards.is-flush .ap-betcard.is-open {
+  border-left-color: var(--info);
 }
 .ap-betcards.is-flush .ap-betcard:first-child {
   border-top: 0;

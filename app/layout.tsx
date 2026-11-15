@@ -10,6 +10,7 @@ import "./styles/tables.css";
 import "./styles/forms.css";
 import "./styles/charts.css";
 import "./styles/pages/dashboard.css";
+import "./styles/pages/bets.css";
 import "./styles/pages/calendar.css";
 import "./styles/pages/queue.css";
 import "./styles/pages/skott.css";

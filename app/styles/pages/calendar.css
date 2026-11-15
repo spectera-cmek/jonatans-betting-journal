@@ -4,6 +4,8 @@
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
   padding: 1px;
+  /* The outer cells' rules land on the panel's own border instead of doubling it. */
+  margin: 0 -1px -1px;
 }
 .ap-cal-head {
   padding: 5px 8px;
@@ -37,7 +39,7 @@
   background: var(--card2);
 }
 .ap-cal-day.is-out {
-  background: transparent;
+  background: var(--bg);
   cursor: default;
 }
 .ap-cal-day.is-win {
@@ -114,4 +116,67 @@
     border-radius: 50%;
     background: var(--info);
   }
+}
+
+/* Month / year stepper in a panel head. */
+.ap-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ap-stepper .ap-card-title {
+  min-width: 132px;
+  justify-content: center;
+}
+.ap-stepper .ap-iconbtn {
+  font-family: var(--sans);
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+
+/* Year heatmap. */
+.ap-heat {
+  padding: 10px var(--pad-x) 10px;
+}
+.ap-heat-lbl {
+  overflow: visible;
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ap-heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+.ap-heat-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 1px;
+}
+.ap-heat-legend i:not(:first-child) {
+  margin-left: 8px;
+}
+
+/* The selected day's bets, beside the month. */
+.ap-daypanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ap-daybets {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
 }

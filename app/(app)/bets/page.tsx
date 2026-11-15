@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Topbar } from "@/components/Shell";
-import { Card, Empty, SportMark } from "@/components/ui";
+import { Empty, SportMark } from "@/components/ui";
 import { ResultBadge } from "@/components/ResultBadge";
 import type { BetPrefill } from "@/components/AddBetModal";
 import { ScreenshotImportButton } from "@/components/ScreenshotImportButton";
@@ -44,7 +44,7 @@ import {
 } from "@/lib/constants";
 import type { BetDTO, BetListDTO } from "@/lib/types";
 
-const GRID = "62px 46px 1.5fr 1.1fr 92px 64px 64px 52px 70px 80px 116px";
+const GRID = "58px 44px minmax(0,1.3fr) minmax(0,1.6fr) 92px 50px 78px 60px 64px 92px 150px";
 const PAGE = 100;
 const RES_CHIPS: [string, string][] = [
   ["alla", "Alla"],
@@ -347,10 +347,10 @@ export default function BetsPage() {
         <I p={IC.menu} size={14} />
       </button>
       <button
-        className="ap-iconbtn"
+        className={"ap-iconbtn" + ((b.league ?? "").trim() === VM_2026_LEAGUE ? " is-on" : "")}
         title={(b.league ?? "").trim() === VM_2026_LEAGUE ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
         aria-label={(b.league ?? "").trim() === VM_2026_LEAGUE ? "Ta bort VM 2026-tagg" : "Tagga som VM 2026"}
-        style={{ opacity: (b.league ?? "").trim() === VM_2026_LEAGUE ? 1 : 0.38 }}
+        aria-pressed={(b.league ?? "").trim() === VM_2026_LEAGUE}
         onClick={() => toggleVM(b)}
       >
         <I p={IC.trophy} size={14} />
@@ -364,12 +364,14 @@ export default function BetsPage() {
     </>
   );
 
+  const count = (
+    <span className="ap-toolbar-count">
+      <b className="ap-num">{Math.min(visible.length, filtered.length)}</b> av <span className="ap-num">{filtered.length}</span>
+    </span>
+  );
+
   return (
     <div className="ap-ledger">
-      <div className="ap-page-kicker">
-        <span>Spelhistorik</span>
-        <em>{rangeLabel || new Date().getFullYear()}</em>
-      </div>
       <Topbar
         title="Alla bets"
         sub={`${bets.length} bets loggade${rangeLabel ? ` · ${rangeLabel}` : ""}`}
@@ -381,7 +383,7 @@ export default function BetsPage() {
         }
       />
 
-      {/* summary strip */}
+      {/* summary strip — follows the filters */}
       <div className="ap-grid ap-kpi-row">
         <StatTile label="Filtrerad P/L" value={uFmt(metrics.profitUnits, true)} tone={metrics.profitUnits >= 0 ? "pos" : "neg"} />
         <StatTile label="ROI" value={pctFmt(metrics.roiPct, true)} tone={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
@@ -389,121 +391,115 @@ export default function BetsPage() {
         <StatTile label="Antal bets" value={String(filtered.length)} sub={`av ${bets.length} totalt`} />
       </div>
 
-      {/* filters */}
-      <div className="ap-filterbar">
-        <div className="ap-search">
-          <I p={IC.search} size={16} />
-          <input type="search" aria-label="Sök bland bets" placeholder="Sök match, liga, spel eller bookmaker…" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <button className={"ap-btn ghost ap-filter-toggle" + (advancedOpen ? " is-active" : "")} aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>
-          <I p={IC.menu} size={15} />
-          Filter{advancedCount > 0 ? ` (${advancedCount})` : ""}
-        </button>
-        <div className="ap-select">
-          <select aria-label="Sortering" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "desc" | "asc")}>
-            <option value="desc">Nyast först</option>
-            <option value="asc">Äldst först</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="ap-filter-summary">
-        <div className="ap-filters" style={{ marginBottom: 0 }}>
-          {RES_CHIPS.map(([v, l]) => (
-            <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} aria-pressed={res === v} onClick={() => setRes(v)}>{l}</button>
-          ))}
-          {/* Arriving from Inställningar or the CLV card: show what was applied
-              and make it one click to leave. */}
-          {flag && (
-            <button className="ap-chip is-active" onClick={() => setFlag("")}>
-              {QUALITY_FLAG_LABELS[flag as QualityFlag] ?? flag} ✕
-            </button>
-          )}
-          {clv === "missing" && (
-            <button className="ap-chip is-active" onClick={() => setClv("")}>
-              Saknar stängningsodds ✕
-            </button>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {advancedCount > 0 && <button className="ap-link" onClick={clearAdvanced}>Rensa {advancedCount} filter</button>}
-          <span style={{ fontSize: 12.5, color: "var(--dim)" }}>
-            <strong style={{ color: "var(--txt)" }}>{Math.min(visible.length, filtered.length)}</strong> av {filtered.length}
-          </span>
-        </div>
-      </div>
-
-      {advancedOpen && (
-        <div className="ap-filter-panel">
-          <div className="ap-filter-panel-head">
-            <div>
-              <div role="heading" aria-level={2} className="ap-card-title">Fler filter</div>
-              <div className="ap-sub">Avgränsa sport, marknad, bookmaker eller datum.</div>
-            </div>
-            {advancedCount > 0 && <button className="ap-link" onClick={clearAdvanced}>Rensa alla</button>}
+      {/* One panel: the toolbar sits on top of the list it filters. */}
+      <div className="ap-ledger-panel">
+        <div className="ap-toolbar">
+          <div className="ap-search">
+            <I p={IC.search} size={15} />
+            <input type="search" aria-label="Sök bland bets" placeholder="Sök match, liga, spel eller bookmaker…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <div className="ap-filter-grid">
-            {sel("Sport", sport, setSport, ["Alla sporter", ...sports])}
+          <div className="ap-toolbar-chips" role="group" aria-label="Resultat">
+            {RES_CHIPS.map(([v, l]) => (
+              <button key={v} className={"ap-chip" + (res === v ? " is-active" : "")} aria-pressed={res === v} onClick={() => setRes(v)}>{l}</button>
+            ))}
+            {/* Arriving from Inställningar or the CLV card: show what was applied
+                and make it one click to leave. */}
+            {flag && (
+              <button className="ap-chip is-active" onClick={() => setFlag("")}>
+                {QUALITY_FLAG_LABELS[flag as QualityFlag] ?? flag} ✕
+              </button>
+            )}
+            {clv === "missing" && (
+              <button className="ap-chip is-active" onClick={() => setClv("")}>
+                Saknar stängningsodds ✕
+              </button>
+            )}
+          </div>
+          <div className="ap-toolbar-end">
+            {count}
+            <button className={"ap-btn ghost ap-filter-toggle" + (advancedOpen ? " is-active" : "")} aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>
+              <I p={IC.filter} size={14} />
+              Filter{advancedCount > 0 ? ` (${advancedCount})` : ""}
+            </button>
             <div className="ap-select">
-              <select aria-label="Liga eller turnering" value={league} onChange={(e) => setLeague(e.target.value)}>
-                <option value="">Alla ligor/turneringar</option>
-                {leagues.map((value) => <option key={value} value={value}>{value}</option>)}
+              <select aria-label="Sortering" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "desc" | "asc")}>
+                <option value="desc">Nyast först</option>
+                <option value="asc">Äldst först</option>
               </select>
             </div>
-            {sel("Bookmaker", book, setBook, ["Alla bookmakers", ...books])}
-            <div className="ap-select">
-              <select aria-label="Marknad" value={market} onChange={(e) => setMarket(e.target.value)}>
-                <option value="">Alla marknader</option>
-                {markets.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+          </div>
+        </div>
+
+        {advancedOpen && (
+          <div className="ap-filter-panel">
+            <div className="ap-filter-panel-head">
+              <div>
+                <div role="heading" aria-level={2} className="ap-card-title">Fler filter</div>
+                <div className="ap-sub">Avgränsa sport, marknad, bookmaker eller datum.</div>
+              </div>
+              {advancedCount > 0 && <button className="ap-link" onClick={clearAdvanced}>Rensa {advancedCount} filter</button>}
             </div>
-            {scopes.length > 0 && (
+            <div className="ap-filter-grid">
+              {sel("Sport", sport, setSport, ["Alla sporter", ...sports])}
               <div className="ap-select">
-                <select aria-label="Avser" value={scope} onChange={(e) => setScope(e.target.value)}>
-                  <option value="">Spelare / lag / match</option>
-                  {scopes.map((sc) => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
+                <select aria-label="Liga eller turnering" value={league} onChange={(e) => setLeague(e.target.value)}>
+                  <option value="">Alla ligor/turneringar</option>
+                  {leagues.map((value) => <option key={value} value={value}>{value}</option>)}
                 </select>
               </div>
-            )}
-            <div className="ap-select">
-              <select aria-label="Eventtyp" value={eventKind} onChange={(e) => setEventKind(e.target.value)}>
-                <option value="">Match + turneringsspel</option>
-                {EVENT_KINDS.map((kind) => <option key={kind.value} value={kind.value}>{kind.label}</option>)}
-              </select>
-            </div>
-            <div className="ap-select">
-              <select aria-label="Turneringsfas" value={stage} onChange={(e) => setStage(e.target.value)}>
-                <option value="">Alla turneringsfaser</option>
-                {TOURNAMENT_STAGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-              </select>
-            </div>
-            <div className="ap-select ap-date-filter">
-              <input
-                type="date"
-                aria-label="Datum"
-                value={day}
-                onChange={(e) => setDay(e.target.value)}
-              />
-            </div>
-            {sel("År", year, setYear, ["Alla år", ...years])}
-            <div className="ap-select">
-              <select aria-label="Månad" value={month} onChange={(e) => setMonth(e.target.value)} disabled={!!day}>
-                <option value="Alla månader">Alla månader</option>
-                {MONTHS_SV.map((label, i) => <option key={label} value={String(i + 1)}>{label}</option>)}
-              </select>
+              {sel("Bookmaker", book, setBook, ["Alla bookmakers", ...books])}
+              <div className="ap-select">
+                <select aria-label="Marknad" value={market} onChange={(e) => setMarket(e.target.value)}>
+                  <option value="">Alla marknader</option>
+                  {markets.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+              {scopes.length > 0 && (
+                <div className="ap-select">
+                  <select aria-label="Avser" value={scope} onChange={(e) => setScope(e.target.value)}>
+                    <option value="">Spelare / lag / match</option>
+                    {scopes.map((sc) => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="ap-select">
+                <select aria-label="Eventtyp" value={eventKind} onChange={(e) => setEventKind(e.target.value)}>
+                  <option value="">Match + turneringsspel</option>
+                  {EVENT_KINDS.map((kind) => <option key={kind.value} value={kind.value}>{kind.label}</option>)}
+                </select>
+              </div>
+              <div className="ap-select">
+                <select aria-label="Turneringsfas" value={stage} onChange={(e) => setStage(e.target.value)}>
+                  <option value="">Alla turneringsfaser</option>
+                  {TOURNAMENT_STAGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </div>
+              <div className="ap-select ap-date-filter">
+                <input
+                  type="date"
+                  aria-label="Datum"
+                  value={day}
+                  onChange={(e) => setDay(e.target.value)}
+                />
+              </div>
+              {sel("År", year, setYear, ["Alla år", ...years])}
+              <div className="ap-select">
+                <select aria-label="Månad" value={month} onChange={(e) => setMonth(e.target.value)} disabled={!!day}>
+                  <option value="Alla månader">Alla månader</option>
+                  {MONTHS_SV.map((label, i) => <option key={label} value={String(i + 1)}>{label}</option>)}
+                </select>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* table (desktop / tablet) */}
-      <div className="ap-table-wrap">
-        <Card style={{ padding: 0 }}>
+        {/* table (desktop / tablet) */}
+        <div className="ap-table-wrap">
           <div className="ap-table">
             <div className="ap-thead" style={{ gridTemplateColumns: GRID }}>
-              <span>Datum</span><span>Sport</span><span>Match</span><span className="ap-hide-sm">Spel</span><span className="ap-hide-sm">Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">CLV</span><span className="ap-r">Insats</span><span className="ap-r">P/L</span><span className="ap-r">Resultat</span><span className="ap-c">·</span>
+              <span>Datum</span><span>Sport</span><span>Match</span><span>Spel</span><span>Bookmaker</span><span className="ap-r">Odds</span><span className="ap-r">CLV</span><span className="ap-r">Insats</span><span className="ap-r">P/L</span><span className="ap-r">Resultat</span><span className="ap-sr">Åtgärder</span>
             </div>
-            {loading && <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>}
+            {loading && <div className="ap-panel-empty">Laddar…</div>}
             {!loading && filtered.length === 0 && (
               <Empty
                 icon={IC.search}
@@ -513,14 +509,14 @@ export default function BetsPage() {
             )}
             {visible.map((b) => (
               <div key={b.id} className={`ap-trow ap-bet-row ${betTone(b.outcome)}`} style={{ gridTemplateColumns: GRID }}>
-                <span style={{ color: "var(--dim)" }} className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span>
+                <span className="ap-num ap-t-dim">{dateShort(b.eventAt ?? b.placedAt)}</span>
                 <span style={{ minWidth: 0 }}><SportMark sport={b.sport} /></span>
                 <span className="ap-ell">{b.event}</span>
-                <span className="ap-ell ap-hide-sm" style={{ color: "var(--dim)", display: "flex", flexDirection: "column", gap: 2, justifyContent: "center" }}>
+                <span className="ap-selcell">
                   <span className="ap-ell">{b.selection || "—"}</span>
                   <BetTags bet={b} compact hideSport />
                 </span>
-                <span className="ap-hide-sm" style={{ color: "var(--dim)" }}>{b.bookmaker || "—"}</span>
+                <span className="ap-ell ap-t-dim">{b.bookmaker || "—"}</span>
                 <span className="ap-r ap-num">{b.odds.toFixed(2)}</span>
                 <span className="ap-r">
                   <ClvCell
@@ -535,81 +531,79 @@ export default function BetsPage() {
                 <span className="ap-r ap-num">{b.stakeUnits.toFixed(2)}U</span>
                 <span className={"ap-r ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>{b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}</span>
                 <span className="ap-r"><ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} /></span>
-                <span className="ap-c" style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                  {rowActions(b)}
-                </span>
+                <span className="ap-rowacts">{rowActions(b)}</span>
               </div>
             ))}
           </div>
-        </Card>
-      </div>
-
-      {/* cards (mobile) */}
-      <div className="ap-betcards">
-        {loading && <div className="ap-betcard-empty">Laddar…</div>}
-        {!loading && filtered.length === 0 && (
-          <Empty
-            icon={IC.search}
-            title="Inga bets matchar filtren"
-            hint="Justera sökningen eller rensa filtren för att se fler."
-          />
-        )}
-        {!loading && visible.map((b) => (
-          <div key={b.id} className={`ap-betcard ${betTone(b.outcome)}`}>
-            <div className="ap-betcard-top">
-              <span className="ap-betcard-date">
-                <span className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span> <SportMark sport={b.sport} />
-              </span>
-              <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
-            </div>
-            <div className="ap-betcard-event">
-              {b.event}
-            </div>
-            <div className="ap-betcard-sel">
-              {b.selection || "—"}{b.bookmaker ? ` · ${b.bookmaker}` : ""}
-            </div>
-            <BetTags bet={b} compact />
-            <div className="ap-betcard-stats">
-              <div>
-                <span>Odds</span>
-                <b className="ap-num">{b.odds.toFixed(2)}</b>
-              </div>
-              <div>
-                <span>CLV</span>
-                <b className="ap-num" style={{ display: "block" }}>
-                  <ClvCell
-                    betId={b.id}
-                    odds={b.odds}
-                    closingOdds={b.closingOdds}
-                    clvPctValue={b.clvPct}
-                    boosted={b.boosted}
-                    onSaved={(next) => onClvSaved(b.id, next)}
-                  />
-                </b>
-              </div>
-              <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
-              <div>
-                <span>P/L</span>
-                <b className={"ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>
-                  {b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}
-                </b>
-              </div>
-              <div className="ap-betcard-act">
-                {rowActions(b)}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* pagination */}
-      {!loading && remaining > 0 && (
-        <div style={{ display: "flex", justifyContent: "center", padding: "14px 0 4px" }}>
-          <button className="ap-btn ghost" onClick={() => setShown((n) => n + PAGE * 2)}>
-            Visa fler ({remaining} kvar)
-          </button>
         </div>
-      )}
+
+        {/* cards (mobile) */}
+        <div className="ap-betcards is-flush">
+          {loading && <div className="ap-panel-empty">Laddar…</div>}
+          {!loading && filtered.length === 0 && (
+            <Empty
+              icon={IC.search}
+              title="Inga bets matchar filtren"
+              hint="Justera sökningen eller rensa filtren för att se fler."
+            />
+          )}
+          {!loading && visible.map((b) => (
+            <div key={b.id} className={`ap-betcard ${betTone(b.outcome)}`}>
+              <div className="ap-betcard-top">
+                <span className="ap-betcard-date">
+                  <span className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span> <SportMark sport={b.sport} />
+                </span>
+                <ResultBadge outcome={b.outcome} profitUnits={b.profitUnits} />
+              </div>
+              <div className="ap-betcard-event">
+                {b.event}
+              </div>
+              <div className="ap-betcard-sel">
+                {b.selection || "—"}{b.bookmaker ? ` · ${b.bookmaker}` : ""}
+              </div>
+              <BetTags bet={b} compact className="ap-betcard-tags" />
+              <div className="ap-betcard-stats">
+                <div>
+                  <span>Odds</span>
+                  <b className="ap-num">{b.odds.toFixed(2)}</b>
+                </div>
+                <div>
+                  <span>CLV</span>
+                  <b className="ap-num" style={{ display: "block" }}>
+                    <ClvCell
+                      betId={b.id}
+                      odds={b.odds}
+                      closingOdds={b.closingOdds}
+                      clvPctValue={b.clvPct}
+                      boosted={b.boosted}
+                      onSaved={(next) => onClvSaved(b.id, next)}
+                    />
+                  </b>
+                </div>
+                <div><span>Insats</span><b className="ap-num">{b.stakeUnits.toFixed(2)}U</b></div>
+                <div>
+                  <span>P/L</span>
+                  <b className={"ap-num " + (b.outcome === "pending" ? "" : (b.profitUnits ?? 0) >= 0 ? "pos" : "neg")}>
+                    {b.outcome === "pending" ? "—" : krShort((b.profitUnits ?? 0) * unit, true)}
+                  </b>
+                </div>
+                <div className="ap-betcard-act">
+                  {rowActions(b)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* pagination */}
+        {!loading && remaining > 0 && (
+          <div className="ap-ledger-more">
+            <button className="ap-btn ghost" onClick={() => setShown((n) => n + PAGE * 2)}>
+              Visa fler ({remaining} kvar)
+            </button>
+          </div>
+        )}
+      </div>
 
       {(modalOpen || modalUsed) && (
         <AddBetModal
