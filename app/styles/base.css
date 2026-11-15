@@ -133,3 +133,10 @@ body {
     --fs-md: 14px;
   }
 }
+
+/* Native checkboxes, radios and sliders take the signal colour, not browser blue. */
+.ap input[type="checkbox"],
+.ap input[type="radio"],
+.ap input[type="range"] {
+  accent-color: var(--acc);
+}

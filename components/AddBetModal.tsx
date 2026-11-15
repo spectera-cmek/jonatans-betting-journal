@@ -433,11 +433,11 @@ export function AddBetModal({ open, onClose, onSaved, hasOddsApiKey, bet, prefil
     ? [form.marketCategory, ...catBase]
     : catBase;
 
-  // The trigger lives inside .ap-topnav, which has a backdrop-filter — that makes
-  // it the containing block for position:fixed children and would clip the modal
-  // off-screen. Portal out to the theme root (.ap): that element is a direct
-  // child of <body> so the overlay is measured against the viewport, and it
-  // still carries the --card/--txt/--acc custom properties the modal needs.
+  // The trigger lives inside the sticky status bar. Portal out to the theme root
+  // (.ap) so the overlay is never positioned or stacked relative to that bar:
+  // .ap is a direct child of <body>, so the overlay is measured against the
+  // viewport, and it still carries the --card/--txt/--acc custom properties the
+  // modal needs.
   const portalTarget = typeof document === "undefined" ? null : document.querySelector(".ap") ?? document.body;
   if (!portalTarget) return null;
 
