@@ -1,0 +1,239 @@
+/* ---- VM 2026: tournament hub ---- */
+.ap-wc-banner {
+  margin-bottom: var(--gap);
+  padding: 8px 12px;
+  border: 1px solid var(--acc-line);
+  border-left: 2px solid var(--acc);
+  border-radius: var(--r-ctl);
+  background: var(--acc-soft);
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.ap-wc-tabs,
+.ap-wc-stage-filter {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--gap);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+.ap-wc-tabs button,
+.ap-wc-stage-filter button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  margin-bottom: -1px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--dim);
+  font-family: var(--disp);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ap-wc-stage-filter button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: var(--fs-sm);
+}
+.ap-wc-tabs button:hover,
+.ap-wc-stage-filter button:hover {
+  color: var(--txt);
+}
+.ap-wc-tabs button.is-active,
+.ap-wc-stage-filter button.is-active {
+  color: var(--txt);
+  border-bottom-color: var(--acc);
+}
+.ap-wc-match-list .ap-wc-match {
+  border: 0;
+  border-bottom: 1px solid var(--line2);
+  box-shadow: none;
+}
+.ap-wc-match-list .ap-wc-match:last-child {
+  border-bottom: 0;
+}
+/* Fixtures and groups tile on shared rules, like every other board. */
+.ap-wc-matches,
+.ap-wc-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  padding: 1px;
+}
+.ap-wc-matches > *,
+.ap-wc-groups > * {
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.ap-wc-match {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+.ap-wc-match.is-compact {
+  padding: 8px 10px;
+}
+.ap-wc-match-head,
+.ap-wc-match-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+.ap-wc-match-stage {
+  margin: 2px 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dim2);
+  font-size: var(--fs-micro);
+}
+.ap-wc-status {
+  font-family: var(--disp);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ap-wc-status.is-live {
+  color: var(--red);
+}
+.ap-wc-status.is-final {
+  color: var(--pos);
+}
+.ap-wc-team {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: var(--fs-md);
+}
+.ap-wc-team img,
+.ap-wc-table-team img {
+  object-fit: contain;
+}
+.ap-wc-team b {
+  font-family: var(--mono);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  text-align: right;
+}
+.ap-wc-warning {
+  margin-top: 6px;
+  color: var(--red);
+  font-size: var(--fs-micro);
+}
+.ap-wc-linked-bets {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dotted var(--line);
+}
+.ap-wc-linked-bets > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--fs-xs);
+}
+.ap-wc-linked-bets > div > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ap-wc-linked-bets b,
+.ap-wc-linked-bets small {
+  display: block;
+}
+.ap-wc-linked-bets small {
+  margin-top: 2px;
+  color: var(--dim2);
+}
+.ap-wc-match-actions {
+  margin-top: 8px;
+}
+.ap-wc-table > div {
+  display: grid;
+  grid-template-columns: 22px minmax(120px, 1fr) repeat(6, 28px);
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line2);
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  text-align: right;
+}
+.ap-wc-table > div:first-child {
+  border-bottom-color: var(--line);
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ap-wc-table > div:last-child {
+  border-bottom: 0;
+}
+.ap-wc-table > div > :nth-child(2) {
+  text-align: left;
+}
+.ap-wc-table-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ap-wc-bracket {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 8px;
+  overflow-x: auto;
+}
+.ap-wc-bracket section {
+  flex: 0 0 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ap-wc-bracket h3 {
+  margin: 0 0 2px;
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+@media (max-width: 980px) {
+  .ap-wc-matches,
+  .ap-wc-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .ap-wc-matches,
+  .ap-wc-groups {
+    grid-template-columns: 1fr;
+  }
+  .ap-wc-table {
+    overflow-x: auto;
+  }
+  .ap-wc-table > div {
+    min-width: 390px;
+  }
+}

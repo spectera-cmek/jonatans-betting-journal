@@ -1,16 +1,12 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
-import { ACCENTS, chartColors, type Accent, type ChartColors } from "@/lib/theme";
+import { chartColors, THEME_COLOR, type ChartColors, type Mode } from "@/lib/theme";
 
 interface ThemeState {
-  accent: Accent;
-  mode: "dark" | "light";
-  glow: boolean;
+  mode: Mode;
   cc: ChartColors;
-  setAccent: (hex: string) => void;
-  setMode: (m: "dark" | "light") => void;
-  setGlow: (g: boolean) => void;
+  setMode: (m: Mode) => void;
 }
 
 const ThemeCtx = createContext<ThemeState | null>(null);
@@ -22,82 +18,45 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Defaults = the terminal look: emerald accent, dark, no glow. Storage keys
-  // stay namespaced "bj.*".
-  const [accentHex, setAccentHex] = useState(ACCENTS[0].hex);
-  const [mode, setModeState] = useState<"dark" | "light">("dark");
-  const [glow, setGlowState] = useState(false);
+  // Dark is the default. The only stored preference is the mode ("bj.mode");
+  // the accent picker and glow toggle of earlier designs are gone, and their
+  // old keys (bj.accent, bj.glow) are simply never read.
+  const [mode, setModeState] = useState<Mode>("dark");
   const [ready, setReady] = useState(false);
 
-  // Load persisted prefs on mount. A stored accent from the previous palette no
-  // longer matches any swatch — ignore it so those users land on the new default
-  // rather than on an accent the Settings page can't show as selected.
   useEffect(() => {
     try {
-      const a = localStorage.getItem("bj.accent");
       const m = localStorage.getItem("bj.mode");
-      const g = localStorage.getItem("bj.glow");
-      if (a && ACCENTS.some((x) => x.hex === a)) setAccentHex(a);
       if (m === "light" || m === "dark") setModeState(m);
-      if (g != null) setGlowState(g === "1");
     } catch {}
     setReady(true);
   }, []);
 
-  const setAccent = useCallback((hex: string) => {
-    setAccentHex(hex);
-    try { localStorage.setItem("bj.accent", hex); } catch {}
-  }, []);
-  const setMode = useCallback((m: "dark" | "light") => {
+  const setMode = useCallback((m: Mode) => {
     setModeState(m);
     try { localStorage.setItem("bj.mode", m); } catch {}
   }, []);
-  const setGlow = useCallback((g: boolean) => {
-    setGlowState(g);
-    try { localStorage.setItem("bj.glow", g ? "1" : "0"); } catch {}
-  }, []);
 
   // Keep <html> in step with the chosen mode. The pre-paint script sets
-  // data-mode there once at load; without this a toggle in Settings left the
-  // root on the old mode until the next reload, so root-scoped rules
-  // (color-scheme, the overscroll canvas) and the browser's theme-color lagged.
+  // data-mode there once at load; without this a toggle left the root on the
+  // old mode until the next reload, so root-scoped rules (color-scheme, the
+  // overscroll canvas) and the browser's theme-color lagged.
   useEffect(() => {
     if (!ready) return;
     document.documentElement.setAttribute("data-mode", mode);
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", mode === "light" ? "#ffffff" : "#0b1120");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[mode]);
   }, [mode, ready]);
 
-  const accent = useMemo(() => ACCENTS.find((a) => a.hex === accentHex) || ACCENTS[0], [accentHex]);
-  const cc = useMemo(() => chartColors(accent.hex, mode), [accent.hex, mode]);
-
-  // Held back until the stored prefs have been read. Before that the accent
-  // comes from the inline script in app/layout.tsx, which sets the same three
-  // custom properties on :root — an inline style here would outrank it and
-  // reintroduce the flash for anyone on a non-default accent.
-  const rootStyle = useMemo(
-    () =>
-      ready
-        ? ({
-            "--acc": accent.hex,
-            "--acc-soft": accent.soft,
-            "--acc-text": accent.text,
-          } as React.CSSProperties)
-        : undefined,
-    [ready, accent]
-  );
-
-  const value = useMemo(
-    () => ({ accent, mode, glow, cc, setAccent, setMode, setGlow }),
-    [accent, mode, glow, cc, setAccent, setMode, setGlow]
-  );
+  const cc = useMemo(() => chartColors(mode), [mode]);
+  const value = useMemo(() => ({ mode, cc, setMode }), [mode, cc, setMode]);
 
   return (
     <ThemeCtx.Provider value={value}>
-      {/* children render immediately: the pre-paint script in app/layout.tsx has
-          already put the right theme on <html>, so there is nothing to hide. */}
-      <div className="ap" data-mode={mode} style={rootStyle} suppressHydrationWarning>
+      {/* Children render immediately: the pre-paint script in app/layout.tsx has
+          already put the right mode on <html>, so there is nothing to hide.
+          Until the stored mode has been read this wrapper carries no data-mode
+          of its own and inherits the tokens from <html>. */}
+      <div className="ap" data-mode={ready ? mode : undefined} suppressHydrationWarning>
         {children}
       </div>
     </ThemeCtx.Provider>

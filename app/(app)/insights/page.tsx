@@ -60,7 +60,7 @@ export default function InsightsPage() {
 
   return (
     <div>
-      <Topbar title="Insikter" sub="Din form, dina rekord och dina mönster" icon={IC.spark} />
+      <Topbar title="Insikter" sub="Din form, dina rekord och dina mönster" />
 
       {loading && !data && (
         <>
@@ -133,16 +133,14 @@ export default function InsightsPage() {
           )}
 
           <div className="ap-kpi-row">
-            <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} icon={IC.flame} accent="amber" />
-            <StatTile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" icon={IC.trendUp} />
-            <StatTile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" icon={IC.trendDown} />
+            <StatTile label="Nuvarande svit" value={streakValue} tone={streakTone} sub={ins?.streaks.currentType === "none" ? "ingen data" : "i rad"} />
+            <StatTile label="Längsta vinstsvit" value={ins ? `${ins.streaks.longestWin}` : "—"} tone="pos" sub="i rad" />
+            <StatTile label="Längsta förlustsvit" value={ins ? `${ins.streaks.longestLoss}` : "—"} tone="neg" sub="i rad" />
             <StatTile
               label={mom ? `Månaden · ${monthLabel(mom.month)}` : "Den här månaden"}
               value={mom ? krShort(mom.profitUnits * unit, true) : "—"}
               tone={mom ? (mom.profitUnits >= 0 ? "pos" : "neg") : ""}
               sub={mom ? `${mom.bets} bets${momDelta != null ? ` · ${momDelta >= 0 ? "▲" : "▼"} ${uFmt(Math.abs(momDelta))} vs ${monthLabel(momPrev?.month)}` : ""}` : "ingen data"}
-              icon={IC.calendar}
-              accent="purple"
             />
           </div>
 
@@ -194,7 +192,7 @@ export default function InsightsPage() {
             </div>
           </Card>
 
-          <SectionHead icon={IC.gear} title="Verktyg" sub="Kelly, tur-index och simulatorn" />
+          <SectionHead title="Verktyg" sub="Kelly, tur-index och simulatorn" />
 
           <KellyCard defaultBankrollUnits={bankrollU} unit={unit} />
 

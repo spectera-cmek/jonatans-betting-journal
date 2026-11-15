@@ -1,0 +1,117 @@
+/* ---- Kalender: the month as a ruled grid ---- */
+.ap-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  padding: 1px;
+}
+.ap-cal-head {
+  padding: 5px 8px;
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim2);
+}
+.ap-cal-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2px;
+  min-width: 0;
+  min-height: 68px;
+  padding: 6px 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 0 0 1px var(--line);
+  background: var(--card);
+  color: var(--txt);
+  font-family: var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+.ap-cal-day:hover {
+  background: var(--card2);
+}
+.ap-cal-day.is-out {
+  background: transparent;
+  cursor: default;
+}
+.ap-cal-day.is-win {
+  background: var(--pos-soft);
+}
+.ap-cal-day.is-loss {
+  background: var(--red-soft);
+}
+.ap-cal-day.is-today .ap-cal-num {
+  color: var(--acc-ink);
+}
+/* Selected: an inset amber frame, so the ruled grid itself never shifts. */
+.ap-cal-day.is-sel {
+  box-shadow: 0 0 0 1px var(--line), inset 0 0 0 2px var(--acc);
+}
+.ap-cal-num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--dim);
+}
+.ap-cal-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.ap-cal-body em {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  font-style: normal;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ap-cal-sub {
+  font-size: var(--fs-micro);
+  color: var(--dim2);
+}
+/* kr value + pending dot are the phone representation — hidden on desktop. */
+.ap-cal-val-kr,
+.ap-cal-dot {
+  display: none;
+}
+@media (max-width: 700px) {
+  /* ~50px per cell on a phone: drop the "N bets" line (the day panel has it),
+     show compact kr instead of units, and a dot for open bets. */
+  .ap-cal-day {
+    min-height: 50px;
+    padding: 4px 5px;
+  }
+  .ap-cal-num {
+    font-size: var(--fs-micro);
+  }
+  .ap-cal-body em {
+    font-size: var(--fs-xs);
+    letter-spacing: -0.03em;
+  }
+  .ap-cal-sub,
+  .ap-cal-val-u {
+    display: none;
+  }
+  .ap-cal-val-kr {
+    display: inline;
+  }
+  .ap-cal-dot {
+    display: block;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--info);
+  }
+}

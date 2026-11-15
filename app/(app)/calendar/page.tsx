@@ -99,7 +99,7 @@ export default function CalendarPage() {
 
   return (
     <div>
-      <Topbar title="Kalender" sub={`${bets.length} bets · klicka på en dag för att se spelen`} icon={IC.calendar} />
+      <Topbar title="Kalender" sub={`${bets.length} bets · klicka på en dag för att se spelen`} />
 
       {loading && bets.length === 0 ? (
         <Card style={{ marginBottom: 12 }}>

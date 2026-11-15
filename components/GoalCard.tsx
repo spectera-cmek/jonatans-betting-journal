@@ -61,47 +61,41 @@ export function GoalCard({
   const hasGoals = monthGoal > 0 || yearGoal > 0;
 
   return (
-    <Card style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span className="ap-label">Mål &amp; tempo</span>
+    <Card>
+      <div className="ap-panel-head">
+        <h2 className="ap-card-title">Mål &amp; tempo</h2>
         {hasGoals && !editing && (
           <button className="ap-link" onClick={() => setEditing(true)}>Ändra mål</button>
         )}
       </div>
 
       {editing || !hasGoals ? (
-        <div style={{ marginTop: 14 }}>
-          {!hasGoals && !editing ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, color: "var(--dim)" }}>
-                Sätt ett vinstmål i units så ser du progress och om du ligger i fas.
-              </span>
-              <button className="ap-btn" onClick={() => setEditing(true)}>
-                <I p={IC.plus} size={15} /> Sätt mål
-              </button>
+        !hasGoals && !editing ? (
+          <div className="ap-goal-empty">
+            <span className="ap-note">Sätt ett vinstmål i units så ser du progress och om du ligger i fas.</span>
+            <button className="ap-btn ghost" onClick={() => setEditing(true)}>
+              <I p={IC.plus} size={14} /> Sätt mål
+            </button>
+          </div>
+        ) : (
+          <div className="ap-goal-form">
+            <div className="ap-x2">
+              <Field label="Månadsmål (U)">
+                <input className="ap-input ap-num" inputMode="decimal" placeholder="t.ex. 20" value={mInput} onChange={(e) => setMInput(e.target.value)} />
+              </Field>
+              <Field label="Årsmål (U)">
+                <input className="ap-input ap-num" inputMode="decimal" placeholder="t.ex. 200" value={yInput} onChange={(e) => setYInput(e.target.value)} />
+              </Field>
             </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div className="ap-x2">
-                <Field label="Månadsmål (U)">
-                  <input className="ap-input ap-num" inputMode="decimal" placeholder="t.ex. 20" value={mInput} onChange={(e) => setMInput(e.target.value)} />
-                </Field>
-                <Field label="Årsmål (U)">
-                  <input className="ap-input ap-num" inputMode="decimal" placeholder="t.ex. 200" value={yInput} onChange={(e) => setYInput(e.target.value)} />
-                </Field>
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button className="ap-btn" onClick={save}>Spara mål</button>
-                {hasGoals && <button className="ap-btn ghost" onClick={() => setEditing(false)}>Avbryt</button>}
-              </div>
-              <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>
-                Tomt fält stänger av målet. Sparas lokalt i den här webbläsaren.
-              </span>
+            <div className="ap-row">
+              <button className="ap-btn" onClick={save}>Spara mål</button>
+              {hasGoals && <button className="ap-btn ghost" onClick={() => setEditing(false)}>Avbryt</button>}
             </div>
-          )}
-        </div>
+            <span className="ap-note">Tomt fält stänger av målet. Sparas lokalt i den här webbläsaren.</span>
+          </div>
+        )
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
+        <div className="ap-goal-rows">
           {monthGoal > 0 && (
             <GoalRow
               label="Den här månaden"
@@ -127,24 +121,22 @@ function GoalRow({ label, prog, unit }: { label: string; prog: GoalProgress; uni
   const reached = prog.profitUnits >= prog.goalUnits;
   const barColor = reached ? "var(--pos)" : prog.profitUnits >= 0 ? "var(--acc)" : "var(--red)";
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13, marginBottom: 7 }}>
-        <span style={{ color: "var(--dim)" }}>{label}</span>
-        <span className="ap-num" style={{ fontWeight: 600 }}>
-          <em className={prog.profitUnits >= 0 ? "pos" : "neg"} style={{ fontStyle: "normal" }}>{uFmt(prog.profitUnits, true)}</em>
-          <span style={{ color: "var(--dim2)" }}> / {uFmt(prog.goalUnits)}</span>
+    <div className="ap-meter">
+      <div className="ap-meter-head">
+        <span>{label}</span>
+        <span className="ap-num">
+          <em className={prog.profitUnits >= 0 ? "pos" : "neg"}>{uFmt(prog.profitUnits, true)}</em>
+          <small> / {uFmt(prog.goalUnits)}</small>
         </span>
       </div>
-      <div style={{ position: "relative", height: 8, borderRadius: 20, background: "var(--card2)", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, width: `${pct}%`, background: barColor, borderRadius: 20, transition: "width 0.4s ease" }} />
+      <div className="ap-meter-track">
+        <i style={{ width: `${pct}%`, background: barColor }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--dim2)", marginTop: 6 }}>
+      <div className="ap-meter-foot">
         <span>{Math.round(prog.pct)}% av målet · {krShort(prog.profitUnits * unit, true)}</span>
         <span>
           I nuvarande takt:{" "}
-          <em className={prog.onTrack ? "pos" : "neg"} style={{ fontStyle: "normal", fontWeight: 600 }}>
-            {uFmt(prog.projectedUnits, true)}
-          </em>{" "}
+          <em className={prog.onTrack ? "pos" : "neg"}>{uFmt(prog.projectedUnits, true)}</em>{" "}
           {prog.onTrack ? "✓ i fas" : "· under mål"}
         </span>
       </div>

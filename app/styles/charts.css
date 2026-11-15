@@ -1,0 +1,155 @@
+/* ---- charts: the plot stretches, everything with a shape is HTML on top ---- */
+.ap-chart {
+  width: 100%;
+}
+.ap-chart-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.ap-chart-plot {
+  position: relative;
+  min-width: 0;
+  touch-action: pan-y;
+}
+.ap-chart-plot svg {
+  display: block;
+  overflow: visible;
+}
+.ap-chart-empty {
+  display: grid;
+  place-items: center;
+  color: var(--dim2);
+  font-size: var(--fs-md);
+}
+/* Value scale in the right gutter. */
+.ap-chart-axis {
+  position: relative;
+  min-width: 46px;
+  margin-left: 6px;
+  border-left: 1px solid var(--line);
+}
+.ap-chart-axis span {
+  position: absolute;
+  left: 6px;
+  transform: translateY(-50%);
+  color: var(--dim2);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  white-space: nowrap;
+}
+/* Width comes from an invisible copy of the widest label, since the real ones
+   are absolutely positioned. */
+.ap-chart-axis::after {
+  content: attr(data-w);
+  display: block;
+  height: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  visibility: hidden;
+}
+/* The last value, as a filled tag sitting on the scale. */
+.ap-chart-axis .ap-chart-last {
+  left: 0;
+  padding: 3px 5px 3px 6px;
+  background: var(--acc);
+  color: var(--acc-text);
+  font-weight: 600;
+}
+.ap-chart-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px var(--card);
+  pointer-events: none;
+}
+.ap-chart-tip {
+  position: absolute;
+  top: 6px;
+  z-index: 5;
+  padding: 6px 9px;
+  background: var(--card2);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-lift);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.ap-chart-tip-date {
+  color: var(--dim);
+  font-size: var(--fs-xs);
+}
+.ap-chart-tip-val {
+  margin-top: 1px;
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.ap-chart-tip-val span {
+  margin-left: 7px;
+  font-size: var(--fs-xs);
+}
+.ap-chart-x {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: var(--dim2);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+}
+
+/* ---- P/L bars off a zero line ---- */
+.ap-plbars {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.ap-plbars-plot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  /* 2px of panel between bars, so neighbours never fuse. */
+  gap: 2px;
+}
+.ap-plbars-zero {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+}
+.ap-plbar {
+  position: relative;
+}
+.ap-plbar i {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+}
+.ap-plbar:hover {
+  background: var(--hover);
+}
+.ap-plbars-x {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  margin-top: 6px;
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.ap-plbars-x span {
+  overflow: hidden;
+  white-space: nowrap;
+}

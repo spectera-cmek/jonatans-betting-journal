@@ -20,7 +20,6 @@ export default function ToolsPage() {
       <Topbar
         title="Verktyg"
         sub="Kalkylatorer för vardagsbesluten — insats, cashout, hedge, handicap och bonusar"
-        icon={IC.wrench}
       />
       {/* Remount once metrics load so the bankroll prefill picks them up. */}
       <KellyCard key={data ? "ready" : "loading"} defaultBankrollUnits={bankrollU} unit={unit} />

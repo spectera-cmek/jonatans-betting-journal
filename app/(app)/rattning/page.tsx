@@ -167,8 +167,6 @@ export default function RattningPage() {
             ? "Kontrollerar resultat…"
             : `${suggestions.length} öppna spel · ${counts.ready} klara att rätta`
         }
-        icon={IC.zap}
-        accent="sky"
         actions={
           <button className="ap-btn ghost" onClick={load} disabled={loading || applying}>
             <I p={IC.refresh} size={14} /> Uppdatera
@@ -185,16 +183,6 @@ export default function RattningPage() {
             sub={key === "ready" ? "kontrollerade mot ESPN" : undefined}
             hint={READINESS_HINTS[key]}
             tone={key === "ready" ? "pos" : undefined}
-            icon={
-              key === "ready"
-                ? IC.checkCircle
-                : key === "waiting"
-                  ? IC.clock
-                  : key === "manual"
-                    ? IC.alert
-                    : IC.helpCircle
-            }
-            accent={key === "waiting" ? "sky" : key === "manual" ? "amber" : undefined}
           />
         ))}
       </div>

@@ -180,8 +180,6 @@ export default function Cs2Page() {
       <Topbar
         title="CS2"
         sub="Lag, spelare och gameplan-docen per karta — underlaget för props och angles"
-        icon={IC.gamepad}
-        accent="purple"
       />
       <div className="ap-seg ap-cs2-tabs">
         <button className={tab === "matcher" ? "is-active" : ""} aria-pressed={tab === "matcher"} onClick={() => setTab("matcher")}>

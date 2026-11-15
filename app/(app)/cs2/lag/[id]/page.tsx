@@ -51,8 +51,6 @@ export default function Cs2TeamPage({ params }: { params: { id: string } }) {
             demo) senaste {months} mån · <Link href="/cs2">← alla lag</Link>
           </>
         }
-        icon={IC.gamepad}
-        accent="purple"
         actions={<SampleWindowPicker maps={10} months={months} onChange={(w) => setMonths(w.months)} showMaps={false} />}
       />
 

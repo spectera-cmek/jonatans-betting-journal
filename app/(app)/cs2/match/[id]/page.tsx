@@ -68,8 +68,6 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
             {v.match.lan ? " · LAN" : ""} · <Link href="/cs2">← alla matcher</Link>
           </>
         }
-        icon={IC.gamepad}
-        accent="purple"
         actions={
           <div className="ap-field" style={{ minWidth: 200 }}>
             <label htmlFor="cs2-w">

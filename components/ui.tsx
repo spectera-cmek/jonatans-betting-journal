@@ -4,7 +4,6 @@ import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useSt
 import { Spark } from "./miniCharts";
 import { I, IC, sportIcon } from "./icons";
 import type { LucideIcon } from "lucide-react";
-import { sportColor } from "@/lib/theme";
 import { sportTag } from "@/lib/format";
 import { useTheme } from "./ThemeProvider";
 
@@ -75,26 +74,21 @@ export function Field({
   );
 }
 
-/** One of the six per-metric hues. Drives both the icon chip and the hero
- *  number, so a card reads as a single coloured unit. */
-export type Accent = "emerald" | "sky" | "amber" | "purple" | "teal" | "pink" | "pos" | "red";
-
-const ACCENT_HEX: Record<Accent, string> = {
-  emerald: "#10b981",
-  sky: "#0ea5e9",
-  amber: "#f59e0b",
-  purple: "#a855f7",
-  teal: "#14b8a6",
-  pink: "#ec4899",
-  pos: "#34d399",
-  red: "#f43f5e",
-};
+/** Small "?" beside a label; the explanation shows on hover or focus. */
+export function Hint({ children, size = 12 }: { children: React.ReactNode; size?: number }) {
+  return (
+    <span className="ap-tip" tabIndex={0} role="note">
+      <I p={IC.helpCircle} size={size} />
+      <span className="ap-tip-body">{children}</span>
+    </span>
+  );
+}
 
 /**
- * KPI card: micro-label (+ optional hint) and a tinted icon chip on top, the
- * hero number in monospace below, and a footer with a trend and a secondary
- * figure. Every part except label/value is optional, so the same component
- * covers both the dense strips and the six-across dashboard row.
+ * KPI cell: micro-label (+ optional hint) on top, the figure in monospace
+ * below, and a footer with a trend and a secondary figure. Cells sit in a ruled
+ * strip (.ap-kpi-row / .ap-kpi-grid). The figure is neutral unless `tone` says
+ * its sign means something — colour is never decoration here.
  */
 export function Kpi({
   label,
@@ -104,8 +98,6 @@ export function Kpi({
   spark,
   valueClass,
   tone,
-  accent,
-  icon,
   hint,
   trend,
   trendTone,
@@ -118,61 +110,45 @@ export function Kpi({
   spark?: number[];
   valueClass?: string;
   tone?: "pos" | "neg";
-  /** Per-metric hue for the icon chip, hero number and sparkline. */
-  accent?: Accent;
-  /** Line icon rendered inside the chip (from IC). */
-  icon?: LucideIcon;
   /** Explanation shown on hover next to the label. */
   hint?: React.ReactNode;
-  /** Footer-left text, e.g. "+12,4 % mot förra perioden". */
+  /** Footer-left text, e.g. "2 vinster i rad". */
   trend?: React.ReactNode;
   trendTone?: "pos" | "neg" | "flat";
   /** Footer-right secondary figure. */
   meta?: React.ReactNode;
 }) {
   const { cc } = useTheme();
-  // An explicit tone (win/loss colouring) wins over the decorative accent.
-  const valueTone = tone === "pos" ? "pos" : tone === "neg" ? "red" : accent;
-  const sparkStroke = accent ? ACCENT_HEX[accent] : cc.acc;
+  const valueTone = tone === "pos" ? "t-pos " : tone === "neg" ? "t-red " : "";
+  const hasSpark = !!spark && spark.length > 1;
 
   return (
-    <div className={"ap-card ap-kpi" + (tone ? ` is-${tone}` : "")}>
+    <div className="ap-card ap-kpi">
       <div className="ap-kpi-head">
         <span className="ap-label">
           {label}
-          {hint && (
-            <span className="ap-tip" tabIndex={0} role="note">
-              <I p={IC.helpCircle} size={12} />
-              <span className="ap-tip-body">{hint}</span>
-            </span>
-          )}
+          {hint && <Hint>{hint}</Hint>}
         </span>
-        {icon ? (
-          <span className={"ap-chip-icon" + (accent ? ` is-${accent}` : "")} aria-hidden="true">
-            <I p={icon} size={16} />
-          </span>
-        ) : delta ? (
-          <span className={"ap-pill " + (deltaPos ? "pos" : "neg")}>{delta}</span>
-        ) : null}
+        {delta && !hasSpark ? <span className={"ap-pill " + (deltaPos ? "pos" : "neg")}>{delta}</span> : null}
       </div>
 
-      <div className={"ap-num ap-kpi-val " + (valueTone ? `t-${valueTone} ` : "") + (valueClass || "")}>
-        {value}
-      </div>
-
-      {spark && spark.length > 1 && (
-        <div style={{ marginTop: 10 }}>
-          <Spark data={spark} w={150} h={26} stroke={sparkStroke} />
-        </div>
+      {hasSpark && (
+        <span className="ap-kpi-spark" aria-hidden="true">
+          <Spark data={spark!} w={64} h={18} stroke={tone === "neg" ? cc.red : tone === "pos" ? cc.pos : cc.acc} />
+        </span>
       )}
 
-      {(trend || meta || (icon && delta)) && (
+      <div className={"ap-num ap-kpi-val " + valueTone + (valueClass || "")}>{value}</div>
+
+      {(trend || meta) && (
         <div className="ap-kpi-foot">
-          <span className={"ap-kpi-trend " + (trendTone ?? "flat")}>
-            {trendTone === "pos" && <I p={IC.trendUp} size={13} />}
-            {trendTone === "neg" && <I p={IC.trendDown} size={13} />}
-            {trend ?? (icon && delta ? delta : null)}
-          </span>
+          {trend && (
+            <span className={"ap-kpi-trend " + (trendTone ?? "flat")}>
+              {trendTone === "pos" && <I p={IC.trendUp} size={12} />}
+              {trendTone === "neg" && <I p={IC.trendDown} size={12} />}
+              {trend}
+            </span>
+          )}
           {meta && <span className="ap-kpi-meta">{meta}</span>}
         </div>
       )}
@@ -181,20 +157,16 @@ export function Kpi({
 }
 
 /**
- * Panel header used *inside* a card: tinted icon chip + title + subtitle on the
- * left, controls (segmented toggles, links) on the right. Wraps on narrow
- * screens so the controls drop under the title instead of squeezing it.
+ * Title row *inside* a padded panel: title + subtitle on the left, controls on
+ * the right. Wraps on narrow screens so the controls drop under the title.
+ * (A padding-less panel uses the .ap-card-head strip instead.)
  */
 export function PanelHead({
-  icon,
-  accent,
   title,
   sub,
   hint,
   actions,
 }: {
-  icon?: LucideIcon;
-  accent?: Accent;
   title: React.ReactNode;
   sub?: React.ReactNode;
   hint?: React.ReactNode;
@@ -203,23 +175,11 @@ export function PanelHead({
   return (
     <div className="ap-panel-head">
       <div className="ap-panel-head-main">
-        {icon && (
-          <span className={"ap-chip-icon" + (accent ? ` is-${accent}` : "")} aria-hidden="true">
-            <I p={icon} size={16} />
-          </span>
-        )}
-        <div style={{ minWidth: 0 }}>
-          <h2 className="ap-panel-head-title">
-            {title}
-            {hint && (
-              <span className="ap-tip" tabIndex={0} role="note" style={{ marginLeft: 6 }}>
-                <I p={IC.helpCircle} size={13} />
-                <span className="ap-tip-body">{hint}</span>
-              </span>
-            )}
-          </h2>
-          {sub && <div className="ap-panel-head-sub">{sub}</div>}
-        </div>
+        <h2 className="ap-panel-head-title">
+          {title}
+          {hint && <Hint size={13}>{hint}</Hint>}
+        </h2>
+        {sub && <div className="ap-panel-head-sub">{sub}</div>}
       </div>
       {actions && <div className="ap-panel-head-actions">{actions}</div>}
     </div>
@@ -227,10 +187,10 @@ export function PanelHead({
 }
 
 /**
- * Sport glyph in the sport's colour, followed by a label. Pass the *raw* sport
- * name — colour and glyph are derived from it. The label defaults to the short
- * tag (sportTag) because the table's sport column is only ~46px wide; pass
- * `long` where there is room for the full name.
+ * Sport glyph followed by a label. Pass the *raw* sport name — the glyph is
+ * derived from it. Neutral on purpose: a sport is told apart by its glyph and
+ * tag, not by a hue of its own. The label defaults to the short tag (sportTag)
+ * because the table's sport column is narrow; pass `long` where there is room.
  */
 export function SportMark({
   sport,
@@ -241,45 +201,40 @@ export function SportMark({
   long?: boolean;
   showIcon?: boolean;
 }) {
-  const color = sportColor(sport);
   return (
     <span className="ap-sport" title={sport || undefined}>
       {showIcon ? (
-        <span className="ap-sport-ico" style={{ color }} aria-hidden="true">
+        <span className="ap-sport-ico" aria-hidden="true">
           <I p={sportIcon(sport)} size={14} />
         </span>
       ) : (
-        <span className="ap-sport-dot" style={{ background: color }} aria-hidden="true" />
+        <span className="ap-sport-dot" aria-hidden="true" />
       )}
       <span className="ap-ell">{long ? sport || "—" : sportTag(sport)}</span>
     </span>
   );
 }
 
-/** Section header between card groups: icon chip + title, optional right-aligned sub. */
+/** Rule between groups of panels: title on the left, a note on the right.
+ *  `id` makes it a target for the page's anchor tabs. */
 export function SectionHead({
-  icon,
   title,
   sub,
+  id,
 }: {
-  icon?: LucideIcon;
   title: string;
   sub?: React.ReactNode;
+  id?: string;
 }) {
   return (
-    <div className="ap-sec">
-      {icon && (
-        <div className="ap-sec-icon" aria-hidden="true">
-          <I p={icon} size={15} />
-        </div>
-      )}
+    <div className="ap-sec" id={id}>
       <h2 className="ap-sec-title">{title}</h2>
       {sub && <div className="ap-sec-sub">{sub}</div>}
     </div>
   );
 }
 
-/** Shimmering placeholder block while data loads. */
+/** Pulsing placeholder block while data loads. */
 export function Skeleton({
   w,
   h = 14,
@@ -297,13 +252,13 @@ export function SkeletonCard({ chartH }: { chartH?: number }) {
   return (
     <div className="ap-card">
       <Skeleton w={90} h={10} />
-      <Skeleton w={130} h={24} style={{ marginTop: 14 }} />
+      <Skeleton w={130} h={22} style={{ marginTop: 10 }} />
       {chartH != null && <Skeleton h={chartH} style={{ marginTop: 14 }} />}
     </div>
   );
 }
 
-/** Polished empty state: optional icon, a title line and a dim hint line. */
+/** Empty state: optional icon, a title line and a dim hint line. */
 export function Empty({
   title,
   hint,
@@ -315,7 +270,7 @@ export function Empty({
 }) {
   return (
     <div className="ap-empty">
-      {icon && <div className="ap-empty-icon" aria-hidden="true"><I p={icon} size={22} /></div>}
+      {icon && <div className="ap-empty-icon" aria-hidden="true"><I p={icon} size={20} /></div>}
       <div className="ap-empty-title">{title}</div>
       {hint && <div className="ap-empty-hint">{hint}</div>}
     </div>

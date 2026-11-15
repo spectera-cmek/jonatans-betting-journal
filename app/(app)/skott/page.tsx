@@ -184,7 +184,6 @@ export default function ShotsPage() {
       <Topbar
         title="Skottmodell"
         sub="Egna skott- och hörnsiffror mot bookmakerpriserna — sorterat på edge"
-        icon={IC.bars}
       />
 
       <Card>

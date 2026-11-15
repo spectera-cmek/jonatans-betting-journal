@@ -373,7 +373,6 @@ export default function BetsPage() {
       <Topbar
         title="Alla bets"
         sub={`${bets.length} bets loggade${rangeLabel ? ` · ${rangeLabel}` : ""}`}
-        icon={IC.ticket}
         actions={
           <>
             <a className="ap-btn ghost" href="/api/bets/export"><I p={IC.download} size={15} /><span className="ap-hide-sm">CSV</span></a>
@@ -384,10 +383,10 @@ export default function BetsPage() {
 
       {/* summary strip */}
       <div className="ap-grid ap-kpi-row">
-        <StatTile label="Filtrerad P/L" value={uFmt(metrics.profitUnits, true)} tone={metrics.profitUnits >= 0 ? "pos" : "neg"} icon={IC.coins} accent={metrics.profitUnits >= 0 ? "emerald" : "red"} />
-        <StatTile label="ROI" value={pctFmt(metrics.roiPct, true)} tone={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"} icon={IC.percent} accent={(metrics.roiPct ?? 0) >= 0 ? "sky" : "red"} />
-        <StatTile label="Träffprocent" value={pctFmt(metrics.winRatePct)} icon={IC.target} accent="amber" />
-        <StatTile label="Antal bets" value={String(filtered.length)} icon={IC.ticket} accent="purple" sub={`av ${bets.length} totalt`} />
+        <StatTile label="Filtrerad P/L" value={uFmt(metrics.profitUnits, true)} tone={metrics.profitUnits >= 0 ? "pos" : "neg"} />
+        <StatTile label="ROI" value={pctFmt(metrics.roiPct, true)} tone={(metrics.roiPct ?? 0) >= 0 ? "pos" : "neg"} />
+        <StatTile label="Träffprocent" value={pctFmt(metrics.winRatePct)} />
+        <StatTile label="Antal bets" value={String(filtered.length)} sub={`av ${bets.length} totalt`} />
       </div>
 
       {/* filters */}

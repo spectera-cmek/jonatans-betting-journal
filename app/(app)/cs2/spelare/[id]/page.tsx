@@ -65,8 +65,6 @@ export default function Cs2PlayerPage({ params }: { params: { id: string } }) {
             {d.player.country ? ` · ${d.player.country}` : ""}
           </>
         }
-        icon={IC.user}
-        accent="purple"
         actions={
           <>
             <div className="ap-field">

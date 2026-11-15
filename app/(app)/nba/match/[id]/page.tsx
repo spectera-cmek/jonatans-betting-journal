@@ -261,8 +261,6 @@ export default function NbaMatchPage({ params }: { params: { id: string } }) {
             {final ? ` · slut ${d.game.awayScore}–${d.game.homeScore}` : ""} · <Link href="/nba">← alla matcher</Link>
           </>
         }
-        icon={SPORT_IC.basketball}
-        accent="amber"
       />
 
       {(d.homeB2B || d.awayB2B) && (

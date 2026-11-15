@@ -665,7 +665,7 @@ export default function NbaPage() {
   const [tab, setTab] = useState<Tab>("kommande");
   return (
     <div className="ap-nba">
-      <Topbar title="NBA" sub="Lagrating + spelarjustering, simulerad och jämförd mot marknaden" icon={SPORT_IC.basketball} accent="amber" />
+      <Topbar title="NBA" sub="Lagrating + spelarjustering, simulerad och jämförd mot marknaden" />
       <div className="ap-seg ap-nba-tabs">
         <button className={tab === "kommande" ? "is-active" : ""} aria-pressed={tab === "kommande"} onClick={() => setTab("kommande")}>
           Kommande

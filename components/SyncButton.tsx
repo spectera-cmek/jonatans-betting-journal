@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/fetcher";
 import { I, IC } from "./icons";
+import { CMD, useCommand } from "@/lib/commands";
 
 interface SyncResult {
   ok: boolean;
@@ -63,33 +64,7 @@ export function SyncButton({
   ) : null;
 
   if (!showResult) {
-    return (
-      <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
-        <button
-          className="ap-btn ghost"
-          onClick={run}
-          disabled={busy}
-          aria-label={busy ? "Synkar…" : label}
-          aria-busy={busy}
-          title={result?.message || "Synka rättning + CLV"}
-        >
-          <span
-            style={
-              busy
-                ? { animation: "spin 1s linear infinite", display: "inline-flex" }
-                : { display: "inline-flex" }
-            }
-          >
-            <I p={IC.refresh} size={15} />
-          </span>
-          <span className="ap-hide-sm">{busy ? "Synkar…" : label}</span>
-        </button>
-        {/* Always mounted so a screen reader announces the result when it arrives. */}
-        <span role="status" style={{ fontSize: 11, color: result?.ok ? "var(--dim)" : "var(--red)", maxWidth: 220 }}>
-          {result && !busy ? result.message : ""}
-        </span>
-      </div>
-    );
+    return <CompactSync busy={busy} label={label} result={result} run={run} />;
   }
 
   return (
@@ -107,6 +82,58 @@ export function SyncButton({
         {busy ? "Synkar…" : label}
       </button>
       {status}
+    </div>
+  );
+}
+
+/**
+ * The status-bar variant: icon button with the outcome dropping down under the
+ * bar for a few seconds, rather than a line of text that would stretch it. This
+ * is also the instance the quick search's "Synka" runs.
+ */
+function CompactSync({
+  busy,
+  label,
+  result,
+  run,
+}: {
+  busy: boolean;
+  label: string;
+  result: SyncResult | null;
+  run: () => void;
+}) {
+  useCommand(CMD.sync, () => {
+    if (!busy) run();
+  });
+
+  // The message clears itself; the title on the button keeps the last outcome.
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!result) return;
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 6000);
+    return () => clearTimeout(t);
+  }, [result]);
+
+  return (
+    <div className="ap-sync">
+      <button
+        className="ap-btn ghost"
+        onClick={run}
+        disabled={busy}
+        aria-label={busy ? "Synkar…" : label}
+        aria-busy={busy}
+        title={result?.message || "Synka rättning + CLV"}
+      >
+        <span style={busy ? { animation: "spin 1s linear infinite", display: "inline-flex" } : { display: "inline-flex" }}>
+          <I p={IC.refresh} size={15} />
+        </span>
+        <span className="ap-hide-sm">{busy ? "Synkar…" : label}</span>
+      </button>
+      {/* Always mounted so a screen reader announces the result when it arrives. */}
+      <span role="status" className={"ap-sync-msg" + (result && !result.ok ? " is-err" : "")}>
+        {result && !busy && show ? result.message : ""}
+      </span>
     </div>
   );
 }

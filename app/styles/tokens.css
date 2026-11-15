@@ -1,0 +1,144 @@
+/* ============================================================
+   Oddstavlan — design tokens.
+
+   The look is an odds board / dealing terminal: a near-black ruled grid where
+   nothing floats. One signal colour (amber) marks everything interactive or
+   needing attention; green and red mean win and loss and nothing else; blue
+   marks an open bet. No shadows, gradients or glows, and corners are 2px.
+
+   Token names (--bg, --card, --dim2, --acc …) are a contract with ~900 inline
+   styles in the TSX, so they are kept; only the values changed.
+   ============================================================ */
+:root {
+  /* One superfamily: Sans for prose, Sans Condensed (caps) for headings and
+     labels, Mono for every number. */
+  --disp: var(--font-disp), "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --sans: var(--font-sans), "IBM Plex Sans", system-ui, sans-serif;
+  --mono: var(--font-mono), "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Type scale — seven steps, nothing in between. */
+  --fs-micro: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+
+  /* Radius: square with the corner just broken. The names are kept from the
+     old scale; "pill" is no longer round on purpose. */
+  --r-xs: 1px;
+  --r-sm: 2px;
+  --r-ctl: 2px;
+  --r-card: 2px;
+  --r-modal: 3px;
+  --r-pill: 2px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+
+  /* Density. Phones override these in base.css. */
+  --row-h: 32px;
+  --ctl-h: 30px;
+  --bar-h: 44px;
+  --side-w: 216px;
+  --rail-w: 52px;
+  --pad-x: 14px;
+  --pad-y: 12px;
+  --gap: 12px;
+}
+
+/* ---- dark (default): amber on black ---- */
+:root,
+:root[data-mode="dark"],
+.ap[data-mode="dark"] {
+  --bg: #0a0a09;
+  --side: #0a0a09;
+  --card: #11110f;
+  --card2: #191917;
+  --card3: #232320;
+  --line: #2b2a26;
+  --line2: #1d1c1a;
+  --txt: #eceae3;
+  --dim: #a8a59b;
+  /* Micro-labels sit on --card and --card2; this clears 4.5:1 on both. */
+  --dim2: #86847a;
+
+  --acc: #ffb000;
+  --acc-soft: rgba(255, 176, 0, 0.11);
+  --acc-line: rgba(255, 176, 0, 0.4);
+  --acc-text: #171000;
+  --acc-ink: #ffb000;
+
+  --pos: #46d68c;
+  --pos-soft: rgba(70, 214, 140, 0.11);
+  --pos-line: rgba(70, 214, 140, 0.36);
+  --red: #ff5f56;
+  --red-soft: rgba(255, 95, 86, 0.11);
+  --red-line: rgba(255, 95, 86, 0.38);
+  --info: #62adff;
+  --info-soft: rgba(98, 173, 255, 0.11);
+  --info-line: rgba(98, 173, 255, 0.36);
+
+  /* The one series a chart is about. */
+  --chart: #ffb000;
+  --chart-fill: rgba(255, 176, 0, 0.08);
+
+  --hover: rgba(255, 255, 255, 0.04);
+  --overlay: rgba(0, 0, 0, 0.72);
+  /* Panels never cast a shadow. Only things that sit above the page do. */
+  --shadow: none;
+  --shadow-lift: 0 0 0 1px var(--line), 0 18px 50px rgba(0, 0, 0, 0.66);
+}
+
+/* ---- light: the same board as a printout — warm paper, black ink ---- */
+:root[data-mode="light"],
+.ap[data-mode="light"] {
+  --bg: #f3f1ea;
+  --side: #f3f1ea;
+  --card: #fbfaf5;
+  --card2: #efece4;
+  --card3: #e6e2d8;
+  --line: #d2cec1;
+  --line2: #e3e0d5;
+  --txt: #17160f;
+  --dim: #54514a;
+  --dim2: #6a675e;
+
+  /* The fill stays amber; amber *text* on paper needs the darker ink. */
+  --acc: #f2a200;
+  --acc-soft: rgba(214, 140, 0, 0.14);
+  --acc-line: rgba(150, 98, 0, 0.5);
+  --acc-text: #171000;
+  --acc-ink: #7d5200;
+
+  --pos: #0a7742;
+  --pos-soft: rgba(10, 119, 66, 0.1);
+  --pos-line: rgba(10, 119, 66, 0.4);
+  --red: #c0271e;
+  --red-soft: rgba(192, 39, 30, 0.09);
+  --red-line: rgba(192, 39, 30, 0.4);
+  --info: #1b5eb5;
+  --info-soft: rgba(27, 94, 181, 0.09);
+  --info-line: rgba(27, 94, 181, 0.4);
+
+  /* On paper the bright fill is too pale to be a mark: a deeper step, 3.5:1. */
+  --chart: #b87900;
+  --chart-fill: rgba(184, 121, 0, 0.1);
+
+  --hover: rgba(23, 22, 15, 0.045);
+  --overlay: rgba(30, 27, 18, 0.46);
+  --shadow: none;
+  --shadow-lift: 0 0 0 1px var(--line), 0 18px 50px rgba(40, 34, 10, 0.2);
+}
+
+:root[data-mode="dark"] {
+  color-scheme: dark;
+}
+:root[data-mode="light"] {
+  color-scheme: light;
+}

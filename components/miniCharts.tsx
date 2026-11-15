@@ -62,7 +62,7 @@ export function Spark({
   );
 }
 
-export function HBar({ pct, color, track = "var(--hover)", h = 6, radius = 999 }: { pct: number; color: string; track?: string; h?: number; radius?: number }) {
+export function HBar({ pct, color, track = "var(--hover)", h = 6, radius = 0 }: { pct: number; color: string; track?: string; h?: number; radius?: number }) {
   return (
     <div style={{ height: h, background: track, borderRadius: radius, overflow: "hidden", width: "100%" }}>
       <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: radius }} />

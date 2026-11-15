@@ -1,9 +1,9 @@
 "use client";
 
-// Dashboard "Öppna spel": a live-action ticker of every pending bet — soonest
-// event first — where each card can be settled and given a closing price
-// without leaving the dashboard. Absorbs the old "Öppen risk" card; the totals
-// come from the same openRisk aggregate.
+// Dashboard "Öppna spel": every pending bet as a vertical action list — soonest
+// event first — where each row can be settled and given a closing price without
+// leaving the dashboard. Rows whose event has been played carry the amber rule:
+// they are the ones waiting on you. The totals come from the openRisk aggregate.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -69,32 +69,18 @@ export function OpenBetsPanel({
 
   return (
     <>
-      <Card className="ap-livecenter" style={{ padding: 0, marginBottom: 16 }}>
+      <Card className="ap-openbets">
         <div className="ap-card-head">
           <span role="heading" aria-level={2} className="ap-card-title">
-            <span className="ap-chip-icon is-sm is-sky" aria-hidden="true">
-              <I p={IC.clock} size={13} />
-            </span>
             Öppna spel
-            <span className="ap-count-badge">{risk.bets} aktiva</span>
+            <span className="ap-count-badge">{risk.bets}</span>
           </span>
-          <div className="ap-livecenter-actions">
-            <span className="ap-livecenter-totals">
-              <b className="ap-num">{krFmt(risk.stakeUnits * unit)}</b> i spel ·{" "}
-              <b className="ap-num pos">{krFmt(risk.potentialReturnUnits * unit)}</b> möjlig retur
-            </span>
-            {nextReady && (
-              <button className="ap-btn ap-settle-next" onClick={() => setSettling(nextReady)}>
-                <I p={IC.zap} size={14} />
-                Rätta nästa{readyCount > 1 ? ` (${readyCount})` : ""}
-              </button>
-            )}
-            {readyCount > 1 && (
-              <Link href="/rattning" className="ap-link">
-                Hela kön →
-              </Link>
-            )}
-          </div>
+          {nextReady && (
+            <button className="ap-openbet-settle" onClick={() => setSettling(nextReady)}>
+              <I p={IC.zap} size={12} />
+              Rätta nästa{readyCount > 1 ? ` (${readyCount})` : ""}
+            </button>
+          )}
         </div>
 
         {risk.bets === 0 ? (
@@ -105,48 +91,44 @@ export function OpenBetsPanel({
           />
         ) : (
           <>
-            {/* Horizontally scrollable ticker — settle and price each bet in place. */}
-            <div className="ap-openbet-row">
+            <div className="ap-openbets-totals">
+              <span>
+                I spel <b className="ap-num">{krFmt(risk.stakeUnits * unit)}</b>
+              </span>
+              <span>
+                Möjlig retur <b className="ap-num pos">{krFmt(risk.potentialReturnUnits * unit)}</b>
+              </span>
+            </div>
+
+            <div className="ap-openbet-scroll">
+            <ul className="ap-openbet-list">
               {rows.map((b) => {
                 const chip = timeChip(b.eventAt);
                 const ready = !!b.eventAt && dayIso(b.eventAt) <= today;
                 return (
-                  <article key={b.id} className={"ap-openbet" + (ready ? " is-ready" : "")}>
-                    <header className="ap-openbet-head">
-                      <SportMark sport={b.sport} />
-                      <span className="ap-openbet-book">{b.bookmaker ?? "—"}</span>
-                    </header>
-
-                    <div className="ap-openbet-sel" title={b.selection || undefined}>
-                      {b.selection || "—"}
-                    </div>
-                    <div className="ap-openbet-event" title={b.event}>
-                      {b.event}
-                    </div>
-
-                    <div className="ap-openbet-meta">
-                      <span className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span>
-                      <Chip chip={chip} />
-                      {b.league && <span className="ap-ell ap-openbet-league">{b.league}</span>}
-                    </div>
-
-                    <div className="ap-openbet-stats">
-                      <div>
-                        <span>Insats / Odds</span>
-                        <b className="ap-num">
-                          {krShort(b.stakeUnits * unit)}{" "}
-                          <em>{b.odds.toFixed(2)}</em>
-                        </b>
+                  <li key={b.id} className={"ap-openbet" + (ready ? " is-ready" : "")}>
+                    <div className="ap-openbet-main">
+                      <div className="ap-openbet-sel" title={b.selection || undefined}>
+                        {b.selection || "—"}
                       </div>
-                      <div className="ap-r">
-                        <span>Möjlig retur</span>
-                        <b className="ap-num pos">{krShort(b.stakeUnits * b.odds * unit)}</b>
+                      <div className="ap-openbet-event" title={b.event}>
+                        {b.event}
+                        {b.league ? ` · ${b.league}` : ""}
+                      </div>
+                      <div className="ap-openbet-meta">
+                        <SportMark sport={b.sport} />
+                        <span className="ap-num">{dateShort(b.eventAt ?? b.placedAt)}</span>
+                        <Chip chip={chip} />
+                        <span>{b.bookmaker ?? "—"}</span>
                       </div>
                     </div>
 
-                    <footer className="ap-openbet-foot">
-                      <span className="ap-openbet-clv">
-                        <span className="ap-label">CLV</span>
+                    <div className="ap-openbet-side">
+                      <span className="ap-num ap-openbet-nums" title="Insats @ odds → möjlig retur">
+                        {krShort(b.stakeUnits * unit)} <em>@</em> {b.odds.toFixed(2)} <em>→</em>{" "}
+                        <span className="pos">{krShort(b.stakeUnits * b.odds * unit)}</span>
+                      </span>
+                      <div className="ap-openbet-acts">
                         <ClvCell
                           betId={b.id}
                           odds={b.odds}
@@ -155,28 +137,29 @@ export function OpenBetsPanel({
                           boosted={b.boosted}
                           onSaved={(next) => handleClv(b.id, next)}
                         />
-                      </span>
-                      <button
-                        className="ap-openbet-settle"
-                        onClick={() => setSettling(b)}
-                        title="Rätta det här spelet"
-                      >
-                        <I p={IC.zap} size={13} />
-                        Rätta
-                      </button>
-                    </footer>
-                  </article>
+                        <button className="ap-openbet-settle" onClick={() => setSettling(b)} title="Rätta det här spelet">
+                          Rätta
+                        </button>
+                      </div>
+                    </div>
+                  </li>
                 );
               })}
+            </ul>
             </div>
 
-            <div className="ap-livecenter-foot">
-              <span>
-                {risk.bets > rows.length ? `Visar de ${rows.length} närmaste av ${risk.bets}` : "Dra i sidled för fler"}
+            <div className="ap-openbets-foot">
+              <span>{risk.bets > rows.length ? `De ${rows.length} närmaste av ${risk.bets}` : `${risk.bets} öppna`}</span>
+              <span style={{ display: "inline-flex", gap: 14 }}>
+                {readyCount > 1 && (
+                  <Link className="ap-link" href="/rattning">
+                    Hela kön →
+                  </Link>
+                )}
+                <Link className="ap-link" href="/bets?res=pending">
+                  Visa alla →
+                </Link>
               </span>
-              <Link className="ap-link" href="/bets?res=pending">
-                Visa alla öppna →
-              </Link>
             </div>
           </>
         )}

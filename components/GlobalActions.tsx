@@ -5,8 +5,9 @@ import dynamic from "next/dynamic";
 import { SyncButton } from "./SyncButton";
 import { revalidateAll, useSettings } from "@/lib/useData";
 import { I, IC } from "./icons";
+import { CMD, useCommand } from "@/lib/commands";
 
-// AddBetModal is ~34 kB and this component sits in the global top nav, so a
+// AddBetModal is ~34 kB and this component sits in the global status bar, so a
 // static import placed the whole modal in every authenticated route's bundle
 // even on pages where it is never opened. Loading it on first open keeps it off
 // the critical path. `mounted` stays true afterwards, so the component instance
@@ -17,8 +18,8 @@ const AddBetModal = dynamic(() => import("./AddBetModal").then((m) => m.AddBetMo
   ssr: false,
 });
 
-// The "Synka" + "+ Logga bet" pair lives in the global top nav (per the design),
-// so it's available on every page. Saving/syncing broadcasts revalidateAll(),
+// The "Synka" + "+ Logga bet" pair lives in the status bar, so it's available on
+// every page. The quick search can ask for either one by name (lib/commands). Saving/syncing broadcasts revalidateAll(),
 // which refreshes whatever data the current page has cached.
 export function GlobalActions() {
   const [adding, setAdding] = useState(false);
@@ -29,6 +30,12 @@ export function GlobalActions() {
   const hasKey = settings?.hasOddsApiKey ?? false;
   const unit = settings?.unitValue || 100;
 
+  const openAdd = () => {
+    setMounted(true);
+    setAdding(true);
+  };
+  useCommand(CMD.addBet, openAdd);
+
   return (
     <>
       <SyncButton onDone={revalidateAll} />
@@ -36,10 +43,7 @@ export function GlobalActions() {
         className="ap-btn"
         aria-label="Logga bet"
         aria-haspopup="dialog"
-        onClick={() => {
-          setMounted(true);
-          setAdding(true);
-        }}
+        onClick={openAdd}
       >
         <I p={IC.plus} size={15} /> <span className="ap-hide-sm">Logga bet</span>
       </button>

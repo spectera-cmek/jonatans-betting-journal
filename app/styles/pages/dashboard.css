@@ -1,0 +1,197 @@
+/* ---- Översikt ---- */
+.ap-chartcard {
+  overflow: hidden;
+}
+.ap-chart-body {
+  padding: 10px var(--pad-x) 8px;
+}
+
+/* Open bets: a vertical action list beside the equity curve. Rows waiting on a
+   result carry the amber rule — amber always means "needs you". */
+.ap-openbets {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+.ap-openbets-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  padding: 7px var(--pad-x);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.ap-openbets-totals b {
+  color: var(--txt);
+  font-weight: 500;
+}
+.ap-openbets-totals b.pos {
+  color: var(--pos);
+}
+/* Beside the chart the list takes whatever height the chart gives the row and
+   scrolls inside it, so it can never stretch the row and leave the chart
+   floating in a too-tall panel. */
+.ap-openbet-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 190px;
+}
+.ap-openbet-list {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.ap-openbet {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px var(--pad-x) 8px calc(var(--pad-x) - 2px);
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--line2);
+}
+.ap-openbet:last-child {
+  border-bottom: 0;
+}
+.ap-openbet:hover {
+  background: var(--hover);
+}
+.ap-openbet.is-ready {
+  border-left-color: var(--acc);
+}
+.ap-openbet-main {
+  min-width: 0;
+}
+.ap-openbet-sel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.ap-openbet-event {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.ap-openbet-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: var(--dim2);
+}
+.ap-openbet-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.ap-openbet-nums {
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.ap-openbet-nums em {
+  color: var(--dim2);
+  font-style: normal;
+}
+.ap-openbet-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ap-openbet-settle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--acc-line);
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--acc-ink);
+  font-family: var(--disp);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ap-openbet-settle:hover {
+  background: var(--acc-soft);
+  border-color: var(--acc);
+}
+.ap-openbets-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px var(--pad-x);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-xs);
+  color: var(--dim2);
+}
+@media (max-width: 920px) {
+  /* Stacked under the chart: the list is as tall as its rows. */
+  .ap-openbet-scroll {
+    min-height: 0;
+  }
+  .ap-openbet-list {
+    position: static;
+  }
+  .ap-openbet-settle {
+    min-height: 34px;
+    padding: 0 12px;
+  }
+}
+
+/* Ranked bars: share of bets per sport, with the P/L beside it. */
+.ap-rank {
+  display: flex;
+  flex-direction: column;
+}
+.ap-rank-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.2fr) minmax(40px, 1fr) 36px 62px;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  border-bottom: 1px dotted var(--line);
+  font-size: var(--fs-sm);
+}
+.ap-rank-row:last-child {
+  border-bottom: 0;
+}
+.ap-rank-bar {
+  height: 6px;
+  background: var(--card2);
+}
+.ap-rank-bar i {
+  display: block;
+  height: 100%;
+}
+
+/* Label on the shaded max-drawdown span of the equity curve. */
+.ap-chart-dd {
+  position: absolute;
+  top: 4px;
+  padding: 0 4px;
+  transform: translateX(-50%);
+  color: var(--red);
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}

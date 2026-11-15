@@ -17,7 +17,6 @@ export default function FairOddsPage() {
       <Topbar
         title="Fair odds"
         sub="Vad borde specialspelet kosta — och är oddset du fått värt det?"
-        icon={IC.percent}
       />
       {loading && !data && (
         <>

@@ -1,0 +1,82 @@
+/* ---- Inställningar: one ruled sheet; group name left, controls right ---- */
+.ap-settings {
+  max-width: 1000px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+.ap-set {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 12px 28px;
+  padding: 16px var(--pad-x);
+  border-bottom: 1px solid var(--line);
+}
+.ap-set:last-child {
+  border-bottom: 0;
+}
+.ap-set-head .ap-note {
+  margin: 6px 0 0;
+}
+.ap-set-head strong,
+.ap-set-body .ap-note strong {
+  color: var(--txt);
+  font-weight: 600;
+}
+.ap-set-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-width: 580px;
+}
+.ap-set-body > .ap-seg {
+  align-self: flex-start;
+}
+.ap-set-body .ap-note {
+  margin: 0;
+}
+.ap-set-body .ap-note p {
+  margin: 0 0 6px;
+}
+.ap-set-body .ap-note ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding-left: 18px;
+  list-style: square;
+}
+.ap-set-body code {
+  color: var(--acc-ink);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+.ap-set-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ap-set-hint {
+  display: block;
+  margin-top: 1px;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+/* Status lamp: square, lit green when connected. */
+.ap-led {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  background: var(--red);
+}
+.ap-led.is-on {
+  background: var(--pos);
+}
+@media (max-width: 760px) {
+  .ap-set {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

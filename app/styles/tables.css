@@ -1,0 +1,246 @@
+/* ---- tables: grid rows on hairlines, 32px on desktop ---- */
+.ap-table {
+  width: 100%;
+}
+.ap-thead,
+.ap-trow {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--pad-x);
+}
+.ap-thead {
+  min-height: 28px;
+  border-bottom: 1px solid var(--line);
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+/* Sortable header cells are buttons; they brighten on hover. */
+.ap-thead button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.ap-thead button:hover {
+  color: var(--txt);
+}
+.ap-thead .ap-r button {
+  margin-left: auto;
+}
+.ap-trow {
+  min-height: var(--row-h);
+  padding-block: 4px;
+  border-bottom: 1px solid var(--line2);
+  font-size: var(--fs-md);
+}
+.ap-trow:last-child {
+  border-bottom: 0;
+}
+.ap-trow:hover {
+  background: var(--hover);
+}
+.ap-trow .ap-num,
+.ap-thead .ap-num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.ap-trow .ap-num {
+  font-size: var(--fs-sm);
+}
+/* Wide grid-tables scroll inside their own panel instead of widening the page. */
+@media (max-width: 700px) {
+  .ap-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ap-table .ap-thead,
+  .ap-table .ap-trow {
+    width: max-content;
+    min-width: 100%;
+  }
+}
+
+/* ---- the bet ledger ---- */
+.ap-ledger .ap-table-wrap > .ap-card {
+  border-radius: var(--r-card);
+}
+/* The header follows the page down, under the status bar. */
+.ap-ledger .ap-thead {
+  position: sticky;
+  top: var(--bar-h);
+  z-index: 5;
+  background: var(--card);
+}
+.ap-ledger .ap-trow > :nth-child(3),
+.ap-ledger .ap-trow > :nth-child(6) {
+  color: var(--txt);
+}
+/* Outcome rail down the left edge of a row. */
+.ap-bet-row {
+  box-shadow: inset 2px 0 0 transparent;
+}
+.ap-bet-row.is-win {
+  box-shadow: inset 2px 0 0 var(--pos);
+}
+.ap-bet-row.is-loss {
+  box-shadow: inset 2px 0 0 var(--red);
+}
+.ap-bet-row.is-open {
+  box-shadow: inset 2px 0 0 var(--info);
+}
+
+/* ---- bet list on phones: stacked cells on shared rules ---- */
+.ap-betcards {
+  display: none;
+}
+@media (max-width: 860px) {
+  .ap-table-wrap {
+    display: none;
+  }
+  .ap-betcards {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Bigger tap targets for the settle/edit/delete buttons on touch screens. */
+  .ap-iconbtn {
+    width: 36px;
+    height: 36px;
+    font-size: var(--fs-md);
+  }
+}
+.ap-betcard {
+  padding: 11px var(--pad-x);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line);
+}
+.ap-betcard + .ap-betcard {
+  border-top: 0;
+}
+.ap-betcard.is-win {
+  border-left-color: var(--pos);
+}
+.ap-betcard.is-loss {
+  border-left-color: var(--red);
+}
+.ap-betcard.is-open {
+  border-left-color: var(--info);
+}
+.ap-betcard-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ap-betcard-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.ap-betcard-event {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.ap-betcard-sel {
+  margin-top: 2px;
+  font-size: var(--fs-md);
+  color: var(--dim);
+}
+.ap-betcard-stats {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px dotted var(--line);
+}
+.ap-betcard-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ap-betcard-stats > div > span {
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim2);
+}
+.ap-betcard-stats > div > b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 500;
+}
+/* Up to six actions for a pending bet don't fit beside the stats on a phone —
+   they get their own full-width row. */
+.ap-betcard-act {
+  flex-basis: 100%;
+  flex-direction: row !important;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px !important;
+  margin-left: auto;
+}
+.ap-betcard-empty {
+  padding: 36px 20px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--dim2);
+  font-size: var(--fs-md);
+  text-align: center;
+}
+/* A card list that sits flush inside its own panel (no outer frame of its own). */
+.ap-betcards.is-flush .ap-betcard {
+  border-left-width: 0;
+  border-right: 0;
+}
+.ap-betcards.is-flush .ap-betcard:first-child {
+  border-top: 0;
+}
+.ap-betcards.is-flush .ap-betcard:last-child {
+  border-bottom: 0;
+}
+/* Selection + its tags on one line: the text gives way, the tags stay whole. */
+.ap-selcell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dim);
+}
+.ap-selcell > .ap-ell {
+  flex: 0 1 auto;
+  min-width: 40px;
+  color: var(--txt);
+}
+.ap-selcell .ap-bet-tags {
+  flex: 1 0 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  /* Tags that don't fit fade out instead of being sliced mid-word. */
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent);
+}
+.ap-selcell .ap-tag {
+  flex-shrink: 0;
+}
