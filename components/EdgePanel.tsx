@@ -44,10 +44,10 @@ function SegmentRows({
   showBaseline: boolean;
 }) {
   if (segments.length === 0) {
-    return <span style={{ color: "var(--dim2)", fontSize: 13 }}>Inget segment kvalificerar sig ännu.</span>;
+    return <span style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>Inget segment kvalificerar sig ännu.</span>;
   }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
       {segments.map((s) => {
         const all = showBaseline ? baseline.get(baselineKey(s)) : undefined;
         // A sign flip between the window and the whole history is the thing
@@ -55,11 +55,11 @@ function SegmentRows({
         const flipped = all != null && Math.sign(all.profitUnits) !== Math.sign(s.profitUnits);
         return (
           <div key={baselineKey(s)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 13, marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: "var(--fs-md)", marginBottom: 6 }}>
               <span style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: 7 }}>
                 <span className="ap-tag" style={{ flexShrink: 0 }}>{s.dim}</span>
                 <span className="ap-ell">
-                  {s.key} <span style={{ color: "var(--dim2)", fontSize: 12 }}>· {s.settled} bets</span>
+                  {s.key} <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>· {s.settled} bets</span>
                 </span>
               </span>
               <span className="ap-num" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
@@ -69,16 +69,16 @@ function SegmentRows({
                 <span style={{ color: "var(--dim2)", marginLeft: 8 }}>{pctFmt(s.roiPct, true)}</span>
               </span>
             </div>
-            <HBar pct={Math.max((Math.abs(s.profitUnits) / max) * 100, 3)} color={color} track={cc.grid} h={7} />
+            <HBar pct={Math.max((Math.abs(s.profitUnits) / max) * 100, 3)} color={color} track={cc.grid} h={3} />
             {showBaseline && (
-              <div style={{ fontSize: 11, color: "var(--dim2)", marginTop: 5 }}>
+              <div style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)", marginTop: 5 }}>
                 {all ? (
                   <>
                     Hela historiken:{" "}
                     <span className={all.profitUnits >= 0 ? "pos" : "neg"}>{pctFmt(all.roiPct, true)}</span> över{" "}
                     {all.settled.toLocaleString("sv-SE")} avgjorda
                     {flipped && (
-                      <b style={{ color: "var(--a-amber, var(--dim))" }}> · har vänt</b>
+                      <b style={{ color: "var(--acc-ink)" }}> · har vänt</b>
                     )}
                   </>
                 ) : (
@@ -121,9 +121,9 @@ export function EdgePanel({
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
           <span className="ap-label">Läckor &amp; Edge</span>
-          <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>{periodLabel.toLowerCase()}</span>
+          <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>{periodLabel.toLowerCase()}</span>
         </div>
-        <p style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14, marginBottom: 0, lineHeight: 1.55 }}>
+        <p style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14, marginBottom: 0, lineHeight: 1.55 }}>
           Inget segment når {minSettled} avgjorda spel inom {periodLabel.toLowerCase()}. Välj en längre period.
         </p>
       </Card>
@@ -136,16 +136,16 @@ export function EdgePanel({
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Läckor &amp; Edge</span>
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>
           {days ? `beräknat live · ${periodLabel.toLowerCase()}` : "beräknat live ur hela historiken"}
         </span>
       </div>
 
-      <div className="ap-grid ap-two" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 16, gap: 22 }}>
+      <div className="ap-split" style={{ marginTop: 12 }}>
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-            <span className="neg" style={{ fontWeight: 700, fontSize: 13.5 }}>Läckor</span>
-            <span style={{ fontSize: 12, color: "var(--dim2)" }}>
+            <span className="neg" style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>Läckor</span>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
               har kostat <b className="ap-num neg">{krFmt(Math.abs(seg.leakUnits) * unit)}</b>
             </span>
           </div>
@@ -153,8 +153,8 @@ export function EdgePanel({
         </div>
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-            <span className="pos" style={{ fontWeight: 700, fontSize: 13.5 }}>Edges</span>
-            <span style={{ fontSize: 12, color: "var(--dim2)" }}>
+            <span className="pos" style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>Edges</span>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
               har gett <b className="ap-num pos">{krFmt(seg.edgeUnits * unit, true)}</b>
             </span>
           </div>
@@ -162,7 +162,7 @@ export function EdgePanel({
         </div>
       </div>
 
-      <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 16, marginBottom: 0 }}>
+      <p style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", lineHeight: 1.55, marginTop: 16, marginBottom: 0 }}>
         Segment över marknad, oddsspann, singel/ack och insatsstorlek med minst {seg.minSettled} avgjorda spel
         {days ? ` inom ${periodLabel.toLowerCase()}` : ""}. Odds-platshållare (1.01) är exkluderade ur oddsspannen.
         Testa reglerna i simulatorn längre ner.

@@ -35,7 +35,7 @@ export function KellyCard({
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Insatskalkylator (Kelly)</span>
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Hur mycket säger Kelly att du ska satsa?</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Hur mycket säger Kelly att du ska satsa?</span>
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
@@ -63,7 +63,7 @@ export function KellyCard({
       </div>
 
       {implied != null && (
-        <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 10 }}>
+        <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginTop: 10 }}>
           Oddset prissätter {pctFmt(implied * 100)} vinstchans — {mode === "ev" ? "din EV motsvarar" : "du tror"}{" "}
           {valid ? (
             <em className={p > implied ? "pos" : "neg"} style={{ fontStyle: "normal", fontWeight: 600 }}>
@@ -77,24 +77,13 @@ export function KellyCard({
       )}
 
       {a == null ? (
-        <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
+        <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14 }}>
           {mode === "ev"
             ? "Fyll i odds (>1), EV (%) och bankrulle."
             : "Fyll i odds (>1), vinstchans (0–100 %) och bankrulle."}
         </div>
       ) : !a.hasEdge ? (
-        <div
-          style={{
-            marginTop: 14,
-            borderRadius: 10,
-            padding: "12px 14px",
-            background: "var(--red-soft)",
-            border: "1px solid var(--red)",
-            color: "var(--red)",
-            fontSize: 13,
-            lineHeight: 1.5,
-          }}
-        >
+        <div className="ap-alert is-neg" style={{ marginTop: 14 }}>
           Ingen edge vid dessa odds och {mode === "ev" ? "denna EV" : "din skattade vinstchans"} — Kelly säger: <strong>lägg inget</strong>.
         </div>
       ) : (
@@ -103,12 +92,12 @@ export function KellyCard({
             <KellyTile label="½ Kelly (rek.)" frac={a.half} units={a.halfUnits} unit={unit} highlight />
             <KellyTile label="¼ Kelly" frac={a.quarter} units={a.quarterUnits} unit={unit} />
             <KellyTile label="Full Kelly" frac={a.full} units={a.fullUnits} unit={unit} />
-            <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
+            <div className="ap-ministat">
               <div className="ap-label">Edge (EV)</div>
-              <div className="ap-num pos" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{pctFmt(a.edge * 100, true)}</div>
+              <div className="ap-num ap-ministat-val pos">{pctFmt(a.edge * 100, true)}</div>
             </div>
           </div>
-          <p style={{ fontSize: 11.5, color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
+          <p style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", lineHeight: 1.55, marginTop: 14, marginBottom: 0 }}>
             Full Kelly maximerar tillväxt men svänger hårt — de flesta proffs spelar ¼–½ Kelly för lugnare
             bankrulle. Full Kelly = EV ÷ (odds − 1). Siffrorna förutsätter att din edge stämmer; överskatta den och Kelly blir för aggressiv.
           </p>
@@ -132,18 +121,10 @@ function KellyTile({
   highlight?: boolean;
 }) {
   return (
-    <div
-      style={{
-        background: highlight ? "var(--acc-soft)" : "var(--card2)",
-        borderRadius: 12,
-        padding: "12px 14px",
-      }}
-    >
+    <div className={"ap-ministat" + (highlight ? " is-key" : "")}>
       <div className="ap-label">{label}</div>
-      <div className="ap-num" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
-        {uFmt(units)}
-      </div>
-      <div style={{ fontSize: 11.5, color: "var(--dim2)", marginTop: 3 }}>
+      <div className="ap-num ap-ministat-val">{uFmt(units)}</div>
+      <div className="ap-ministat-sub">
         {pctFmt(frac * 100)} · {krFmt(units * unit)}
       </div>
     </div>

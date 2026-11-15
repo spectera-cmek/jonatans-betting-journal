@@ -106,7 +106,7 @@ function Distribution({ hist, mean, line }: { hist: number[]; mean: number; line
           <line x1={x(hover)} x2={x(hover)} y1={10} y2={H - padB} stroke="var(--dim2)" strokeWidth={1} strokeOpacity={0.6} />
         )}
       </svg>
-      <div style={{ fontSize: 12, color: "var(--dim)", minHeight: 18 }}>
+      <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim)", minHeight: 18 }}>
         {hover != null ? (
           <>
             <b className="ap-num">{hist[hover] ?? 0}</b> av {total} kvällar exakt {hover} · {pct((hist.slice(hover + 1).reduce((a, b) => a + b, 0)) / total, 0)} över {hover}
@@ -165,7 +165,7 @@ function AddPropLine({ gameId, playerId, stat, onSaved }: { gameId: number; play
       <button className="ap-btn" disabled={busy} onClick={save}>
         Lägg till
       </button>
-      {err && <span style={{ color: "var(--red)", fontSize: 12 }}>{err}</span>}
+      {err && <span style={{ color: "var(--red)", fontSize: "var(--fs-sm)" }}>{err}</span>}
     </div>
   );
 }
@@ -205,7 +205,7 @@ export function PropsPanel({
     <Card style={{ padding: 0, marginBottom: 16 }}>
       <div className="ap-card-head">
         <span role="heading" aria-level={2} className="ap-card-title">Spelarprops</span>
-        <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>5 000 simulerade kvällar per spelare · modellen väger 15 % mot linjen</span>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>5 000 simulerade kvällar per spelare · modellen väger 15 % mot linjen</span>
       </div>
       <div style={{ padding: "10px 16px 0" }}>
         <div className="ap-seg">
@@ -245,8 +245,8 @@ export function PropsPanel({
                   aria-expanded={isOpen}
                 >
                   <span className="ap-ell">
-                    <b>{p.name}</b> <span style={{ color: "var(--dim2)", fontSize: 11 }}>{teamAbbr.get(p.teamId)}</span>
-                    {s.quotes.length > 0 && <span style={{ color: "var(--dim2)", fontSize: 11 }}> · {s.quotes.length} bk</span>}
+                    <b>{p.name}</b> <span style={{ color: "var(--dim2)", fontSize: "var(--fs-xs)" }}>{teamAbbr.get(p.teamId)}</span>
+                    {s.quotes.length > 0 && <span style={{ color: "var(--dim2)", fontSize: "var(--fs-xs)" }}> · {s.quotes.length} bk</span>}
                   </span>
                   <span className="ap-r ap-num">{num(p.minutes, 0)}</span>
                   <span className="ap-r ap-num">
@@ -285,7 +285,7 @@ export function PropsPanel({
                           <div key={q.id} className={`ap-trow${q.flagged ? " ap-nba-flag" : ""}`} style={{ gridTemplateColumns: "1.2fr 70px 70px 70px 1fr 1fr 60px" }}>
                             <span className="ap-ell">
                               {q.book}
-                              <span style={{ color: "var(--dim2)", fontSize: 11 }}> · {q.source === "manual" ? "eget" : q.source}</span>
+                              <span style={{ color: "var(--dim2)", fontSize: "var(--fs-xs)" }}> · {q.source === "manual" ? "eget" : q.source}</span>
                             </span>
                             <span className="ap-r ap-num">{String(q.line).replace(".", ",")}</span>
                             <span className="ap-r ap-num">{dec(q.over)}</span>
@@ -298,7 +298,7 @@ export function PropsPanel({
                             </span>
                             <span className="ap-r">
                               {q.source === "manual" && (
-                                <button className="ap-btn ghost" style={{ padding: "2px 6px", fontSize: 11 }} onClick={() => del(q.id)}>
+                                <button className="ap-btn ghost" style={{ padding: "2px 6px", fontSize: "var(--fs-xs)" }} onClick={() => del(q.id)}>
                                   Ta bort
                                 </button>
                               )}
@@ -307,7 +307,7 @@ export function PropsPanel({
                         ))}
                       </div>
                     )}
-                    <div style={{ fontSize: 12, color: "var(--dim2)", marginTop: 8 }}>
+                    <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginTop: 8 }}>
                       Modellens P(över) vägs 15 % mot linjens pris efter att marginalen räknats bort — linjen bär resten. Spelare som inte spelar blir void.
                     </div>
                     {editable && <AddPropLine gameId={gameId} playerId={p.playerId} stat={stat} onSaved={onChanged} />}

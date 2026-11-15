@@ -50,7 +50,7 @@ export function SyncButton({
   };
 
   const status = result ? (
-    <div role="status" style={{ fontSize: 12.5, color: result.ok ? "var(--dim)" : "var(--red)", marginTop: showResult ? 10 : 0 }}>
+    <div role="status" style={{ fontSize: "var(--fs-md)", color: result.ok ? "var(--dim)" : "var(--red)", marginTop: showResult ? 10 : 0 }}>
       <div>{result.message}</div>
       {showResult && result.details?.length > 0 && (
         <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--dim2)", lineHeight: 1.45 }}>

@@ -94,7 +94,7 @@ a.ap-nba-card:hover {
   justify-content: space-between;
   gap: 8px;
   padding: 1px 0;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 .ap-nba-card-lines {
   display: flex;

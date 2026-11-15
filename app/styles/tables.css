@@ -154,7 +154,7 @@
   color: var(--dim);
 }
 .ap-betcard-event {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 600;
   line-height: 1.3;
 }
@@ -188,7 +188,7 @@
 .ap-betcard-stats > div > b {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 500;
   line-height: 22px;
 }
@@ -198,7 +198,7 @@
   height: 22px;
 }
 .ap-betcard-stats .ap-clv-btn {
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 /* Up to six actions for a pending bet don't fit beside the stats on a phone —
    they get their own full-width row. */

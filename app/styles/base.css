@@ -66,6 +66,13 @@ body {
   line-height: 1.3;
 }
 
+/* Plex Sans and Mono are loaded up to 600. A browser asked for 700 would fake
+   it by smearing the 600, so emphasis tops out at the real weight. */
+.ap b,
+.ap strong {
+  font-weight: 600;
+}
+
 .pos {
   color: var(--pos);
 }
@@ -111,7 +118,8 @@ body {
   line-height: 1.5;
 }
 
-/* Phones: looser rows and controls, bigger body text. */
+/* Phones: looser rows and controls, and the small end of the type scale moves
+   up a pixel — the same seven steps, read at arm's length. */
 @media (max-width: 920px) {
   :root {
     --row-h: 40px;
@@ -119,8 +127,9 @@ body {
     --bar-h: 48px;
     --pad-x: 12px;
     --gap: 10px;
-  }
-  .ap {
-    font-size: 14px;
+    --fs-micro: 11px;
+    --fs-xs: 12px;
+    --fs-sm: 13px;
+    --fs-md: 14px;
   }
 }

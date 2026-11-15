@@ -51,7 +51,7 @@ export function AsianHandicapCard() {
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Asian handicap-hjälpen</span>
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Vad händer med insatsen vid varje slutresultat?</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Vad händer med insatsen vid varje slutresultat?</span>
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
@@ -86,7 +86,7 @@ export function AsianHandicapCard() {
       )}
 
       {!valid ? (
-        <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>Fyll i linje, odds (&gt; 1) och insats.</div>
+        <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14 }}>Fyll i linje, odds (&gt; 1) och insats.</div>
       ) : (
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
           {MARGINS.map((m) => {
@@ -101,9 +101,9 @@ export function AsianHandicapCard() {
                   alignItems: "center",
                   gap: 10,
                   background: "var(--card2)",
-                  borderRadius: 10,
+                  borderRadius: "var(--r-ctl)",
                   padding: "9px 12px",
-                  fontSize: 13,
+                  fontSize: "var(--fs-md)",
                 }}
               >
                 <span style={{ flex: "1 1 110px", minWidth: 0 }}>{marginLabel(m)}</span>

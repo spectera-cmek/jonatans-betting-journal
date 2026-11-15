@@ -153,3 +153,15 @@
   overflow: hidden;
   white-space: nowrap;
 }
+/* Month labels under an index-spaced line, clear of the value scale. */
+.ap-chart-months {
+  display: flex;
+  justify-content: space-between;
+  margin: 5px 52px 0 0;
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

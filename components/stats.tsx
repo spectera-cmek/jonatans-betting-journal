@@ -105,7 +105,7 @@ export function PerfCards({
         <div key={r.label} className="ap-betcard">
           <div className="ap-betcard-top">
             <span className="ap-betcard-event" style={cap ? { textTransform: "capitalize" } : undefined}>{r.label}</span>
-            <b className={"ap-num " + (r.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 500, fontSize: 15 }}>
+            <b className={"ap-num " + (r.profitUnits >= 0 ? "pos" : "neg")} style={{ fontWeight: 500, fontSize: "var(--fs-lg)" }}>
               {krShort(r.profitUnits * unit, true)}
             </b>
           </div>

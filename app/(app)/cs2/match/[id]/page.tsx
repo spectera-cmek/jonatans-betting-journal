@@ -113,7 +113,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
           <span role="heading" aria-level={2} className="ap-card-title">Kartor</span>
-          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>{v.vetoManual ? "Kartorna inmatade för hand" : v.vetoKnown ? "Vetot klart" : "Sannolikhet per position ur vetot"}</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>{v.vetoManual ? "Kartorna inmatade för hand" : v.vetoKnown ? "Vetot klart" : "Sannolikhet per position ur vetot"}</span>
         </div>
         <div className="ap-cs2-scroll">
           <div className="ap-table" style={{ minWidth: 760 }}>
@@ -152,7 +152,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
           <span role="heading" aria-level={2} className="ap-card-title">Spelare · modellens linjer</span>
-          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Fair line = linjen där modellen ger ~50 %, inkl. övertid</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Fair line = linjen där modellen ger ~50 %, inkl. övertid</span>
         </div>
         <div className="ap-cs2-scroll">
           <div className="ap-table" style={{ minWidth: 760 }}>
@@ -215,9 +215,9 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
       <Card style={{ marginBottom: 16 }}>
         <div className="ap-card-head" style={{ margin: "-20px -20px 14px" }}>
           <span role="heading" aria-level={2} className="ap-card-title">Angles</span>
-          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Datadrivna skäl att avvika från linjen — med urvalet bakom</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Datadrivna skäl att avvika från linjen — med urvalet bakom</span>
         </div>
-        {v.angles.length === 0 && <div style={{ color: "var(--dim2)", fontSize: 13 }}>Inga angles över trösklarna för den här matchen.</div>}
+        {v.angles.length === 0 && <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>Inga angles över trösklarna för den här matchen.</div>}
         <ul className="ap-cs2-items">
           {v.angles.map((a, i) => (
             <li key={i} className={`ap-cs2-item ${a.strength === 0 ? "warn" : a.kind === "edge" ? "pos" : ""}`}>
@@ -225,7 +225,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
                 {a.strength > 0 ? "●".repeat(a.strength) + " " : "⚠ "}
                 {a.title}
               </b>
-              <div style={{ color: "var(--dim)", fontSize: 12.5 }}>{a.detail}</div>
+              <div style={{ color: "var(--dim)", fontSize: "var(--fs-md)" }}>{a.detail}</div>
             </li>
           ))}
         </ul>
@@ -239,7 +239,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
           Gameplan: {v.team2.name}
         </button>
       </div>
-      <div style={{ marginBottom: 8, fontSize: 12.5, color: "var(--dim)" }}>
+      <div style={{ marginBottom: 8, fontSize: "var(--fs-md)", color: "var(--dim)" }}>
         Docen för <TeamLink id={gpTeam === 1 ? v.team1.id : v.team2.id} name={gpTeam === 1 ? v.team1.name : v.team2.name} /> mot{" "}
         {gpTeam === 1 ? v.team2.name : v.team1.name}, på kartan som troligast spelas.
       </div>

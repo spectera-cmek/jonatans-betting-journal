@@ -57,7 +57,7 @@
 }
 .ap-brand .name {
   font-family: var(--disp);
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -489,7 +489,7 @@
     padding: 0 8px;
   }
   .ap-h1 {
-    font-size: 22px;
+    font-size: var(--fs-xl);
   }
 
   .ap-mobnav {
@@ -614,7 +614,7 @@
     display: block;
   }
   .ap-more-sheet-item strong {
-    font-size: 14px;
+    font-size: var(--fs-md);
     font-weight: 500;
   }
   .ap-more-sheet-item small {

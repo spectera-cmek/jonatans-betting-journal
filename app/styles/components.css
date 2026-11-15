@@ -156,7 +156,7 @@
   margin-top: 6px;
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: 22px;
+  font-size: var(--fs-xl);
   line-height: 1.1;
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -168,11 +168,6 @@
 }
 .ap-kpi-val.t-red {
   color: var(--red);
-}
-@media (max-width: 1500px) {
-  .ap-kpi-grid .ap-kpi-val {
-    font-size: 20px;
-  }
 }
 .ap-kpi-foot {
   display: flex;
@@ -1032,7 +1027,7 @@
 }
 .ap-ministat-val {
   margin-top: 4px;
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 500;
 }
 .ap-ministat-sub {
@@ -1049,7 +1044,7 @@
   font-size: var(--fs-micro);
 }
 .ap-inlinestat .ap-num {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 500;
 }
 
@@ -1267,5 +1262,80 @@
   .ap-clv-fetch {
     width: 30px;
     height: 30px;
+  }
+}
+
+/* A row of headline figures inside a panel. */
+.ap-figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 36px;
+}
+.ap-figs .ap-kpi-val {
+  margin-top: 0;
+}
+.ap-figs .ap-note {
+  margin-top: 3px;
+}
+/* Donut beside its legend; stacks when the panel is narrow. */
+.ap-outcomes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+}
+.ap-outcomes > svg {
+  flex-shrink: 0;
+}
+.ap-outcomes-legend {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+/* A micro-label that opens a padded panel is that panel's title — raise it to
+   the same weight as the strip titles, without touching the markup. */
+.ap-card:not(.ap-kpi) > .ap-label:first-child,
+.ap-card:not(.ap-kpi) > div:first-child > .ap-label:first-child {
+  color: var(--txt);
+  font-size: var(--fs-md);
+  letter-spacing: 0.1em;
+}
+/* The one tile in a row that is the recommendation. */
+.ap-ministat.is-key {
+  border-color: var(--acc-line);
+  background: var(--acc-soft);
+}
+/* Inline notice inside a panel. */
+.ap-alert {
+  padding: 8px 10px;
+  border: 1px solid var(--acc-line);
+  border-left: 2px solid var(--acc);
+  border-radius: var(--r-ctl);
+  background: var(--acc-soft);
+  color: var(--txt);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+.ap-alert.is-neg {
+  border-color: var(--red-line);
+  border-left-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red);
+}
+.ap-alert.is-pos {
+  border-color: var(--pos-line);
+  border-left-color: var(--pos);
+  background: var(--pos-soft);
+}
+
+/* Two columns inside one panel (no rules between them — it is one panel). */
+.ap-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 24px;
+}
+@media (max-width: 920px) {
+  .ap-split {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -202,7 +202,7 @@ function GamesTab({ past }: { past: boolean }) {
           </button>
         </div>
         {data && data.dbConfigured && data.lastRun && (
-          <span style={{ fontSize: 12, color: "var(--dim2)" }}>Senast räknad {dateLabel(data.lastRun)}</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Senast räknad {dateLabel(data.lastRun)}</span>
         )}
       </div>
       {data && games.length > 0 && (
@@ -219,7 +219,7 @@ function GamesTab({ past }: { past: boolean }) {
             <small>Största avvikelse</small>
             <b className="ap-num">{stats.biggest ? num(stats.biggest.e) : "—"}</b>
             {stats.biggest ? (
-              <span style={{ fontSize: 12, color: "var(--dim2)" }}>
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
                 {stats.biggest.g.away?.abbr} @ {stats.biggest.g.home?.abbr} · {stats.biggest.m === "spread" ? "spread" : "total"}
               </span>
             ) : null}
@@ -239,7 +239,7 @@ function GamesTab({ past }: { past: boolean }) {
         ))}
       </div>
       {shown.length > 0 && (
-        <p style={{ fontSize: 12, color: "var(--dim2)", marginTop: 10 }}>
+        <p style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginTop: 10 }}>
           Spread i hemmalagets perspektiv (− = hemma favorit). Talet i parentes är edgen i poäng: modellens linje mot marknadens. Picken låses mot
           första linjen modellen ser och prissätts aldrig om. Matcher där modellen avviker {BIG_EDGE}+ poäng markeras.
         </p>
@@ -326,7 +326,7 @@ function BucketTiles({ records, selected, onSelect }: { records: BucketRecord[];
           <b className="ap-num">
             {b.w}-{b.l}-{b.p}
           </b>
-          <span style={{ fontSize: 12, color: "var(--dim2)" }}>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
             {b.hit == null ? "—" : pct(b.hit, 1)}
             {b.roi != null ? ` · ROI ${pct(b.roi, 1)}` : ""}
             {b.clv != null ? ` · CLV ${signed(Math.round(b.clv * 10) / 10)}` : ""}
@@ -364,7 +364,7 @@ function FacitTab() {
             Total
           </button>
         </div>
-        <span style={{ fontSize: 12, color: "var(--dim2)" }}>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
           Låsta picks mot första linjen. Break-even vid 1,91 (−110): {pct(data.breakEven, 1)}. Få spel = mest brus.
         </span>
       </div>
@@ -420,17 +420,17 @@ function FacitTab() {
               <b>
                 Backtest #{r.id} · {r.modelVersion}
               </b>
-              <span style={{ fontSize: 12, color: "var(--dim2)" }}>
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
                 {r.fromDate.slice(0, 10)} → {r.toDate.slice(0, 10)} · {r.games} matcher · mot stängning: {m.books.join(", ") || "—"}
               </span>
             </div>
             {m.ats?.[market] && (
               <>
-                <div style={{ fontSize: 12, color: "var(--dim2)", marginBottom: 6 }}>Picks mot stängningslinjen ({market === "spread" ? "spread" : "total"})</div>
+                <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginBottom: 6 }}>Picks mot stängningslinjen ({market === "spread" ? "spread" : "total"})</div>
                 <BucketTiles records={m.ats[market]!} />
               </>
             )}
-            <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+            <div style={{ fontSize: "var(--fs-md)", lineHeight: 1.7 }}>
               Marginal: MAE modell {f(m.margin.maeModel, 2)} / marknad {f(m.margin.maeMarket, 2)}, bias {f(m.margin.bias, 2)}
               <br />
               Total: MAE modell {f(m.total.maeModel, 2)} / marknad {f(m.total.maeMarket, 2)}, bias {f(m.total.bias, 2)}
@@ -449,7 +449,7 @@ function FacitTab() {
       <Card style={{ padding: 0 }}>
         <div className="ap-card-head">
           <span role="heading" aria-level={2} className="ap-card-title">Priser i procent — modellens sparade sannolikheter</span>
-          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Lägre log loss = bättre</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Lägre log loss = bättre</span>
         </div>
         <div className="ap-nba-scroll">
           <div className="ap-table" style={{ minWidth: 560 }}>
@@ -574,7 +574,7 @@ function PropsTab() {
           <div className="ap-card">
             <small>Rättade projektioner</small>
             <b className="ap-num">{f.n}</b>
-            <span style={{ fontSize: 12, color: "var(--dim2)" }}>medelfel {num(f.mae)}</span>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>medelfel {num(f.mae)}</span>
           </div>
           <div className="ap-card">
             <small>Inom 10–90 % (mål 80 %)</small>
@@ -585,7 +585,7 @@ function PropsTab() {
             <b className="ap-num">
               {f.w}-{f.l}
             </b>
-            <span style={{ fontSize: 12, color: "var(--dim2)" }}>{f.roi == null ? "—" : `ROI ${pct(f.roi, 1)}`}</span>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>{f.roi == null ? "—" : `ROI ${pct(f.roi, 1)}`}</span>
           </div>
         </div>
       )}
@@ -625,7 +625,7 @@ function PropsTab() {
                       {r.matchup}
                     </span>
                     <span className="ap-ell">
-                      <b>{r.name}</b> <span style={{ color: "var(--dim2)", fontSize: 11 }}>{r.team}</span>
+                      <b>{r.name}</b> <span style={{ color: "var(--dim2)", fontSize: "var(--fs-xs)" }}>{r.team}</span>
                     </span>
                     <span className="ap-r ap-num">{num(r.minutes, 0)}</span>
                     <span className="ap-r ap-num">
@@ -651,7 +651,7 @@ function PropsTab() {
           </div>
         </Card>
       )}
-      <p style={{ fontSize: 12, color: "var(--dim2)", marginTop: 10 }}>
+      <p style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginTop: 10 }}>
         Modellen simulerar 5 000 kvällar per spelare (minuter, skott, träff, returer, assist) och väger 15 % mot linjen efter att marginalen räknats
         bort. Markeras vid edge ≥ {Math.round(data.threshold * 100)} % och odds ≤ {String(data.maxOdds).replace(".", ",")}. Klicka för fördelningen.
       </p>

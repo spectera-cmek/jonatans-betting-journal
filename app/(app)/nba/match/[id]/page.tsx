@@ -24,7 +24,7 @@ function QuoteRow({ q, home, away, onDelete }: { q: Quote; home: string; away: s
     <div className={`ap-trow${q.flagged ? " ap-nba-flag" : ""}`} style={{ gridTemplateColumns: Q_GRID }}>
       <span className="ap-ell">
         {q.book ?? "—"}
-        <span style={{ color: "var(--dim2)", fontSize: 11 }}> · {q.source === "manual" ? "eget" : q.source}</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-xs)" }}> · {q.source === "manual" ? "eget" : q.source}</span>
       </span>
       <span>{MARKET_LABEL[q.market]}</span>
       <span className="ap-ell ap-num">
@@ -45,7 +45,7 @@ function QuoteRow({ q, home, away, onDelete }: { q: Quote; home: string; away: s
           "—"
         )}
         {onDelete && (
-          <button className="ap-btn ghost" style={{ marginLeft: 8, padding: "2px 8px", fontSize: 11 }} onClick={onDelete}>
+          <button className="ap-btn ghost" style={{ marginLeft: 8, padding: "2px 8px", fontSize: "var(--fs-xs)" }} onClick={onDelete}>
             Ta bort
           </button>
         )}
@@ -72,7 +72,7 @@ function MinutesCard({
     <Card style={{ padding: 0 }}>
       <div className="ap-card-head">
         <span role="heading" aria-level={2} className="ap-card-title">{title}</span>
-        <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>{total.toFixed(0)} min</span>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>{total.toFixed(0)} min</span>
       </div>
       <div className="ap-table">
         <div className="ap-thead" style={{ gridTemplateColumns: M_GRID }}>
@@ -91,7 +91,7 @@ function MinutesCard({
               <span className="ap-ell">{r.name}</span>
               <span style={{ color: "var(--dim)" }}>{r.position ?? "—"}</span>
               <span className="ap-r ap-num">{r.baseline.toFixed(1)}</span>
-              <span className="ap-ell" style={{ fontSize: 12, color: r.injuryStatus ? "var(--amber, #d97706)" : "var(--dim2)" }} title={r.injuryDetail ?? undefined}>
+              <span className="ap-ell" style={{ fontSize: "var(--fs-sm)", color: r.injuryStatus ? "var(--amber, #d97706)" : "var(--dim2)" }} title={r.injuryDetail ?? undefined}>
                 {r.injuryStatus ?? (hasOverride ? "ändrad" : "")}
               </span>
               <span className="ap-r" style={{ display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
@@ -105,7 +105,7 @@ function MinutesCard({
                 />
                 <button
                   className="ap-btn ghost"
-                  style={{ padding: "2px 6px", fontSize: 11 }}
+                  style={{ padding: "2px 6px", fontSize: "var(--fs-xs)" }}
                   title={hasOverride || edited != null ? "Återställ till modellens minuter" : "Spelar inte"}
                   onClick={() => setEdit(r.playerId, hasOverride || edited != null ? null : "0")}
                 >
@@ -175,7 +175,7 @@ function ManualOdds({ gameId, home, away, onSaved }: { gameId: number; home: str
       <button className="ap-btn" disabled={busy} onClick={save}>
         Lägg till
       </button>
-      {err && <span style={{ color: "var(--red)", fontSize: 12 }}>{err}</span>}
+      {err && <span style={{ color: "var(--red)", fontSize: "var(--fs-sm)" }}>{err}</span>}
     </div>
   );
 }
@@ -294,7 +294,7 @@ export default function NbaMatchPage({ params }: { params: { id: string } }) {
       <Card style={{ padding: 0, marginBottom: 16 }}>
         <div className="ap-card-head">
           <span role="heading" aria-level={2} className="ap-card-title">Priser</span>
-          <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>Modell · marknad → viktad. Edge ≥ 5 % markeras.</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Modell · marknad → viktad. Edge ≥ 5 % markeras.</span>
         </div>
         <div className="ap-nba-scroll">
           <div className="ap-table" style={{ minWidth: 820 }}>
@@ -325,10 +325,10 @@ export default function NbaMatchPage({ params }: { params: { id: string } }) {
         <button className="ap-btn" disabled={!dirty || busy} onClick={resimulate}>
           {busy ? "Simulerar…" : "Simulera om"}
         </button>
-        <span style={{ fontSize: 12, color: "var(--dim2)" }}>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
           Ändra minuter (0 = spelar inte) eller tryck Ut. Övriga spelare fördelas om så att laget får 240 minuter.
         </span>
-        {error && <span style={{ color: "var(--red)", fontSize: 12 }}>{error}</span>}
+        {error && <span style={{ color: "var(--red)", fontSize: "var(--fs-sm)" }}>{error}</span>}
       </div>
       <div className="ap-nba-teams">
         <MinutesCard title={`${d.game.away.name} (borta)`} lineup={d.away} edits={edits} resets={resets} setEdit={setEdit} />

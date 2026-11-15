@@ -21,7 +21,7 @@ export function BonusCard() {
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Bonusvärdering</span>
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Vad är bonusen värd efter omsättningskravet?</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Vad är bonusen värd efter omsättningskravet?</span>
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
@@ -37,7 +37,7 @@ export function BonusCard() {
       </div>
 
       {b == null ? (
-        <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
+        <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14 }}>
           Fyll i bonusbelopp, omsättningskrav och antagen marginal.
         </div>
       ) : (
@@ -48,7 +48,7 @@ export function BonusCard() {
             <MiniStat label="Bonusens nettovärde" value={krFmt(b.netValue, true)} tone={b.netValue >= 0 ? "pos" : "neg"} />
             <MiniStat label="Du behåller" value={pctFmt(b.retained * 100)} tone={b.retained >= 0 ? undefined : "neg"} />
           </div>
-          <div className={"ap-num " + (b.netValue > 0 ? "pos" : "neg")} style={{ marginTop: 14, fontSize: 14, fontWeight: 700 }}>
+          <div className={"ap-num " + (b.netValue > 0 ? "pos" : "neg")} style={{ marginTop: 14, fontSize: "var(--fs-lg)", fontWeight: 600 }}>
             {b.netValue > 0 ? `✓ Ta bonusen · ${krFmt(b.netValue, true)}` : `✗ Tacka nej · ${krFmt(b.netValue, true)}`}
           </div>
         </>

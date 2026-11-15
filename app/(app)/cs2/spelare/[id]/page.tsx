@@ -187,7 +187,7 @@ export default function Cs2PlayerPage({ params }: { params: { id: string } }) {
               .map((x) => (
                 <div key={`${x.mapName}-${x.side}`} className="ap-trow" style={{ gridTemplateColumns: "1fr 50px 60px 70px 70px 80px 1.6fr" }}>
                   <b>{mapLabel(x.mapName)}</b>
-                  <span style={{ color: x.side === "ct" ? "var(--cs2-ct)" : "var(--cs2-t)", fontWeight: 700 }}>{x.side.toUpperCase()}</span>
+                  <span style={{ color: x.side === "ct" ? "var(--cs2-ct)" : "var(--cs2-t)", fontWeight: 600 }}>{x.side.toUpperCase()}</span>
                   <span className="ap-r ap-num">{x.facts.rounds}</span>
                   <span className="ap-r ap-num">{dec(rate(x.facts.kills, x.facts.rounds))}</span>
                   <span className="ap-r ap-num">{pct(rate(x.facts.headshots, x.facts.kills))}</span>

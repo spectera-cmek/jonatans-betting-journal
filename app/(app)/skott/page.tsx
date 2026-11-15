@@ -250,7 +250,7 @@ export default function ShotsPage() {
               onChange={(e) => setBlendW(Number(e.target.value))}
               style={{ accentColor: "var(--acc)", width: "100%" }}
             />
-            <span style={{ fontSize: 11, color: "var(--dim2)" }}>
+            <span style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)" }}>
               0 % ren marknad · 100 % ren modell
             </span>
           </div>
@@ -320,7 +320,7 @@ export default function ShotsPage() {
             </div>
 
             {loading && (
-              <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: 14 }}>Laddar…</div>
+              <div style={{ padding: "48px 20px", textAlign: "center", color: "var(--dim2)", fontSize: "var(--fs-lg)" }}>Laddar…</div>
             )}
 
             {!loading && rows.length === 0 && trainedMatches > 0 && !meta?.missingOdds && (
@@ -448,7 +448,7 @@ export default function ShotsPage() {
                       value={`${m.homeMean.toFixed(1)} / ${m.awayMean.toFixed(1)} · φ ${Number.isFinite(m.dispersion) ? m.dispersion.toFixed(0) : "∞"}`}
                     />
                   ))}
-                  {l.models.length === 0 && <span style={{ color: "var(--dim2)", fontSize: 13 }}>Ingen modell — för lite data</span>}
+                  {l.models.length === 0 && <span style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>Ingen modell — för lite data</span>}
                 </div>
               </div>
             ))}

@@ -59,7 +59,7 @@ export function ManualVeto({ v, onSaved }: { v: MatchupView; onSaved: () => void
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <b>Kartor</b>{" "}
-          <span style={{ color: "var(--dim)", fontSize: 12.5 }}>
+          <span style={{ color: "var(--dim)", fontSize: "var(--fs-md)" }}>
             {v.vetoManual
               ? `inmatade för hand: ${v.vetoMaps.map(mapLabel).join(" → ")}`
               : "vetot är inte inläst — modellen räknar med sannolikheter. Vet du kartorna? Lägg in dem."}
@@ -112,7 +112,7 @@ export function ManualVeto({ v, onSaved }: { v: MatchupView; onSaved: () => void
                   </div>
                 </div>
               ) : (
-                <div style={{ alignSelf: "end", fontSize: 12, color: "var(--dim2)", paddingBottom: 10 }}>
+                <div style={{ alignSelf: "end", fontSize: "var(--fs-sm)", color: "var(--dim2)", paddingBottom: 10 }}>
                   {n === 1 ? "" : "spelas om det står 1–1"}
                 </div>
               )}
@@ -128,7 +128,7 @@ export function ManualVeto({ v, onSaved }: { v: MatchupView; onSaved: () => void
           </div>
         </div>
       )}
-      {error && <div role="alert" style={{ marginTop: 8, color: "var(--red)", fontSize: 12.5 }}>{error}</div>}
+      {error && <div role="alert" style={{ marginTop: 8, color: "var(--red)", fontSize: "var(--fs-md)" }}>{error}</div>}
     </Card>
   );
 }

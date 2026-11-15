@@ -153,7 +153,7 @@ export function ManualShotOdds({
         <div className="ap-card-head">
           <span role="heading" aria-level={2} className="ap-card-title">Räkna på egna odds</span>
         </div>
-        <div style={{ color: "var(--dim2)", fontSize: 13 }}>Laddar matcher…</div>
+        <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>Laddar matcher…</div>
       </Card>
     );
   }
@@ -164,7 +164,7 @@ export function ManualShotOdds({
         <div className="ap-card-head">
           <span role="heading" aria-level={2} className="ap-card-title">Räkna på egna odds</span>
         </div>
-        <div style={{ color: "var(--dim2)", fontSize: 13 }}>
+        <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>
           Inga kommande matcher med modell. Kör <code>npm run shots:ingest</code> först.
         </div>
       </Card>
@@ -175,7 +175,7 @@ export function ManualShotOdds({
     <Card>
       <div className="ap-card-head">
         <span role="heading" aria-level={2} className="ap-card-title">Räkna på egna odds</span>
-        <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
           För böcker API:et inte täcker — Betsson, Bethard, NordicBet
         </span>
       </div>
@@ -281,7 +281,7 @@ export function ManualShotOdds({
           </div>
 
           {result.priced && (
-            <div style={{ marginTop: 12, fontWeight: 700, fontSize: 14 }}>
+            <div style={{ marginTop: 12, fontWeight: 600, fontSize: "var(--fs-lg)" }}>
               {result.priced.edge > 0 ? (
                 <>
                   Spela <strong>{result.priced.side === "over" ? "över" : "under"} {line.replace(".", ",")}</strong> till{" "}

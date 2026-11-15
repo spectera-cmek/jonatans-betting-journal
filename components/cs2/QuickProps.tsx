@@ -170,7 +170,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
     if (!l || !pr || pr.edge == null || !pr.bestSide) return null;
     const side = l.market === "kill_duel" ? nick((pr.bestSide === "over" ? l.playerId : l.player2Id) ?? -1) : pr.bestSide === "over" ? "Ö" : "U";
     return (
-      <span className={pr.edge > 0 ? "pos" : "neg"} style={{ fontWeight: 700 }}>
+      <span className={pr.edge > 0 ? "pos" : "neg"} style={{ fontWeight: 600 }}>
         {side} {pr.edge >= 0 ? "+" : ""}
         {(pr.edge * 100).toFixed(1)} %
       </span>
@@ -181,7 +181,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
     <Card style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <b>Snabbläge · spelarprops</b>
-        <span style={{ fontSize: 11.5, color: "var(--dim2)" }}>fair odds = modellen utan bokens pris · övertid räknas</span>
+        <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>fair odds = modellen utan bokens pris · övertid räknas</span>
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0" }}>
@@ -211,7 +211,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10, fontSize: 12.5 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10, fontSize: "var(--fs-md)" }}>
         <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
           Bok
           <input className="ap-input" style={{ width: 110 }} value={book} onChange={(e) => setBook(e.target.value)} aria-label="Bok" />
@@ -221,7 +221,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
         </label>
       </div>
 
-      {err && <div className="neg" style={{ fontSize: 12.5, marginBottom: 8 }}>{err}</div>}
+      {err && <div className="neg" style={{ fontSize: "var(--fs-md)", marginBottom: 8 }}>{err}</div>}
 
       {!isDuel && tab === "ladder" && (
         <div style={{ display: "grid", gap: 10 }}>
@@ -231,9 +231,9 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
             const activeSaved = isActive ? saved(p.playerId, active!.line) : null;
             return (
               <div key={p.playerId}>
-                <div style={{ fontSize: 13, marginBottom: 4 }}>
+                <div style={{ fontSize: "var(--fs-md)", marginBottom: 4 }}>
                   <b>{p.nickname}</b>{" "}
-                  <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>
+                  <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>
                     {p.side === 1 ? view.team1.name : view.team2.name} · linje {lineTxt(r.median)}
                   </span>
                 </div>
@@ -252,25 +252,25 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
                           minWidth: 78,
                           textAlign: "left",
                           padding: "6px 8px",
-                          borderRadius: 8,
+                          borderRadius: "var(--r-ctl)",
                           cursor: "pointer",
                           background: sel ? "var(--surface-2, rgba(255,255,255,0.06))" : "transparent",
                           color: "inherit",
                           border: `1px solid ${edge != null ? (edge > 0 ? "var(--pos, #10b981)" : "var(--line)") : x.line === r.median ? "var(--dim)" : "var(--line)"}`,
-                          fontSize: 11.5,
+                          fontSize: "var(--fs-sm)",
                           lineHeight: 1.35,
                         }}
                       >
-                        <div style={{ fontWeight: 700, fontSize: 12.5 }}>{lineTxt(x.line)}</div>
+                        <div style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>{lineTxt(x.line)}</div>
                         <div className="ap-num">Ö {fair(x.pOver)}</div>
                         <div className="ap-num">U {fair(1 - x.pOver)}</div>
-                        {s && <div style={{ fontSize: 11 }}>{edgeBadge(s)}</div>}
+                        {s && <div style={{ fontSize: "var(--fs-xs)" }}>{edgeBadge(s)}</div>}
                       </button>
                     );
                   })}
                 </div>
                 {isActive && (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 6, fontSize: 12.5 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 6, fontSize: "var(--fs-md)" }}>
                     <span>
                       Bokens odds {lineTxt(active!.line)}:
                     </span>
@@ -309,13 +309,13 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
               </div>
             );
           })}
-          {players.length === 0 && <div style={{ fontSize: 12.5, color: "var(--dim2)" }}>Inga spelare med modell för den här kartan.</div>}
+          {players.length === 0 && <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)" }}>Inga spelare med modell för den här kartan.</div>}
         </div>
       )}
 
       {!isDuel && tab === "form" && (
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: FORM_COLS, gap: 6, fontSize: 11.5, color: "var(--dim2)", marginBottom: 4 }}>
+          <div style={{ display: "grid", gridTemplateColumns: FORM_COLS, gap: 6, fontSize: "var(--fs-sm)", color: "var(--dim2)", marginBottom: 4 }}>
             <span>Spelare</span>
             <span>Linje</span>
             <span>Över</span>
@@ -326,17 +326,17 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
             const s = num(r.line) != null ? saved(p.playerId, num(r.line)!) : null;
             return (
               <div key={p.playerId} style={{ display: "grid", gridTemplateColumns: FORM_COLS, gap: 6, alignItems: "center", marginBottom: 6 }}>
-                <span className="ap-ell" style={{ fontSize: 13 }}>
+                <span className="ap-ell" style={{ fontSize: "var(--fs-md)" }}>
                   <b>{p.nickname}</b>
                 </span>
                 <input className="ap-input ap-num" style={CELL} inputMode="decimal" aria-label={`${p.nickname} linje`} value={r.line} onChange={(e) => setFormField(p.playerId, "line", e.target.value)} />
                 <input className="ap-input ap-num" style={CELL} inputMode="decimal" aria-label={`${p.nickname} över`} value={r.over} onChange={(e) => setFormField(p.playerId, "over", e.target.value)} />
                 <input className="ap-input ap-num" style={CELL} inputMode="decimal" aria-label={`${p.nickname} under`} value={r.under} onChange={(e) => setFormField(p.playerId, "under", e.target.value)} />
                 {s?.price && (
-                  <span style={{ gridColumn: "1 / -1", fontSize: 11.5, display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", minWidth: 0 }}>
+                  <span style={{ gridColumn: "1 / -1", fontSize: "var(--fs-sm)", display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", minWidth: 0 }}>
                     {edgeBadge(s)}
                     {s.price.edge != null && s.price.edge > 0 && (
-                      <button className="ap-btn" style={{ padding: "3px 9px", fontSize: 11 }} onClick={() => logBet(s)}>
+                      <button className="ap-btn" style={{ padding: "3px 9px", fontSize: "var(--fs-xs)" }} onClick={() => logBet(s)}>
                         Logga bet
                       </button>
                     )}
@@ -352,10 +352,10 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
       )}
       {isDuel && (
         <div>
-          <div style={{ fontSize: 11.5, color: "var(--dim2)", marginBottom: 6 }}>
+          <div style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", marginBottom: 6 }}>
             Flest kills på kartan, lika = void. Paren är förvalda roll mot roll — byt spelare om boken parar annorlunda.
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: DUEL_COLS, gap: 6, fontSize: 11.5, color: "var(--dim2)", marginBottom: 4 }}>
+          <div style={{ display: "grid", gridTemplateColumns: DUEL_COLS, gap: 6, fontSize: "var(--fs-sm)", color: "var(--dim2)", marginBottom: 4 }}>
             <span>{view.team1.name}</span>
             <span>{view.team2.name}</span>
             <span>Odds 1</span>
@@ -392,7 +392,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
                   <input className="ap-input ap-num" style={CELL} inputMode="decimal" aria-label={`${nick(p.a)} odds`} placeholder={m ? fair(m.pA) : ""} value={o.a} onChange={(e) => setOdds("a", e.target.value)} />
                   <input className="ap-input ap-num" style={CELL} inputMode="decimal" aria-label={`${nick(p.b)} odds`} placeholder={m ? fair(1 - m.pA) : ""} value={o.b} onChange={(e) => setOdds("b", e.target.value)} />
                 </div>
-                <div style={{ fontSize: 11.5, display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginTop: 2, minWidth: 0 }}>
+                <div style={{ fontSize: "var(--fs-sm)", display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginTop: 2, minWidth: 0 }}>
                   {m ? (
                     <span className="ap-num" style={{ color: "var(--dim)" }}>
                       fair {nick(p.a)} {fair(m.pA)} · {nick(p.b)} {fair(1 - m.pA)}
@@ -402,7 +402,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
                   )}
                   {edgeBadge(s)}
                   {s?.price?.edge != null && s.price.edge > 0 && (
-                    <button className="ap-btn" style={{ padding: "3px 9px", fontSize: 11 }} onClick={() => logBet(s)}>
+                    <button className="ap-btn" style={{ padding: "3px 9px", fontSize: "var(--fs-xs)" }} onClick={() => logBet(s)}>
                       Logga bet
                     </button>
                   )}
@@ -410,7 +410,7 @@ export function QuickProps({ view, onChanged }: { view: MatchupView; onChanged: 
               </div>
             );
           })}
-          {pairs.length === 0 && <div style={{ fontSize: 12.5, color: "var(--dim2)" }}>Inga spelare med modell för den här kartan.</div>}
+          {pairs.length === 0 && <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)" }}>Inga spelare med modell för den här kartan.</div>}
           <button className="ap-btn" disabled={busy || duelReady.length === 0} onClick={saveDuels} style={{ marginTop: 6 }}>
             {busy ? "Sparar…" : `Spara alla (${duelReady.length})`}
           </button>

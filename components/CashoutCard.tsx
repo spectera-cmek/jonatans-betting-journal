@@ -38,7 +38,7 @@ export function CashoutCard() {
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
         <span className="ap-label">Cashout-kollen</span>
-        <span style={{ color: "var(--dim2)", fontSize: 11.5 }}>Vad är ditt öppna spel värt — och vad skaver bookien?</span>
+        <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>Vad är ditt öppna spel värt — och vad skaver bookien?</span>
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
@@ -81,7 +81,7 @@ export function CashoutCard() {
       )}
 
       {a == null ? (
-        <div style={{ fontSize: 13, color: "var(--dim2)", marginTop: 14 }}>
+        <div style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14 }}>
           Fyll i spelet, läget just nu och det erbjudna cashout-beloppet.
         </div>
       ) : (
@@ -92,7 +92,7 @@ export function CashoutCard() {
             <MiniStat label="EV hålla vs sälja" value={krFmt(a.evDiff, true)} tone={a.evDiff >= 0 ? "pos" : "neg"} />
             <MiniStat label="Break-even-chans" value={pctFmt(a.breakEvenProb * 100)} />
           </div>
-          <div className="ap-num pos" style={{ marginTop: 14, fontSize: 14, fontWeight: 700 }}>
+          <div className="ap-num pos" style={{ marginTop: 14, fontSize: "var(--fs-lg)", fontWeight: 600 }}>
             {a.evDiff > 0 ? `→ Håll · ${krFmt(a.evDiff, true)} EV` : `→ Sälj · ${krFmt(-a.evDiff, true)} över fair`}
           </div>
         </>

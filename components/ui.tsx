@@ -6,6 +6,7 @@ import { I, IC, sportIcon } from "./icons";
 import type { LucideIcon } from "lucide-react";
 import { sportTag } from "@/lib/format";
 import { useTheme } from "./ThemeProvider";
+import { useScrollSpy } from "@/lib/useScrollSpy";
 
 export function Card({
   children,
@@ -231,6 +232,23 @@ export function SectionHead({
       <h2 className="ap-sec-title">{title}</h2>
       {sub && <div className="ap-sec-sub">{sub}</div>}
     </div>
+  );
+}
+
+/**
+ * Anchor tabs for a long page: jump to a section (a SectionHead with the same
+ * id), stick under the status bar, and mark the section being read.
+ */
+export function AnchorTabs({ items, label }: { items: { id: string; label: string }[]; label: string }) {
+  const active = useScrollSpy(items.map((i) => i.id));
+  return (
+    <nav className="ap-tabs is-sticky" aria-label={label}>
+      {items.map((it) => (
+        <a key={it.id} href={`#${it.id}`} className={active === it.id ? "is-active" : ""} aria-current={active === it.id ? "location" : undefined}>
+          {it.label}
+        </a>
+      ))}
+    </nav>
   );
 }
 
