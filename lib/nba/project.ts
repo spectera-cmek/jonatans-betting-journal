@@ -11,7 +11,7 @@
 //   tempo från båda lagen                  → antal possessions
 //   hemmaplan / back-to-back               → logit-tillägg på träffprocent
 
-import { DEFAULT_NBA_PARAMS, type NbaModelParams } from "./params";
+import { DEFAULT_NBA_PARAMS, RUBBER_BAND_MAX, type NbaModelParams } from "./params";
 import {
   leagueAverages,
   playerRates,
@@ -25,6 +25,7 @@ import {
 import { expectedPpp, logit, prepare, sigmoid, simulateGame, summarize, type GameSimInput, type SimResult, type SimSummary, type TeamSimInput } from "./sim";
 import { expectedOrtg, fitTeamRatings, ratingOf, type RatingTable } from "./teamRatings";
 import { lineupImpact, type RapmFit } from "./rapm";
+import { marketMargin, type MarketRatings } from "./marketRatings";
 
 export interface LineupEntry {
   playerId: number;
@@ -127,6 +128,8 @@ export interface GameContext {
   awayBaseLineup?: LineupEntry[];
   /** Spelarnas påverkan (RAPM) — används med rapmK > 0. */
   rapm?: RapmFit;
+  /** Marknadens lagrating ur tidigare stängningslinjer — används med marketMix > 0. */
+  market?: MarketRatings;
 }
 
 export interface Targets {
@@ -141,6 +144,9 @@ export interface Targets {
   /** RAPM-justeringen av lagets ORtg (anfall − motståndarens försvarsförändring). */
   homeRapm: number;
   awayRapm: number;
+  /** Andel av lagets minuter till spelare utan data (0–1), se lowDataRtg. */
+  homeLowData: number;
+  awayLowData: number;
 }
 
 export interface Projection {
@@ -152,6 +158,34 @@ export interface Projection {
   homeB2B: boolean;
   awayB2B: boolean;
   targets: Targets;
+}
+
+/**
+ * Andel av lagets minuter som går till okända spelare: varje spelare räknas
+ * som okänd till andelen K / (possessions bakom RAPM + K).
+ */
+export function unknownShare(rapm: RapmFit, lineup: LineupEntry[], K: number): number {
+  const total = lineup.reduce((a, e) => a + Math.max(0, e.minutes), 0);
+  if (!(total > 0)) return 0;
+  let u = 0;
+  for (const e of lineup) {
+    if (!(e.minutes > 0)) continue;
+    const poss = rapm.players.get(e.playerId)?.poss ?? 0;
+    u += (e.minutes / total) * (K / (poss + K));
+  }
+  return u;
+}
+
+/**
+ * Andel av lagets normala minuter (240) som tillhör spelare som inte spelar i
+ * kväll. Bara frånvaro räknas: när stjärnorna är tillbaka och bänken tappar
+ * minuter är det ingen förlust.
+ */
+export function missingShare(today: LineupEntry[], base: LineupEntry[]): number {
+  const playing = new Set(today.filter((e) => e.minutes > 0).map((e) => e.playerId));
+  let miss = 0;
+  for (const b of base) if (!playing.has(b.playerId)) miss += Math.max(0, b.minutes);
+  return miss / 240;
 }
 
 /** Shot-logit som får profilen att ge `ppp` poäng per possession. */
@@ -219,6 +253,29 @@ export function buildSimInput(h: History, ctx: GameContext, p: NbaModelParams = 
     awayOrtg = m * rAway + (1 - m) * playerAway;
     pace = m * rPace + (1 - m) * playerPace;
   }
+  // Utsträckning av lagens skillnad (se marginStretch) — totalen behålls. Hemmaplan och
+  // back-to-back är fasta parametrar, inte krympta skattningar, och sträcks inte ut.
+  const playoff = ctx.seasonType === 3;
+  const stretch = (p.marginStretch ?? 1) * (playoff ? p.playoffStretch ?? 1 : 1);
+  if (stretch !== 1) {
+    const hca = ctx.neutral ? 0 : p.homeRtg / 2;
+    const fixedHome = hca + (homeB2B ? p.b2bRtg : 0);
+    const fixedAway = -hca + (awayB2B ? p.b2bRtg : 0);
+    const mid = (homeOrtg - fixedHome + awayOrtg - fixedAway) / 2;
+    homeOrtg = fixedHome + mid + stretch * (homeOrtg - fixedHome - mid);
+    awayOrtg = fixedAway + mid + stretch * (awayOrtg - fixedAway - mid);
+  }
+  // Marknadens lagrating: grundnivån dras mot vad tidigare stängningslinjer säger om lagen.
+  // Kvällens uppställning (RAPM, okända, bortfall nedan) läggs på efteråt.
+  if ((p.marketMix ?? 0) > 0 && ctx.market) {
+    const mm = marketMargin(ctx.market, ctx.homeId, ctx.awayId, !!ctx.neutral, 3, playoff ? p.playoffStretch ?? 1 : 1);
+    if (mm != null && pace > 0) {
+      const m0 = ((homeOrtg - awayOrtg) * pace) / 100;
+      const shift = (p.marketMix * (mm - m0) * 100) / pace / 2;
+      homeOrtg += shift;
+      awayOrtg -= shift;
+    }
+  }
   // RAPM: kvällens uppställning mot den normala, både anfall och försvar.
   let homeRapm = 0;
   let awayRapm = 0;
@@ -232,20 +289,43 @@ export function buildSimInput(h: History, ctx: GameContext, p: NbaModelParams = 
     homeOrtg += homeRapm;
     awayOrtg += awayRapm;
   }
+  // Okända spelare (lite eller ingen RAPM-data) är ersättningsnivå: lagets eget anfall
+  // blir sämre och motståndarens bättre (se lowDataRtg). Totalen rörs inte.
+  let homeLowData = 0;
+  let awayLowData = 0;
+  const useLowData = (p.lowDataRtg ?? 0) > 0 && !!ctx.rapm;
+  if (useLowData) {
+    homeLowData = unknownShare(ctx.rapm!, ctx.homeLineup, p.lowDataPoss);
+    awayLowData = unknownShare(ctx.rapm!, ctx.awayLineup, p.lowDataPoss);
+    const k = p.lowDataRtg / 2;
+    homeOrtg += k * (awayLowData - homeLowData);
+    awayOrtg += k * (homeLowData - awayLowData);
+  }
+  // Bortfall: andel av de normala minuterna som saknas i kväll (se missRtg).
+  let homeMiss = 0;
+  let awayMiss = 0;
+  const useMiss = (p.missRtg ?? 0) > 0 && !!ctx.homeBaseLineup?.length && !!ctx.awayBaseLineup?.length;
+  if (useMiss) {
+    homeMiss = missingShare(ctx.homeLineup, ctx.homeBaseLineup!);
+    awayMiss = missingShare(ctx.awayLineup, ctx.awayBaseLineup!);
+    const k = p.missRtg / 2;
+    homeOrtg += k * (awayMiss - homeMiss);
+    awayOrtg += k * (homeMiss - awayMiss);
+  }
   // Slutspel: tätare försvar och lägre tempo än i grundserien.
-  const playoff = ctx.seasonType === 3;
   if (playoff) {
-    homeOrtg += p.playoffRtg;
-    awayOrtg += p.playoffRtg;
+    const hca = ctx.neutral ? 0 : (p.playoffHomeRtg ?? 0) / 2;
+    homeOrtg += p.playoffRtg + hca;
+    awayOrtg += p.playoffRtg - hca;
     pace += p.playoffPace;
   }
-  if (rt || playoff || useRapm) {
+  if (rt || playoff || useRapm || stretch !== 1 || useLowData || useMiss || ((p.marketMix ?? 0) > 0 && !!ctx.market)) {
     // Profilens form (andel trejor, straffar, turnovers) kommer från spelarna;
     // nivån sätts så att den träffar målet.
     home.shotLogit = logitForPpp(home, homeOrtg / 100, p.ftsPerTrip);
     away.shotLogit = logitForPpp(away, awayOrtg / 100, p.ftsPerTrip);
   }
-  const targets: Targets = { homeOrtg, awayOrtg, pace, homeAdj, awayAdj, homeRapm, awayRapm };
+  const targets: Targets = { homeOrtg, awayOrtg, pace, homeAdj, awayAdj, homeRapm, awayRapm, homeLowData, awayLowData };
   const input: GameSimInput = {
     home,
     away,
@@ -253,7 +333,8 @@ export function buildSimInput(h: History, ctx: GameContext, p: NbaModelParams = 
     possSd: p.possSd,
     nightSigma: p.nightSigma,
     sharedSigma: p.sharedSigma,
-    rubberBand: p.rubberBand,
+    // Mindre spridning i ojämna matcher (se rubberBandPerPt).
+    rubberBand: Math.min(Math.max(p.rubberBand, RUBBER_BAND_MAX), p.rubberBand + (p.rubberBandPerPt ?? 0) * Math.abs(((homeOrtg - awayOrtg) * pace) / 100)),
     ftsPerTrip: p.ftsPerTrip,
     sims: p.sims,
     seed: (ctx.homeId * 7919 + ctx.awayId * 104729 + Math.floor(ctx.t / 864e5)) >>> 0,

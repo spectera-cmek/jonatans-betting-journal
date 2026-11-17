@@ -1,7 +1,7 @@
 // NBA-modellens parametrar på ett ställe. Backtesten (npm run nba:backtest)
 // är det som ska flytta dem — ändra versionen när modellens matte ändras.
 
-export const NBA_MODEL_VERSION = "nba-v3";
+export const NBA_MODEL_VERSION = "nba-v4";
 
 export interface NbaModelParams {
   /** Spelartakter: halveringstid i spelarens egna matcher. */
@@ -40,6 +40,14 @@ export interface NbaModelParams {
    * modellens faktiska fel mot utfallet (14,9) — backtest dec 2025–jun 2026.
    */
   rubberBand: number;
+  /**
+   * rubberBand växer med förväntad marginal: + så här mycket per poäng, upp till
+   * RUBBER_BAND_MAX. I ojämna matcher är spridningen mindre (vilade startare,
+   * garbage time) — backtest 2024–2026: SD(utfall − modell) 14,4 vid jämna matcher,
+   * 13,4 vid 9–12 poäng och 12,9 vid 12–16 — men simuleringen gav ~14,7 överallt,
+   * så underdogs i ojämna matcher fick för hög chans. 0 = samma överallt.
+   */
+  rubberBandPerPt: number;
   /** Spridning i antal possessions per match. */
   possSd: number;
   /** Straffar per straffsituation (0,44-regeln ⇒ ≈ 2,27). */
@@ -77,6 +85,43 @@ export interface NbaModelParams {
   playoffRtg: number;
   /** Slutspel: possessions per 48 (lägre tempo). */
   playoffPace: number;
+  /**
+   * Slutspel: lagens skillnad sträcks ut så här mycket till (utöver marginStretch).
+   * Rotationerna kortas och stjärnorna spelar mer, så skillnaderna blir större än
+   * grundseriens siffror säger. 1 = av.
+   */
+  playoffStretch: number;
+  /** Slutspel: extra hemmafördel i poäng per 100 possessions (marginal), utöver homeRtg. */
+  playoffHomeRtg: number;
+  /**
+   * Vikt för marknadens lagrating (ur tidigare matchers stängningslinjer, se
+   * marketRatings.ts) mot modellens egen grundnivå, före kvällens
+   * uppställningsjusteringar. 0 = av.
+   */
+  marketMix: number;
+  /**
+   * Sträcker ut skillnaden mellan lagens ORtg runt deras snitt (totalen rörs
+   * inte), före RAPM och slutspelsjusteringen. Lagrating och spelarmodell är
+   * båda krympta skattningar, och ett vägt snitt av dem med vikter som
+   * summerar till 1 trycker ihop skillnaderna ytterligare. 1 = av.
+   * Hemmaplan och back-to-back sträcks inte.
+   */
+  marginStretch: number;
+  /**
+   * Spelare utan NBA-data är ersättningsnivå, inte ligasnitt: kvällens
+   * uppställning tappar så här många poäng per 100 possessions i netto
+   * (halva i anfall, halva i försvar) per hel andel okända minuter. En spelare
+   * räknas som okänd till andelen K / (possessions i RAPM + K), K = lowDataPoss.
+   * Kräver RAPM (possessions). 0 = av.
+   */
+  lowDataRtg: number;
+  lowDataPoss: number;
+  /**
+   * Avdrag i netto per 100 possessions per hel andel av lagets normala minuter
+   * (baseLineup) som saknas i kväll — utöver RAPM, som krymper alla spelare mot
+   * snittet och därför undervärderar bortfall. 0 = av.
+   */
+  missRtg: number;
 }
 
 export const DEFAULT_NBA_PARAMS: NbaModelParams = {
@@ -94,6 +139,9 @@ export const DEFAULT_NBA_PARAMS: NbaModelParams = {
   nightSigma: 0.03,
   sharedSigma: 0.04,
   rubberBand: 0.035,
+  // 0,0028: underdogs kalibrerade (modellens 0–10 % → utfall 6,8 %, förut 15,5 % → 10,2 %
+  // i 10–20 %), log loss ml 0,5838 → 0,5830.
+  rubberBandPerPt: 0.0028,
   possSd: 4,
   ftsPerTrip: 1 / 0.44,
   sims: 20000,
@@ -114,11 +162,37 @@ export const DEFAULT_NBA_PARAMS: NbaModelParams = {
   b2bRtg: -3,
   ratingMix: 0.6,
   // Spelarmodellens justering (bara anfall) ersätts av RAPM (anfall + försvar):
-  // med båda på samtidigt blev det sämre.
+  // med båda på samtidigt blev det sämre. 0,8 → 0,3 i nba-v4: marknaden rörde sig
+  // mindre än modellen på RAPM-skillnaden (t ≈ −11), och missRtg tar bortfallen.
   playerAdjK: 0,
-  rapmK: 0.8,
+  rapmK: 0.3,
   playoffRtg: -3,
   playoffPace: -2,
+  // Slutspel 2024–2026 (247 matcher): utfallet = 1,18 × modellens marginal och Pinnacles
+  // spread = 1,26 × modellens (81 matcher), mot 0,96 och 0,92 i grundserien.
+  playoffStretch: 1.25,
+  // Slutspel: Pinnacles spread ligger 1,5 poäng närmare hemmalaget än modellen (81 matcher,
+  // t ≈ 5), utfallen 2,1 ± 1,0 (247 matcher, 2024–2026).
+  playoffHomeRtg: 1.5,
+  // 0,4: modellens grundnivå avvek från Pinnacles stängning med ~3,3 p utan att det sa
+  // något om utfallet (β 0,03), och de största edgarna var därför ungefär dubbelt för
+  // stora (β 0,41–0,58). Med 0,4: stora avvikelser (≥ 4 p) β 1,12 ± 0,35, log loss
+  // ml 0,5838 → 0,5824, spread 0,7034 → 0,7009, marginal-MAE 11,31 → 11,29 (samma matcher).
+  marketMix: 0.4,
+  // nba-v4, backtest jan 2025–nov 2026 (2 272 matcher, 1 168 med Pinnacle-/DraftKings-
+  // stängning). I nba-v3 var utfallet = 1,22 × modellens marginal (lagrating ensam 1,08,
+  // spelarmodellen ensam 1,26) och underdogs fick för hög chans (marknadens 5–10 % blev
+  // 18 % i modellen, utfall 0 %). Modellens fel hängde också ihop med minuter till
+  // spelare utan data (t ≈ −5; marknadens fel gjorde det inte) — tankande lag i mars–april
+  // med G-League-spelare såg ut som snittlag — och med andelen normala minuter som
+  // saknades (t ≈ −3,5). Med de fyra, playoffStretch och rubberBandPerPt: lutning 1,00,
+  // marginal-MAE 11,33 → 11,11, log loss ml 0,6008 → 0,5841, spread 0,7118 → 0,7043.
+  marginStretch: 1.06,
+  lowDataRtg: 16,
+  lowDataPoss: 3000,
+  // 8: bortfallstermen var den enda delen av modellens avvikelse från Pinnacles stängning
+  // som förutsade utfallet (β 2,0 ± 0,9 vid 4); 4 → 8 gav log loss ml 0,5845 → 0,5838.
+  missRtg: 8,
 };
 
 /**
@@ -150,6 +224,9 @@ export const NBA_MAX_FLAG_ODDS = 4;
 export function isFlagged(edge: number | null | undefined, odds: number | null | undefined): boolean {
   return edge != null && odds != null && edge >= NBA_EDGE_THRESHOLD && odds <= NBA_MAX_FLAG_ODDS;
 }
+
+/** Tak för rubberBand när den växer med förväntad marginal. */
+export const RUBBER_BAND_MAX = 0.07;
 
 /** Minuter per lag och match i ordinarie tid. */
 export const TEAM_MINUTES = 240;

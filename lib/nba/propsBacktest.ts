@@ -8,7 +8,7 @@
 //   - täckning: hur ofta utfallet hamnar mellan modellens 10:e och 90:e
 //     percentil (ska vara ~80 %)
 
-import { baselineMinutes, projectMinutes } from "./minutes";
+import { baselineMinutes, ownBaseline, projectMinutes } from "./minutes";
 import { DEFAULT_NBA_PARAMS, type NbaModelParams } from "./params";
 import { DEFAULT_PROP_PARAMS, PROP_STATS, overProb, simulatePlayer, summarizeSamples, type PropParams, type PropStat } from "./props";
 import { firstBefore, leagueAverages, playerRates, type History, type League, type PlayerGameRow } from "./ratings";
@@ -70,7 +70,7 @@ export function runPropsBacktest(
       const played = rows.filter((r) => r.teamId === teamId && r.minutes > 0);
       const base = new Map(baselineMinutes(h, teamId, g.t, { activeDays: 400 }).map((b) => [b.playerId, b.baseline]));
       const mins = projectMinutes(
-        played.map((r) => ({ playerId: r.playerId, name: "", position: null, baseline: Math.max(4, base.get(r.playerId) ?? 12), games: 0, injuryStatus: null, injuryDetail: null, override: null }))
+        played.map((r) => ({ playerId: r.playerId, name: "", position: null, baseline: Math.max(4, base.get(r.playerId) ?? ownBaseline(h, r.playerId, g.t) ?? 12), games: 0, injuryStatus: null, injuryDetail: null, override: null }))
       );
       const env = propEnv(rt, teamId, oppId);
       for (const m of mins) {
