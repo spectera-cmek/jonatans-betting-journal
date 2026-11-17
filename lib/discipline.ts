@@ -55,6 +55,9 @@ function asBet(input: DisciplineInput): EdgeBetInput {
 }
 
 function ruleText(rule: DisciplineRule, windowLabel: string): string {
+  if (rule.basis === "rest") {
+    return `${rule.key}: ${pctFmt(rule.roiPct, true)} ROI mot ${pctFmt(rule.restRoiPct ?? null, true)} på dina övriga spel · ${uFmt(rule.profitUnits, true)} över ${rule.settled.toLocaleString("sv-SE")} avgjorda (${windowLabel})`;
+  }
   return `${rule.key}: ${pctFmt(rule.roiPct, true)} ROI och ${uFmt(rule.profitUnits, true)} över ${rule.settled.toLocaleString("sv-SE")} avgjorda (${windowLabel})`;
 }
 

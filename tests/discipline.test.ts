@@ -63,6 +63,32 @@ describe("deriveDisciplineRules", () => {
     expect(oddsRule).toBeUndefined();
   });
 
+  it("names a leak that only shows against the rest of the journal", () => {
+    const bets = [
+      // Long odds at −6.7 % ROI: inside the no-edge spread (z ≈ −0.9), so the
+      // absolute test stays quiet…
+      ...series(900, 140, { odds: 6.0, selection: "Arsenal vinner", market: "h2h" }),
+      // …but everything else returns +10 %.
+      ...series(1800, 990, { odds: 2.0, selection: "Arsenal vinner", market: "h2h" }),
+    ];
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    const leak = rules.find((r) => r.dim === "Odds" && r.key.startsWith("Odds 5"));
+    expect(leak?.basis).toBe("rest");
+    expect(leak?.tone).toBe("neg");
+    expect(leak!.z!).toBeLessThanOrEqual(-2);
+    expect(leak!.roiPct!).toBeCloseTo(-6.67, 1);
+    expect(leak!.restRoiPct!).toBeCloseTo(10, 1);
+  });
+
+  it("does not call a segment a leak just for trailing the rest a little", () => {
+    const bets = [
+      ...series(900, 160, { odds: 6.0, selection: "Arsenal vinner", market: "h2h" }), // +6,7 %
+      ...series(1800, 990, { odds: 2.0, selection: "Arsenal vinner", market: "h2h" }), // +10 %
+    ];
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    expect(rules.find((r) => r.basis === "rest")).toBeUndefined();
+  });
+
   it("only looks at the trailing window", () => {
     const old = series(120, 8, { odds: 5.5, selection: "Arsenal vinner" }).map((b) => ({
       ...b,
@@ -97,6 +123,18 @@ describe("evaluateBet", () => {
     expect(v.notes[0].text).toContain("Odds 5.00+");
     expect(v.notes[0].text).toContain("−21,0% ROI");
     expect(v.notes[0].text).toContain("senaste året");
+  });
+
+  it("quotes the rest of the journal for a relative leak", () => {
+    const rel: DisciplineRuleSet = {
+      ...ruleSet,
+      rules: [
+        { dim: "Insats", key: "Insats 1,01–2 u", settled: 2622, profitUnits: 29.7, roiPct: 1.2, z: -3, tone: "neg", basis: "rest", restRoiPct: 11.6 },
+      ],
+    };
+    const v = evaluateBet({ odds: 2.0, stakeUnits: 1.25, selection: "Arsenal vinner" }, rel);
+    expect(v.level).toBe("warn");
+    expect(v.notes[0].text).toContain("+1,2% ROI mot +11,6% på dina övriga spel");
   });
 
   it("reports an edge market as positive, and both together as mixed", () => {

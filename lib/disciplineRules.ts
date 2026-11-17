@@ -8,13 +8,20 @@
 // only for segments that are both big enough and far enough from the no-edge
 // baseline to be worth saying out loud.
 //
+// That test alone misses the leaks a review actually finds. Long odds swing so
+// hard that −14 % ROI over a thousand bets sits inside the no-edge spread, and a
+// default stake that returns +1 % is "no edge" rather than a loss. Both are
+// leaks only *relative to the rest of the journal*, so a second test compares a
+// segment with everything else in its dimension and warns when it is clearly
+// worse (`basis: "rest"`).
+//
 // Pure & dependency-free so it is trivially unit-testable and can run either on
 // the server (in /api/metrics) or in a script.
 
 import { EDGE_DIMENSIONS, edgeSegmentCandidates, type EdgeBetInput, type EdgeSegment } from "./edge";
 import { varianceByKey } from "./variance";
 import { filterByPeriod } from "./periods";
-import { round2 } from "./betting";
+import { round2, settledProfit } from "./betting";
 
 export interface DisciplineRule {
   dim: EdgeSegment["dim"];
@@ -22,9 +29,14 @@ export interface DisciplineRule {
   settled: number;
   profitUnits: number;
   roiPct: number | null;
-  /** No-edge z for the segment; sign follows the money. */
+  /** No-edge z for the segment; sign follows the money. For `basis: "rest"`
+   *  it is the z of the ROI difference against the rest of the dimension. */
   z: number | null;
   tone: "pos" | "neg";
+  /** What the segment was measured against. Absent = the no-edge baseline. */
+  basis?: "edge" | "rest";
+  /** With `basis: "rest"`: ROI on every other bet in the same dimension. */
+  restRoiPct?: number | null;
 }
 
 export interface DisciplineRuleSet {
@@ -45,10 +57,16 @@ export interface DeriveOptions {
   minAbsZ?: number;
   /** Largest share of the window a segment may cover and still be a rule. */
   maxShare?: number;
+  /** How far below the rest of its dimension a segment must sit (z of the ROI
+   *  difference) to become a relative leak. */
+  minRelZ?: number;
+  /** Share cap for relative leaks. Looser than `maxShare`: a default stake on
+   *  40 % of the journal that trails the rest is exactly the leak to name. */
+  maxRelShare?: number;
   now?: number;
 }
 
-const DEFAULTS = { sinceDays: 365, minSettled: 40, minAbsZ: 1, maxShare: 0.35 };
+const DEFAULTS = { sinceDays: 365, minSettled: 40, minAbsZ: 1, maxShare: 0.35, minRelZ: 2, maxRelShare: 0.5 };
 
 export function windowLabelFor(sinceDays: number | null): string {
   if (!sinceDays) return "hela historiken";
@@ -109,10 +127,70 @@ export function deriveDisciplineRules(
       tone: seg.profitUnits >= 0 ? "pos" : "neg",
     });
   }
+  // Relative leaks: clearly worse than the rest of the same dimension.
+  const minRelZ = options.minRelZ ?? DEFAULTS.minRelZ;
+  const relShareCap = Math.max(minSettled, settledInWindow * (options.maxRelShare ?? DEFAULTS.maxRelShare));
+  const taken = new Set(rules.map((r) => `${r.dim}:${r.key}`));
+  for (const d of EDGE_DIMENSIONS) {
+    const source = (d.include ? windowBets.filter((b) => d.include!(b)) : windowBets).filter(
+      (b) => b.outcome !== "pending"
+    );
+    const groups = new Map<string, EdgeBetInput[]>();
+    for (const b of source) {
+      const key = d.keyOf(b) ?? d.fallback;
+      const g = groups.get(key);
+      if (g) g.push(b);
+      else groups.set(key, [b]);
+    }
+    for (const [key, seg] of groups) {
+      if (seg.length < minSettled || seg.length > relShareCap) continue;
+      if (catchAll.has(`${d.dim}:${key}`) || taken.has(`${d.dim}:${key}`)) continue;
+      const rest = source.filter((b) => (d.keyOf(b) ?? d.fallback) !== key);
+      if (rest.length < minSettled) continue;
+      const a = roiStats(seg);
+      const r = roiStats(rest);
+      if (a == null || r == null || a.roi >= r.roi) continue;
+      const se = Math.sqrt(a.variance + r.variance);
+      if (!(se > 0)) continue;
+      const z = (a.roi - r.roi) / se;
+      if (z > -minRelZ) continue;
+      rules.push({
+        dim: d.dim,
+        key,
+        settled: seg.length,
+        profitUnits: round2(a.profit),
+        roiPct: round2(a.roi * 100),
+        z: round2(z),
+        tone: "neg",
+        basis: "rest",
+        restRoiPct: round2(r.roi * 100),
+      });
+    }
+  }
+
   // Strongest signal first, so a modal that only has room for a few shows those.
   rules.sort((a, b) => Math.abs(b.z ?? 0) - Math.abs(a.z ?? 0));
 
   return { rules, windowLabel: windowLabelFor(sinceDays), settled: settledInWindow, minSettled };
+}
+
+/**
+ * Stake-weighted ROI and the variance of that ratio estimate. Per-bet returns
+ * are weighted by stake, the same way the journal's ROI is, so the variance is
+ * the ratio estimator's Σ(pᵢ − ROI·sᵢ)² / (Σsᵢ)².
+ */
+function roiStats(bets: EdgeBetInput[]): { roi: number; variance: number; profit: number } | null {
+  let stake = 0;
+  let profit = 0;
+  for (const b of bets) {
+    stake += b.stakeUnits;
+    profit += settledProfit(b);
+  }
+  if (!(stake > 0)) return null;
+  const roi = profit / stake;
+  let ss = 0;
+  for (const b of bets) ss += (settledProfit(b) - roi * b.stakeUnits) ** 2;
+  return { roi, variance: ss / (stake * stake), profit };
 }
 
 /* ------------------------- Spel på samma match ---------------------------- */
