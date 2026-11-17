@@ -95,7 +95,8 @@
     "purge:thestatsapi": "tsx scripts/purgeTheStatsApi.ts",
     "shots:ingest": "tsx scripts/shots/ingestSofascore.ts",
     "shots:backtest": "tsx scripts/shots/backtest.ts",
-    "shots:tune": "tsx scripts/shots/tune.ts"
+    "shots:tune": "tsx scripts/shots/tune.ts",
+    "user:reset-link": "tsx scripts/resetLink.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
