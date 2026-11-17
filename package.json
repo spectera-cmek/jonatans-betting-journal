@@ -55,6 +55,7 @@
     "install:nba-tasks": "powershell -ExecutionPolicy Bypass -File scripts/install-nba-tasks.ps1",
     "import:bet365": "tsx scripts/importBet365.ts",
     "import:unibet": "tsx scripts/importUnibet.ts",
+    "import:bethero": "tsx scripts/importBetheroClv.ts",
     "recategorize": "tsx scripts/recategorize.ts",
     "recategorize:detail": "tsx scripts/recategorizeDetail.ts",
     "backfill:tags": "tsx scripts/backfillBetTags.ts",
