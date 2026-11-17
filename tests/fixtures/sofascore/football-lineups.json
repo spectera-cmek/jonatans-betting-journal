@@ -1,0 +1,27 @@
+{
+  "confirmed": true,
+  "home": {
+    "formation": "4-3-3",
+    "players": [
+      { "player": { "id": 900001, "name": "Johan Dahlin", "shortName": "J. Dahlin", "position": "G" }, "shirtNumber": 1, "position": "G", "substitute": false,
+        "statistics": { "minutesPlayed": 90, "saves": 2, "touches": 31, "rating": 6.9 } },
+      { "player": { "id": 900002, "name": "Isaac Kiese Thelin", "shortName": "I. Kiese Thelin", "position": "F" }, "shirtNumber": 9, "position": "F", "substitute": false, "captain": true,
+        "statistics": { "minutesPlayed": 88, "totalShots": 4, "onTargetScoringAttempt": 2, "shotOffTarget": 1, "blockedScoringAttempt": 1, "goals": 1, "rating": 7.8, "ratingVersions": { "original": 7.8, "alternative": 7.5 } } },
+      { "player": { "id": 900003, "name": "Hugo Bolin", "shortName": "H. Bolin", "position": "M" }, "shirtNumber": 10, "position": "M", "substitute": false,
+        "statistics": { "minutesPlayed": 90, "goalAssist": 1, "keyPass": 3, "shotOffTarget": 2 } },
+      { "player": { "id": 900004, "name": "Otto Rosengren", "shortName": "O. Rosengren", "position": "M" }, "shirtNumber": 20, "position": "M", "substitute": true,
+        "statistics": {} }
+    ]
+  },
+  "away": {
+    "formation": "4-4-2",
+    "players": [
+      { "player": { "id": 900101, "name": "Kristoffer Nordfeldt", "shortName": "K. Nordfeldt", "position": "G" }, "shirtNumber": 1, "position": "G", "substitute": false,
+        "statistics": { "minutesPlayed": 90, "saves": 4 } },
+      { "player": { "id": 900102, "name": "Bersant Celina", "shortName": "B. Celina", "position": "M" }, "shirtNumber": 10, "position": "M", "substitute": false,
+        "statistics": { "minutesPlayed": 75, "totalShots": 3, "onTargetScoringAttempt": 1, "shotOffTarget": 2, "goals": 1 } },
+      { "player": { "id": 900103, "name": "Zachary Elbouzedi", "shortName": "Z. Elbouzedi", "position": "M" }, "shirtNumber": 7, "position": "M", "substitute": true,
+        "statistics": { "minutesPlayed": 15, "onTargetScoringAttempt": 1 } }
+    ]
+  }
+}

@@ -1,21 +1,57 @@
 // Batch OddsPortal CLV capture for featured markets (h2h / totals / spreads).
-// Local/CLI only — Playwright is not suited for serverless.
+// Local/CLI only — the pages are fetched by the Scrapling worker (Python and
+// a browser), which a serverless deployment does not have.
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "./db";
 import { clvPct } from "./betting";
 import { parseHomeAway } from "./eventLink";
-import {
-  scrapeClosingBatch,
-  type ScrapeBetInput,
-  type ScrapeClosingResult,
-} from "./oddsPortal";
+import type { ScrapeBetInput, ScrapeClosingResult } from "./oddsPortal";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
+export const FEATURED_MARKETS = ["h2h", "totals", "spreads"] as const;
+/** market = "other" som ändå finns på OddsPortal (marketCategory som loggen sätter den). */
+export const SCRAPEABLE_OTHER_CATEGORIES = ["BTTS"] as const;
+
+/** Featured-marknad, eller en "other" som OddsPortal har (BTTS). */
+export function isScrapeableMarket(market: string, marketCategory: string | null): boolean {
+  return (
+    (FEATURED_MARKETS as readonly string[]).includes(market) ||
+    (market === "other" && (SCRAPEABLE_OTHER_CATEGORIES as readonly string[]).includes(marketCategory ?? ""))
+  );
+}
+/** CLV (i procent) som flaggas i utskriften — oftast fel marknad, inte ett slaget pris. */
+export const SUSPICIOUS_CLV_PCT = 25;
+
+export function isSuspicious(odds: number, closingOdds: number): boolean {
+  const pct = clvPct(odds, closingOdds);
+  return pct != null && Math.abs(pct) >= SUSPICIOUS_CLV_PCT;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Databasen (Neon) kan tappa anslutningen mitt i en lång körning — den somnar
+ * eller nätet hackar. Ett par nya försök med väntan emellan innan körningen
+ * stoppas; allt sparat dittills ligger kvar.
+ */
+async function withDbRetry<T>(fn: () => Promise<T>, log?: (line: string) => void): Promise<T> {
+  const waits = [3_000, 10_000, 30_000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      // P1001/P1002/P1017: servern nås inte, svarar inte eller stängde anslutningen.
+      if (attempt >= waits.length || !["P1001", "P1002", "P1017"].includes(code ?? "")) throw err;
+      log?.(`  (databasen svarar inte — försöker igen om ${waits[attempt] / 1000} s)`);
+      await sleep(waits[attempt]);
+    }
+  }
+}
 
 /** Sports OddsPortal scrape handles reliably enough for batch CLV. */
-const SCRAPEABLE_SPORTS = [
+export const SCRAPEABLE_SPORTS = [
   "Football",
   "Tennis",
   "Basketball",
@@ -25,6 +61,7 @@ const SCRAPEABLE_SPORTS = [
   "MMA",
   "Boxing",
   "Darts",
+  "Esports",
 ] as const;
 
 export interface OddsPortalClvOptions {
@@ -41,7 +78,29 @@ export interface OddsPortalClvOptions {
   graceMinutes?: number;
   /** Pause between OddsPortal searches (default 1200). */
   pauseMs?: number;
+  /**
+   * Save closing odds whose CLV is ±SUSPICIOUS_CLV_PCT or more. Off by default:
+   * that size is almost always the wrong market (a live bet without a time, an
+   * unmarked boost, a different market logged as h2h), not a real edge.
+   */
+  saveSuspicious?: boolean;
+  /**
+   * Called with each result line as soon as that bet is done (it is also in
+   * `details`). Lets a long run show progress instead of going quiet for hours.
+   */
+  log?: (line: string) => void;
   prisma?: PrismaClient;
+}
+
+async function scrapeBatch(
+  items: { id: string; input: ScrapeBetInput }[],
+  pauseMs: number | undefined,
+  onResult: (row: { id: string; result: ScrapeClosingResult }, index: number, total: number) => Promise<void>
+) {
+  // Laddas bara här: /api/sync importerar den här filen och ska inte dra in
+  // cheerio och child_process för en väg som bara körs från skripten.
+  const { scrapeClosingBatch } = await import("./oddsPortal/scrape");
+  return scrapeClosingBatch(items, { pauseMs, onResult });
 }
 
 export interface OddsPortalClvResult {
@@ -60,6 +119,7 @@ type CandidateBet = {
   sport: string | null;
   league: string | null;
   eventAt: Date | null;
+  placedAt: Date;
   market: string;
   marketCategory: string | null;
   marketScope: string | null;
@@ -84,6 +144,7 @@ function toScrapeInput(bet: CandidateBet): ScrapeBetInput | null {
     homeTeam,
     awayTeam,
     eventAt: bet.eventAt,
+    placedAt: bet.placedAt,
     market: bet.market,
     marketCategory: bet.marketCategory,
     marketScope: bet.marketScope,
@@ -105,7 +166,10 @@ function formatResult(
   const pct = clvPct(bet.odds, scraped.closingOdds);
   const pctStr = pct == null ? "?" : `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
   const bk = scraped.bookmakerUsed ? ` via ${scraped.bookmakerUsed}` : "";
-  return `${bet.event}: closing ${scraped.closingOdds.toFixed(2)} (du ${bet.odds.toFixed(2)}, CLV ${pctStr})${bk}${dryRun ? " [dry-run]" : ""}`;
+  // Så stor skillnad är nästan alltid fel marknad (halvlek, live, boost som inte
+  // är markerad) snarare än ett riktigt slaget closing-pris.
+  const odd = isSuspicious(bet.odds, scraped.closingOdds) ? ` ⚠ kontrollera marknaden` : "";
+  return `${bet.event}: closing ${scraped.closingOdds.toFixed(2)} (du ${bet.odds.toFixed(2)}, CLV ${pctStr})${bk}${odd}${dryRun ? " [dry-run]" : ""}`;
 }
 
 /** Featured singles missing closing odds in the lookback window. */
@@ -124,11 +188,13 @@ export async function listFeaturedClvCandidates(
   const where: Prisma.BetWhereInput = {
     betType: "single",
     eventKind: "match",
-    market: { in: [...FEATURED_MARKETS] },
     closingOdds: null,
+    // En boost är inget marknadspris — den får aldrig CLV (se /api/metrics).
+    boosted: false,
     sport: { in: [...SCRAPEABLE_SPORTS] },
     OR: [{ marketScope: null }, { marketScope: { not: "player" } }],
     AND: [
+      { OR: [{ market: { in: [...FEATURED_MARKETS] } }, { market: "other", marketCategory: { in: [...SCRAPEABLE_OTHER_CATEGORIES] } }] },
       {
         OR: [
           { eventAt: { gte: since } },
@@ -161,6 +227,7 @@ export async function listFeaturedClvCandidates(
       sport: true,
       league: true,
       eventAt: true,
+      placedAt: true,
       market: true,
       marketCategory: true,
       marketScope: true,
@@ -215,40 +282,50 @@ export async function captureClosingFromOddsPortal(
     };
   }
 
-  const scraped = await scrapeClosingBatch(
-    batchItems.map(({ id, input }) => ({ id, input })),
-    { pauseMs: opts.pauseMs }
-  );
-
   const byId = new Map(batchItems.map((b) => [b.id, b.bet]));
   let updated = 0;
   let failed = 0;
+  const startedAt = Date.now();
+  const note = (line: string) => {
+    details.push(line);
+    opts.log?.(line);
+  };
 
-  for (const row of scraped) {
-    const bet = byId.get(row.id);
-    if (!bet) continue;
-    details.push(formatResult(bet, row.result, dryRun));
+  // Each bet is written as soon as it is scraped: a run over a whole season
+  // takes hours, and a crash or Ctrl+C must not throw away what was fetched.
+  // A rerun picks up where this one stopped, since saved bets have closingOdds.
+  await scrapeBatch(
+    batchItems.map(({ id, input }) => ({ id, input })),
+    opts.pauseMs,
+    async (row, index, total) => {
+      const bet = byId.get(row.id);
+      if (!bet) return;
+      const left = total - index - 1;
+      const eta = left > 0 ? ` · ~${Math.ceil((((Date.now() - startedAt) / (index + 1)) * left) / 60_000)} min kvar` : "";
+      note(`[${index + 1}/${total}${eta}] ${formatResult(bet, row.result, dryRun)}`);
 
-    if (!row.result.ok || row.result.closingOdds == null || !(row.result.closingOdds > 1)) {
-      failed += 1;
-      continue;
+      if (!row.result.ok || row.result.closingOdds == null || !(row.result.closingOdds > 1)) {
+        failed += 1;
+        return;
+      }
+      // Skip writing provisional (pre-kickoff) live odds in batch mode.
+      if (row.result.provisional && opts.postKickoffOnly !== false) {
+        note(`  → hoppade provisional (pre-kickoff)`);
+        failed += 1;
+        return;
+      }
+      if (isSuspicious(bet.odds, row.result.closingOdds) && !opts.saveSuspicious) {
+        note(`  → sparades inte (kontrollera, eller kör med --save-suspicious)`);
+        failed += 1;
+        return;
+      }
+      if (!dryRun) {
+        const closingOdds = row.result.closingOdds;
+        await withDbRetry(() => prisma.bet.update({ where: { id: bet.id }, data: { closingOdds } }), opts.log);
+      }
+      updated += 1;
     }
-
-    // Skip writing provisional (pre-kickoff) live odds in batch mode.
-    if (row.result.provisional && opts.postKickoffOnly !== false) {
-      details.push(`  → hoppade provisional (pre-kickoff)`);
-      failed += 1;
-      continue;
-    }
-
-    if (!dryRun) {
-      await prisma.bet.update({
-        where: { id: bet.id },
-        data: { closingOdds: row.result.closingOdds },
-      });
-    }
-    updated += 1;
-  }
+  );
 
   return {
     candidates: candidates.length,

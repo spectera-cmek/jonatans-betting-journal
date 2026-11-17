@@ -16,7 +16,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 import { cs2Prisma as prisma, hasCs2Db } from "../../lib/cs2Db";
-import { HltvSession, headedFromArgs } from "../../lib/cs2/hltv/session";
+import { HltvSession, headedFromArgs, fetcherFromArgs } from "../../lib/cs2/hltv/session";
 import { runIngest, runReparse } from "../../lib/cs2/pipeline";
 
 function argValue(flag: string): string | undefined {
@@ -50,6 +50,7 @@ async function main() {
   const reparse = process.argv.includes("--reparse");
   const session = new HltvSession({
     headed: headedFromArgs(),
+    fetcher: fetcherFromArgs(),
     maxPages: numberArg("--max-pages", Number(process.env.CS2_HLTV_MAX_PAGES) || 1500),
     offline: reparse,
   });

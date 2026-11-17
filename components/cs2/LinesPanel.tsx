@@ -131,7 +131,6 @@ export function useLogBet(view: MatchupView, defaultBook: string) {
         setModalOpen(false);
         revalidateAll();
       }}
-      hasOddsApiKey={settings?.hasOddsApiKey ?? false}
       prefill={prefill}
       unit={settings?.unitValue || 100}
     />

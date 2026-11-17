@@ -1,11 +1,9 @@
 // Is the OddsPortal CLV scrape reachable from this deployment?
 //
-// The scrape drives a real Chromium through Playwright. Playwright keeps its
-// browser binaries in a user-level cache outside the project directory
-// (~/.cache/ms-playwright), and a serverless bundle contains only the project
-// plus traced node_modules — so the browser is never there and
-// chromium.launch() can only throw. Rather than let the button fail with a 502
-// on every tap, we hide it and say why.
+// The scrape runs the Scrapling worker: a Python process driving a real
+// browser (npm run scrapling:setup). A serverless deployment has neither
+// Python nor the browser, so starting the worker can only fail. Rather than
+// let the button fail with a 502 on every tap, we hide it and say why.
 //
 // The flag is set in next.config.mjs and inlined into both the server and the
 // client bundle at build time, so both sides agree without an extra request.

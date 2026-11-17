@@ -1,0 +1,19 @@
+{
+  "confirmed": true,
+  "home": {
+    "players": [
+      { "player": { "id": 817181, "name": "Jayson Tatum", "shortName": "J. Tatum", "position": "F" }, "position": "F", "substitute": false,
+        "statistics": { "secondsPlayed": 2280, "points": 31, "rebounds": 9, "assists": 6, "threePointsMade": 4, "threePointAttempts": 10, "freeThrowsMade": 7, "steals": 1, "blocks": 0, "turnovers": 3, "plusMinus": 8 } },
+      { "player": { "id": 817182, "name": "Jaylen Brown", "shortName": "J. Brown", "position": "G" }, "position": "G", "substitute": false,
+        "statistics": { "secondsPlayed": 2100, "points": 22, "rebounds": 5, "assists": 3, "threePointsMade": 2, "steals": 2, "blocks": 1 } },
+      { "player": { "id": 817183, "name": "Neemias Queta", "shortName": "N. Queta", "position": "C" }, "position": "C", "substitute": true,
+        "statistics": {} }
+    ]
+  },
+  "away": {
+    "players": [
+      { "player": { "id": 817201, "name": "Jalen Brunson", "shortName": "J. Brunson", "position": "G" }, "position": "G", "substitute": false,
+        "statistics": { "secondsPlayed": 2220, "points": 27, "rebounds": 3, "assists": 8, "threePointsMade": 3, "steals": 1 } }
+    ]
+  }
+}

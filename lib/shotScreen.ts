@@ -2,8 +2,9 @@
 // kommande matcher och sorterar dem på edge.
 //
 // Bygger ligamodellen ur lagrade ShotMatch-rader och priserna ur lagrade
-// ShotOddsSnapshot-rader — inga API-anrop här. Att fylla på med färska odds är
-// `npm run shots:odds -- --upcoming --confirm`.
+// ShotOddsSnapshot-rader — inga API-anrop här. Inget fyller på dem automatiskt
+// sedan TheStatsAPI togs bort (okt 2026); manuella odds räknas i klienten
+// (components/ManualShotOdds.tsx).
 
 import { shotsPrisma as prisma } from "./shotsDb";
 import {

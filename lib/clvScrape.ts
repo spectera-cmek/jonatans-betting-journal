@@ -79,6 +79,7 @@ export async function fetchClvForBet(
     homeTeam,
     awayTeam,
     eventAt: bet.eventAt,
+    placedAt: bet.placedAt,
     market: bet.market,
     marketCategory: bet.marketCategory,
     marketScope: bet.marketScope,

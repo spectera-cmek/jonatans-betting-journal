@@ -7,9 +7,8 @@ möjligt** utan att gissa — prova flera källor tills resultatet är entydigt.
 ## Två lager
 
 1. **Natten (Vercel-cron, ingen dator behövs):** `/api/cron/grade` 04:00 UTC rättar
-   strukturerade singlar mot ESPN (hoppar över förlängning/straffar),
-   `/api/cron/closing` 05:00 UTC hämtar closing odds. Varje körning lämnar en
-   `cron:<jobb>`-rad i `syncLog`.
+   strukturerade singlar mot ESPN (hoppar över förlängning/straffar). Varje körning
+   lämnar en `cron:grade`-rad i `syncLog`.
 2. **Morgonen (den här rutinen, 08:00 lokalt):** allt nattjobbet inte kan — props,
    kombi, daterlösa spel, ligor ESPN inte känner — plus rapport via mejl.
 
@@ -88,11 +87,22 @@ motsäger sig själv, eller saknar den marknad du behöver.
    ```
    npx tsx scripts/agent/cronStatus.ts
    ```
-   Ta med utfallet i rapporten ("Natten: 3 rättade av cron, closing 5").
+   Ta med utfallet i rapporten ("Natten: 3 rättade av cron").
 1. Lista öppna bets:
    ```
    npx tsx scripts/agent/openBets.ts > .claude/tmp/open-bets.json
    ```
+   **Först:** låt statistikrättningen ta det den kan (props, lag-/matchtotaler
+   för hörnor och skott, BTTS i fotboll, basket och hockey). Den läser ESPN och
+   NHL:s API (öppna, fungerar även i molnet) och skriver förslag med källa;
+   allt osäkert lämnas:
+   ```
+   npm run props:grade
+   ```
+   Granska `.claude/tmp/results-props-YYYY-MM-DD.json` och kör den som i steg 5–6
+   (eller `npm run props:grade -- --confirm`). Lägg bara research på det som står
+   under "Lämnas åt handen". I en molnkörning: lägg till `-- --no-sofascore`
+   (reserven Sofascore spärrar molnadresser).
 2. Dela upp i:
    - **(A) kandidater** — match/event verkar avgjort eller kan verifieras nu
    - **(B) vänta** — framtida `eventAt`, live, futures ej klara

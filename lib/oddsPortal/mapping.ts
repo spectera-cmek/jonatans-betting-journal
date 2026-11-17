@@ -1,5 +1,5 @@
 // Pure OddsPortal mapping helpers (sport slug, market target, bookmaker priority).
-// Kept free of Playwright so unit tests stay offline.
+// Kept free of the fetcher so unit tests stay offline.
 
 export type OddsPortalSportSlug =
   | "football"
@@ -160,7 +160,12 @@ export function resolveMarketTarget(bet: {
   const column = resolveSelectionColumn(bet);
   const line = bet.line != null && Number.isFinite(bet.line) ? bet.line : null;
   const sport = oddsPortalSportSlug(bet.sport, null);
-  const twoWay = sport !== "football";
+  // Hockey och basket har både ett tvåvägsspel (inkl. förlängning) och 1X2
+  // efter ordinarie tid. "Exkl. OT", "60 min" eller ett oavgjort-spel är det senare.
+  const regularTime =
+    column === "draw" ||
+    /exkl\.?\s*(ot|förl|forl)|60\s*min|ordinarie|regular time|3[- ]?way|1x2/i.test(`${category} ${selection} ${bet.market}`);
+  const twoWay = sport !== "football" && !regularTime;
 
   const isProp =
     scope === "player" ||

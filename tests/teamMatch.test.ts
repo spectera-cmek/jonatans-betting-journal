@@ -1,0 +1,217 @@
+import { describe, expect, it } from "vitest";
+import {
+  matchFixture,
+  MIN_TEAM_SIMILARITY,
+  normalizeTeam,
+  teamAlias,
+  teamSimilarity,
+  teamTokens,
+  type FixtureCandidate,
+} from "../lib/teamMatch";
+
+// Lagnamnen nedan är de som faktiskt ligger i ShotMatch (hämtade 2026-08-18),
+// inte påhittade exempel. Motparten är hur andra källor brukar stava dem.
+
+describe("normalizeTeam", () => {
+  it("viker bort diakritiker källorna stavar olika", () => {
+    expect(normalizeTeam("Beşiktaş")).toBe("besiktas");
+    expect(normalizeTeam("Atlético Madrid")).toBe("atletico madrid");
+    expect(normalizeTeam("Viktoria Plzeň")).toBe("viktoria plzen");
+    expect(normalizeTeam("Lech Poznań")).toBe("lech poznan");
+    expect(normalizeTeam("Jagiellonia Białystok")).toBe("jagiellonia bialystok");
+    expect(normalizeTeam("Lillestrøm SK")).toBe("lillestrom sk");
+    expect(normalizeTeam("Mjällby AIF")).toBe("mjallby aif");
+    expect(normalizeTeam("Deportivo La Coruña")).toBe("deportivo la coruna");
+  });
+
+  it("gör & till and", () => {
+    expect(normalizeTeam("Brighton & Hove Albion")).toBe("brighton and hove albion");
+  });
+
+  it("rensar klubbsuffix men aldrig särskiljande ord", () => {
+    expect(teamTokens("FC Thun")).toEqual(["thun"]);
+    expect(teamTokens("RSC Anderlecht")).toEqual(["anderlecht"]);
+    expect(teamTokens("Ferencváros TC")).toEqual(["ferencvaros"]);
+    // "Real" och "Athletic" skiljer lag åt och får aldrig rensas bort.
+    expect(teamTokens("Real Betis")).toEqual(["real", "betis"]);
+    expect(teamTokens("Athletic Club")).toEqual(["athletic"]);
+  });
+
+  it("slår upp alias även när ett klubbsuffix står i vägen", () => {
+    expect(teamTokens("FK Crvena zvezda")).toEqual(["red", "star", "belgrade"]);
+    expect(teamTokens("Sint-Truidense VV")).toEqual(["sint", "truiden"]);
+  });
+});
+
+describe("teamSimilarity", () => {
+  const samePairs: Array<[string, string]> = [
+    ["Atletico Madrid", "Atlético Madrid"],
+    ["Besiktas", "Beşiktaş"],
+    ["Anderlecht", "RSC Anderlecht"],
+    ["Ferencvaros", "Ferencváros TC"],
+    ["Kauno Zalgiris", "FK Kauno Žalgiris"],
+    ["Lillestrom", "Lillestrøm SK"],
+    ["Mjallby AIF", "Mjällby AIF"],
+    ["Egnatia", "KF Egnatia"],
+    ["Ararat-Armenia", "FC Ararat-Armenia"],
+    ["Iberia 1999", "FC Iberia 1999"],
+    ["Sint-Truiden", "Sint-Truidense VV"],
+    ["Red Star Belgrade", "FK Crvena zvezda"],
+    ["Viktoria Plzen", "Viktoria Plzeň"],
+    ["Alaves", "Deportivo Alavés"],
+    ["Levante", "Levante UD"],
+    ["Celta de Vigo", "Celta Vigo"],
+    ["Brighton and Hove Albion", "Brighton & Hove Albion"],
+    ["Nott'm Forest", "Nottingham Forest"],
+    ["Tottenham", "Tottenham Hotspur"],
+    ["Malaga", "Málaga"],
+    ["Atletico Madrid", "Atl. Madrid"],
+    ["Manchester United", "Manchester Utd"],
+    ["Man Utd", "Manchester United"],
+    ["NaVi", "Natus Vincere"],
+    ["Bayern München", "Bayern Munich"],
+    ["PSG", "Paris Saint-Germain"],
+    ["Go Ahead Eagles", "G.A. Eagles"],
+    ["Sverige U20", "Sweden U20"],
+    ["Saudiarabien", "Saudi Arabia"],
+    ["Nya Zeeland", "New Zealand"],
+    ["Bosnien och Hercegovina", "Bosnia and Herzegovina"],
+  ];
+
+  it.each(samePairs)("kopplar ihop %s och %s", (a, b) => {
+    expect(teamSimilarity(a, b)).toBeGreaterThanOrEqual(MIN_TEAM_SIMILARITY);
+  });
+
+  // Lag som delar ortnamn men inte är samma klubb. Faller de här igenom hamnar
+  // ett lags priser på ett annat lags rad, och det syns inte i UI:t.
+  const differentPairs: Array<[string, string]> = [
+    ["Real Madrid", "Real Betis"],
+    ["Real Madrid", "Real Sociedad"],
+    ["Real Sociedad", "Real Betis"],
+    ["Manchester City", "Manchester United"],
+    ["Atletico Madrid", "Real Madrid"],
+    ["Athletic Club", "Atlético Madrid"],
+    ["Deportivo La Coruña", "Deportivo Alavés"],
+    ["Elche", "Espanyol"],
+    ["Getafe", "Girona"],
+    ["Racing de Santander", "Rayo Vallecano"],
+  ];
+
+  it.each(differentPairs)("håller isär %s och %s", (a, b) => {
+    expect(teamSimilarity(a, b)).toBeLessThan(MIN_TEAM_SIMILARITY);
+  });
+
+  it("inget par av verkliga lag i samma liga korsar tröskeln", () => {
+    const leagues: Record<string, string[]> = {
+      pl: [
+        "Arsenal", "Aston Villa", "Bournemouth", "Brentford", "Brighton & Hove Albion",
+        "Chelsea", "Coventry City", "Crystal Palace", "Everton", "Fulham", "Hull City",
+        "Ipswich Town", "Leeds United", "Liverpool", "Manchester City", "Manchester United",
+        "Newcastle United", "Nottingham Forest", "Sunderland", "Tottenham Hotspur",
+      ],
+      laliga: [
+        "Athletic Club", "Atlético Madrid", "Barcelona", "Celta Vigo", "Deportivo Alavés",
+        "Deportivo La Coruña", "Elche", "Espanyol", "Getafe", "Levante UD", "Málaga",
+        "Osasuna", "Racing de Santander", "Rayo Vallecano", "Real Betis", "Real Madrid",
+        "Real Sociedad", "Sevilla", "Valencia", "Villarreal",
+      ],
+      el: [
+        "AGF", "Benfica", "Beşiktaş", "CSKA Sofia", "FC Ararat-Armenia", "FC Iberia 1999",
+        "FC Thun", "FK Crvena zvezda", "FK Kauno Žalgiris", "Ferencváros TC",
+        "Jagiellonia Białystok", "KF Egnatia", "Kairat Almaty", "Lech Poznań",
+        "Lillestrøm SK", "Mjällby AIF", "OFI Crete", "Omonia Nicosia", "RSC Anderlecht",
+        "Red Bull Salzburg", "Sint-Truidense VV", "Trabzonspor", "Universitatea Craiova",
+        "Viktoria Plzeň",
+      ],
+    };
+
+    const collisions: string[] = [];
+    for (const [league, teams] of Object.entries(leagues)) {
+      for (let i = 0; i < teams.length; i++) {
+        for (let j = i + 1; j < teams.length; j++) {
+          const s = teamSimilarity(teams[i], teams[j]);
+          if (s >= MIN_TEAM_SIMILARITY) collisions.push(`${league}: ${teams[i]} ~ ${teams[j]} (${s})`);
+        }
+      }
+    }
+    expect(collisions).toEqual([]);
+  });
+});
+
+describe("matchFixture", () => {
+  const at = (iso: string) => new Date(iso);
+  const fixtures: FixtureCandidate[] = [
+    { id: "mt_1", kickoffAt: at("2026-08-20T17:00:00Z"), homeTeamName: "Beşiktaş", awayTeamName: "FK Kauno Žalgiris" },
+    { id: "mt_2", kickoffAt: at("2026-08-20T17:00:00Z"), homeTeamName: "Lech Poznań", awayTeamName: "FC Thun" },
+    { id: "mt_3", kickoffAt: at("2026-08-20T17:00:00Z"), homeTeamName: "Trabzonspor", awayTeamName: "Ferencváros TC" },
+    { id: "mt_4", kickoffAt: at("2026-08-19T19:00:00Z"), homeTeamName: "Atlético Madrid", awayTeamName: "Málaga" },
+  ];
+
+  it("hittar rätt match bland samtidiga kandidater", () => {
+    const hit = matchFixture(
+      { home_team: "Besiktas", away_team: "Kauno Zalgiris", commence_time: "2026-08-20T17:00:00Z" },
+      fixtures
+    );
+    expect(hit?.fixture.id).toBe("mt_1");
+    expect(hit?.score).toBe(1);
+  });
+
+  it("tål att källorna stavar och förkortar olika", () => {
+    const hit = matchFixture(
+      { home_team: "Trabzonspor", away_team: "Ferencvarosi TC", commence_time: "2026-08-20T17:00:00Z" },
+      fixtures
+    );
+    expect(hit?.fixture.id).toBe("mt_3");
+  });
+
+  it("tål en timmes drift i avsparkstid", () => {
+    const hit = matchFixture(
+      { home_team: "Lech Poznan", away_team: "Thun", commence_time: "2026-08-20T18:00:00Z" },
+      fixtures
+    );
+    expect(hit?.fixture.id).toBe("mt_2");
+    expect(hit?.hoursApart).toBe(1);
+  });
+
+  it("returnerar null när matchen ligger utanför tidsfönstret", () => {
+    expect(
+      matchFixture(
+        { home_team: "Besiktas", away_team: "Kauno Zalgiris", commence_time: "2026-08-22T17:00:00Z" },
+        fixtures
+      )
+    ).toBeNull();
+  });
+
+  it("returnerar null i stället för att gissa när laget inte finns", () => {
+    expect(
+      matchFixture(
+        { home_team: "Real Madrid", away_team: "Sevilla", commence_time: "2026-08-19T19:00:00Z" },
+        fixtures
+      )
+    ).toBeNull();
+  });
+
+  it("returnerar null när två fixturer är lika bra träffar", () => {
+    const ambiguous: FixtureCandidate[] = [
+      { id: "a", kickoffAt: at("2026-08-20T17:00:00Z"), homeTeamName: "Deportivo", awayTeamName: "Elche" },
+      { id: "b", kickoffAt: at("2026-08-20T17:00:00Z"), homeTeamName: "Deportivo La Coruña", awayTeamName: "Elche" },
+    ];
+    expect(
+      matchFixture(
+        { home_team: "Deportivo", away_team: "Elche", commence_time: "2026-08-20T17:00:00Z" },
+        ambiguous
+      )
+    ).toBeNull();
+  });
+});
+
+describe("teamAlias", () => {
+  it("svenska landsnamn och klubbalias, annars null", () => {
+    expect(teamAlias("Sverige U20")).toBe("sweden u20");
+    expect(teamAlias("Elfenbenskusten")).toBe("ivory coast");
+    expect(teamAlias("Island")).toBe("iceland");
+    expect(teamAlias("Rhode Island")).toBeNull();
+    expect(teamAlias("NaVi")).toBe("natus vincere");
+    expect(teamAlias("Arsenal")).toBeNull();
+  });
+});

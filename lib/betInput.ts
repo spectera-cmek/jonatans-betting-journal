@@ -14,9 +14,17 @@ import {
   normalizeTournamentStage,
 } from "./betTaxonomy";
 import { normalizeBookmaker } from "./constants";
-import { inferSportKey, parseHomeAway } from "./eventLink";
-import { LEAGUE_SEARCH } from "./clvCapture";
+import { parseHomeAway } from "./eventLink";
 import { inferSelection } from "./grading";
+
+/** Liganamn (gemener) som betyder fotboll när sporten saknas på betet. */
+const FOOTBALL_LEAGUES = [
+  "premier league", "epl", "la liga", "serie a", "bundesliga", "ligue 1",
+  "champions league", "europa league", "conference league", "allsvenskan", "superettan",
+  "vm 2026", "world cup", "mls", "championship", "fa cup", "efl cup", "league cup",
+  "copa del rey", "dfb pokal", "eredivisie", "primeira liga", "liga portugal",
+  "scottish premiership", "belgian pro league", "süper lig", "super lig", "saudi pro league",
+];
 
 const OUTCOMES: Outcome[] = [
   "pending",
@@ -217,10 +225,10 @@ export function buildBetData(
       }
     }
 
-    // Infer sport/league for CLV: TheStatsAPI needs Football + known league.
+    // Infer sport from a known football league (CLV, grading and props need it).
     if (!data.sport || data.sport === "Other") {
       const league = ((data.league as string | undefined) ?? input.league ?? "").toLowerCase().trim();
-      if (league && Object.keys(LEAGUE_SEARCH).some((k) => league === k || league.includes(k))) {
+      if (league && FOOTBALL_LEAGUES.some((k) => league === k || league.includes(k))) {
         data.sport = "Football";
       } else if (data.event) {
         const inferred = inferSport(
@@ -242,14 +250,6 @@ export function buildBetData(
       if (inferred.side) data.selectionSide = inferred.side;
       if (inferred.market && (!data.market || data.market === "h2h")) data.market = inferred.market;
       if (inferred.line != null && data.line == null) data.line = inferred.line;
-    }
-
-    if (!data.sportKey) {
-      const key = inferSportKey(
-        (data.sport as string | undefined) ?? input.sport,
-        (data.league as string | undefined) ?? input.league
-      );
-      if (key) data.sportKey = key;
     }
 
     if (data.eventKind === undefined) {
