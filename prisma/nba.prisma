@@ -89,6 +89,7 @@ model NbaGame {
   stints      NbaStint[]
   starters    NbaStarter[]
   propProjs   NbaPropProjection[]
+  propPicks   NbaPropPick[]
   smarkets    NbaSmarketsQuote[]
 
   @@index([startAt])
@@ -314,11 +315,83 @@ model NbaPropLine {
   line       Float
   over       Float
   under      Float
-  /// oddspapi | manual
+  /// oddspapi | kambi | arcadia (Pinnacles öppna webb-API) | manual
   source     String
+  /// När priset sattes (rader skrivs bara när linjen eller priset ändras).
   capturedAt DateTime @default(now())
+  /// Senast sedd med samma pris i en fångst. En linje som bolaget dragit in
+  /// slutar uppdateras här — prissättningen hoppar över gamla rader.
+  seenAt     DateTime?
+  /// OddsPapi:s spelar-id (samma för alla bolag) — kopplar historiken till spelaren.
+  oddspapiPlayerId String?
+  /// Pinnacles maxinsats på marknaden när priset sågs (låg = mjuk linje).
+  maxStake   Float?
 
   @@index([gameId, playerId, stat])
+  @@index([gameId, book, seenAt])
+}
+
+/// OddsPapi:s spelar-id → ESPN-spelaren. Historikens prop-priser har bara id:t.
+model NbaOddspapiPlayer {
+  oddspapiId String   @id
+  playerId   Int
+  name       String?
+  /// live (namn i ett live-svar) | join (sparad linje = historikens pris) | stat (statistisk koppling)
+  source     String
+  /// 0–1; live och join = 1.
+  confidence Float?
+  updatedAt  DateTime @updatedAt
+
+  @@index([playerId])
+}
+
+/// Ett flaggat prop-spel, låst första gången det flaggades (skrivs aldrig över) —
+/// facit för props: CLV mot Pinnacles rättvisa stängning och utfall.
+model NbaPropPick {
+  id           Int      @id @default(autoincrement())
+  gameId       Int
+  game         NbaGame  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId     Int
+  stat         String
+  book         String
+  line         Float
+  /// 1 = över, 2 = under.
+  side         Int
+  price        Float
+  /// Slutlig sannolikhet för vår sida (ingen push) när spelet flaggades.
+  pFinal       Float
+  /// Pinnacles rättvisa sannolikhet för vår sida på vår linje, när den fanns.
+  pAnchor      Float?
+  pPush        Float?
+  /// Varians/medel i modellens fördelning (för CLV på en annan linje än Pinnacles).
+  vmr          Float?
+  edge         Float
+  modelVersion String
+  flaggedAt    DateTime @default(now())
+  /// Pinnacles rättvisa sannolikhet för vår sida på vår linje vid stängning.
+  closeFair    Float?
+  /// Värde mot stängningen: pris · closeFair · (1 − push) + push − 1.
+  evClose      Float?
+  actual       Float?
+  /// W | L | P
+  result       String?
+
+  @@unique([gameId, playerId, stat])
+  @@index([flaggedAt])
+}
+
+/// Skadelistans statusändringar över tid (NbaInjury skrivs över varje gång) —
+/// för att mäta hur ofta Questionable/Day-To-Day faktiskt spelar.
+model NbaInjuryLog {
+  id         Int      @id @default(autoincrement())
+  playerId   Int
+  teamId     Int?
+  /// Status, eller "cleared" när spelaren försvann från listan.
+  status     String
+  detail     String?
+  capturedAt DateTime @default(now())
+
+  @@index([playerId, capturedAt])
 }
 
 /// Modellens projektion för en spelare och statistik (senaste körningen),
@@ -346,6 +419,20 @@ model NbaPropProjection {
   edgeOver     Float?
   edgeUnder    Float?
   modelVersion String
+  /// Varians/medel i modellens fördelning — flyttar Pinnacles pris mellan linjer.
+  vmr          Float?
+  /// pinnacle = prissatt mot Pinnacles rättvisa pris, own = mot bokens eget (ingen Pinnacle-linje).
+  anchor       String?
+  /// Pinnacles rättvisa P(över) översatt till bästa linjen.
+  pAnchor      Float?
+  pinLine      Float?
+  pinOver      Float?
+  pinUnder     Float?
+  pinMaxStake  Float?
+  /// Pinnacles rättvisa P(över) på bästa linjen vid stängning.
+  closeFair    Float?
+  /// Värde mot stängningen för den sida som hade edge.
+  evClose      Float?
   /// Utfallet när matchen är spelad.
   actual       Float?
   updatedAt    DateTime @updatedAt

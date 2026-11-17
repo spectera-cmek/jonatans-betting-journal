@@ -20,7 +20,8 @@ import net from "node:net";
 // Nodes standard (250 ms per adress) ger ETIMEDOUT på långsamma nät — ge varje adress 3 s.
 net.setDefaultAutoSelectFamilyAttemptTimeout(3000);
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
-import { getHistoricalOdds, hasOddspapiKey, oddspapiBookmaker, oddspapiRetry, OddspapiError, type OpHistoricalOdds, type OpHistoryEntry } from "../../lib/oddspapi";
+import { hasOddspapiKey, oddspapiBookmaker, type OpHistoricalOdds, type OpHistoryEntry } from "../../lib/oddspapi";
+import { cachedHistory, historyCacheDir } from "../../lib/nba/historyCache";
 import { loadIds, type MarketSpec } from "../../lib/oddspapi/markets";
 import { valueWindows, type ValueWindow } from "../../lib/nba/lag";
 
@@ -29,7 +30,7 @@ function arg(flag: string): string | null {
   return i === -1 ? null : process.argv[i + 1] ?? null;
 }
 
-const CACHE = path.join(".claude", "oddspapi-history");
+const CACHE = historyCacheDir();
 const KINDS = ["ml", "spread", "total"] as const;
 type Kind = (typeof KINDS)[number];
 const NAME: Record<Kind, string> = { ml: "vinnare", spread: "spread", total: "total" };
@@ -42,22 +43,7 @@ interface Found extends ValueWindow {
   kind: Kind;
 }
 
-async function history(fixtureId: string, books: string[]): Promise<OpHistoricalOdds | null> {
-  const file = path.join(CACHE, `${fixtureId}.json`);
-  if (fs.existsSync(file)) {
-    const h = JSON.parse(fs.readFileSync(file, "utf8")) as OpHistoricalOdds | null;
-    if (!h || books.every((b) => h.bookmakers?.[b])) return h;
-  }
-  let h: OpHistoricalOdds | null = null;
-  try {
-    h = await oddspapiRetry(() => getHistoricalOdds(fixtureId, books), 5);
-  } catch (e) {
-    if (!(e instanceof OddspapiError && e.statusCode === 404)) throw e;
-  }
-  fs.mkdirSync(CACHE, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(h));
-  return h;
-}
+const history = (fixtureId: string, books: string[]) => cachedHistory(fixtureId, books);
 
 const series = (h: OpHistoricalOdds, book: string, marketId: string, outcomeId: string): OpHistoryEntry[] => {
   const oc = h.bookmakers?.[book]?.markets?.[marketId]?.outcomes?.[outcomeId];

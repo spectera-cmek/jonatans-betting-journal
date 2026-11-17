@@ -1,0 +1,356 @@
+{
+ "matchups": [
+  {
+   "id": 1639930058,
+   "type": "special",
+   "parentId": 1639482788,
+   "isLive": false,
+   "startTime": "2026-11-05T03:40:00Z",
+   "units": "Points",
+   "special": {
+    "category": "Player Props",
+    "description": "Bam Adebayo Total Points"
+   },
+   "participants": [
+    {
+     "id": 1639930059,
+     "alignment": "neutral",
+     "name": "Over"
+    },
+    {
+     "id": 1639930060,
+     "alignment": "neutral",
+     "name": "Under"
+    }
+   ],
+   "parent": {
+    "id": 1639482788,
+    "startTime": "2026-11-05T03:40:00Z",
+    "participants": [
+     {
+      "alignment": "home",
+      "name": "Los Angeles Clippers"
+     },
+     {
+      "alignment": "away",
+      "name": "Miami Heat"
+     }
+    ]
+   }
+  },
+  {
+   "id": 1639929249,
+   "type": "special",
+   "parentId": 1639476269,
+   "isLive": false,
+   "startTime": "2026-11-05T02:10:00Z",
+   "units": "Threes Made",
+   "special": {
+    "category": "Player Props",
+    "description": "Aaron Gordon Total Threes Made"
+   },
+   "participants": [
+    {
+     "id": 1639929250,
+     "alignment": "neutral",
+     "name": "Over"
+    },
+    {
+     "id": 1639929251,
+     "alignment": "neutral",
+     "name": "Under"
+    }
+   ],
+   "parent": {
+    "id": 1639476269,
+    "startTime": "2026-11-05T02:10:00Z",
+    "participants": [
+     {
+      "alignment": "home",
+      "name": "Denver Nuggets"
+     },
+     {
+      "alignment": "away",
+      "name": "Toronto Raptors"
+     }
+    ]
+   }
+  },
+  {
+   "id": 1639980863,
+   "type": "special",
+   "parentId": 1639476228,
+   "isLive": false,
+   "startTime": "2026-11-05T00:10:00Z",
+   "units": "Pts & Rebs & Asts",
+   "special": {
+    "category": "Player Props",
+    "description": "Anthony Davis Total Pts & Rebs & Asts"
+   },
+   "participants": [
+    {
+     "id": 1639980864,
+     "alignment": "neutral",
+     "name": "Over"
+    },
+    {
+     "id": 1639980865,
+     "alignment": "neutral",
+     "name": "Under"
+    }
+   ],
+   "parent": {
+    "id": 1639476228,
+    "startTime": "2026-11-05T00:10:00Z",
+    "participants": [
+     {
+      "alignment": "home",
+      "name": "Washington Wizards"
+     },
+     {
+      "alignment": "away",
+      "name": "Atlanta Hawks"
+     }
+    ]
+   }
+  },
+  {
+   "id": 1639903078,
+   "type": "special",
+   "parentId": 1639482731,
+   "isLive": false,
+   "startTime": "2026-11-05T00:40:00Z",
+   "units": "Points",
+   "special": {
+    "category": "General",
+    "description": "Winning Margin Range"
+   },
+   "participants": [
+    {
+     "id": 1639903107,
+     "alignment": "neutral",
+     "name": "Charlotte Hornets By 1 - 2"
+    },
+    {
+     "id": 1639903108,
+     "alignment": "neutral",
+     "name": "Charlotte Hornets By 3 - 6"
+    },
+    {
+     "id": 1639903109,
+     "alignment": "neutral",
+     "name": "Charlotte Hornets By 7 - 9"
+    },
+    {
+     "id": 1639903110,
+     "alignment": "neutral",
+     "name": "Charlotte Hornets By 10 - 13"
+    },
+    {
+     "id": 1639903111,
+     "alignment": "neutral",
+     "name": "Charlotte Hornets By 14 - 16"
+    },
+    {
+     "id": 1639903112,
+     "alignment": "neutral",
+     "name": "Charlotte Hornets By 17 - 20"
+    },
+    {
+     "id": 1639903113,
+     "alignment": "neutral",
+     "name": "Charlotte Hornets By 21+"
+    },
+    {
+     "id": 1639903114,
+     "alignment": "neutral",
+     "name": "Brooklyn Nets By 1 - 2"
+    },
+    {
+     "id": 1639903115,
+     "alignment": "neutral",
+     "name": "Brooklyn Nets By 3 - 6"
+    },
+    {
+     "id": 1639903116,
+     "alignment": "neutral",
+     "name": "Brooklyn Nets By 7 - 9"
+    },
+    {
+     "id": 1639903117,
+     "alignment": "neutral",
+     "name": "Brooklyn Nets By 10 - 13"
+    },
+    {
+     "id": 1639903118,
+     "alignment": "neutral",
+     "name": "Brooklyn Nets By 14 - 16"
+    },
+    {
+     "id": 1639903119,
+     "alignment": "neutral",
+     "name": "Brooklyn Nets By 17 - 20"
+    },
+    {
+     "id": 1639903120,
+     "alignment": "neutral",
+     "name": "Brooklyn Nets By 21+"
+    }
+   ],
+   "parent": {
+    "id": 1639482731,
+    "startTime": "2026-11-05T00:40:00Z",
+    "participants": [
+     {
+      "alignment": "home",
+      "name": "Brooklyn Nets"
+     },
+     {
+      "alignment": "away",
+      "name": "Charlotte Hornets"
+     }
+    ]
+   }
+  }
+ ],
+ "markets": [
+  {
+   "matchupId": 1639930058,
+   "type": "total",
+   "period": 0,
+   "limits": [
+    {
+     "amount": 250,
+     "type": "maxRiskStake"
+    }
+   ],
+   "prices": [
+    {
+     "participantId": 1639930059,
+     "points": 17.5,
+     "price": -119
+    },
+    {
+     "participantId": 1639930060,
+     "points": 17.5,
+     "price": -111
+    }
+   ]
+  },
+  {
+   "matchupId": 1639929249,
+   "type": "total",
+   "period": 0,
+   "limits": [
+    {
+     "amount": 250,
+     "type": "maxRiskStake"
+    }
+   ],
+   "prices": [
+    {
+     "participantId": 1639929250,
+     "points": 1.5,
+     "price": -118
+    },
+    {
+     "participantId": 1639929251,
+     "points": 1.5,
+     "price": -112
+    }
+   ]
+  },
+  {
+   "matchupId": 1639980863,
+   "type": "total",
+   "period": 0,
+   "limits": [
+    {
+     "amount": 250,
+     "type": "maxRiskStake"
+    }
+   ],
+   "prices": [
+    {
+     "participantId": 1639980864,
+     "points": 36.5,
+     "price": -122
+    },
+    {
+     "participantId": 1639980865,
+     "points": 36.5,
+     "price": -108
+    }
+   ]
+  },
+  {
+   "matchupId": 1639903078,
+   "type": "moneyline",
+   "period": 0,
+   "limits": [
+    {
+     "amount": 250,
+     "type": "maxRiskStake"
+    }
+   ],
+   "prices": [
+    {
+     "participantId": 1639903107,
+     "price": 985
+    },
+    {
+     "participantId": 1639903108,
+     "price": 482
+    },
+    {
+     "participantId": 1639903109,
+     "price": 681
+    },
+    {
+     "participantId": 1639903110,
+     "price": 613
+    },
+    {
+     "participantId": 1639903111,
+     "price": 1003
+    },
+    {
+     "participantId": 1639903112,
+     "price": 1019
+    },
+    {
+     "participantId": 1639903113,
+     "price": 809
+    },
+    {
+     "participantId": 1639903114,
+     "price": 1044
+    },
+    {
+     "participantId": 1639903115,
+     "price": 586
+    },
+    {
+     "participantId": 1639903116,
+     "price": 918
+    },
+    {
+     "participantId": 1639903117,
+     "price": 931
+    },
+    {
+     "participantId": 1639903118,
+     "price": 1595
+    },
+    {
+     "participantId": 1639903119,
+     "price": 1762
+    },
+    {
+     "participantId": 1639903120,
+     "price": 1796
+    }
+   ]
+  }
+ ]
+}
