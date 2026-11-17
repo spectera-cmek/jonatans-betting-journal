@@ -4,6 +4,7 @@ import { useDialog } from "@/lib/useDialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/fetcher";
+import { toast } from "@/lib/toast";
 import {
   SPORTS,
   MARKETS,
@@ -354,6 +355,11 @@ export function AddBetModal({ open, onClose, onSaved, bet, prefill, unit = 100 }
           ...(prefill?.legs ? { legs: prefill.legs } : {}),
         });
       }
+      toast({
+        title: editing ? "Spel uppdaterat" : "Spel loggat",
+        detail: [form.selection, form.event].filter(Boolean).join(" — ") || undefined,
+        tone: editing ? "info" : "pos",
+      });
       onSaved();
       onClose();
     } catch (e) {

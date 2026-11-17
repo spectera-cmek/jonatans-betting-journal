@@ -1,0 +1,276 @@
+/* ============================================================
+   Motion — how the board answers you.
+
+   The board stays still on its own; things move only when you do something
+   or when new data lands. Everything is short (≤ 240 ms), eases out, and
+   never bounces. a11y.css turns all of it off under prefers-reduced-motion.
+   ============================================================ */
+:root {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur-1: 110ms; /* hover, colour */
+  --dur-2: 170ms; /* press, open */
+  --dur-3: 240ms; /* content arriving, rows leaving */
+}
+
+/* ---- hover and press: colour eases instead of snapping ---- */
+.ap-btn,
+.ap-segbtn,
+.ap-seg button,
+.ap-seg2 button,
+.ap-chip,
+.ap-navitem,
+.ap-link,
+.ap-close,
+.ap-cancel,
+.ap-iconbtn,
+.ap-tabs > a,
+.ap-tabs > button,
+.ap-thead button,
+.ap-trow,
+.ap-openbet,
+.ap-openbet-settle,
+.ap-more-sheet-item,
+.ap-mobnav a,
+.ap-tip {
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out),
+    transform var(--dur-2) var(--ease-out),
+    opacity var(--dur-1) var(--ease-out);
+}
+.ap-navitem svg,
+.ap-mobnav a svg {
+  transition: color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+
+/* A press sinks a touch and springs back on release. */
+.ap-btn:active,
+.ap-segbtn:active,
+.ap-seg button:active,
+.ap-seg2 button:active,
+.ap-chip:active,
+.ap-iconbtn:active,
+.ap-openbet-settle:active,
+.ap-cancel:active,
+.ap-close:active {
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
+.ap-mobnav a:active svg {
+  transform: scale(0.88);
+  transition-duration: 60ms;
+}
+
+/* Focus ring grows in rather than appearing. */
+:where(.ap) :focus-visible {
+  transition: outline-offset var(--dur-1) var(--ease-out);
+}
+
+/* ---- overlays: backdrop fades, the panel rises ---- */
+@keyframes ap-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ap-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+/* Tooltips are display:none until hovered, so they fade up on show. */
+.ap-tip:hover > .ap-tip-body,
+.ap-tip:focus-visible > .ap-tip-body {
+  animation: ap-pop-in var(--dur-2) var(--ease-out) backwards;
+}
+@keyframes ap-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+.ap-overlay,
+.ap-cmdk-overlay,
+.ap-more-sheet-overlay {
+  animation: ap-fade-in var(--dur-2) var(--ease-out) backwards;
+}
+.ap-modal,
+.ap-cmdk {
+  animation: ap-pop-in var(--dur-3) var(--ease-out) backwards;
+}
+.ap-more-sheet {
+  animation: ap-sheet-in 280ms var(--ease-out) backwards;
+}
+
+/* ---- content arriving: a page or a panel fades up as it mounts ----
+   "backwards" fill only: once the animation ends nothing is left on the
+   element, so no transform lingers to trap fixed-position children. */
+@keyframes ap-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.ap-main > * {
+  animation: ap-rise var(--dur-3) var(--ease-out) backwards;
+}
+.ap-card,
+.ap-kpi {
+  animation: ap-fade-in var(--dur-3) var(--ease-out) backwards;
+}
+/* The skeleton itself shouldn't fade in — it would look like a flicker. */
+.ap-card:has(> .ap-skel) {
+  animation: none;
+}
+/* KPI strips arrive left to right. */
+.ap-kpi-grid > :nth-child(2) { animation-delay: 30ms; }
+.ap-kpi-grid > :nth-child(3) { animation-delay: 60ms; }
+.ap-kpi-grid > :nth-child(4) { animation-delay: 90ms; }
+.ap-kpi-grid > :nth-child(5) { animation-delay: 120ms; }
+.ap-kpi-grid > :nth-child(6) { animation-delay: 150ms; }
+.ap-kpi-grid > :nth-child(7) { animation-delay: 180ms; }
+.ap-kpi-grid > :nth-child(8) { animation-delay: 210ms; }
+
+/* ---- a settled row slides out and closes the gap ---- */
+.ap-openbet.is-leaving {
+  animation: ap-leave var(--dur-3) var(--ease-in) forwards;
+  pointer-events: none;
+}
+@keyframes ap-leave {
+  0% {
+    opacity: 1;
+    transform: none;
+    max-height: 120px;
+  }
+  45% {
+    opacity: 0;
+    transform: translateX(24px);
+    max-height: 120px;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(24px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-width: 0;
+  }
+}
+
+/* ---- toast ---- */
+.ap-toasts {
+  position: fixed;
+  z-index: 1200;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+.ap-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 360px;
+  padding: 10px 12px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--acc);
+  border-radius: var(--r-modal);
+  box-shadow: var(--shadow-lift);
+  color: var(--txt);
+  font-size: var(--fs-md);
+  pointer-events: auto;
+  animation: ap-toast-in var(--dur-3) var(--ease-out) backwards;
+}
+.ap-toast.is-pos {
+  border-left-color: var(--pos);
+}
+.ap-toast.is-neg {
+  border-left-color: var(--red);
+}
+.ap-toast.is-leaving {
+  animation: ap-toast-out var(--dur-2) var(--ease-in) forwards;
+}
+.ap-toast-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--acc-ink);
+}
+.ap-toast.is-pos .ap-toast-icon {
+  color: var(--pos);
+}
+.ap-toast.is-neg .ap-toast-icon {
+  color: var(--red);
+}
+.ap-toast-text {
+  flex: 1;
+  min-width: 0;
+}
+.ap-toast-text strong {
+  display: block;
+  font-family: var(--disp);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.ap-toast-text span {
+  display: block;
+  overflow: hidden;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-toast-action {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--acc-ink);
+  font-family: var(--disp);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+.ap-toast-action:hover {
+  background: var(--acc-soft);
+}
+.ap-toast-action:active {
+  transform: scale(0.96);
+}
+@keyframes ap-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes ap-toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+@media (max-width: 920px) {
+  /* Above the bottom tabs, full width. */
+  .ap-toasts {
+    left: 12px;
+    right: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    align-items: stretch;
+  }
+  .ap-toast {
+    width: auto;
+  }
+}

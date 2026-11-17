@@ -19,6 +19,7 @@ import "./styles/pages/cs2.css";
 import "./styles/pages/nba.css";
 import "./styles/pages/settings.css";
 import "./styles/pages/auth.css";
+import "./styles/motion.css";
 import "./styles/a11y.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { THEME_COLOR } from "@/lib/theme";

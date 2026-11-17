@@ -7,6 +7,8 @@ import type { BetListDTO, BetSettlementDTO } from "@/lib/types";
 import type { Outcome } from "@/lib/betting";
 import { ResultBadge } from "./ResultBadge";
 import { Field } from "./ui";
+import { toast, outcomeLabel, outcomeTone } from "@/lib/toast";
+import { revalidateAll } from "@/lib/useData";
 
 const OUTCOMES: { value: Exclude<Outcome, "pending">; label: string }[] = [
   { value: "win", label: "Vunnen" },
@@ -84,6 +86,24 @@ export function SettlementDialog({
         reason: reason.trim() || "Manuell rättning",
         correct: correcting,
       });
+      const settled = { id: bet.id, event: bet.event };
+      toast({
+        title: `${correcting ? "Korrigerad" : "Rättad"} · ${outcomeLabel(outcome)}`,
+        detail: bet.selection ? `${bet.selection} — ${bet.event}` : bet.event,
+        tone: outcomeTone(outcome),
+        action: {
+          label: "Ångra",
+          run: async () => {
+            try {
+              await api.del(`/api/bets/${settled.id}/settle`);
+              toast({ title: "Rättning ångrad", detail: settled.event });
+              revalidateAll();
+            } catch (err) {
+              toast({ title: "Kunde inte ångra", detail: (err as Error).message, tone: "neg" });
+            }
+          },
+        },
+      });
       onChanged();
       onClose();
     } catch (err) {
@@ -99,6 +119,7 @@ export function SettlementDialog({
     setError(null);
     try {
       await api.del(`/api/bets/${bet.id}/settle`);
+      toast({ title: "Rättning ångrad", detail: bet.event });
       onChanged();
       onClose();
     } catch (err) {
