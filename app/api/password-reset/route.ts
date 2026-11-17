@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from "@/lib/auth";
 import { hashPassword, validatePassword } from "@/lib/password";
-import { resetTokenUserId, verifyResetToken } from "@/lib/passwordReset";
+import { checkResetExpiry, hashResetToken, looksLikeResetToken } from "@/lib/passwordReset";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,15 +19,20 @@ export async function POST(req: Request) {
     password?: unknown;
     passwordConfirm?: unknown;
   };
-  if (typeof body.token !== "string" || typeof body.password !== "string" || typeof body.passwordConfirm !== "string") {
+  if (typeof body.password !== "string" || typeof body.passwordConfirm !== "string") {
     return NextResponse.json({ ok: false, error: "Ogiltig förfrågan." }, { status: 400 });
   }
+  if (!looksLikeResetToken(body.token)) {
+    return NextResponse.json({ ok: false, error: INVALID }, { status: 400 });
+  }
 
-  const userId = resetTokenUserId(body.token);
-  const user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;
+  const user = await prisma.user.findUnique({
+    where: { resetTokenHash: hashResetToken(body.token) },
+    select: { id: true, username: true, resetTokenExpiresAt: true },
+  });
   if (!user) return NextResponse.json({ ok: false, error: INVALID }, { status: 400 });
 
-  const check = verifyResetToken(body.token, user.passwordHash);
+  const check = checkResetExpiry(user.resetTokenExpiresAt);
   if (!check.ok) {
     const error = check.reason === "expired" ? "Länken har gått ut. Be om en ny." : INVALID;
     return NextResponse.json({ ok: false, error }, { status: 400 });
@@ -39,8 +44,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Lösenorden matchar inte." }, { status: 400 });
   }
 
-  // Ny hash = länken slutar gälla (signaturen täcker den gamla).
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(body.password) } });
+  // Koden nollställs i samma skrivning: länken går att använda en gång.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(body.password), resetTokenHash: null, resetTokenExpiresAt: null },
+  });
 
   const res = NextResponse.json({ ok: true, username: user.username });
   res.cookies.set(SESSION_COOKIE, createSessionToken(user.id), sessionCookieOptions());

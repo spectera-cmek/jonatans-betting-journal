@@ -16,6 +16,10 @@ model User {
   username     String   @unique // stored lowercase; capitalized only for display
   passwordHash String // bcrypt
   createdAt    DateTime @default(now())
+  // Återställningslänk (npm run user:reset-link): bara SHA-256 av koden sparas,
+  // och båda nollställs när lösenordet byts — länken går att använda en gång.
+  resetTokenHash      String?   @unique
+  resetTokenExpiresAt DateTime?
   bets         Bet[]
   setting      Setting?
 }
