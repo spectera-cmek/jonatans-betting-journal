@@ -13,6 +13,8 @@
  *   npm run nba:backtest -- --line bet --lineup actual # som ovan, men modellen vet vilka som spelade (fusk)
  *   npm run nba:backtest -- --sims 8000 --save         # spara körningen (visas under Facit)
  *   npm run nba:backtest -- --param usageK=0.4 --param rubberBand=0.05   # prova andra parametrar
+ *   npm run nba:backtest -- --top-edges 10             # de 10 största edgarna (ren modell), match för match
+ *   npm run nba:backtest -- --edges-json edges.json    # alla priser med modellens edge, för egen analys
  *
  * Stängningspris: Pinnacle via OddsPapi-historiken (npm run nba:odds-history)
  * om det finns, annars ESPN:s DraftKings-linje.
@@ -21,12 +23,13 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
-import { loadHistory, loadStints } from "../../lib/nba/store";
+import { loadHistory, loadMarketLines, loadStints } from "../../lib/nba/store";
 import { runBacktest, type BacktestGame, type ClosingQuote } from "../../lib/nba/backtest";
 import { DEFAULT_NBA_BLEND_W, DEFAULT_NBA_PARAMS, NBA_MODEL_VERSION, type NbaModelParams } from "../../lib/nba/params";
 import type { NbaMarket } from "../../lib/nba/pricing";
 import { oddspapiBookmaker } from "../../lib/oddspapi";
-import { betSource } from "../../lib/nba/oddspapiCapture";
+import { betSource, UNRELIABLE_HISTORY_BOOKS } from "../../lib/nba/oddspapiCapture";
+import { MARKET_LINE_DAYS, type MarketLine } from "../../lib/nba/marketRatings";
 
 /** Börsens provision på nettovinsten — priset räknas om till vad du faktiskt får. */
 const COMMISSION: Array<[RegExp, number]> = [
@@ -65,8 +68,9 @@ async function main() {
     process.exit(1);
   }
   const to = arg("--to") ? new Date(`${arg("--to")}T23:59:59Z`) : new Date();
-  // Standard: från 1 december — modellen behöver några veckor av säsongen först.
-  const defFrom = new Date(Date.UTC(to.getUTCMonth() >= 9 ? to.getUTCFullYear() : to.getUTCFullYear() - 1, 11, 1));
+  // Standard: från 1 december — modellen behöver några veckor av säsongen först. I oktober–
+  // november har säsongen ingen december än: då från förra säsongens 1 december.
+  const defFrom = new Date(Date.UTC(to.getUTCMonth() === 11 ? to.getUTCFullYear() : to.getUTCFullYear() - 1, 11, 1));
   const from = arg("--from") ? new Date(`${arg("--from")}T00:00:00Z`) : defFrom;
   const sims = Number(arg("--sims")) || 4000;
   const betMode = arg("--line") === "bet";
@@ -76,7 +80,11 @@ async function main() {
   const BET_RANK: Record<string, number> = { [BET]: 0 };
   // Mot speltidspriset ska facit vara en enda skarp bok, annars blandas bolagen.
   const book = arg("--book") ?? (betMode ? oddspapiBookmaker() : null);
-  const betBookList = (arg("--bet-books") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  const betBookList = (arg("--bet-books") ?? "").split(",").map((x) => x.trim()).filter(Boolean).filter((b) => {
+    if (!UNRELIABLE_HISTORY_BOOKS.has(b)) return true;
+    console.log(`${b} hoppas över: dess sparade OddsPapi-historik går inte att lita på (npm run nba:check-books -- ${b})`);
+    return false;
+  });
   if (betBookList.length && !betMode) {
     console.error("--bet-books kräver --line bet");
     process.exit(1);
@@ -108,9 +116,14 @@ async function main() {
   const closing = new Map<number, ClosingQuote[]>();
   const closeLines = new Map<number, ClosingQuote[]>();
   const betQuotes = new Map<number, ClosingQuote[]>();
+  // Facit utan --book: Pinnacle i OddsPapi-källorna, DraftKings via ESPN. Historiken har också
+  // andra bolag med samma tidsstämpel (för --bet-books) — bet365:s rader där är ofta omvända
+  // (SA 11,00 som hemmafavorit, spread +19 i stället för −24) och får aldrig bli facit.
+  const ref = oddspapiBookmaker();
+  const bookOk = (o: { source: string; book: string }) => (book ? o.book === book : o.source === "espn" || o.book === ref);
   const pick = (g: (typeof games)[number], m: NbaMarket, rank: Record<string, number>) =>
     g.odds
-      .filter((o) => o.market === m && o.capturedAt <= g.startAt && o.source in rank && (!book || o.book === book))
+      .filter((o) => o.market === m && o.capturedAt <= g.startAt && o.source in rank && bookOk(o))
       .sort((a, b) => (rank[a.source] ?? 9) - (rank[b.source] ?? 9) || b.capturedAt.getTime() - a.capturedAt.getTime())[0];
   for (const g of games) {
     list.push({ id: g.id, t: g.startAt.getTime(), homeId: g.homeTeamId, awayId: g.awayTeamId, neutral: g.neutral, seasonType: g.seasonType, homeScore: g.homeScore!, awayScore: g.awayScore! });
@@ -140,6 +153,12 @@ async function main() {
       betQuotes.set(g.id, bq);
     }
   }
+  // Marknadens lagrating: tidigare matchers stängningsspread (Pinnacle, annars DraftKings).
+  let marketLines: MarketLine[] | undefined;
+  if (params.marketMix > 0) {
+    marketLines = await loadMarketLines(db, new Date(from.getTime() - MARKET_LINE_DAYS * 864e5), to, ref);
+    console.log(`${marketLines.length} stängningslinjer för marknadens lagrating`);
+  }
   console.log(`${list.length} matcher ${from.toISOString().slice(0, 10)} → ${to.toISOString().slice(0, 10)}, ${sims} simuleringar per match`);
   let last = 0;
   if (betMode && !list.length) {
@@ -153,6 +172,8 @@ async function main() {
     stints,
     lineup,
     betQuotes: betBookList.length ? betQuotes : undefined,
+    topEdges: arg("--edges-json") ? Infinity : Number(arg("--top-edges")) || undefined,
+    marketLines,
     onProgress: (d, n) => {
       if (d - last >= 100 || d === n) {
         last = d;
@@ -163,8 +184,8 @@ async function main() {
   console.log("\n");
   const f = (x: number | null | undefined, d = 2) => (x == null ? "—" : x.toFixed(d));
   console.log(`Matcher: ${r.games}   Stängningspris från: ${r.books.join(", ") || "—"}`);
-  console.log(`Marginal  MAE modell ${f(r.margin.maeModel)} (samma matcher som marknaden: ${f(r.margin.maeModelSame)})  marknad ${f(r.margin.maeMarket)}  bias ${f(r.margin.bias)}  spridning verklig ${f(r.margin.residualSd)} / sim ${f(r.margin.simSd)}`);
-  console.log(`Total     MAE modell ${f(r.total.maeModel)} (samma matcher som marknaden: ${f(r.total.maeModelSame)})  marknad ${f(r.total.maeMarket)}  bias ${f(r.total.bias)}  spridning verklig ${f(r.total.residualSd)} / sim ${f(r.total.simSd)}`);
+  console.log(`Marginal  MAE modell ${f(r.margin.maeModel)} (samma matcher som marknaden: ${f(r.margin.maeModelSame)})  marknad ${f(r.margin.maeMarket)}  bias ${f(r.margin.bias)}  spridning verklig ${f(r.margin.residualSd)} / sim ${f(r.margin.simSd)}  lutning ${f(r.margin.slope)}`);
+  console.log(`Total     MAE modell ${f(r.total.maeModel)} (samma matcher som marknaden: ${f(r.total.maeModelSame)})  marknad ${f(r.total.maeMarket)}  bias ${f(r.total.bias)}  spridning verklig ${f(r.total.residualSd)} / sim ${f(r.total.simSd)}  lutning ${f(r.total.slope)}`);
   console.log("");
   for (const [m, x] of Object.entries(r.markets)) {
     if (!x) continue;
@@ -219,9 +240,33 @@ async function main() {
       ? `Break-even vid −110 (1,91): 52,4 %. Picks vid speltid (${betHours} h före start). CLV = poäng linjen rörde sig mot modellens sida till stängning — positiv CLV över många spel är det starkaste tecknet på en riktig edge.`
       : "Break-even vid −110 (1,91): 52,4 %. Picks räknas mot stängningslinjen — svårare än första linjen."
   );
+  const edgesJson = arg("--edges-json");
+  if (edgesJson && r.edges) {
+    (await import("node:fs")).writeFileSync(edgesJson, JSON.stringify(r.edges));
+    console.log(`${r.edges.length} priser med modellens edge skrivna till ${edgesJson}`);
+    r.edges = r.edges.slice(0, Number(arg("--top-edges")) || 0);
+  }
+  if (r.edges?.length) {
+    const teams = new Map((await db.nbaTeam.findMany()).map((x) => [x.id, x.abbr]));
+    const ab = (id: number) => teams.get(id) ?? String(id);
+    console.log("");
+    console.log(`De ${r.edges.length} största edgarna (ren modell):`);
+    console.log("match                    datum       id          marknad          sida     pris   modell  marknad  edge    edge(vikt)  modellens resultat  utfall");
+    for (const e of r.edges) {
+      const mk = e.market === "ml" ? "ml" : `${e.market} ${e.line}`;
+      const sd = e.market === "total" ? (e.side === 1 ? "över" : "under") : e.side === 1 ? ab(e.homeId) : ab(e.awayId);
+      console.log(
+        `${`${ab(e.awayId)} @ ${ab(e.homeId)}`.padEnd(24)} ${new Date(e.t).toISOString().slice(0, 10)}  ${String(e.gameId).padEnd(10)}  ${mk.padEnd(15)}  ${sd.padEnd(6)}  ${e.price.toFixed(2).padStart(5)}  ` +
+          `${(e.pModel * 100).toFixed(1).padStart(5)} %  ${(e.pMarket * 100).toFixed(1).padStart(5)} %  ${(e.edge * 100).toFixed(1).padStart(5)} %  ${(e.edgeBlend * 100).toFixed(1).padStart(6)} %    ` +
+          `${e.awayMean.toFixed(1)}–${e.homeMean.toFixed(1)}`.padEnd(20) +
+          (e.result === 1 ? "vann" : e.result === 0 ? "förlust" : "push")
+      );
+    }
+  }
   console.log("");
   console.log("Läsguide: vikt 0 = bara marknaden. Om bästa vikt är 0 slår modellen inte marknaden än.");
   console.log("Bias > 0 = verkligheten högre än modellen. Sim-spridning ska ligga nära den verkliga.");
+  console.log("Lutning = utfallet mot modellens snitt: 1 = rätt skala, över 1 = modellen trycker ihop skillnaderna mellan lagen (underdogs får för hög chans).");
 
   if (process.argv.includes("--save")) {
     const run = await db.nbaBacktestRun.create({

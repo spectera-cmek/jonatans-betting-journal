@@ -88,6 +88,13 @@ describe("odds-svar", () => {
     expect(spread.price1).toBe(1.952);
   });
 
+  it("ingen huvudlinje när hela stegen har lika jämna priser", () => {
+    const row = (line: number) => ({ kind: "spread" as const, line, price1: 1.9, price2: 1.9, mainLine: false });
+    const ml = { kind: "ml" as const, line: null, price1: 1.5, price2: 2.6, mainLine: false };
+    const out = pickMainLines([row(-7.5), row(-3.5), row(12), ml] as Parameters<typeof pickMainLines>[0]);
+    expect(out.map((r) => r.kind)).toEqual(["ml"]);
+  });
+
   it("vänder till hemmalagets perspektiv när participant1 är bortalaget", () => {
     const main = pickMainLines(extractLines(fx.odds[0], "pinnacle", map));
     const flipped = orientRows(main, false);

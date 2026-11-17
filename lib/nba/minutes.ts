@@ -150,6 +150,27 @@ export function baselineMinutes(
 }
 
 /**
+ * Spelarens egna grundminuter oavsett lag: viktat snitt av de senaste 10
+ * framträdandena utan frånvaro. För spelare som inte har grundminuter i laget
+ * (ny i laget, tillbaka efter lång skada) i stället för en gissning. null = ingen historik.
+ */
+export function ownBaseline(h: History, playerId: number, asOf: number, lookback = 10, halfLife = 4): number | null {
+  const rows = h.players.get(playerId) ?? [];
+  let wSum = 0;
+  let mSum = 0;
+  let n = 0;
+  for (let i = firstBefore(rows, asOf); i < rows.length && n < lookback; i++) {
+    const r = rows[i];
+    if (isAbsence(r.dnp, r.dnpReason)) continue;
+    const w = Math.pow(0.5, n / halfLife);
+    wSum += w;
+    mSum += w * r.minutes;
+    n++;
+  }
+  return n ? mSum / wSum : null;
+}
+
+/**
  * Lägger på skador och overrides och skalar de fria spelarna så att laget
  * får exakt 240 minuter, med tak per spelare.
  */
@@ -185,17 +206,23 @@ export function projectMinutes(
       free.forEach((r, i) => (r.minutes = Math.max(0, r.minutes - (excess * w[i]) / ws)));
       continue;
     }
-    // För få minuter (någon borta): fördela proportionellt, med tak.
-    const k = target / freeSum;
+    // För få minuter (någon borta): lägg till underskottet viktat med (48−m)², så att bänken
+    // tar de lediga minuterna och stjärnorna bara går upp lite. Proportionellt gav fyra
+    // spelare 42 minuter i ett decimerat lag (NO 8 april 2026: Hawkins 42 mot 23 spelade).
+    // Två säsongers backtest, decimerade lag (< 215 grundminuter): 6,71 → 5,49 min fel.
+    const deficit = target - freeSum;
+    const w = free.map((r) => Math.max(0, 48 - r.minutes) ** 2);
+    const ws = w.reduce((a, b) => a + b, 0);
+    if (ws <= 0) break;
     let capped = false;
-    for (const r of free) {
-      r.minutes *= k;
+    free.forEach((r, i) => {
+      r.minutes += (deficit * w[i]) / ws;
       if (r.minutes > cap) {
         r.minutes = cap;
         fixed.add(r.playerId);
         capped = true;
       }
-    }
+    });
     if (!capped) break;
   }
   return rows.map((r) => ({ ...r, minutes: Math.round(r.minutes * 10) / 10 }));

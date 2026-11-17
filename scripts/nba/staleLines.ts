@@ -19,7 +19,7 @@ config({ path: ".env.local" });
 config();
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
 import { oddspapiBookmaker } from "../../lib/oddspapi";
-import { betSource, HISTORY_CLOSING } from "../../lib/nba/oddspapiCapture";
+import { betSource, HISTORY_CLOSING, UNRELIABLE_HISTORY_BOOKS } from "../../lib/nba/oddspapiCapture";
 import { settle, type NbaMarket } from "../../lib/nba/pricing";
 import { staleEv, type Quote } from "../../lib/nba/stale";
 import { SUSPICIOUS_DIFF } from "../../lib/nba/backtest";
@@ -48,7 +48,11 @@ async function main() {
     process.exit(1);
   }
   const ref = oddspapiBookmaker();
-  const books = (arg("--books") ?? "unibet.se,betsson").split(",").map((s) => s.trim()).filter(Boolean);
+  const books = (arg("--books") ?? "unibet.se,betsson").split(",").map((s) => s.trim()).filter(Boolean).filter((b) => {
+    if (!UNRELIABLE_HISTORY_BOOKS.has(b)) return true;
+    console.log(`${b} hoppas över: dess sparade OddsPapi-historik går inte att lita på (npm run nba:check-books -- ${b})`);
+    return false;
+  });
   const betHours = Number(arg("--bet-hours")) || 12;
   const BET = betSource(betHours);
   const from = new Date(`${arg("--from") ?? "2026-01-01"}T00:00:00Z`);
