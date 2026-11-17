@@ -43,6 +43,14 @@ model Bet {
   betType         String          @default("single") // single | accumulator
   odds            Float // decimal odds you took
   closingOdds     Float? // for CLV
+  // Where closingOdds came from. A de-vigged fair price (BetHero) and a real
+  // closing line share the column, so the number is only comparable once you
+  // know its source. Both columns have existed in the production database since
+  // 2026-09-03 without being modelled here — every `prisma db push` would have
+  // dropped them until these lines.
+  // odds_api | thestatsapi | oddsportal | bethero_fair | manual | legacy
+  closingSource   String?
+  closingCapturedAt DateTime?
   // Odds-boost: a boosted price is not a market price, so it must never count as
   // CLV. This column has existed in the production database since before it was
   // modelled here — every `prisma db push` silently dropped it until this line.
