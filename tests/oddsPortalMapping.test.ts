@@ -41,6 +41,14 @@ describe("resolveSelectionColumn / resolveMarketTarget", () => {
     ).toBe("home");
   });
 
+  it("hockey: vinnare inkl. förlängning är tvåväg, exkl. OT är 1X2", () => {
+    const base = { market: "h2h", selectionSide: "home", homeTeam: "Columbus", awayTeam: "Pittsburgh", sport: "Ice Hockey" };
+    expect(resolveMarketTarget({ ...base, selection: "Columbus" }).tabLabels[0]).toBe("Home/Away");
+    expect(resolveMarketTarget({ ...base, selection: "Columbus (exkl. OT)" }).tabLabels[0]).toBe("1X2");
+    expect(resolveMarketTarget({ ...base, marketCategory: "Matchvinnare 60 min", selection: "Columbus" }).tabLabels[0]).toBe("1X2");
+    expect(resolveMarketTarget({ ...base, selectionSide: "draw", selection: "Oavgjort" }).column).toBe("draw");
+  });
+
   it("resolves totals under", () => {
     const target = resolveMarketTarget({
       market: "totals",
@@ -136,36 +144,9 @@ describe("search helpers", () => {
     ).toBe(true);
   });
 
-  it("parses OU summary text", async () => {
-    const { parseOuSummaryText } = await import("../lib/oddsPortal/scrape");
-    const text = `
-Handicap Over Under Payout
-Over/Under +2.5 8 2.25 1.70 96.8%
-Over/Under +3 2 3.30 1.33 94.8%
-`;
-    const lines = parseOuSummaryText(text);
-    expect(lines.find((l) => l.line === 2.5)).toEqual({ line: 2.5, over: 2.25, under: 1.7 });
-  });
-
   it("checks date window", () => {
     const eventAt = new Date("2026-07-20T15:00:00Z");
     expect(dateWithinWindow("2026-07-20T12:00:00Z", eventAt)).toBe(true);
     expect(dateWithinWindow("2026-07-28T12:00:00Z", eventAt)).toBe(false);
-  });
-});
-
-describe("isMatchHref", () => {
-  it("accepts modern h2h urls", async () => {
-    const { isMatchHref } = await import("../lib/oddsPortal/scrape");
-    expect(
-      isMatchHref(
-        "https://www.oddsportal.com/football/h2h/levski-sofia-E5OOzgs4/univ-craiova-bsd9fGaK/#MgQOEmS8",
-        "football"
-      )
-    ).toBe(true);
-    expect(
-      isMatchHref("https://www.oddsportal.com/football/england/premier-league/arsenal-chelsea-123456/", "football")
-    ).toBe(true);
-    expect(isMatchHref("https://www.oddsportal.com/football/", "football")).toBe(false);
   });
 });

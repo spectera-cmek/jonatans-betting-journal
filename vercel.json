@@ -4,10 +4,6 @@
     {
       "path": "/api/cron/grade",
       "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/closing",
-      "schedule": "0 5 * * *"
     }
   ]
 }

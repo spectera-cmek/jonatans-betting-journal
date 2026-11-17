@@ -18,16 +18,12 @@ export {
 } from "./mapping";
 
 export {
-  fetchClosingFromMatch,
-  isMatchHref,
-  parseOuSummaryText,
   scrapeClosingBatch,
   scrapeClosingForBet,
-  searchMatch,
+  scrapeClosingWith,
   withScrapeLock,
   type BatchScrapeItem,
   type BatchScrapeResult,
   type ScrapeBetInput,
   type ScrapeClosingResult,
-  type SearchMatchResult,
 } from "./scrape";

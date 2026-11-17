@@ -129,51 +129,12 @@ export default function SettingsPage() {
           <SyncButton kind="scores" label="Rätta via resultat" showResult />
         </Section>
 
-        <Section title="CLV & synk" note="API-nycklar för stängningsodds och automatisk rättning.">
-          <div className="ap-keylist">
-            <div className="ap-legrow">
-              <i className={"ap-led" + (settings?.hasTheStatsApiKey ? " is-on" : "")} aria-hidden="true" />
-              <span style={{ flex: 1 }}>TheStatsAPI</span>
-              {settings?.hasTheStatsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}
-            </div>
-            <div className="ap-legrow">
-              <i className={"ap-led" + (settings?.hasOddsApiKey ? " is-on" : "")} aria-hidden="true" />
-              <span style={{ flex: 1 }}>The Odds API</span>
-              {settings?.hasOddsApiKey ? <span className="pos">ansluten</span> : <span className="neg">ingen nyckel</span>}
-            </div>
-          </div>
-
-          {settings?.hasTheStatsApiKey || settings?.hasOddsApiKey ? (
-            <>
-              <p className="ap-note">
-                {settings?.hasTheStatsApiKey
-                  ? "TheStatsAPI hämtar historiska stängningsodds (CLV) för fotboll — även retroaktivt. Synken kör i små batchar (undviker 504); kör igen för fler bets. "
-                  : ""}
-                {settings?.hasOddsApiKey
-                  ? "The Odds API länkar icke-fotboll och ger live-closing som fallback. "
-                  : ""}
-                ESPN-resultat rättar singlar utan API-länk.
-              </p>
-              <div className="ap-set-actions" style={{ alignItems: "flex-start" }}>
-                <SyncButton kind="closing" label="Hämta closing-odds" showResult />
-                <SyncButton kind="all" label="Full synk" showResult />
-                {settings?.hasOddsApiKey && <SyncButton kind="grade" label="Rätta via Odds API" showResult />}
-              </div>
-            </>
-          ) : (
-            <div className="ap-note">
-              <p>Lägg till minst en API-nyckel i <code>.env.local</code>:</p>
-              <ul>
-                <li><strong>THESTATSAPI_KEY</strong> — historisk CLV för fotboll (rekommenderas). thestatsapi.com</li>
-                <li><strong>ODDS_API_KEY</strong> — gratis tier för MLB/NBA/NHL m.fl. the-odds-api.com</li>
-              </ul>
-              <p>
-                Utan nycklar fungerar gratis ESPN-rättning ovan. CLV: använd refresh-knappen
-                bredvid varje bets CLV-cell (OddsPortal-scrape, kräver Playwright lokalt) eller
-                TheStatsAPI/Odds API.
-              </p>
-            </div>
-          )}
+        <Section title="CLV" note="Stängningsodds hämtas från OddsPortal på datorn.">
+          <p className="ap-note">
+            Använd refresh-knappen bredvid varje bets CLV-cell, eller kör{" "}
+            <code>npm run scrape:clv -- --confirm</code> för alla på en gång (kräver Scrapling lokalt:{" "}
+            <code>npm run scrapling:setup</code>). Props och udda marknader sätts för hand.
+          </p>
         </Section>
 
         <Section title="Data" note="Hela journalen som en fil.">

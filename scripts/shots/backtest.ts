@@ -11,7 +11,8 @@
  *   • spelet läggs till bästa tillgängliga pris
  *   • ROI mäts mot faktiskt utfall
  *
- * OBS: TheStatsAPI lämnar `opening` tomt för skott- och hörnmarknader, så i
+ * OBS: de lagrade oddsen (ShotOddsSnapshot) kom från TheStatsAPI fram till
+ * oktober 2026. Den lämnade `opening` tomt för skott- och hörnmarknader, så i
  * praktiken finns bara stängningspriser. Spelen läggs då till stängning, och
  * CLV går inte att mäta — utskriften visar vilken priskälla som användes.
  *
@@ -172,7 +173,7 @@ async function backtestLeague(leagueKey: string, metric: ShotMetric, minHistory:
   })) as OddsRow[];
 
   if (oddsRows.length === 0) {
-    console.log(`  ${pad(METRIC_LABEL[metric], 14)} inga odds lagrade — kör shots:odds först`);
+    console.log(`  ${pad(METRIC_LABEL[metric], 14)} inga bolagslinjer lagrade (ShotOddsSnapshot) — inget att backtesta mot`);
     return null;
   }
 
@@ -226,7 +227,7 @@ async function backtestLeague(leagueKey: string, metric: ShotMetric, minHistory:
       const openingRows = group.filter((o) => !o.isClosing);
       const closing = group.filter((o) => o.isClosing);
 
-      // TheStatsAPI lämnar `opening` tomt för de här marknaderna — i praktiken
+      // Källan (TheStatsAPI) lämnade `opening` tomt för de här marknaderna — i praktiken
       // finns bara stängningspriser. Faller vi inte tillbaka på dem blir hela
       // backtestet tomt. Priset man spelar till blir då stängningen, vilket
       // gör CLV omätbar; det räknas och rapporteras separat.
@@ -435,7 +436,7 @@ async function main() {
   }
 
   if (results.length === 0) {
-    console.log("Inget att rapportera. Kör shots:ingest och shots:odds först.");
+    console.log("Inget att rapportera. Kör shots:ingest först; backtestet behöver också lagrade bolagslinjer.");
     return;
   }
 

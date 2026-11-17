@@ -96,7 +96,7 @@ stavning; ditt jobb är att läsa rätt varumärke.
 
 ## Datering
 - `eventAt` = avspark **med klockslag** när kupongen visar det (Coolbet-kort:
-  "26 aug 21:00"). Kickoff-CLV behöver tiden.
+  "26 aug 21:00"). CLV-skrapan och props-rättningen hittar matchen säkrare med tiden.
 - Kvitto-skärmdumpar visar oftast bara läggningstid, inte avspark → `eventAt` =
   bara datum, eller fråga. `placedAt` = kvittots tidsstämpel.
 - Nordamerika/Sydamerika-kväll (MLS, Liga MX, Brasilien) = ofta **nästa dygn**

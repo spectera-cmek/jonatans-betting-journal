@@ -2,7 +2,7 @@
 
 > A personal sports betting journal. Log bets in **units**, track **ROI** and
 > **bankroll** over time, and **auto-settle** results from a bet365 account statement
-> or The Odds API. Runs locally, or deployed to Vercel + Postgres as an installable
+> or free score feeds (ESPN, NHL). Runs locally, or deployed to Vercel + Postgres as an installable
 > PWA with per-account login.
 
 <p align="left">
@@ -36,14 +36,15 @@
 - **Auto-settling, two ways:**
   - Import a **bet365 account-statement PDF** — parses every slip and settles from the
     *actual payout* (after tax), never recomputed.
-  - Optional **[The Odds API](https://the-odds-api.com/)** integration to grade finished
-    events and pull closing odds for CLV.
+  - Free, keyless **ESPN** scores grade finished singles; `props:grade` settles props
+    and stat totals from ESPN and the NHL API. Closing odds for CLV come from a local
+    OddsPortal scrape.
 - **Your own instance** — one Postgres database you control (Neon via Vercel, or any
   Postgres locally). Registration is gated behind an invite code and every query is
   scoped to the signed-in account, so accounts never see each other's bets.
-- **Optional third-party calls** — grading and CLV use The Odds API and TheStatsAPI, and
-  betslip screenshot import uses the Anthropic API. All three are opt-in: leave the key
-  unset and the app simply falls back to manual entry.
+- **No paid data APIs** — grading uses ESPN and the NHL API (open, no key); only the
+  betslip screenshot import uses a key (Anthropic API), and it is opt-in: leave it unset
+  and the app falls back to manual entry.
 
 ## 🖼️ Screenshots
 
@@ -55,7 +56,7 @@
 
 **Next.js 14** (App Router) · **TypeScript** · **Prisma + Postgres** (Neon) ·
 **Tailwind CSS** · hand-rolled **SVG charts** · **Vitest** · **pdfjs-dist** (statement
-parsing) · **Playwright** (local OddsPortal CLV scrape).
+parsing) · **Scrapling** (local OddsPortal, HLTV and Sofascore fetching) · **patchright** (HLTV demos).
 
 ## 🚀 Quick start
 
@@ -89,11 +90,8 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run db:push` | Create / sync the Postgres schema |
 | `npm run db:seed` | Insert demo bets |
 | `npm run db:studio` | Browse the database in Prisma Studio |
-| `npm run sync` | Auto-settle finished bets + near-kickoff CLV (Odds API) |
+| `npm run sync` | Auto-settle finished singles from ESPN scores |
 | `npm run scrape:clv` | Batch OddsPortal CLV for featured markets (local) |
-| `npm run capture:kickoff-clv` | Odds API near-kickoff closing capture |
-| `npm run watch:kickoff-clv` | Daemon: auto-capture CLV T-30…T+5 |
-| `npm run install:kickoff-clv-task` | Install Windows Task (every 10 min) |
 | `npm run backfill:clv-scrape` | 90d OddsPortal CLV backfill (`--confirm`) |
 | `npm run import:bet365` | Import / sync bets from a bet365 statement PDF |
 | `npm run import:unibet` | Import bets from a Unibet transaction-history CSV |
@@ -104,6 +102,11 @@ immediately — replace them with your own from the **Logga bet** button.
 | `npm run cs2:update` | Daily run: ingest + demos for upcoming matches + settle lines |
 | `npm run cs2:backtest` | Walk-forward backtest of the CS2 model (`--save` → Facit tab) |
 | `npm run backfill:bookmakers` | Fold bookmaker spelling variants onto one name (`--confirm`) |
+| `npm run scrapling:setup` | Install the Scrapling fetcher into `.venv` (Python 3.10+) |
+| `npm run scrapling:check` | Check the Scrapling chain against a harmless page |
+| `npm run purge:thestatsapi` | Clear leftover TheStatsAPI links on bets (`--confirm`) |
+| `npm run props:grade` | Grade props/stat totals from Sofascore (`--confirm` settles) |
+| `npm run sofascore:capture` | Check the Sofascore parsers against live data (local) |
 
 ## 🗂️ Pages
 
@@ -115,7 +118,6 @@ immediately — replace them with your own from the **Logga bet** button.
 | **Analys** (Analytics) | P/L by market, league, sport and odds band |
 | **Insikter** (Insights) | Streaks, best/worst days, averages |
 | **VM 2026** | Tournament hub for bets tagged with the World Cup league |
-| **Skottmodell** (Shot model) | Team-level shots & corners model, own database |
 | **CS2** | Teams, players, per-map gameplan (T/CT), match pricing and props angles, own database |
 | **NBA** | Player-based Monte Carlo simulation blended with the market (moneyline, spread, total), own database |
 | **Fair odds** | De-vig, combo, correlation and Poisson calculators |
@@ -141,44 +143,30 @@ It matches on each slip's reference, so it never wipes manually-added bets and i
 to re-run. Profit comes from the **actual payout column**, after tax. Statement files
 are git-ignored — they never leave your machine.
 
-### From The Odds API (grading + near-kickoff CLV)
+### From final scores (ESPN, no key)
 
-1. Get a free key (~500 requests/month) at <https://the-odds-api.com/>.
-2. Copy `.env.local.example` → `.env.local` and set `ODDS_API_KEY=your_key`.
-3. Restart the dev server. Then **Synka** (or `npm run sync`) settles finished H2H /
-   totals / spreads bets and captures **near-kickoff** closing odds for linked events.
-
-**Automatic pre-kickoff CLV (recommended):** install a Windows task that runs every
-10 minutes and snapshots featured bets in the **T-30 … T+5** window:
-
-```bash
-npm run install:kickoff-clv-task
-# or keep a terminal open:
-npm run watch:kickoff-clv
-```
-
-Needs `ODDS_API_KEY`. Logs land in `.claude/logs/kickoff-clv.log`. New bets placed
-inside the window are captured immediately on create.
+**Synka** (or `npm run sync`, and the nightly `/api/cron/grade`) settles finished
+single H2H / totals / spreads bets from ESPN's free scoreboard. Props and stat markets
+are settled with `npm run props:grade` (ESPN + the NHL API, see below).
 
 ### Automatic CLV via OddsPortal (local scrape batch)
 
-Primary free CLV path for featured markets after kickoff (replaces TheStatsAPI when
-you do not have that key):
+Primary free CLV path for featured markets after kickoff. The pages are fetched by
+[Scrapling](#️-scrapling-fetcher-local), so run `npm run scrapling:setup` once first:
 
 ```bash
-npm i playwright
-npx playwright install chromium
-
 npm run scrape:clv -- --list                         # candidates only
 npm run scrape:clv -- --confirm --limit 30            # post-kickoff batch
+npm run scrape:clv -- --confirm --since 2026-01-01 --limit 2000   # a whole year; saved bet by bet, rerun resumes
+npm run clv:coverage                                  # where closing odds are missing, and why
 npm run backfill:clv-scrape -- --limit 50             # 90d backfill (writes DB)
 ```
 
 Schedule `npm run scrape:clv -- --confirm` hourly via Task Scheduler. Per-bet refresh
 in the UI still works. Prefers the bet’s bookmaker, then Pinnacle → bet365.
 
-Requires local Node — not suited for serverless. Playwright keeps its Chromium in a
-user-level cache outside the project, so it is never part of a serverless bundle: on a
+Requires local Node and Python — not suited for serverless. The Scrapling worker and its
+browser live outside the project, so they are never part of a serverless bundle: on a
 Vercel deployment the per-bet CLV button is hidden and the endpoint answers `501
 scrape_unavailable` rather than failing a browser launch. Manual closing odds and
 `npm run scrape:clv` on your own machine both work as before. Props/niche markets may
@@ -202,7 +190,7 @@ the lines you enter (by hand, from a screenshot, or fetched from Unibet/Kambi).
 **Data flow**
 
 ```
-HLTV (Playwright, your PC) → HTML cache (.cache/cs2/html) → parsers → CS2 DB
+HLTV (patchright or Scrapling, your PC) → HTML cache (.cache/cs2/html) → parsers → CS2 DB
 HLTV demos (.rar/.zip)     → demoparser2 → facts (.cache/cs2/demos/norm) → CS2 DB
 CS2 DB → profiles · gameplan · ratings/veto/map/kill models → /api/cs2 → /cs2
 ```
@@ -215,7 +203,7 @@ CS2 DB → profiles · gameplan · ratings/veto/map/kill models → /api/cs2 →
    it at the bet log's schema: `db push` drops tables that are not in
    `prisma/cs2.prisma`.
 2. `npm run db:push:cs2`
-3. `npm i playwright && npx playwright install chromium` (as for the OddsPortal scraper).
+3. `npm i` installs patchright, which uses your Chrome or Edge.
    `npm i @laihoe/demoparser2` for demos (an optional native module).
 4. `npm run cs2:capture`: checks every parser against live HLTV pages and prints a
    report. Any missing field means a selector needs fixing before you ingest.
@@ -244,6 +232,10 @@ metrics can be computed with `cs2:demos -- --confirm --reanalyze`.
   looks for) and your installed Chrome or Edge when available.
 - The scripts open a visible browser window by default, because Cloudflare rarely lets a
   hidden one through. Click the check when it appears; `--headless` hides the window.
+- **No clicking:** add `--scrapling` (or set `CS2_FETCHER=scrapling`) and the pages are
+  fetched through [Scrapling](#️-scrapling-fetcher-local), which solves the Cloudflare
+  check by itself in a hidden window (`--headed` shows it). Same cache, pace and page
+  budget. Demo downloads still use patchright.
 - If the Cloudflare check keeps coming back after a click, start your own Chrome or Edge
   with `--remote-debugging-port=9222` and set `CS2_CDP_URL=http://localhost:9222`
   (see `.env.local.example`).
@@ -406,6 +398,47 @@ as book `smarkets`, and the app prices it after Smarkets' 2 % commission.
   blend weight 0.3 best for totals. Check `CLV-koll`'s "modellens bidrag" before trusting
   it: it removes line drift and line shopping.
 
+## 🕷️ Scrapling fetcher (local)
+
+The local scrapers can fetch pages through [Scrapling](https://github.com/D4Vinci/Scrapling),
+a Python library that drives a stealth Chromium and solves Cloudflare checks by itself.
+**Python fetches, TypeScript parses:** a small long-lived worker (`scrapers/worker.py`)
+hands raw HTML/JSON back to the TS scripts (`lib/scrapling.ts`), so all parsers, models
+and database writes stay where they were.
+
+```bash
+npm run scrapling:setup     # once: .venv + scrapling (pinned) + its Chromium. Needs Python 3.10+
+npm run scrapling:check     # fetch a harmless page in HTTP and browser mode
+```
+
+| Uses Scrapling | How |
+|----------------|-----|
+| HLTV (CS2) | `--scrapling` on `cs2:capture` / `cs2:ingest` / `cs2:update`, or `CS2_FETCHER=scrapling` |
+| Props grading (fallback source) | `npm run props:grade` uses ESPN and the NHL API first; Sofascore only for leagues they don't cover |
+| Parser check (Sofascore) | `npm run sofascore:capture` — saves live fixtures and reports missing fields |
+| OddsPortal CLV | `npm run scrape:clv` and the per-bet CLV button in the app |
+
+**Props grading.** `npm run props:grade` finds each open bet's match, reads the team or
+player statistic and grades over/under with the app's own rules. Sources, in order:
+**ESPN** for football (every league ESPN follows, Allsvenskan included) and NBA/WNBA,
+the **official NHL API** for NHL — open JSON, no key, no scraping — and **Sofascore**
+(via Scrapling) only for leagues those don't cover; `--no-sofascore` skips it. It writes
+`.claude/tmp/results-props-<date>.json` (the format `scripts/agent/settleBets.ts` reads)
+and touches nothing until `--confirm`. Cards, combos, quarter lines, players who did not
+play, 90-minute markets in games that went to extra time, and fields not seen in the
+match's data are listed and left for manual settling.
+
+**OddsPortal.** Played matches are found through the league's results page and the
+two teams' head-to-head page (OddsPortal's search only lists upcoming games), upcoming
+ones through the search. The odds tables are read as page text instead of CSS classes,
+which OddsPortal renames often. Clicking a line open ("Over/Under +2.5") shows odds per
+bookmaker, so O/U and Asian handicap closing comes from the bet's bookmaker or Pinnacle
+rather than the site average. 1X2/moneyline, Over/Under (goals) and Asian handicap only:
+props, corners, cards and team totals answer `market_not_found`.
+
+The scripts find `.venv` on their own; `SCRAPLING_PYTHON` points them at another Python.
+Same rules as the other scrapers: local only, slow pace, cache everything, personal use.
+
 ## 🧪 Testing
 
 ```bash
@@ -424,7 +457,7 @@ lib/            betting.ts (math) · grading.ts (auto-settle) · bet365.ts (PDF 
                 oddsApi.ts · sync.ts · insights.ts
 lib/cs2/        CS2 module: hltv/ (scrape + parse) · demo/ (demo pipeline) ·
                 ratings · veto · mapModel · killModel · pricing · backtest · settle
-prisma/         schema.prisma + seed.ts (demo data) · shots.prisma · cs2.prisma
+prisma/         schema.prisma + seed.ts (demo data) · cs2.prisma
 scripts/        sync.ts · importBet365.ts (CLI tools) · cs2/ (CS2 scripts)
 tests/          Unit tests for the math and grading
 ```
@@ -450,7 +483,7 @@ fun, seek help (in Sweden: [Stödlinjen](https://www.stodlinjen.se/), 020-81 91 
 
 En **lokal** betting-journal. Logga bets i **units** med decimalodds, följ **ROI** och
 **bankrulle** över tid, och **auto-rätta** resultat från ett bet365-kontoutdrag eller
-The Odds API — allt på din egen dator, ingen inloggning, ingen molntjänst.
+gratis resultatflöden (ESPN, NHL) — utan betalda API-nycklar.
 
 ### ✨ Funktioner
 
@@ -462,9 +495,9 @@ The Odds API — allt på din egen dator, ingen inloggning, ingen molntjänst.
   med CSV-export.
 - **Analys** — P/L per marknad, liga, sport och odds-band.
 - **Insikter & kalender** — svit, bästa/sämsta dag, snittinsats och kalender-heatmap.
-- **Auto-rättning på två sätt:** importera ett **bet365-kontoutdrag (PDF)** — vinst tas
-  från den *faktiska utbetalningen* efter skatt — eller koppla på
-  **[The Odds API](https://the-odds-api.com/)** för rättning + stängningsodds (CLV).
+- **Auto-rättning:** importera ett **bet365-kontoutdrag (PDF)** — vinst tas från den
+  *faktiska utbetalningen* efter skatt — eller låt ESPN och NHL:s API rätta singlar och
+  props. Stängningsodds (CLV) hämtas från OddsPortal på datorn.
 - **Din egen instans** — en Postgres-databas du äger. Registrering kräver inbjudningskod
   och varje konto ser bara sina egna bets.
 
@@ -495,12 +528,11 @@ npm run import:bet365 -- --confirm --user <användarnamn>    # inkrementellt in 
 Matchar på varje slips referens — rör aldrig manuellt tillagda bets och är säker att
 köra om. Kontoutdrag är git-ignorerade och lämnar aldrig din dator.
 
-### 🔄 Auto-rättning via The Odds API
+### 🔄 Auto-rättning via slutresultat (ESPN, ingen nyckel)
 
-1. Skaffa en gratis nyckel på <https://the-odds-api.com/> (~500 anrop/mån).
-2. Kopiera `.env.local.example` → `.env.local` och sätt `ODDS_API_KEY=din_nyckel`.
-3. Starta om. **Synka** (eller `npm run sync`) rättar färdigspelade bets och fångar
-   near-kickoff closing (`npm run capture:kickoff-clv -- --confirm`).
+**Synka** (eller `npm run sync`, och nattens `/api/cron/grade`) rättar färdigspelade
+singlar (1X2, över/under, handikapp) via ESPN. Props och statistikmarknader rättas med
+`npm run props:grade` (ESPN + NHL:s API).
 
 ### Automatisk CLV via OddsPortal (lokal batch)
 

@@ -2,7 +2,7 @@
 // Run manually:        npm run sync
 // Schedule (Windows):  Task Scheduler -> see README.
 //
-// Loads .env.local so ODDS_API_KEY is available outside Next.js.
+// ESPN grading of finished singles (no API key). Loads .env.local for DATABASE_URL.
 
 import { config } from "dotenv";
 config({ path: ".env.local" });

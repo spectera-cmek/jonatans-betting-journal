@@ -20,7 +20,7 @@ export function SyncButton({
   onDone,
   showResult = false,
 }: {
-  kind?: "all" | "grade" | "closing" | "scores" | "link";
+  kind?: "all" | "scores";
   label?: string;
   onDone?: () => void;
   showResult?: boolean;

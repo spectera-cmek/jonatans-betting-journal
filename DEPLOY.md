@@ -29,7 +29,6 @@ I Vercel: **Settings → Environment Variables**. Lägg till (Environment: *Prod
 | `AUTH_SECRET` | En lång slumpsträng (se kommando nedan) — signerar sessionscookies |
 | `INVITE_CODE` | Koden som krävs för att skapa konto — dela bara med folk du vill ha in |
 | `DIRECT_URL` | Samma som `DATABASE_URL` men **utan** `-pooler` i hostnamnet *(se nedan)* |
-| `ODDS_API_KEY` | (valfritt) din The Odds API-nyckel |
 | `ANTHROPIC_API_KEY` | (valfritt) driver **Från kvitto** — läser spelkvitto-skärmdumpar och förifyller bet-formuläret |
 
 Generera `AUTH_SECRET` lokalt:
