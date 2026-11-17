@@ -220,6 +220,8 @@ export interface OpHistoryEntry {
   createdAt: string;
   price: number;
   active?: boolean;
+  /** Bokens maxinsats vid priset (Pinnacle), annars null. */
+  limit?: number | null;
 }
 
 export interface OpHistoricalOdds {

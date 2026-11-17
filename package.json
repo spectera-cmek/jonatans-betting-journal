@@ -89,7 +89,10 @@
     "nba:lineups": "tsx scripts/nba/update.ts --lineups",
     "nba:odds-history": "tsx scripts/nba/oddsHistory.ts",
     "nba:backtest": "tsx scripts/nba/backtest.ts",
-    "nba:props-backtest": "tsx scripts/nba/propsBacktest.ts"
+    "nba:props-backtest": "tsx scripts/nba/propsBacktest.ts",
+    "nba:props-history": "tsx scripts/nba/propsHistory.ts",
+    "nba:props-map": "tsx scripts/nba/propsMap.ts",
+    "nba:props-line-backtest": "tsx scripts/nba/propsLineBacktest.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -19,6 +19,7 @@ net.setDefaultAutoSelectFamilyAttemptTimeout(3000);
 import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
 import { captureSmarkets } from "../../lib/nba/smarketsCapture";
 import { captureKambiProps } from "../../lib/nba/kambiProps";
+import { capturePinnacleProps } from "../../lib/nba/pinnacleProps";
 
 async function main() {
   if (!hasNbaDb()) {
@@ -32,6 +33,8 @@ async function main() {
   if (r.unmatched.length) console.log(`Ej kopplade (matchen saknas i databasen — kör nba:update): ${r.unmatched.slice(0, 5).join("; ")}`);
   // Kambis spelarprops (svenska bolag) följer med i timkörningen — gratis.
   await captureKambiProps(db, { hours, log: (m) => console.log(`Kambi-props: ${m}`) }).catch((e) => console.log(`Kambi-props: hoppar över (${e instanceof Error ? e.message : e})`));
+  // Pinnacles props samma timme — ankaret ska vara lika färskt som Kambi-linjerna.
+  await capturePinnacleProps(db, { hours, log: (m) => console.log(`Pinnacle-props: ${m}`) }).catch((e) => console.log(`Pinnacle-props: hoppar över (${e instanceof Error ? e.message : e})`));
 }
 
 main()

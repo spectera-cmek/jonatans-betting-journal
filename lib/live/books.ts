@@ -27,7 +27,7 @@ const UA = { Accept: "application/json", "User-Agent": "Mozilla/5.0 (betting-tra
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Hämtar JSON. Tillfälliga fel (401/429/5xx, tomt svar, nätet) försöks igen två gånger. */
-async function getJson<T>(url: string): Promise<T> {
+export async function getJson<T>(url: string): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch(url, { headers: UA, cache: "no-store" });

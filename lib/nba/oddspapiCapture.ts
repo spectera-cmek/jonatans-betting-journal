@@ -25,7 +25,7 @@ import {
   reclassifyPropMarkets,
   type MarketSpec,
 } from "../oddspapi/markets";
-import { saveOddsIfChanged } from "./store";
+import { saveOddsIfChanged, savePropLines } from "./store";
 
 /** "Los Angeles Lakers" → "lakers", "Portland Trail Blazers" → "blazers". */
 export function nickname(name: string): string {
@@ -189,8 +189,12 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
           select: { id: true, name: true },
         });
         const byName = new Map(players.map((p) => [normalizeName(p.name), p.id]));
+        const known = await db.nbaOddspapiPlayer.findMany({ where: { oddspapiId: { in: [...new Set(props.map((p) => p.oddspapiPlayerId))] } } });
+        const byOpId = new Map(known.map((k) => [k.oddspapiId, k.playerId]));
+        const learned = new Set<string>();
+        const batch: Parameters<typeof savePropLines>[4] = [];
         for (const pr of props) {
-          let playerId = byName.get(normalizeName(pr.playerName));
+          let playerId = byOpId.get(pr.oddspapiPlayerId) ?? byName.get(normalizeName(pr.playerName));
           // Reserv: spelaren står på ett annat lag i vår data (trejd, nyförvärv
           // som inte spelat än) — sök i hela ligan om namnet bara finns en gång.
           if (!playerId) {
@@ -202,14 +206,15 @@ export async function captureNbaOdds(db: NbaPrisma, opts: { closing?: boolean; l
             if (res.propsUnmatched.length < 20 && !res.propsUnmatched.includes(pr.playerName)) res.propsUnmatched.push(pr.playerName);
             continue;
           }
-          const last = await db.nbaPropLine.findFirst({
-            where: { gameId: hit.game.id, playerId, stat: pr.stat, book, source: "oddspapi" },
-            orderBy: { capturedAt: "desc" },
-          });
-          if (last && last.line === pr.line && last.over === pr.over && last.under === pr.under) continue;
-          await db.nbaPropLine.create({ data: { gameId: hit.game.id, playerId, stat: pr.stat, book, line: pr.line, over: pr.over, under: pr.under, source: "oddspapi" } });
-          res.propsSaved++;
+          // Lär in OddsPapi-id → spelare (namnet finns bara i live-svaret, inte i historiken).
+          if (!byOpId.has(pr.oddspapiPlayerId) && !learned.has(pr.oddspapiPlayerId)) {
+            learned.add(pr.oddspapiPlayerId);
+            const data = { playerId, name: pr.playerName, source: "live", confidence: 1 };
+            await db.nbaOddspapiPlayer.upsert({ where: { oddspapiId: pr.oddspapiPlayerId }, create: { oddspapiId: pr.oddspapiPlayerId, ...data }, update: data });
+          }
+          batch.push({ playerId, stat: pr.stat, line: pr.line, over: pr.over, under: pr.under, oddspapiPlayerId: pr.oddspapiPlayerId });
         }
+        res.propsSaved += await savePropLines(db, hit.game.id, book, "oddspapi", batch);
       }
     }
   }
