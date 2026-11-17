@@ -5,6 +5,7 @@ import { Topbar } from "@/components/Shell";
 import { Field } from "@/components/ui";
 import { SyncButton } from "@/components/SyncButton";
 import { ImportPanel } from "@/components/ImportPanel";
+import { ChangePassword } from "@/components/ChangePassword";
 import { api } from "@/lib/fetcher";
 import Link from "next/link";
 import { useMetrics, useSettings } from "@/lib/useData";
@@ -108,6 +109,18 @@ export default function SettingsPage() {
             </Field>
           </div>
           {saveRow}
+        </Section>
+
+        <Section
+          title="Konto"
+          note={
+            <>
+              Inloggad som <strong>{settings?.username ?? "…"}</strong>. Glömt lösenordet? Den som driftar appen skapar en
+              engångslänk med <code>npm run user:reset-link -- &lt;användarnamn&gt;</code>.
+            </>
+          }
+        >
+          <ChangePassword />
         </Section>
 
         <DataQualitySection />

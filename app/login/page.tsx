@@ -80,6 +80,9 @@ export default function LoginPage() {
         <p className="ap-login-sub" style={{ marginTop: 14 }}>
           Inget konto? <Link href="/register" className="ap-link" style={{ fontSize: "inherit" }}>Skapa konto</Link>
         </p>
+        <p className="ap-login-sub" style={{ marginTop: 6 }}>
+          Glömt lösenordet? Be den som driftar appen om en återställningslänk.
+        </p>
       </form>
     </div>
   );
