@@ -323,7 +323,7 @@ export async function projectUpcoming(
     orderBy: { startAt: "asc" },
   });
   if (!games.length) return { games: 0, flagged: 0 };
-  const h = await loadHistory(db, new Date(now - HISTORY_DAYS * 864e5));
+  const h = await loadHistory(db, new Date(now - HISTORY_DAYS * 864e5), { log });
   const injuries = new Map((await db.nbaInjury.findMany()).map((i) => [i.playerId, { status: i.status, detail: i.detail }]));
   const names = new Map((await db.nbaPlayer.findMany({ select: { id: true, name: true } })).map((p) => [p.id, p.name]));
   const teams = new Map((await db.nbaTeam.findMany()).map((t) => [t.id, t.abbr]));

@@ -6,7 +6,7 @@
  *   npm run nba:smarkets               # matcher inom 36 h
  *   npm run nba:smarkets -- --hours 12
  *
- * Körs varje timme av Schemaläggaren (npm run install:nba-tasks) och i
+ * Körs varje timme av Schemaläggaren (npm run install:tasks) och i
  * nba:update / nba:closing / nba:lineups. Smarkets har ingen historik —
  * det här bygger vår egen, för att senare kunna mäta modellen mot Smarkets.
  */

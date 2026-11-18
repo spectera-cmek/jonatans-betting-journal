@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
+import { Freshness } from "@/components/Freshness";
 import { Card, Empty } from "@/components/ui";
 import { InlineStat, MiniStat } from "@/components/stats";
 import { I, IC } from "@/components/icons";
@@ -184,6 +185,7 @@ export default function ShotsPage() {
       <Topbar
         title="Skottmodell"
         sub="Egna skott- och hörnsiffror mot bookmakerpriserna — sorterat på edge"
+        actions={<Freshness job="shots:ingest" />}
       />
 
       <Card>

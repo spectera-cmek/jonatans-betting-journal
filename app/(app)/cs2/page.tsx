@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Topbar } from "@/components/Shell";
+import { Freshness } from "@/components/Freshness";
 import { Card } from "@/components/ui";
 import { IC } from "@/components/icons";
 import { api } from "@/lib/fetcher";
@@ -180,6 +181,7 @@ export default function Cs2Page() {
       <Topbar
         title="CS2"
         sub="Lag, spelare och gameplan-docen per karta — underlaget för props och angles"
+        actions={<Freshness job="cs2:update" />}
       />
       <div className="ap-seg ap-cs2-tabs">
         <button className={tab === "matcher" ? "is-active" : ""} aria-pressed={tab === "matcher"} onClick={() => setTab("matcher")}>
