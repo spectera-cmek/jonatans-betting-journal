@@ -1,5 +1,6 @@
 # Install (or update) every Windows Scheduled Task for the Betting Tracker models.
-# Each task runs scripts\run-job.cmd <npm-script> [args], which logs to
+# Each task runs scripts\run-job.cmd <npm-script> [args] through
+# `conhost.exe --headless` (no window), which logs to
 # .claude\logs\<area>.log, returns the script's real exit code, writes a
 # "lokal:<script>" row to SyncLog (the pages' "Uppdaterad" indicator) and sends
 # an ntfy alert on failure (NTFY_TOPIC), at most one per job and day.
@@ -125,7 +126,15 @@ $Tasks = @(
 )
 
 foreach ($t in $Tasks) {
-  $Action = New-ScheduledTaskAction -Execute $Runner -Argument $t.Job -WorkingDirectory $RepoRoot
+  # run-job.cmd stops the job (with every child process) 10 min before the Task
+  # Scheduler limit: the scheduler's own limit only kills cmd.exe, and node kept
+  # running for 11 h. The scheduler limit stays as a backstop.
+  $MaxMinutes = if ($t.ExecutionHours) { $t.ExecutionHours * 60 - 10 } else { 25 }
+  # conhost --headless: no console window at all (a window per run kept stealing
+  # focus and getting tiled by the window manager). It does not pass the exit
+  # code on, so Task Scheduler always shows 0 - failures show in SyncLog, the
+  # ntfy alert and the pages' "Uppdaterad" indicator instead.
+  $Action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless `"$Runner`" --max-minutes $MaxMinutes $($t.Job)" -WorkingDirectory $RepoRoot
   $Trigger = New-ScheduledTaskTrigger -Daily -At $t.At
   if ($t.RepeatMinutes) {
     $Trigger.Repetition = (New-ScheduledTaskTrigger -Once -At $t.At `
@@ -149,7 +158,7 @@ foreach ($t in $Tasks) {
     -Description $t.Description `
     -Force | Out-Null
   $When = if ($t.RepeatMinutes) { "every $($t.RepeatMinutes) min for $($t.RepeatHours) h from $($t.At)" } else { "daily at $($t.At)" }
-  Write-Host "Installed '$($t.Name)': $($t.Job), $When."
+  Write-Host "Installed '$($t.Name)': $($t.Job), $When, stopped after $MaxMinutes min."
 }
 
 if ($NbaResumeAt) {
@@ -157,7 +166,7 @@ if ($NbaResumeAt) {
   foreach ($n in $NbaNames) { Disable-ScheduledTask -TaskName $n | Out-Null }
   $Cmd = "Get-ScheduledTask -TaskName 'BettingTracker-Nba*' | Where-Object TaskName -ne 'BettingTracker-NbaResume' | Enable-ScheduledTask; " +
     "Unregister-ScheduledTask -TaskName 'BettingTracker-NbaResume' -Confirm:`$false"
-  $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"$Cmd`""
+  $Action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"$Cmd`""
   $Trigger = New-ScheduledTaskTrigger -Once -At $ResumeAt
   $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
