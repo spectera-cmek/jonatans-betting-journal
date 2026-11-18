@@ -36,7 +36,8 @@ const hourSe = () => Number(new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", 
 
 async function notify(title: string, message: string, click?: string) {
   if (!process.env.NTFY_TOPIC) return;
-  if (!(await sendNtfy({ title, message, tags: ["basketball"], click }))) console.log("  (notisen gick inte fram)");
+  const r = await sendNtfy({ title, message, tags: ["basketball"], click });
+  if (!r.ok) console.log(`  (notisen gick inte fram: ${r.error})`);
 }
 
 async function gameIdFor(ev: LiveEvent): Promise<number | null> {

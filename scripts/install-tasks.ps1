@@ -125,7 +125,11 @@ $Tasks = @(
 )
 
 foreach ($t in $Tasks) {
-  $Action = New-ScheduledTaskAction -Execute $Runner -Argument $t.Job -WorkingDirectory $RepoRoot
+  # run-job.cmd stops the job (with every child process) 10 min before the Task
+  # Scheduler limit: the scheduler's own limit only kills cmd.exe, and node kept
+  # running for 11 h. The scheduler limit stays as a backstop.
+  $MaxMinutes = if ($t.ExecutionHours) { $t.ExecutionHours * 60 - 10 } else { 25 }
+  $Action = New-ScheduledTaskAction -Execute $Runner -Argument "--max-minutes $MaxMinutes $($t.Job)" -WorkingDirectory $RepoRoot
   $Trigger = New-ScheduledTaskTrigger -Daily -At $t.At
   if ($t.RepeatMinutes) {
     $Trigger.Repetition = (New-ScheduledTaskTrigger -Once -At $t.At `
@@ -149,7 +153,7 @@ foreach ($t in $Tasks) {
     -Description $t.Description `
     -Force | Out-Null
   $When = if ($t.RepeatMinutes) { "every $($t.RepeatMinutes) min for $($t.RepeatHours) h from $($t.At)" } else { "daily at $($t.At)" }
-  Write-Host "Installed '$($t.Name)': $($t.Job), $When."
+  Write-Host "Installed '$($t.Name)': $($t.Job), $When, stopped after $MaxMinutes min."
 }
 
 if ($NbaResumeAt) {
