@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { CACHE_VERSION, historyCacheFile, planRefresh, readCache, syncCache, writeCache, type CachedGame } from "../lib/nba/historyCache";
+import { CACHE_VERSION, cacheTmpFile, historyCacheFile, planRefresh, readCache, syncCache, writeCache, type CachedGame } from "../lib/nba/historyCache";
 
 const game = (id: number, version: string): CachedGame => ({
   id,
@@ -79,6 +79,29 @@ describe("NBA-historikens cache", () => {
       [1, 1, 1, 1],
       [2, 1, 1, 1],
     ]);
+  });
+
+  it("en cache som inte går att skriva stoppar inte körningen", async () => {
+    // Föräldern till cachefilen är en fil — skrivningen misslyckas (som vid låst fil på Windows).
+    const blocker = tmpFile();
+    fs.writeFileSync(blocker, "x");
+    const db = {
+      $disconnect: async () => {},
+      nbaGame: { findMany: async () => [{ id: 1, updatedAt: new Date(), startAt: new Date("2026-11-01T00:00:00Z"), periods: 4, homeTeamId: 1, awayTeamId: 2, boxFetchedAt: new Date() }] },
+      nbaTeamGame: { findMany: async () => [{ gameId: 1, teamId: 9 }] },
+      nbaPlayerGame: { findMany: async () => [] },
+    } as any;
+    const logs: string[] = [];
+    const out = await syncCache(db, new Date("2026-10-01T00:00:00Z"), { withStints: false, file: path.join(blocker, "history.json"), log: (m) => logs.push(m) });
+    expect(out.map((g) => [g.id, g.team.length])).toEqual([[1, 1]]);
+    expect(logs.some((m) => m.startsWith("kunde inte skriva NBA-cachen"))).toBe(true);
+  });
+
+  it("två körningar samtidigt skriver inte över varandras tmp-fil", () => {
+    const f = tmpFile();
+    writeCache(f, new Map([[1, game(1, "a")]]));
+    expect(fs.readdirSync(path.dirname(f))).toEqual(["history.json"]);
+    expect(cacheTmpFile(f)).toBe(`${f}.${process.pid}.tmp`);
   });
 
   it("används inte på Vercel", () => {

@@ -32,4 +32,21 @@ describe("lokala jobb", () => {
       lastMeaningfulLine('npm error Missing script: "x"\nnpm error\nnpm error A complete log of this run can be found in: C:\\x.log')
     ).toBe('npm error Missing script: "x"');
   });
+
+  it("ett utskrivet Prisma-fel ger felraden, inte objektets avslutande klammer", () => {
+    // Slutet av nba.log när NBA-databasen svarade 402 (2026-11-17).
+    const tail = [
+      "Can't reach database server at `ep-x-pooler.c-14.us-east-1.aws.neon.tech:5432`",
+      "",
+      "Please make sure your database server is running at `ep-x-pooler.c-14.us-east-1.aws.neon.tech:5432`.",
+      "    at $n.handleRequestError (C:\\x\\library.js:121:7615)",
+      "    at async l (C:\\x\\library.js:130:9633) {",
+      "  clientVersion: '5.22.0',",
+      "  errorCode: undefined",
+      "}",
+    ].join("\n");
+    expect(lastMeaningfulLine(tail)).toBe("Please make sure your database server is running at `ep-x-pooler.c-14.us-east-1.aws.neon.tech:5432`.");
+    // Ett vanligt felmeddelande med kolon ska inte tas för en objektrad.
+    expect(lastMeaningfulLine("Error: CS2_DATABASE_URL saknas")).toBe("Error: CS2_DATABASE_URL saknas");
+  });
 });

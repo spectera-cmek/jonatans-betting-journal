@@ -31,12 +31,21 @@ export function shouldNotify(lastNotifiedAt: Date | null, now: Date): boolean {
   return !lastNotifiedAt || now.getTime() - lastNotifiedAt.getTime() >= NOTIFY_EVERY_MS;
 }
 
-/** Sista icke-tomma raden som inte är npm:s eget brus ("> tsx …"). */
+/** Rader som inte säger något om felet: npm-brus, stackrader och resten av ett utskrivet felobjekt. */
+const NOISE = [
+  /^>/, // "> tsx scripts/…"
+  /^npm (error|ERR!)( A complete log|$)/,
+  /^at /, // stackrad
+  /^[{}[\]()]+[,;]?$/, // ensam klammer
+  /^\w+: ('.*'|".*"|undefined|null|true|false|-?\d[\d.]*|\[.*\]|\{.*\}),?$/, // "clientVersion: '5.22.0',"
+];
+
+/** Sista raden i utskriften som beskriver felet. */
 export function lastMeaningfulLine(output: string): string {
   const lines = output
     .split(/\r?\n/)
     .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith(">") && !/^npm (error|ERR!)( A complete log|$)/.test(l));
+    .filter((l) => l && !NOISE.some((re) => re.test(l)));
   return lines[lines.length - 1] ?? "";
 }
 

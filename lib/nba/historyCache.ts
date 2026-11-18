@@ -82,10 +82,15 @@ export function readCache(file: string): Map<number, CachedGame> {
   }
 }
 
+/** Egen tmp-fil per process, så att två samtidiga körningar inte skriver i samma. */
+export function cacheTmpFile(file: string): string {
+  return `${file}.${process.pid}.tmp`;
+}
+
 /** Skriver via en tmp-fil, så att en avbruten körning inte lämnar en halv cache. */
 export function writeCache(file: string, games: Map<number, CachedGame>): void {
   mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
+  const tmp = cacheTmpFile(file);
   writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, games: [...games.values()] }));
   renameSync(tmp, file);
 }
@@ -181,7 +186,14 @@ export async function syncCache(
     }
   }
 
-  if (plan.fetch.length || plan.drop.length || stintGames) writeCache(file, cache);
+  if (plan.fetch.length || plan.drop.length || stintGames) {
+    try {
+      writeCache(file, cache);
+    } catch (e) {
+      // Datan i minnet stämmer ändå — hellre en körning utan sparad cache än ingen körning.
+      opts.log?.(`kunde inte skriva NBA-cachen: ${(e as Error).message}`);
+    }
+  }
   opts.log?.(
     `historik: ${current.length - plan.fetch.length} matcher ur cachen, ${plan.fetch.length} hämtade` +
       (opts.withStints ? `, stintar hämtade för ${stintGames}` : "")
