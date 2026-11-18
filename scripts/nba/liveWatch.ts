@@ -23,6 +23,7 @@ import { nbaPrisma as db, hasNbaDb } from "../../lib/nbaDb";
 import { fetchKambiNba, fetchPinnacleNba, KAMBI_BRANDS, type LiveEvent } from "../../lib/live/books";
 import { describeEdge, edgeKey, findEdges, matchEvents, updateWindows, valueAgainst, type OpenWindow } from "../../lib/live/edges";
 import { nickname } from "../../lib/nba/oddspapiCapture";
+import { sendNtfy } from "../../lib/ntfy";
 
 function arg(flag: string): string | null {
   const i = process.argv.indexOf(flag);
@@ -34,17 +35,8 @@ const stamp = () => new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/S
 const hourSe = () => Number(new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", hourCycle: "h23", timeZone: "Europe/Stockholm" }).format(new Date()));
 
 async function notify(title: string, message: string, click?: string) {
-  const topic = process.env.NTFY_TOPIC;
-  if (!topic) return;
-  try {
-    await fetch(process.env.NTFY_URL ?? "https://ntfy.sh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, title, message, priority: 4, tags: ["basketball"], ...(click ? { click } : {}) }),
-    });
-  } catch (e) {
-    console.log(`  (notisen gick inte fram: ${e instanceof Error ? e.message : e})`);
-  }
+  if (!process.env.NTFY_TOPIC) return;
+  if (!(await sendNtfy({ title, message, tags: ["basketball"], click }))) console.log("  (notisen gick inte fram)");
 }
 
 async function gameIdFor(ev: LiveEvent): Promise<number | null> {
