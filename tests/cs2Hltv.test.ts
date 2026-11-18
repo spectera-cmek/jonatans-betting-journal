@@ -101,6 +101,20 @@ describe("parseTeamPage", () => {
     expect(t.upcoming[0].matchId).toBe(2390001);
     expect(t.upcoming[0].startAt?.getTime()).toBe(1791648000000);
   });
+  it("hittar kommande matcher trots kalenderpopupen under rubriken (HLTV, november 2026)", () => {
+    // HLTV lade en dold "Sync to your calendar"-popup med egen <h2> direkt efter
+    // rubriken; den togs för en ny rubrik och 15 matcher inom 7 dagar försvann.
+    const popup =
+      '<div class="popup-component-wrapper hidden calendar-sync-popup " popup-id="team-calendar-sync"><div class="popup-component-content">' +
+      '<h2 class="calendar-sync-title">Sync to your calendar</h2><p>Every upcoming and live match.</p></div></div>';
+    const html = read("team.html").replace(
+      '<h2 class="standard-headline">Upcoming matches for Vitality</h2>',
+      `<h2 class="standard-headline">Upcoming matches for Vitality</h2>${popup}`
+    );
+    expect(html).toContain("calendar-sync-title");
+    const withPopup = parseTeamPage(html);
+    expect(withPopup.upcoming.map((u) => u.matchId)).toEqual([2390001]);
+  });
 });
 
 describe("parseResults", () => {

@@ -153,6 +153,9 @@ export function parseTeamPage(html: string): HltvTeamPage {
   let inUpcoming = false;
   scope.find("h2, .standard-headline, tr, .team-row").each((_, el) => {
     const node = $(el);
+    // Dolda popuper (t.ex. "Sync to your calendar" direkt under rubriken, nov 2026)
+    // har egna <h2> som annars avslutar "Upcoming"-avsnittet innan tabellen.
+    if (node.closest(".popup-component-wrapper").length) return;
     if (node.is("h2, .standard-headline")) {
       inUpcoming = /upcoming/i.test(node.text());
       return;
