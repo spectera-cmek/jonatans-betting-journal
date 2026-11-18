@@ -8,6 +8,7 @@ import type { RapmFit, StintRow } from "./rapm";
 import type { MarketLine } from "./marketRatings";
 import { buildHistory, type History, type PlayerGameRow, type TeamGameRow } from "./ratings";
 import { withDbRetry } from "../nbaDbRetry";
+import { historyCacheFile, PLAYER_SELECT, syncCache, type PlayerRaw, type TeamRaw } from "./historyCache";
 
 export async function upsertGames(db: NbaPrisma, games: EspnGame[]): Promise<number> {
   let n = 0;
@@ -166,6 +167,11 @@ export async function saveInjuries(db: NbaPrisma, list: EspnInjury[]): Promise<n
  * Neon att stänga anslutningen.
  */
 export async function loadStints(db: NbaPrisma, since: Date, opts: { pageSize?: number; log?: (m: string) => void } = {}): Promise<StintRow[]> {
+  // Lokalt: ur cachen på disk, bara ändrade matcher hämtas (lib/nba/historyCache.ts).
+  if (historyCacheFile()) {
+    const games = await syncCache(db, since, { withStints: true, log: opts.log });
+    return games.flatMap((g) => (g.stints ?? []).map((s) => ({ t: Date.parse(g.startAt), ...s })));
+  }
   const pageSize = opts.pageSize ?? 20000;
   const out: StintRow[] = [];
   let cursor: number | undefined;
@@ -234,22 +240,40 @@ export async function loadPlayerImpact(db: NbaPrisma): Promise<RapmFit | undefin
   return { players: new Map(rows.map((r) => [r.playerId, { off: r.off, def: r.def, poss: r.poss }])), ortg: 112, stints: 0 };
 }
 
-/** All historik från och med `since` som modellen räknar på. */
-export async function loadHistory(db: NbaPrisma, since: Date): Promise<History> {
+interface HistoryRows {
+  games: { id: number; startAt: Date; periods: number | null; homeTeamId: number; awayTeamId: number }[];
+  teamRows: TeamRaw[];
+  playerRows: PlayerRaw[];
+}
+
+async function historyRowsFromDb(db: NbaPrisma, since: Date): Promise<HistoryRows> {
   const games = await db.nbaGame.findMany({
     where: { status: "final", startAt: { gte: since }, boxFetchedAt: { not: null } },
     select: { id: true, startAt: true, periods: true, homeTeamId: true, awayTeamId: true },
   });
-  const gameInfo = new Map(games.map((g) => [g.id, g]));
   const ids = games.map((g) => g.id);
-  const [teamRows, playerRows, players] = await Promise.all([
+  const [teamRows, playerRows] = await Promise.all([
     db.nbaTeamGame.findMany({ where: { gameId: { in: ids } } }),
-    db.nbaPlayerGame.findMany({
-      where: { gameId: { in: ids } },
-      select: { gameId: true, playerId: true, teamId: true, minutes: true, fga2: true, fgm2: true, fga3: true, fgm3: true, fta: true, ftm: true, oreb: true, dreb: true, ast: true, tov: true, dnp: true, dnpReason: true, starter: true },
-    }),
-    db.nbaPlayer.findMany({ select: { id: true, position: true } }),
+    db.nbaPlayerGame.findMany({ where: { gameId: { in: ids } }, select: PLAYER_SELECT }),
   ]);
+  return { games, teamRows, playerRows };
+}
+
+/** Samma rader som historyRowsFromDb, men ur cachen på disk (lib/nba/historyCache.ts). */
+async function historyRowsFromCache(db: NbaPrisma, since: Date, log?: (m: string) => void): Promise<HistoryRows> {
+  const cached = (await syncCache(db, since, { withStints: false, log })).filter((g) => g.hasBox);
+  return {
+    games: cached.map((g) => ({ id: g.id, startAt: new Date(g.startAt), periods: g.periods, homeTeamId: g.homeTeamId, awayTeamId: g.awayTeamId })),
+    teamRows: cached.flatMap((g) => g.team),
+    playerRows: cached.flatMap((g) => g.players),
+  };
+}
+
+/** All historik från och med `since` som modellen räknar på. */
+export async function loadHistory(db: NbaPrisma, since: Date, opts: { log?: (m: string) => void } = {}): Promise<History> {
+  const { games, teamRows, playerRows } = historyCacheFile() ? await historyRowsFromCache(db, since, opts.log) : await historyRowsFromDb(db, since);
+  const players = await db.nbaPlayer.findMany({ select: { id: true, position: true } });
+  const gameInfo = new Map(games.map((g) => [g.id, g]));
   const pos = new Map(players.map((p) => [p.id, p.position]));
   const byGame = new Map<number, typeof teamRows>();
   for (const r of teamRows) {
