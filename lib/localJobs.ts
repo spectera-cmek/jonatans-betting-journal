@@ -71,11 +71,22 @@ export async function killTree(pid: number): Promise<void> {
     await new Promise<void>((resolve) => execFile("taskkill", ["/PID", String(pid), "/T", "/F"], () => resolve()));
     return;
   }
-  try {
-    process.kill(-pid, "SIGKILL");
-  } catch {
+  // Samla hela trädet först (pgrep -P i flera led) och döda sedan alla, så att
+  // inget barnbarn hinner få en ny förälder. Fungerar oavsett processgrupp.
+  const children = (p: number) =>
+    new Promise<number[]>((resolve) =>
+      execFile("pgrep", ["-P", String(p)], (err, out) => resolve(err ? [] : out.split(/\s+/).filter(Boolean).map(Number)))
+    );
+  const tree: number[] = [];
+  const queue = [pid];
+  while (queue.length) {
+    const p = queue.shift()!;
+    tree.push(p);
+    queue.push(...(await children(p)));
+  }
+  for (const p of tree) {
     try {
-      process.kill(pid, "SIGKILL");
+      process.kill(p, "SIGKILL");
     } catch {
       // redan borta
     }
