@@ -79,6 +79,10 @@ body {
 .neg {
   color: var(--red);
 }
+/* Siffror som behöver uppmärksamhet men inte är fel (t.ex. gammal data). */
+.ap-num.warn {
+  color: var(--acc-ink);
+}
 .ap-r {
   text-align: right;
 }

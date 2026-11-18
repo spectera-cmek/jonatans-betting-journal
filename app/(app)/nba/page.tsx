@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Topbar } from "@/components/Shell";
+import { Freshness } from "@/components/Freshness";
 import { Card } from "@/components/ui";
 import { SPORT_IC } from "@/components/icons";
 import { api } from "@/lib/fetcher";
@@ -665,7 +666,7 @@ export default function NbaPage() {
   const [tab, setTab] = useState<Tab>("kommande");
   return (
     <div className="ap-nba">
-      <Topbar title="NBA" sub="Lagrating + spelarjustering, simulerad och jämförd mot marknaden" />
+      <Topbar title="NBA" sub="Lagrating + spelarjustering, simulerad och jämförd mot marknaden" actions={<Freshness job="nba:update" />} />
       <div className="ap-seg ap-nba-tabs">
         <button className={tab === "kommande" ? "is-active" : ""} aria-pressed={tab === "kommande"} onClick={() => setTab("kommande")}>
           Kommande

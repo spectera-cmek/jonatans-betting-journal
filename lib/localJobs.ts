@@ -39,3 +39,41 @@ export function lastMeaningfulLine(output: string): string {
     .filter((l) => l && !l.startsWith(">") && !/^npm (error|ERR!)( A complete log|$)/.test(l));
   return lines[lines.length - 1] ?? "";
 }
+
+/** Timmar utan lyckad körning innan sidan varnar. */
+export const STALE_HOURS = 30;
+
+export interface Freshness {
+  lastOkAt: string | null;
+  lastRunAt: string | null;
+  failed: boolean;
+  error: string | null;
+  /** "" = färskt, "warn" = gammalt eller aldrig kört, "neg" = senaste körningen misslyckades. */
+  tone: "" | "warn" | "neg";
+  /** Tid sedan senaste lyckade körning: "nyss", "5 h sedan", "3 d sedan", "aldrig". */
+  label: string;
+}
+
+export function agoLabel(from: Date | null, now: Date): string {
+  if (!from) return "aldrig";
+  const hours = (now.getTime() - from.getTime()) / 3600e3;
+  if (hours < 1) return "nyss";
+  if (hours < 48) return `${Math.floor(hours)} h sedan`;
+  return `${Math.floor(hours / 24)} d sedan`;
+}
+
+/** `rows` = jobbets senaste SyncLog-rader, nyast först. */
+export function summarizeFreshness(rows: { ranAt: Date; summary: string }[], now: Date): Freshness {
+  const last = rows[0] ?? null;
+  const ok = rows.find((r) => r.summary.startsWith("ok")) ?? null;
+  const failed = !!last && !last.summary.startsWith("ok");
+  const stale = !ok || now.getTime() - ok.ranAt.getTime() > STALE_HOURS * 3600e3;
+  return {
+    lastOkAt: ok?.ranAt.toISOString() ?? null,
+    lastRunAt: last?.ranAt.toISOString() ?? null,
+    failed,
+    error: failed ? last!.summary : null,
+    tone: failed ? "neg" : stale ? "warn" : "",
+    label: agoLabel(ok?.ranAt ?? null, now),
+  };
+}
