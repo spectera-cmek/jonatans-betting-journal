@@ -354,11 +354,14 @@ npm run nba:odds-history -- --confirm --books unibet.se,betsson,bet365   # your 
 npm run nba:backtest -- --line bet --bet-books unibet.se,betsson,bet365  # picks at your books
 ```
 
-Schedule both with `npm run install:nba-tasks` (Windows Task Scheduler): `nba:update`
+Schedule both with `npm run install:tasks` (Windows Task Scheduler, run from the main
+checkout; it also installs the shot-model and CS2 jobs): `nba:update`
 daily at 13:00 (last night's results, tonight's lines) and `nba:closing` at 23:30,
 before the first tip-off. Change the times with
-`npm run install:nba-tasks -- -UpdateAt 12:00 -ClosingAt 23:00`. Logs go to
-`.claude/logs/nba.log`. That is ~60 OddsPapi requests a month out of the free 250.
+`npm run install:tasks -- -UpdateAt 12:00 -ClosingAt 23:00`. Every job runs through
+`scripts/run-job.cmd`: logs go to `.claude/logs/<area>.log` (here `nba.log`), each run
+leaves a `lokal:<script>` row in `SyncLog` (the pages' "Uppdaterad" indicator) and a
+failure sends an ntfy alert (`NTFY_TOPIC`), at most one per job and day. That is ~60 OddsPapi requests a month out of the free 250.
 The tasks also run `nba:lineups` every 30 min from 00:00 and `nba:smarkets` every hour
 12:00–03:00. Smarkets is not in OddsPapi and has no price history, so we build our own:
 the full ladder goes to `NbaSmarketsQuote` (only changed lines), the main line to `NbaOdds`
