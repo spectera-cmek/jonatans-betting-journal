@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Sans, IBM_Plex_Sans_Condensed, IBM_Plex_Mono } from "next/font/google";
+import localFont from "next/font/local";
 // Order matters: Tailwind's reset first, then the app's own layers.
 import "./globals.css";
 import "./styles/tokens.css";
@@ -24,25 +24,41 @@ import "./styles/a11y.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { THEME_COLOR } from "@/lib/theme";
 
-// One superfamily, self-hosted by Next and preloaded: Sans for prose, Sans
-// Condensed (set in caps) for headings and labels, Mono for every number.
-const sans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+// One superfamily, self-hosted and preloaded: Sans for prose, Sans Condensed
+// (set in caps) for headings and labels, Mono for every number.
+// The woff2 files (Google Fonts' latin subset, OFL — see app/fonts/) live in the
+// repo so the build never fetches from Google: Vercel's build machine got font
+// URLs next/font/google couldn't parse and failed an uncached build (2026-11-20).
+const sans = localFont({
+  src: [
+    { path: "./fonts/ibm-plex-sans-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-600.woff2", weight: "600", style: "normal" },
+  ],
   variable: "--font-sans",
   display: "swap",
+  fallback: ["system-ui", "sans-serif"],
 });
-const disp = IBM_Plex_Sans_Condensed({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+const disp = localFont({
+  src: [
+    { path: "./fonts/ibm-plex-sans-condensed-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-condensed-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-condensed-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-disp",
   display: "swap",
+  fallback: ["Arial Narrow", "system-ui", "sans-serif"],
 });
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const mono = localFont({
+  src: [
+    { path: "./fonts/ibm-plex-mono-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/ibm-plex-mono-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/ibm-plex-mono-600.woff2", weight: "600", style: "normal" },
+  ],
   variable: "--font-mono",
   display: "swap",
+  adjustFontFallback: false,
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
 });
 
 export const metadata: Metadata = {
