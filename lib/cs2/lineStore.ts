@@ -45,8 +45,11 @@ export async function kambiRowsForMatch(
   });
 }
 
+/** Det saveLines skriver till: klienten eller en transaktion. */
+export type Cs2Writer = Pick<PrismaClient, "cs2Line" | "cs2Projection">;
+
 /** Sparar linjerna och modellens pris på var och en (Cs2Projection). Alla ska gälla ctx:s match. */
-export async function saveLines(db: PrismaClient, ctx: MatchupContext, lines: ValidLine[], createdBy: string | null): Promise<PricedLine[]> {
+export async function saveLines(db: Cs2Writer, ctx: MatchupContext, lines: ValidLine[], createdBy: string | null): Promise<PricedLine[]> {
   const out: PricedLine[] = [];
   for (const v of lines) {
     const { matchId, ...rest } = v;
@@ -104,6 +107,44 @@ export function changedLines<T extends LineIdentity & { overOdds: number | null;
     const prev = latest.get(k);
     return !prev || prev.overOdds !== r.overOdds || prev.underOdds !== r.underOdds;
   });
+}
+
+type SavedLineRow = LineIdentity & { id: number; overOdds: number | null; underOdds: number | null };
+
+/** Det writeChangedLines behöver av databasen — en PrismaClient, eller en låtsasdatabas i testerna. */
+export interface LockingDb {
+  $transaction<R>(fn: (tx: LockingTx) => Promise<R>, opts?: { timeout?: number }): Promise<R>;
+}
+interface LockingTx {
+  $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number>;
+  cs2Line: { findMany(args: { where: { matchId: number; bookmaker: string | null }; select: Record<keyof SavedLineRow, true> }): Promise<SavedLineRow[]> };
+}
+
+/**
+ * Sparar de linjer vars odds är nya eller ändrade, med matchen låst under
+ * tiden (pg_advisory_xact_lock). Två hämtningar som går samtidigt läser
+ * annars samma "senast sparade" och sparar samma version två gånger.
+ * Returnerar antalet sparade.
+ */
+export async function writeChangedLines<T extends ValidLine>(
+  db: LockingDb,
+  matchId: number,
+  valid: T[],
+  save: (tx: LockingTx, toSave: T[]) => Promise<unknown>
+): Promise<number> {
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
+      const saved = await tx.cs2Line.findMany({
+        where: { matchId, bookmaker: valid[0]?.bookmaker ?? null },
+        select: { id: true, market: true, scope: true, playerId: true, player2Id: true, teamId: true, line: true, overOdds: true, underOdds: true },
+      });
+      const toSave = changedLines(valid, saved);
+      if (toSave.length > 0) await save(tx, toSave);
+      return toSave.length;
+    },
+    { timeout: 30_000 }
+  );
 }
 
 export interface CaptureOptions {
@@ -171,9 +212,10 @@ export async function captureKambiLines(db: PrismaClient, opts: CaptureOptions, 
         where: { matchId: m.id, bookmaker: KAMBI_BOOKMAKER },
         select: { id: true, market: true, scope: true, playerId: true, player2Id: true, teamId: true, line: true, overOdds: true, underOdds: true },
       });
-      const toSave = changedLines(valid, saved);
-      sum.unchanged += valid.length - toSave.length;
-      if (toSave.length === 0) {
+      // Snabbkoll utan lås: oftast har inget ändrats, och då behövs varken
+      // modellen eller transaktionen.
+      if (changedLines(valid, saved).length === 0) {
+        sum.unchanged += valid.length;
         log(`${name}: ${valid.length} linjer, inga ändrade odds`);
         continue;
       }
@@ -182,9 +224,11 @@ export async function captureKambiLines(db: PrismaClient, opts: CaptureOptions, 
         log(`${name}: matchen saknar lag eller data — sparas inte`);
         continue;
       }
-      await saveLines(db, ctx, toSave, "auto");
-      sum.saved += toSave.length;
-      log(`${name}: ${toSave.length} linjer sparade (${valid.length - toSave.length} oförändrade)`);
+      // Avgörs på nytt under lås — en annan hämtning kan ha hunnit spara samma odds.
+      const n = await writeChangedLines(db, m.id, valid, (tx, toSave) => saveLines(tx as unknown as Cs2Writer, ctx, toSave, "auto"));
+      sum.saved += n;
+      sum.unchanged += valid.length - n;
+      log(`${name}: ${n} linjer sparade (${valid.length - n} oförändrade)`);
     } catch (e) {
       sum.errors.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
     }
