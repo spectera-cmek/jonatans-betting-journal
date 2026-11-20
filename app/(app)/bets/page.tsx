@@ -25,6 +25,7 @@ import { betslipPrefill } from "@/lib/betslipPrefill";
 import { StatTile } from "@/components/stats";
 import { useBets } from "@/lib/useData";
 import { api } from "@/lib/fetcher";
+import { toast, outcomeLabel, outcomeTone } from "@/lib/toast";
 import { uFmt, pctFmt, krShort, dateShort } from "@/lib/format";
 import { computeMetrics, type BetLike, type Outcome } from "@/lib/betting";
 import {
@@ -300,14 +301,33 @@ export default function BetsPage() {
         outcome,
         reason: "Snabbrättning i betlistan",
       });
+      const b = bets.find((x) => x.id === id);
+      toast({
+        title: `Rättad · ${outcomeLabel(outcome)}`,
+        detail: b ? (b.selection ? `${b.selection} — ${b.event}` : b.event) : undefined,
+        tone: outcomeTone(outcome),
+        action: {
+          label: "Ångra",
+          run: async () => {
+            try {
+              await api.del(`/api/bets/${id}/settle`);
+              toast({ title: "Rättning ångrad", detail: b?.event });
+              reload();
+            } catch (err) {
+              toast({ title: "Kunde inte ångra", detail: (err as Error).message, tone: "neg" });
+            }
+          },
+        },
+      });
       reload();
     } catch (error) {
-      alert((error as Error).message);
+      toast({ title: "Kunde inte rätta", detail: (error as Error).message, tone: "neg" });
     }
   };
   const del = async (b: BetListDTO) => {
     if (!confirm(`Ta bort betet "${b.event}"?`)) return;
     await api.del(`/api/bets/${b.id}`);
+    toast({ title: "Spel borttaget", detail: b.event });
     reload();
   };
   // One-click VM 2026 tag toggle (stored in the league field; drives the VM 2026 page).

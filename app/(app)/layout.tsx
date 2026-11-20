@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { Sidebar, StatusBar, MobileNav } from "@/components/Shell";
 import { CommandPalette } from "@/components/CommandPalette";
+import { Toaster } from "@/components/Toaster";
 
 // Layout for the authenticated app pages — everything except /login and
 // /register lives here, so those screens render standalone without the side
@@ -21,6 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       <MobileNav />
       <CommandPalette />
+      <Toaster />
     </div>
   );
 }
