@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { changedLines } from "../lib/cs2/lineStore";
-import { lineKey, matchHandicapProblem, maxMatchHandicap } from "../lib/cs2/lineInput";
+import { latestLineVersions, lineKey, matchHandicapProblem, maxMatchHandicap } from "../lib/cs2/lineInput";
 import { latestPerLine } from "../lib/cs2/settle";
 
 const kills = (line: number, overOdds: number | null, underOdds: number | null, playerId = 7) => ({
@@ -87,5 +87,26 @@ describe("spärr mot rundhandikapp som karthandikapp", () => {
   });
   it("kartans rundhandikapp berörs inte", () => {
     expect(matchHandicapProblem(h(-6.5, "map_handicap"), "bo3")).toBeNull();
+  });
+});
+
+describe("senaste versionen på matchsidan", () => {
+  const base = { market: "kills", scope: "map1", playerId: 7, player2Id: null, teamId: null, line: 15.5 };
+  it("en rad per linje och bok, den senaste", () => {
+    const out = latestLineVersions([
+      { ...base, id: 1, bookmaker: "Unibet" },
+      { ...base, id: 5, bookmaker: "Unibet" },
+      { ...base, id: 3, bookmaker: "unibet " },
+    ]);
+    expect(out.map((r) => r.id)).toEqual([5]);
+  });
+  it("olika böcker och linjer hålls isär", () => {
+    const out = latestLineVersions([
+      { ...base, id: 1, bookmaker: "Unibet" },
+      { ...base, id: 2, bookmaker: "Bet365" },
+      { ...base, id: 3, line: 16.5, bookmaker: "Unibet" },
+      { ...base, id: 4, bookmaker: null },
+    ]);
+    expect(out.map((r) => r.id)).toEqual([4, 3, 2, 1]);
   });
 });

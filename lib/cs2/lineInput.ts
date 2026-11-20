@@ -101,3 +101,19 @@ export function matchHandicapProblem(l: { market: string; line: number | null },
   if (l.market !== "match_handicap" || l.line == null) return null;
   return Math.abs(l.line) > maxMatchHandicap(format) ? "handikappet är större än serien tillåter (rundhandikapp?)" : null;
 }
+
+/**
+ * Den senaste versionen av varje linje per bok (högst id vinner), nyaste
+ * först. Unibet-hämtningen sparar en ny version när oddsen ändras — sidan ska
+ * visa de aktuella oddsen, inte varje version. Boknamnet jämförs utan
+ * skiftläge och mellanslag, som i facit.
+ */
+export function latestLineVersions<T extends LineIdentity & { id: number; bookmaker: string | null }>(rows: T[]): T[] {
+  const best = new Map<string, T>();
+  for (const r of rows) {
+    const k = `${(r.bookmaker ?? "").trim().toLowerCase()}|${lineKey(r)}`;
+    const prev = best.get(k);
+    if (!prev || r.id > prev.id) best.set(k, r);
+  }
+  return [...best.values()].sort((a, b) => b.id - a.id);
+}

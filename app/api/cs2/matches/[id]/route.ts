@@ -4,6 +4,7 @@ import { cs2Prisma, hasCs2Db } from "@/lib/cs2Db";
 import { buildMatchupView, loadMatchupContext, type LineInput } from "@/lib/cs2/matchup";
 import { DEFAULT_CS2_BLEND_W } from "@/lib/cs2/pricing";
 import { idParam, noCs2Db } from "@/lib/cs2/api";
+import { latestLineVersions } from "@/lib/cs2/lineInput";
 import type { Cs2Market, Cs2Scope } from "@/lib/cs2/types";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     if (!m) return NextResponse.json({ error: "Matchen finns inte" }, { status: 404 });
     return NextResponse.json({ dbConfigured: true, pending: true, team1Name: m.team1Name, team2Name: m.team2Name });
   }
-  const rows = await cs2Prisma.cs2Line.findMany({ where: { matchId: id }, orderBy: { createdAt: "desc" } });
+  // Bara den senaste versionen per linje och bok — äldre versioner är historik.
+  const rows = latestLineVersions(await cs2Prisma.cs2Line.findMany({ where: { matchId: id } }));
   const lines: LineInput[] = rows.map((r) => ({
     id: r.id,
     market: r.market as Cs2Market,
