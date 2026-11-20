@@ -18,7 +18,7 @@ import { idFromHref, slugFromHref, hltvUrls } from "../lib/cs2/hltv/urls";
 import { sideRoundsFromHalves } from "../lib/cs2/ingest";
 import { canonicalMap, activeMapPool, mapLabel } from "../lib/cs2/maps";
 import { cacheFileFor, HltvBudgetError, isRetryableScraplingError } from "../lib/cs2/hltv/session";
-import { collectResultIds, ingestFailed, playedMatchPage, type IngestSummary } from "../lib/cs2/pipeline";
+import { collectResultIds, FailureStreak, HltvGiveUpError, ingestFailed, playedMatchPage, type IngestSummary } from "../lib/cs2/pipeline";
 import { ScraplingError } from "../lib/scrapling";
 
 const FIX = path.join(__dirname, "fixtures", "cs2", "hltv");
@@ -390,5 +390,25 @@ describe("HLTV-jobbet tål sidfel", () => {
     expect(isRetryableScraplingError(new ScraplingError("x", "worker_died"))).toBe(true);
     expect(isRetryableScraplingError(new ScraplingError("x", "scrapling_missing"))).toBe(false);
     expect(isRetryableScraplingError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("HLTV-steget ger upp när allt blockeras", () => {
+  it("fem misslyckade sidor i rad avbryter, enstaka fel gör det inte", () => {
+    const st = new FailureStreak(5);
+    for (let i = 0; i < 4; i++) st.fail();
+    st.ok();
+    for (let i = 0; i < 4; i++) st.fail();
+    expect(() => st.fail()).toThrow(HltvGiveUpError);
+  });
+
+  it("resultatlistorna slutar efter fem fel i rad", async () => {
+    const session = { getHtml: async () => { throw new Error("Cloudflare"); } };
+    const errors: string[] = [];
+    let calls = 0;
+    const counting = { getHtml: async () => { calls++; return session.getHtml(); } };
+    await expect(collectResultIds(counting, [1, 2, 3, 4, 5, 6, 7], new Date(), () => {}, errors, new FailureStreak(5))).rejects.toBeInstanceOf(HltvGiveUpError);
+    expect(calls).toBe(5);
+    expect(errors).toHaveLength(5);
   });
 });
