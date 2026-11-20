@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { selectCleanup, type CleanupLine } from "../lib/cs2/cleanup";
+import { cloudflareDemoFailures, selectCleanup, type CleanupLine } from "../lib/cs2/cleanup";
 
 const t0 = new Date("2026-11-18T22:58:44Z");
 const L = (id: number, matchId: number, line: number, extra: Partial<CleanupLine> = {}): CleanupLine => ({
@@ -50,5 +50,17 @@ describe("rensning av felrader", () => {
     const k = { market: "kills", teamId: null, playerId: 7 } as const;
     const r = selectCleanup([L(10, 1, 15.5, k), L(11, 1, 15.5, { ...k, bookmaker: "Bet365" })], new Map([[1, "bo3"]]));
     expect(r.duplicates).toEqual([]);
+  });
+});
+
+describe("demomatcher som Cloudflare stoppade", () => {
+  it("bara Cloudflare-stoppen ska prövas igen, inte riktiga fel", () => {
+    const rows = [
+      { id: 1, demoStatus: "failed", demoError: "HLTV svarade med en Cloudflare-utmaning på https://www.hltv.org/. Klicka i rutan …" },
+      { id: 2, demoStatus: "failed", demoError: "ingen karta i arkivet kunde tolkas" },
+      { id: 3, demoStatus: "unavailable", demoError: "404 från HLTV: /download/demo/3" },
+      { id: 4, demoStatus: "failed", demoError: null },
+    ];
+    expect(cloudflareDemoFailures(rows)).toEqual([1]);
   });
 });

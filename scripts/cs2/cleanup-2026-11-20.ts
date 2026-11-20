@@ -7,7 +7,9 @@
  *   npx tsx scripts/cs2/cleanup-2026-11-20.ts --confirm --backup-dir "<huvudmappen>/.claude/backups"
  *
  * Med --confirm skrivs först en backup (JSON med linjer och projektioner), och
- * sedan raderas allt i en transaktion.
+ * sedan raderas allt i en transaktion. Samma körning sätter tillbaka matcher
+ * vars demo bara markerats som misslyckad för att Cloudflare stoppade den
+ * (demoStatus "failed" → "none"), så att demokön prövar dem igen.
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -15,7 +17,7 @@ config();
 import fs from "node:fs";
 import path from "node:path";
 import { cs2Prisma as db, hasCs2Db } from "../../lib/cs2Db";
-import { selectCleanup } from "../../lib/cs2/cleanup";
+import { cloudflareDemoFailures, selectCleanup } from "../../lib/cs2/cleanup";
 
 function arg(flag: string): string | null {
   const i = process.argv.indexOf(flag);
@@ -52,6 +54,10 @@ async function main() {
   const projections = await db.cs2Projection.findMany({ where: { lineId: { in: ids } } });
   console.log(`Projektioner som hör till: ${projections.length} (${projections.filter((p) => p.settledAt).length} avgjorda)`);
 
+  const failedDemos = await db.cs2Match.findMany({ where: { demoStatus: "failed" }, select: { id: true, demoStatus: true, demoError: true } });
+  const demoReset = cloudflareDemoFailures(failedDemos);
+  console.log(`Demos som bara Cloudflare stoppade (prövas igen): ${demoReset.length} av ${failedDemos.length} misslyckade`);
+
   if (!confirm) {
     console.log("Inget raderat. Kör med --confirm --backup-dir <mapp> för att ta bort.");
     return;
@@ -59,11 +65,20 @@ async function main() {
 
   fs.mkdirSync(backupDir, { recursive: true });
   const file = path.join(backupDir, `cs2-cleanup-2026-11-20-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-  fs.writeFileSync(file, JSON.stringify({ createdAt: new Date().toISOString(), roundHandicap, duplicates, lines: ids.map((id) => byId.get(id)), projections }, null, 2), "utf8");
+  const demoBackup = failedDemos.filter((m) => demoReset.includes(m.id));
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ createdAt: new Date().toISOString(), roundHandicap, duplicates, lines: ids.map((id) => byId.get(id)), projections, demoReset: demoBackup }, null, 2),
+    "utf8"
+  );
   console.log(`Backup: ${file}`);
 
-  const [p, l] = await db.$transaction([db.cs2Projection.deleteMany({ where: { lineId: { in: ids } } }), db.cs2Line.deleteMany({ where: { id: { in: ids } } })]);
-  console.log(`Raderat: ${l.count} linjer och ${p.count} projektioner.`);
+  const [p, l, d] = await db.$transaction([
+    db.cs2Projection.deleteMany({ where: { lineId: { in: ids } } }),
+    db.cs2Line.deleteMany({ where: { id: { in: ids } } }),
+    db.cs2Match.updateMany({ where: { id: { in: demoReset } }, data: { demoStatus: "none", demoError: null } }),
+  ]);
+  console.log(`Raderat: ${l.count} linjer och ${p.count} projektioner. Demos som prövas igen: ${d.count}.`);
 }
 
 main()

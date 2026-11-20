@@ -53,3 +53,12 @@ export function selectCleanup(lines: CleanupLine[], formats: Map<number, string>
   }
   return { roundHandicap, duplicates };
 }
+
+/**
+ * Matcher vars demo markerats som misslyckad bara för att Cloudflare stoppade
+ * nedladdningen (före 2026-11-20 gjordes det, och då prövades de aldrig igen).
+ * De ska tillbaka till "none" så att demokön tar dem nästa körning.
+ */
+export function cloudflareDemoFailures(rows: Array<{ id: number; demoStatus: string; demoError: string | null }>): number[] {
+  return rows.filter((r) => r.demoStatus === "failed" && /Cloudflare-utmaning/.test(r.demoError ?? "")).map((r) => r.id);
+}

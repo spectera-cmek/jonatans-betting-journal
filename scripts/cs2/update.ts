@@ -69,6 +69,7 @@ async function main() {
     // behöver inte HLTV. Bara demos hoppas över, de bygger på dagens inläsning.
     let s: IngestSummary | null = null;
     let hltvError: string | null = null;
+    let demoNote: string | null = null;
     try {
       s = await runIngest(
         prisma,
@@ -93,14 +94,25 @@ async function main() {
         return null;
       });
       if (api) {
-        const d = await runDemoQueue(
-          prisma,
-          session,
-          api,
-          { confirm: true, upcomingOnly: true, days: numberArg("--days", 7), teams: [], perTeamMap: numberArg("--maps-per-team-map", 10), months: 4, maxGb: numberArg("--max-gb", 15), maxSeries: numberArg("--max-series", 25), keepDemos: false, retryFailed: false, cacheDir: CS2_CACHE_DIR },
-          (m) => console.log(`  ${m}`)
-        );
-        console.log(`   ${d.processedSeries}/${d.queued} serier, ${d.processedMaps} kartor, ${d.downloadedGb} GB`);
+        // Demos är ett tillägg: ett fel här (Cloudflare, tappad databas) får
+        // inte stoppa linjer, facit och roller eller fälla hela jobbet.
+        try {
+          const d = await runDemoQueue(
+            prisma,
+            session,
+            api,
+            { confirm: true, upcomingOnly: true, days: numberArg("--days", 7), teams: [], perTeamMap: numberArg("--maps-per-team-map", 10), months: 4, maxGb: numberArg("--max-gb", 15), maxSeries: numberArg("--max-series", 25), keepDemos: false, retryFailed: false, cacheDir: CS2_CACHE_DIR },
+            (m) => console.log(`  ${m}`)
+          );
+          console.log(`   ${d.processedSeries}/${d.queued} serier, ${d.processedMaps} kartor, ${d.downloadedGb} GB`);
+          if (d.stoppedBy === "blocked") demoNote = "demos stoppade av Cloudflare";
+        } catch (e) {
+          // Prismas fel är många rader (anrop, fil, kodutdrag) — ta första raden som säger vad som hände.
+          const lines = (e instanceof Error ? e.message : String(e)).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+          const what = lines.find((l) => !/^Invalid `|^[A-Z]:\\|^\d+ |^→/.test(l)) ?? lines[0] ?? "okänt fel";
+          demoNote = `demosteget avbröts: ${what}`;
+          console.log(`   ${demoNote}`);
+        }
       }
     }
     if (!process.argv.includes("--no-lines")) await captureLines("3/5 ");
@@ -112,8 +124,8 @@ async function main() {
     if (hltvError) {
       console.log(`HLTV-steget misslyckades: ${hltvError}`);
       process.exitCode = 1;
-    } else if (s && s.errors.length > 0) {
-      console.log(`klart · ${s.errors.length} HLTV-sidor hoppades över`);
+    } else if ((s && s.errors.length > 0) || demoNote) {
+      console.log(["klart", s && s.errors.length > 0 ? `${s.errors.length} HLTV-sidor hoppades över` : null, demoNote].filter(Boolean).join(" · "));
     }
   } finally {
     await session.close();
