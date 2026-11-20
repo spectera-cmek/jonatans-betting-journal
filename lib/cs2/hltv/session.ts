@@ -32,7 +32,7 @@ import type { Browser, BrowserContext, BrowserType, Page } from "patchright";
 type Chromium = BrowserType;
 import { HLTV_ORIGIN } from "./urls";
 import { isChallengePage } from "./parse";
-import { ScraplingWorker } from "../../scrapling";
+import { ScraplingError, ScraplingWorker } from "../../scrapling";
 
 export const CS2_CACHE_DIR = process.env.CS2_CACHE_DIR || ".cache/cs2";
 
@@ -93,6 +93,11 @@ export class HltvBlockedError extends Error {
       `HLTV svarade med en Cloudflare-utmaning på ${url}. Klicka i rutan i webbläsarfönstret när den visas (kör utan --headless), eller vänta en stund och kör igen.`
     );
   }
+}
+
+/** Fel där Scrapling-workern fastnat eller dött — ett nytt försök med en nystartad worker kan gå. */
+export function isRetryableScraplingError(e: unknown): boolean {
+  return e instanceof ScraplingError && (e.code === "timeout" || e.code === "worker_died");
 }
 
 export class HltvBudgetError extends Error {
@@ -315,7 +320,17 @@ export class HltvSession {
     let lastStatus = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
       await this.throttle();
-      const res = await this.scraplingWorker().fetch({ mode: "browser", url });
+      let res: Awaited<ReturnType<ScraplingWorker["fetch"]>>;
+      try {
+        res = await this.scraplingWorker().fetch({ mode: "browser", url });
+      } catch (err) {
+        // En sida som fastnar (oftast Cloudflare) tar workern med sig — den
+        // startas om vid nästa anrop. Två nya försök innan vi ger upp sidan.
+        if (!isRetryableScraplingError(err) || attempt === 2) throw err;
+        console.log(`    Scrapling fastnade — startar om och försöker igen (${attempt + 2}/3).`);
+        await sleep(15_000 * (attempt + 1));
+        continue;
+      }
       const html = res.body;
       lastStatus = res.status;
       if (!html || isChallengePage(html)) {

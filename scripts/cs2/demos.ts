@@ -112,7 +112,7 @@ async function main() {
     const missing = new Set(s.results.flatMap((r) => r.missingFields));
     if (missing.size > 0) console.log(`\nFält som demoparsern inte gav: ${[...missing].join(", ")} — rapportera så kan normaliseringen anpassas.`);
     if (s.stoppedBy)
-      console.log(`\nStoppad av ${s.stoppedBy === "gb" ? "GB-taket" : s.stoppedBy === "time" ? "tidsgränsen" : "serietaket"} — kör igen för att fortsätta.`);
+      console.log(`\nStoppad av ${s.stoppedBy === "gb" ? "GB-taket" : s.stoppedBy === "time" ? "tidsgränsen" : s.stoppedBy === "blocked" ? "Cloudflare (för många stopp i rad)" : "serietaket"} — kör igen för att fortsätta.`);
     const left = s.queued - s.processedSeries;
     if (left > 0) console.log(`Kvar i kön: ${left} serier ≈ ${Math.round(left * AVG_SERIES_GB * 10) / 10} GB.`);
     if (s.errors.length > 0) {

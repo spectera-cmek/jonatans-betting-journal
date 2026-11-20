@@ -4,7 +4,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { PrismaClient } from ".prisma/cs2-client";
-import { isClosedSessionError, type HltvSession } from "../hltv/session";
+import { HltvBlockedError, isClosedSessionError, type HltvSession } from "../hltv/session";
 import { extractDemos } from "./archive";
 import type { DemoparserApi } from "./parseDemo";
 import { analyzeAndStore, loadNormalized, processDemoFiles, type ProcessResult } from "./process";
@@ -40,12 +40,16 @@ export interface DemoRunSummary {
   downloadedGb: number;
   results: ProcessResult[];
   errors: string[];
-  stoppedBy: "gb" | "series" | "time" | null;
+  /** "blocked": Cloudflare stoppade nedladdningen BLOCKED_LIMIT gånger i rad. */
+  stoppedBy: "gb" | "series" | "time" | "blocked" | null;
   /** Serier i kön per nivå (DEMO_TIER_LABEL). */
   byTier: number[];
 }
 
 type Log = (msg: string) => void;
+
+/** Så många Cloudflare-stopp i rad innan demosteget ger upp för den här körningen. */
+export const BLOCKED_LIMIT = 5;
 
 async function upcomingMatches(db: PrismaClient, days: number): Promise<Array<{ team1Id: number | null; team2Id: number | null }>> {
   const now = new Date();
@@ -128,7 +132,23 @@ export async function runDemoQueue(
   opts: DemoRunOptions,
   log: Log
 ): Promise<DemoRunSummary> {
-  const queue = await planDemoQueue(db, opts);
+  return runQueuedDemos(db, session, api, await planDemoQueue(db, opts), opts, log);
+}
+
+/**
+ * Laddar ner och tolkar serierna i kön. En Cloudflare-kontroll som inte
+ * släpper markerar inte matchen som misslyckad — den ska prövas nästa körning
+ * — och efter BLOCKED_LIMIT stopp i rad ger steget upp i stället för att nöta
+ * sig igenom hela kön.
+ */
+export async function runQueuedDemos(
+  db: PrismaClient,
+  session: HltvSession,
+  api: DemoparserApi | null,
+  queue: QueuedSeries[],
+  opts: DemoRunOptions,
+  log: Log
+): Promise<DemoRunSummary> {
   const summary: DemoRunSummary = {
     queued: queue.length,
     estimatedGb: Math.round(queue.length * AVG_SERIES_GB * 10) / 10,
@@ -144,6 +164,7 @@ export async function runDemoQueue(
   const started = Date.now();
 
   const rawDir = path.join(opts.cacheDir, "demos", "raw");
+  let blocked = 0;
   for (const series of queue) {
     if (summary.processedSeries >= opts.maxSeries) {
       summary.stoppedBy = "series";
@@ -192,9 +213,20 @@ export async function runDemoQueue(
         data: done > 0 ? { demoStatus: "done", demoError: null } : { demoStatus: "failed", demoError: "ingen karta i arkivet kunde tolkas" },
       });
       summary.processedSeries++;
+      blocked = 0;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       summary.errors.push(`match ${series.matchId}: ${msg}`);
+      if (err instanceof HltvBlockedError) {
+        blocked++;
+        if (blocked >= BLOCKED_LIMIT) {
+          log(`    Cloudflare stoppade ${BLOCKED_LIMIT} nedladdningar i rad — demosteget ger upp för den här körningen.`);
+          summary.stoppedBy = "blocked";
+          break;
+        }
+        continue;
+      }
+      blocked = 0;
       await db.cs2Match.update({
         where: { id: series.matchId },
         data: { demoStatus: /404|not found|saknas/i.test(msg) ? "unavailable" : "failed", demoError: msg.slice(0, 500) },

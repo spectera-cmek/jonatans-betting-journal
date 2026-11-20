@@ -73,6 +73,7 @@ Marknader:
 - "map_winner": vem vinner en karta (scope map1/map2/map3). Som match_winner.
 - "match_handicap": karthandikapp på matchen (t.ex. "-1.5 kartor"). team = laget vars handikapp står vid FÖRSTA oddset, line = det lagets handikapp (t.ex. -1.5 eller +1.5), overOdds = det lagets odds, underOdds = motståndarens odds på motsatt handikapp. scope = "match".
 - "map_handicap": rundhandikapp på en karta (t.ex. "-3.5 rundor", scope map1/map2/map3). Som match_handicap.
+- Rundhandikapp för hela matchen (inte en enskild karta) → "other".
 - "rounds": totalt antal rundor på en karta, Över/Under (scope map1/map2/map3). team = null.
 - "total_maps": totalt antal kartor i matchen, Över/Under (t.ex. 2.5). scope = "match", team = null.
 - "pistol": vem vinner FÖRSTA pistolrundan på kartan. team = laget som står först, overOdds = dess odds, underOdds = det andra lagets. Andra pistolrundan → "other".

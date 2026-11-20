@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { changedLines } from "../lib/cs2/lineStore";
-import { lineKey } from "../lib/cs2/lineInput";
+import { latestLineVersions, lineKey, matchHandicapProblem, maxMatchHandicap } from "../lib/cs2/lineInput";
 import { latestPerLine } from "../lib/cs2/settle";
 
 const kills = (line: number, overOdds: number | null, underOdds: number | null, playerId = 7) => ({
@@ -63,5 +63,50 @@ describe("facit per linje", () => {
 
   it("projektioner utan linje räknas var för sig", () => {
     expect(latestPerLine([proj(1, null, 15.5, 1, null), proj(2, null, 15.5, 1, null)])).toHaveLength(2);
+  });
+});
+
+describe("karthandikapp per format", () => {
+  it("högsta möjliga karthandikapp", () => {
+    expect(maxMatchHandicap("bo1")).toBe(0);
+    expect(maxMatchHandicap("bo3")).toBe(1.5);
+    expect(maxMatchHandicap("bo5")).toBe(2.5);
+  });
+});
+
+describe("spärr mot rundhandikapp som karthandikapp", () => {
+  const h = (line: number, market = "match_handicap") => ({ market, line });
+  it("Bo5 ±2,5 och Bo3 ±1,5 är riktiga karthandikapp", () => {
+    expect(matchHandicapProblem(h(-2.5), "bo5")).toBeNull();
+    expect(matchHandicapProblem(h(1.5), "bo3")).toBeNull();
+  });
+  it("större linjer och allt i Bo1 spärras", () => {
+    expect(matchHandicapProblem(h(-2.5), "bo3")).toMatch(/rundhandikapp/);
+    expect(matchHandicapProblem(h(-1.5), "bo1")).toMatch(/rundhandikapp/);
+    expect(matchHandicapProblem(h(3.5), "bo5")).toMatch(/rundhandikapp/);
+  });
+  it("kartans rundhandikapp berörs inte", () => {
+    expect(matchHandicapProblem(h(-6.5, "map_handicap"), "bo3")).toBeNull();
+  });
+});
+
+describe("senaste versionen på matchsidan", () => {
+  const base = { market: "kills", scope: "map1", playerId: 7, player2Id: null, teamId: null, line: 15.5 };
+  it("en rad per linje och bok, den senaste", () => {
+    const out = latestLineVersions([
+      { ...base, id: 1, bookmaker: "Unibet" },
+      { ...base, id: 5, bookmaker: "Unibet" },
+      { ...base, id: 3, bookmaker: "unibet " },
+    ]);
+    expect(out.map((r) => r.id)).toEqual([5]);
+  });
+  it("olika böcker och linjer hålls isär", () => {
+    const out = latestLineVersions([
+      { ...base, id: 1, bookmaker: "Unibet" },
+      { ...base, id: 2, bookmaker: "Bet365" },
+      { ...base, id: 3, line: 16.5, bookmaker: "Unibet" },
+      { ...base, id: 4, bookmaker: null },
+    ]);
+    expect(out.map((r) => r.id)).toEqual([4, 3, 2, 1]);
   });
 });

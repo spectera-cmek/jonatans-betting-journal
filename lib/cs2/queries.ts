@@ -4,6 +4,7 @@
 import type { PrismaClient } from ".prisma/cs2-client";
 import type { PlayerSideFacts, RoundFact } from "./demo/types";
 import { buildGameplan, type GameplanPlayer, type GameplanReport } from "./gameplan";
+import { latestLineVersions } from "./lineInput";
 import { mapLabel } from "./maps";
 import {
   applyWindow,
@@ -531,9 +532,16 @@ export async function listUpcoming(db: PrismaClient, days: number): Promise<Upco
       team2Id: true,
       team1Name: true,
       team2Name: true,
-      _count: { select: { lines: true } },
     },
   });
+  // Antal linjer = senaste versionen per linje och bok, som på matchsidan.
+  const lineRows = await db.cs2Line.findMany({
+    where: { matchId: { in: rows.map((r) => r.id) } },
+    select: { id: true, matchId: true, bookmaker: true, market: true, scope: true, playerId: true, player2Id: true, teamId: true, line: true },
+  });
+  const linesByMatch = new Map<number, typeof lineRows>();
+  for (const l of lineRows) linesByMatch.set(l.matchId, [...(linesByMatch.get(l.matchId) ?? []), l]);
+  const lineCount = new Map([...linesByMatch].map(([id, ls]) => [id, latestLineVersions(ls).length]));
   const teamIds = [...new Set(rows.flatMap((r) => [r.team1Id, r.team2Id]).filter((x): x is number => x != null))];
   const teams = await db.cs2Team.findMany({ where: { id: { in: teamIds } }, select: { id: true, rank: true, tracked: true } });
   const tInfo = new Map(teams.map((t) => [t.id, t]));
@@ -571,6 +579,6 @@ export async function listUpcoming(db: PrismaClient, days: number): Promise<Upco
       team1Demo: r.team1Id != null ? cov.get(r.team1Id)?.demo ?? 0 : 0,
       team2Demo: r.team2Id != null ? cov.get(r.team2Id)?.demo ?? 0 : 0,
     },
-    lines: r._count.lines,
+    lines: lineCount.get(r.id) ?? 0,
   }));
 }

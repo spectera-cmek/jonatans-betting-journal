@@ -3,7 +3,7 @@ import { getSessionUser, getSessionUserId, apiUnauthorized } from "@/lib/auth";
 import { cs2Prisma, hasCs2Db } from "@/lib/cs2Db";
 import { loadMatchupContext } from "@/lib/cs2/matchup";
 import { saveLines } from "@/lib/cs2/lineStore";
-import { validateLine } from "@/lib/cs2/lineInput";
+import { matchHandicapProblem, validateLine } from "@/lib/cs2/lineInput";
 import { noCs2Db } from "@/lib/cs2/api";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,10 @@ export async function POST(req: Request) {
 
   const ctx = await loadMatchupContext(cs2Prisma, matchId);
   if (!ctx) return NextResponse.json({ error: "Matchen saknar lag eller data" }, { status: 404 });
+  for (const v of valid) {
+    const problem = matchHandicapProblem(v, ctx.format);
+    if (problem) return NextResponse.json({ error: `Karthandikapp ${v.line}: ${problem}` }, { status: 400 });
+  }
 
   const out = await saveLines(cs2Prisma, ctx, valid, user.username);
   return NextResponse.json({ ok: true, lines: out });

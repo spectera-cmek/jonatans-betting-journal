@@ -160,6 +160,13 @@ export class ScraplingWorker {
         this.opts.startTimeoutMs ?? 60_000
       );
 
+      // En skrivning till en worker som just dött ger EPIPE på stdin. Utan
+      // lyssnare blir det ett ohanterat fel som kraschar hela körningen —
+      // processens "exit" tar hand om resten.
+      proc.stdin.on("error", (err) => {
+        this.stderrTail.push(`stdin: ${err.message}`);
+      });
+
       proc.on("error", (err: NodeJS.ErrnoException) => {
         if (err.code === "ENOENT") {
           fail(new ScraplingError(`Hittar inte Python ("${command}"). Installera Python 3.10+ eller sätt SCRAPLING_PYTHON. ${SETUP_HINT}`, "python_missing"));

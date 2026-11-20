@@ -10,7 +10,7 @@
 
 import type { PrismaClient } from ".prisma/cs2-client";
 import { fetchBetOffers, fetchCs2Events, findKambiEvent, KAMBI_BOOKMAKER, mapBetOffers, type KambiEvent } from "./kambi";
-import { lineKey, validateLine, type LineIdentity, type ValidLine } from "./lineInput";
+import { lineKey, matchHandicapProblem, validateLine, type LineIdentity, type ValidLine } from "./lineInput";
 import { loadMatchupContext, priceLine, type MatchupContext, type PricedLine } from "./matchup";
 import { CS2_MODEL_VERSION, DEFAULT_CS2_BLEND_W } from "./pricing";
 import type { ParsedPropRow } from "./propsExtract";
@@ -24,7 +24,7 @@ export type MatchedPropRow = ParsedPropRow & { playerId: number | null; player2I
  */
 export async function kambiRowsForMatch(
   db: PrismaClient,
-  match: { startAt: Date; team1Id: number | null; team2Id: number | null; team1Name: string; team2Name: string },
+  match: { startAt: Date; format: string; team1Id: number | null; team2Id: number | null; team1Name: string; team2Name: string },
   events: KambiEvent[]
 ): Promise<MatchedPropRow[] | null> {
   const teams = [
@@ -35,18 +35,21 @@ export async function kambiRowsForMatch(
   if (!event) return null;
   const players = await db.cs2Player.findMany({ where: { teamId: { in: teams.map((t) => t.id) } }, select: { id: true, nickname: true, teamId: true } });
   // Marknader utanför modellen (udda/jämnt, övertid, exakt resultat …) är bara brus här.
-  const parsed = mapBetOffers(await fetchBetOffers(event.id), event).filter((r) => r.market !== "other");
+  const parsed = mapBetOffers(await fetchBetOffers(event.id), event, match.format).filter((r) => r.market !== "other");
   const teamOf = matchTeams(parsed.map((r) => r.team), teams);
   return parsed.map((r) => {
     const playerId = matchPlayer(r.player, players);
     const player2Id = matchPlayer(r.player2, players);
     const teamId = r.team ? teamOf.get(r.team) ?? null : null;
-    return { ...r, playerId, player2Id, teamId, skip: skipReason({ ...r, playerId, player2Id, teamId }) };
+    return { ...r, playerId, player2Id, teamId, skip: skipReason({ ...r, playerId, player2Id, teamId }) ?? matchHandicapProblem(r, match.format) };
   });
 }
 
+/** Det saveLines skriver till: klienten eller en transaktion. */
+export type Cs2Writer = Pick<PrismaClient, "cs2Line" | "cs2Projection">;
+
 /** Sparar linjerna och modellens pris på var och en (Cs2Projection). Alla ska gälla ctx:s match. */
-export async function saveLines(db: PrismaClient, ctx: MatchupContext, lines: ValidLine[], createdBy: string | null): Promise<PricedLine[]> {
+export async function saveLines(db: Cs2Writer, ctx: MatchupContext, lines: ValidLine[], createdBy: string | null): Promise<PricedLine[]> {
   const out: PricedLine[] = [];
   for (const v of lines) {
     const { matchId, ...rest } = v;
@@ -106,6 +109,44 @@ export function changedLines<T extends LineIdentity & { overOdds: number | null;
   });
 }
 
+type SavedLineRow = LineIdentity & { id: number; overOdds: number | null; underOdds: number | null };
+
+/** Det writeChangedLines behöver av databasen — en PrismaClient, eller en låtsasdatabas i testerna. */
+export interface LockingDb {
+  $transaction<R>(fn: (tx: LockingTx) => Promise<R>, opts?: { timeout?: number }): Promise<R>;
+}
+interface LockingTx {
+  $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number>;
+  cs2Line: { findMany(args: { where: { matchId: number; bookmaker: string | null }; select: Record<keyof SavedLineRow, true> }): Promise<SavedLineRow[]> };
+}
+
+/**
+ * Sparar de linjer vars odds är nya eller ändrade, med matchen låst under
+ * tiden (pg_advisory_xact_lock). Två hämtningar som går samtidigt läser
+ * annars samma "senast sparade" och sparar samma version två gånger.
+ * Returnerar antalet sparade.
+ */
+export async function writeChangedLines<T extends ValidLine>(
+  db: LockingDb,
+  matchId: number,
+  valid: T[],
+  save: (tx: LockingTx, toSave: T[]) => Promise<unknown>
+): Promise<number> {
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
+      const saved = await tx.cs2Line.findMany({
+        where: { matchId, bookmaker: valid[0]?.bookmaker ?? null },
+        select: { id: true, market: true, scope: true, playerId: true, player2Id: true, teamId: true, line: true, overOdds: true, underOdds: true },
+      });
+      const toSave = changedLines(valid, saved);
+      if (toSave.length > 0) await save(tx, toSave);
+      return toSave.length;
+    },
+    { timeout: 30_000 }
+  );
+}
+
 export interface CaptureOptions {
   /** Matcher som startar inom så många dagar. */
   days: number;
@@ -144,7 +185,7 @@ export async function captureKambiLines(db: PrismaClient, opts: CaptureOptions, 
       team2Id: { not: null },
       ...(tracked ? { OR: [{ team1Id: { in: tracked } }, { team2Id: { in: tracked } }] } : {}),
     },
-    select: { id: true, startAt: true, team1Id: true, team2Id: true, team1Name: true, team2Name: true },
+    select: { id: true, startAt: true, format: true, team1Id: true, team2Id: true, team1Name: true, team2Name: true },
     orderBy: { startAt: "asc" },
   });
   const sum: CaptureSummary = { matches: matches.length, found: 0, saved: 0, unchanged: 0, skipped: 0, errors: [] };
@@ -171,9 +212,10 @@ export async function captureKambiLines(db: PrismaClient, opts: CaptureOptions, 
         where: { matchId: m.id, bookmaker: KAMBI_BOOKMAKER },
         select: { id: true, market: true, scope: true, playerId: true, player2Id: true, teamId: true, line: true, overOdds: true, underOdds: true },
       });
-      const toSave = changedLines(valid, saved);
-      sum.unchanged += valid.length - toSave.length;
-      if (toSave.length === 0) {
+      // Snabbkoll utan lås: oftast har inget ändrats, och då behövs varken
+      // modellen eller transaktionen.
+      if (changedLines(valid, saved).length === 0) {
+        sum.unchanged += valid.length;
         log(`${name}: ${valid.length} linjer, inga ändrade odds`);
         continue;
       }
@@ -182,9 +224,11 @@ export async function captureKambiLines(db: PrismaClient, opts: CaptureOptions, 
         log(`${name}: matchen saknar lag eller data — sparas inte`);
         continue;
       }
-      await saveLines(db, ctx, toSave, "auto");
-      sum.saved += toSave.length;
-      log(`${name}: ${toSave.length} linjer sparade (${valid.length - toSave.length} oförändrade)`);
+      // Avgörs på nytt under lås — en annan hämtning kan ha hunnit spara samma odds.
+      const n = await writeChangedLines(db, m.id, valid, (tx, toSave) => saveLines(tx as unknown as Cs2Writer, ctx, toSave, "auto"));
+      sum.saved += n;
+      sum.unchanged += valid.length - n;
+      log(`${name}: ${n} linjer sparade (${valid.length - n} oförändrade)`);
     } catch (e) {
       sum.errors.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
     }

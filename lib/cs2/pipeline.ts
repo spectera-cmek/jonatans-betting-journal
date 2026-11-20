@@ -70,7 +70,7 @@ export async function playedMatchPage(session: Pick<HltvSession, "getHtml">, url
 }
 
 async function resultMatchIds(
-  session: HltvSession,
+  session: Pick<HltvSession, "getHtml">,
   teamId: number,
   since: Date,
   log: Log
@@ -90,6 +90,65 @@ async function resultMatchIds(
   return out;
 }
 
+const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** HLTV-steget ger upp: för många sidor i rad gick inte att hämta. */
+export class HltvGiveUpError extends Error {}
+
+/**
+ * Räknar sidor i rad som inte gick att hämta. När Cloudflare blockerar allt
+ * ska körningen inte nöta i timmar (tre försök à 180 s per sida) — efter
+ * `limit` fel i rad avbryts HLTV-steget, och resten av jobbet körs.
+ */
+export class FailureStreak {
+  private n = 0;
+  constructor(private readonly limit = 5) {}
+  ok(): void {
+    this.n = 0;
+  }
+  fail(): void {
+    this.n += 1;
+    if (this.n >= this.limit) throw new HltvGiveUpError(`${this.limit} HLTV-sidor i rad gick inte att hämta — HLTV-steget avbryts.`);
+  }
+}
+
+/**
+ * Matcher ur lagens resultatlistor. Ett lag vars lista inte går att hämta
+ * (t.ex. en Cloudflare-kontroll som inte släpper) hamnar i `errors` och
+ * resten läses ändå. Sidtaket stoppar fortfarande.
+ */
+export async function collectResultIds(
+  session: Pick<HltvSession, "getHtml">,
+  teamIds: number[],
+  since: Date,
+  log: Log,
+  errors: string[],
+  streak: FailureStreak = new FailureStreak()
+): Promise<Map<number, string | null>> {
+  const out = new Map<number, string | null>();
+  for (const teamId of teamIds) {
+    try {
+      for (const r of await resultMatchIds(session, teamId, since, log)) out.set(r.id, r.slug);
+      streak.ok();
+    } catch (err) {
+      if (err instanceof HltvBudgetError) throw err;
+      errors.push(`Resultat för lag ${teamId}: ${errText(err)}`);
+      log(`    hoppar över resultaten för lag ${teamId}: ${errText(err)}`);
+      streak.fail();
+    }
+  }
+  return out;
+}
+
+/**
+ * Räknas HLTV-steget som misslyckat? Bara när nästan inget gick: inga sidor
+ * alls, eller fler fel än hälften av sidorna. Enstaka sidfel är normalt.
+ */
+export function ingestFailed(s: Pick<IngestSummary, "fetched" | "cacheHits" | "errors">): boolean {
+  const pages = s.fetched + s.cacheHits;
+  return pages === 0 || s.errors.length > pages / 2;
+}
+
 export async function runIngest(db: PrismaClient, session: HltvSession, opts: IngestOptions, log: Log): Promise<IngestSummary> {
   const summary: IngestSummary = {
     trackedTeams: 0,
@@ -105,6 +164,7 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
     errors: [],
   };
   const since = new Date(Date.now() - opts.months * 30 * DAY);
+  const streak = new FailureStreak();
 
   try {
     // 1) Ranking → bevakade lag.
@@ -113,9 +173,17 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
       teamIds = await trackedTeamIds(db);
     } else {
       const url = opts.ranking === "vrs" ? hltvUrls.vrsRanking() : hltvUrls.hltvRanking();
-      const ranked = parseRanking(await session.getHtml(url, { maxAgeMs: DAY }));
+      let ranked: ReturnType<typeof parseRanking> = [];
+      let rankingFailed = false;
+      try {
+        ranked = parseRanking(await session.getHtml(url, { maxAgeMs: DAY }));
+      } catch (err) {
+        if (err instanceof HltvBudgetError) throw err;
+        summary.errors.push(`Rankingsidan (${url}) gick inte att hämta: ${errText(err)}. Använder redan bevakade lag.`);
+        rankingFailed = true;
+      }
       if (ranked.length === 0) {
-        summary.errors.push(`Rankingsidan (${url}) gav inga lag — parsern behöver ses över. Använder redan bevakade lag.`);
+        if (!rankingFailed) summary.errors.push(`Rankingsidan (${url}) gav inga lag — parsern behöver ses över. Använder redan bevakade lag.`);
         teamIds = await trackedTeamIds(db);
       } else if (opts.confirm) {
         teamIds = await applyRanking(db, ranked, opts.topN);
@@ -133,7 +201,17 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
     const horizon = Date.now() + opts.upcomingDays * DAY;
     for (const teamId of teamIds) {
       const team = await db.cs2Team.findUnique({ where: { id: teamId }, select: { slug: true, name: true } });
-      const page = parseTeamPage(await session.getHtml(hltvUrls.team(teamId, team?.slug ?? "x"), { maxAgeMs: 3 * HOUR }));
+      let page: ReturnType<typeof parseTeamPage>;
+      try {
+        page = parseTeamPage(await session.getHtml(hltvUrls.team(teamId, team?.slug ?? "x"), { maxAgeMs: 3 * HOUR }));
+        streak.ok();
+      } catch (err) {
+        if (err instanceof HltvBudgetError) throw err;
+        summary.errors.push(`Lagsida ${teamId}: ${errText(err)}`);
+        log(`    hoppar över lagsidan för ${team?.name ?? teamId}: ${errText(err)}`);
+        streak.fail();
+        continue;
+      }
       if (opts.confirm) {
         // Lag som bara kommer via --team blir "vid behov", inte bevakade.
         if (!team) await db.cs2Team.create({ data: { id: teamId, name: page.name ?? `team-${teamId}`, tracked: false } });
@@ -148,26 +226,29 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
     log(`Lagsidor klara: ${teamIds.length} lag, ${upcoming.size} kommande matcher inom ${opts.upcomingDays} dagar`);
 
     // 3) Resultatlistor → matcher som saknas eller inte är färdiga i DB.
-    const wanted = new Map<number, string | null>();
-    for (const teamId of teamIds) {
-      for (const r of await resultMatchIds(session, teamId, since, log)) wanted.set(r.id, r.slug);
-    }
+    const wanted = await collectResultIds(session, teamIds, since, log, summary.errors, streak);
 
     // 4) Kommande matcher först — de avgör vilka motståndare som behövs.
     const opponents = new Set<number>();
     for (const [matchId, { slug, startAt }] of upcoming) {
       // Vetot publiceras strax före start — då får sidan bara vara 10 min gammal.
       const startsSoon = startAt != null && startAt.getTime() - Date.now() < 3 * HOUR;
-      const html = await session.getHtml(hltvUrls.match(matchId, slug ?? "x"), { maxAgeMs: startsSoon ? 10 * 60_000 : 2 * HOUR });
-      const page = parseMatchPage(html);
-      if (opts.confirm) await applyMatchPage(db, matchId, slug, page);
-      for (const t of [page.team1, page.team2]) if (t && !teamIds.includes(t.id)) opponents.add(t.id);
+      try {
+        const html = await session.getHtml(hltvUrls.match(matchId, slug ?? "x"), { maxAgeMs: startsSoon ? 10 * 60_000 : 2 * HOUR });
+        const page = parseMatchPage(html);
+        if (opts.confirm) await applyMatchPage(db, matchId, slug, page);
+        for (const t of [page.team1, page.team2]) if (t && !teamIds.includes(t.id)) opponents.add(t.id);
+        streak.ok();
+      } catch (err) {
+        if (err instanceof HltvBudgetError) throw err;
+        summary.errors.push(`Kommande match ${matchId}: ${errText(err)}`);
+        log(`    hoppar över matchsidan ${matchId}: ${errText(err)}`);
+        streak.fail();
+      }
     }
     summary.onDemandTeams = opponents.size;
     if (opponents.size > 0) log(`Vid behov: ${opponents.size} motståndare utanför topplistan läses också in`);
-    for (const teamId of opponents) {
-      for (const r of await resultMatchIds(session, teamId, since, log)) wanted.set(r.id, r.slug);
-    }
+    for (const [id, slug] of await collectResultIds(session, [...opponents], since, log, summary.errors, streak)) wanted.set(id, slug);
 
     const known = new Map(
       (
@@ -196,6 +277,7 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
       i++;
       try {
         const page = await playedMatchPage(session, hltvUrls.match(matchId, slug ?? "x"));
+        streak.ok();
         if (!page.team1 || !page.team2) {
           summary.errors.push(`Match ${matchId}: lagen gick inte att läsa`);
           continue;
@@ -204,8 +286,9 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
         summary.matchesWritten++;
         if (i % 25 === 0) log(`  … matchsidor ${i}/${toFetch.length}`);
       } catch (err) {
-        if (err instanceof HltvBudgetError) throw err;
+        if (err instanceof HltvBudgetError || err instanceof HltvGiveUpError) throw err;
         summary.errors.push(`Match ${matchId}: ${err instanceof Error ? err.message : String(err)}`);
+        streak.fail();
       }
     }
 
@@ -217,6 +300,7 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
       j++;
       try {
         const stats = parseMapStats(await session.getHtml(hltvUrls.mapStats(m.id), { maxAgeMs: Infinity }));
+        streak.ok();
         if (stats.players.length === 0) {
           summary.errors.push(`Karta ${m.id}: inga scoreboards hittades`);
           continue;
@@ -225,8 +309,9 @@ export async function runIngest(db: PrismaClient, session: HltvSession, opts: In
         summary.mapsWritten++;
         if (j % 25 === 0) log(`  … mapstats ${j}/${maps.length}`);
       } catch (err) {
-        if (err instanceof HltvBudgetError) throw err;
+        if (err instanceof HltvBudgetError || err instanceof HltvGiveUpError) throw err;
         summary.errors.push(`Karta ${m.id}: ${err instanceof Error ? err.message : String(err)}`);
+        streak.fail();
       }
     }
   } catch (err) {
