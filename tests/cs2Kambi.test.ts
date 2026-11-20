@@ -47,6 +47,30 @@ describe("Kambis etiketter", () => {
     }
   });
 
+  it("rundhandikapp över hela matchen är inte karthandikapp", () => {
+    expect(marketOf("Round Handicap", false)).toBe("other");
+    expect(marketOf("Rundhandikapp", false)).toBe("other");
+    expect(marketOf("Map Handicap", false)).toBe("match_handicap");
+    expect(marketOf("Map 1 - Round Handicap", false)).toBe("map_handicap");
+  });
+
+  it("rundhandikapp i Bo1 blir kartans rundhandikapp", () => {
+    const offer: KambiBetOffer = {
+      criterion: { englishLabel: "Round Handicap" },
+      betOfferType: { englishName: "Handicap" },
+      outcomes: [
+        { type: "OT_ONE", line: -4500, odds: 2180, participant: "HEROIC" },
+        { type: "OT_TWO", line: 4500, odds: 1620, participant: "Imperial" },
+      ],
+    };
+    const ev = { homeName: "HEROIC", awayName: "Imperial" };
+    const bo1 = mapBetOffers([offer], ev, "bo1");
+    expect(bo1).toHaveLength(1);
+    expect(bo1[0]).toMatchObject({ market: "map_handicap", scope: "map1", line: -4.5, overOdds: 2.18, underOdds: 1.62 });
+    expect(mapBetOffers([offer], ev, "bo3").every((r) => r.market === "other")).toBe(true);
+    expect(mapBetOffers([offer], ev).every((r) => r.market === "other")).toBe(true);
+  });
+
   it("spelarmarknad avgörs av typen, inte av participant", () => {
     const byLabel = (l: string) => fixture.betOffers.find((b) => b.criterion?.englishLabel === l)!;
     expect(isPlayerOffer(byLabel("Map 1 - Total Kills by the Player"))).toBe(true);

@@ -10,7 +10,7 @@
 
 import type { PrismaClient } from ".prisma/cs2-client";
 import { fetchBetOffers, fetchCs2Events, findKambiEvent, KAMBI_BOOKMAKER, mapBetOffers, type KambiEvent } from "./kambi";
-import { lineKey, validateLine, type LineIdentity, type ValidLine } from "./lineInput";
+import { lineKey, matchHandicapProblem, validateLine, type LineIdentity, type ValidLine } from "./lineInput";
 import { loadMatchupContext, priceLine, type MatchupContext, type PricedLine } from "./matchup";
 import { CS2_MODEL_VERSION, DEFAULT_CS2_BLEND_W } from "./pricing";
 import type { ParsedPropRow } from "./propsExtract";
@@ -24,7 +24,7 @@ export type MatchedPropRow = ParsedPropRow & { playerId: number | null; player2I
  */
 export async function kambiRowsForMatch(
   db: PrismaClient,
-  match: { startAt: Date; team1Id: number | null; team2Id: number | null; team1Name: string; team2Name: string },
+  match: { startAt: Date; format: string; team1Id: number | null; team2Id: number | null; team1Name: string; team2Name: string },
   events: KambiEvent[]
 ): Promise<MatchedPropRow[] | null> {
   const teams = [
@@ -35,13 +35,13 @@ export async function kambiRowsForMatch(
   if (!event) return null;
   const players = await db.cs2Player.findMany({ where: { teamId: { in: teams.map((t) => t.id) } }, select: { id: true, nickname: true, teamId: true } });
   // Marknader utanför modellen (udda/jämnt, övertid, exakt resultat …) är bara brus här.
-  const parsed = mapBetOffers(await fetchBetOffers(event.id), event).filter((r) => r.market !== "other");
+  const parsed = mapBetOffers(await fetchBetOffers(event.id), event, match.format).filter((r) => r.market !== "other");
   const teamOf = matchTeams(parsed.map((r) => r.team), teams);
   return parsed.map((r) => {
     const playerId = matchPlayer(r.player, players);
     const player2Id = matchPlayer(r.player2, players);
     const teamId = r.team ? teamOf.get(r.team) ?? null : null;
-    return { ...r, playerId, player2Id, teamId, skip: skipReason({ ...r, playerId, player2Id, teamId }) };
+    return { ...r, playerId, player2Id, teamId, skip: skipReason({ ...r, playerId, player2Id, teamId }) ?? matchHandicapProblem(r, match.format) };
   });
 }
 
@@ -144,7 +144,7 @@ export async function captureKambiLines(db: PrismaClient, opts: CaptureOptions, 
       team2Id: { not: null },
       ...(tracked ? { OR: [{ team1Id: { in: tracked } }, { team2Id: { in: tracked } }] } : {}),
     },
-    select: { id: true, startAt: true, team1Id: true, team2Id: true, team1Name: true, team2Name: true },
+    select: { id: true, startAt: true, format: true, team1Id: true, team2Id: true, team1Name: true, team2Name: true },
     orderBy: { startAt: "asc" },
   });
   const sum: CaptureSummary = { matches: matches.length, found: 0, saved: 0, unchanged: 0, skipped: 0, errors: [] };

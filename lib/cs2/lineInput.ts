@@ -84,3 +84,20 @@ export type LineIdentity = { market: string; scope: string; playerId: number | n
 export function lineKey(l: LineIdentity): string {
   return [l.market, l.scope, l.playerId ?? "", l.player2Id ?? "", l.teamId ?? "", l.line ?? ""].join("|");
 }
+
+/**
+ * Största karthandikapp som går att vinna i serien: Bo1 har inget (0), Bo3
+ * ±1,5, Bo5 ±2,5. Större linjer på `match_handicap` är rundhandikapp som
+ * hamnat fel.
+ */
+export function maxMatchHandicap(format: string): number {
+  if (format === "bo1") return 0;
+  if (format === "bo3") return 1.5;
+  return 2.5;
+}
+
+/** Skälet till att en karthandikapp inte kan stämma för formatet, annars null. */
+export function matchHandicapProblem(l: { market: string; line: number | null }, format: string): string | null {
+  if (l.market !== "match_handicap" || l.line == null) return null;
+  return Math.abs(l.line) > maxMatchHandicap(format) ? "handikappet är större än serien tillåter (rundhandikapp?)" : null;
+}

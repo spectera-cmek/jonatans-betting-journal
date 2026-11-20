@@ -150,11 +150,18 @@ export function marketOf(label: string, isPlayer: boolean): ParsedPropRow["marke
   if (/first (?:kill|blood)|första kill/.test(l)) return onMap ? "first_kill" : "other";
   if (/\bkills?\b|headshot/.test(l)) return "other";
   if (/pistol/.test(l) || /^(?:round|runda) 1$/.test(rest)) return onMap ? "pistol" : "other";
-  if (/handicap|handikapp/.test(l)) return onMap ? "map_handicap" : "match_handicap";
+  // "Round Handicap" utan kartnummer gäller rundorna över hela matchen — det
+  // prissätter modellen inte (se mapBetOffers för Bo1, där det är kartans).
+  if (/handicap|handikapp/.test(l)) return onMap ? "map_handicap" : isRoundHandicap(l) ? "other" : "match_handicap";
   if (/total rounds|antal rundor/.test(l)) return onMap ? "rounds" : "other";
   if (/total maps|antal kartor/.test(l)) return "total_maps";
   if (rest === "" || /match odds|matchodds|winner|vinnare|moneyline/.test(l)) return onMap ? "map_winner" : "match_winner";
   return "other";
+}
+
+/** Rundhandikapp (inte karthandikapp)? "Round Handicap", "Rundhandikapp". */
+function isRoundHandicap(label: string): boolean {
+  return /handicap|handikapp/i.test(label) && /round|rund/i.test(label);
 }
 
 const OVER = new Set(["OT_OVER", "OT_YES"]);
@@ -164,15 +171,20 @@ const UNDER = new Set(["OT_UNDER", "OT_NO"]);
  * Kambis marknader → rader i samma form som skärmdumpstolkningen. Lagmarknader
  * anges från lag 1:s sida (OT_ONE: team, line och overOdds; OT_TWO: underOdds).
  * Stängda utfall hoppas över; okända marknader blir "other" så att de syns men
- * inte sparas.
+ * inte sparas. `format` (bo1/bo3/bo5): i en Bo1 är matchens rundhandikapp
+ * kartans, så den blir karta 1:s rundhandikapp. Utan format gäller Bo3.
  */
-export function mapBetOffers(offers: KambiBetOffer[], event: Pick<KambiEvent, "homeName" | "awayName">): ParsedPropRow[] {
+export function mapBetOffers(offers: KambiBetOffer[], event: Pick<KambiEvent, "homeName" | "awayName">, format?: string): ParsedPropRow[] {
   const rows: ParsedPropRow[] = [];
   for (const bo of offers) {
     const label = bo.criterion?.englishLabel ?? bo.criterion?.label ?? "";
-    const scope = scopeOf(label);
+    let scope = scopeOf(label);
     const isPlayer = isPlayerOffer(bo);
-    const market = marketOf(label, isPlayer);
+    let market = marketOf(label, isPlayer);
+    if (format === "bo1" && !isPlayer && scope === "match" && isRoundHandicap(label)) {
+      market = "map_handicap";
+      scope = "map1";
+    }
     const handicap = market === "map_handicap" || market === "match_handicap";
     const outs = (bo.outcomes ?? []).filter((o) => !o.status || o.status === "OPEN");
     // En betoffer kan innehålla flera spelare och flera linjer — gruppera.

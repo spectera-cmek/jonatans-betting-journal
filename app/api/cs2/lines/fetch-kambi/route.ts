@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const matchId = Number(body.matchId);
   if (!Number.isInteger(matchId)) return NextResponse.json({ error: "matchId saknas" }, { status: 400 });
 
-  const match = await cs2Prisma.cs2Match.findUnique({ where: { id: matchId }, select: { startAt: true, team1Id: true, team2Id: true, team1Name: true, team2Name: true } });
+  const match = await cs2Prisma.cs2Match.findUnique({ where: { id: matchId }, select: { startAt: true, format: true, team1Id: true, team2Id: true, team1Name: true, team2Name: true } });
   if (!match) return NextResponse.json({ error: "Matchen finns inte" }, { status: 404 });
   try {
     const rows = await kambiRowsForMatch(cs2Prisma, match, await fetchCs2Events());
