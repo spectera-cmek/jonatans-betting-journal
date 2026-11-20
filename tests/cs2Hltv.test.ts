@@ -17,8 +17,9 @@ import { trimHltvPage, type HltvPageKind } from "../lib/cs2/hltv/trim";
 import { idFromHref, slugFromHref, hltvUrls } from "../lib/cs2/hltv/urls";
 import { sideRoundsFromHalves } from "../lib/cs2/ingest";
 import { canonicalMap, activeMapPool, mapLabel } from "../lib/cs2/maps";
-import { cacheFileFor } from "../lib/cs2/hltv/session";
-import { playedMatchPage } from "../lib/cs2/pipeline";
+import { cacheFileFor, HltvBudgetError, isRetryableScraplingError } from "../lib/cs2/hltv/session";
+import { collectResultIds, ingestFailed, playedMatchPage, type IngestSummary } from "../lib/cs2/pipeline";
+import { ScraplingError } from "../lib/scrapling";
 
 const FIX = path.join(__dirname, "fixtures", "cs2", "hltv");
 const read = (name: string) => readFileSync(path.join(FIX, name), "utf8");
@@ -355,5 +356,39 @@ describe("synligt fönster som standard", () => {
     expect(headedFromArgs(["node", "x"])).toBe(false);
     if (prev === undefined) delete process.env.CS2_HEADLESS;
     else process.env.CS2_HEADLESS = prev;
+  });
+});
+
+describe("HLTV-jobbet tål sidfel", () => {
+  it("ett lag vars resultatsida kastar hoppas över, de andra läses", async () => {
+    const session = {
+      getHtml: async (u: string) => {
+        if (/team=1(&|$)/.test(u)) throw new Error("Scrapling svarade inte inom 180 s");
+        return "";
+      },
+    };
+    const errors: string[] = [];
+    const ids = await collectResultIds(session, [1, 2], new Date("2026-05-01"), () => {}, errors);
+    expect(ids.size).toBe(0);
+    expect(errors).toEqual([expect.stringContaining("lag 1")]);
+  });
+
+  it("budgetfelet stoppar fortfarande", async () => {
+    const session = { getHtml: async () => { throw new HltvBudgetError(600); } };
+    await expect(collectResultIds(session, [1], new Date(), () => {}, [])).rejects.toBeInstanceOf(HltvBudgetError);
+  });
+
+  it("misslyckat bara när nästan inget gick", () => {
+    const s = (fetched: number, errors: number) => ({ fetched, cacheHits: 0, errors: Array(errors).fill("x") }) as unknown as IngestSummary;
+    expect(ingestFailed(s(0, 0))).toBe(true);
+    expect(ingestFailed(s(100, 3))).toBe(false);
+    expect(ingestFailed(s(10, 6))).toBe(true);
+  });
+
+  it("timeout och död worker försöks igen, annat inte", () => {
+    expect(isRetryableScraplingError(new ScraplingError("x", "timeout"))).toBe(true);
+    expect(isRetryableScraplingError(new ScraplingError("x", "worker_died"))).toBe(true);
+    expect(isRetryableScraplingError(new ScraplingError("x", "scrapling_missing"))).toBe(false);
+    expect(isRetryableScraplingError(new Error("x"))).toBe(false);
   });
 });

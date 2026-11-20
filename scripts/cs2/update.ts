@@ -21,7 +21,7 @@ config({ path: ".env.local" });
 config();
 import { cs2Prisma as prisma, hasCs2Db } from "../../lib/cs2Db";
 import { HltvSession, CS2_CACHE_DIR, headedFromArgs, fetcherFromArgs } from "../../lib/cs2/hltv/session";
-import { runIngest } from "../../lib/cs2/pipeline";
+import { ingestFailed, runIngest, type IngestSummary } from "../../lib/cs2/pipeline";
 import { runDemoQueue } from "../../lib/cs2/demo/run";
 import { loadDemoparser } from "../../lib/cs2/demo/parseDemo";
 import { settleProjections } from "../../lib/cs2/settle";
@@ -65,16 +65,28 @@ async function main() {
   const session = new HltvSession({ headed: headedFromArgs(), fetcher: fetcherFromArgs(), maxPages: numberArg("--max-pages", 600) });
   try {
     console.log("1/5 HLTV");
-    const s = await runIngest(
-      prisma,
-      session,
-      { confirm: true, topN: numberArg("--top", 50), months: numberArg("--months", 6), ranking: "vrs", extraTeams: [], skipRanking: false, upcomingDays: numberArg("--days", 7) },
-      console.log
-    );
-    console.log(`   ${s.matchesWritten} matcher, ${s.mapsWritten} kartor, ${s.fetched} sidor hämtade${s.stoppedByBudget ? " (sidtaket nått)" : ""}`);
-    if (s.errors.length) console.log(`   ${s.errors.length} fel, första: ${s.errors[0]}`);
+    // Ett fel i HLTV-steget får inte stoppa linjer, facit och roller — de
+    // behöver inte HLTV. Bara demos hoppas över, de bygger på dagens inläsning.
+    let s: IngestSummary | null = null;
+    let hltvError: string | null = null;
+    try {
+      s = await runIngest(
+        prisma,
+        session,
+        { confirm: true, topN: numberArg("--top", 50), months: numberArg("--months", 6), ranking: "vrs", extraTeams: [], skipRanking: false, upcomingDays: numberArg("--days", 7) },
+        console.log
+      );
+      console.log(`   ${s.matchesWritten} matcher, ${s.mapsWritten} kartor, ${s.fetched} sidor hämtade${s.stoppedByBudget ? " (sidtaket nått)" : ""}`);
+      if (s.errors.length) console.log(`   ${s.errors.length} fel, första: ${s.errors[0]}`);
+      if (ingestFailed(s)) hltvError = s.errors[0] ?? "inga sidor hämtades";
+    } catch (e) {
+      hltvError = e instanceof Error ? e.message : String(e);
+      console.log(`   HLTV-steget avbröts: ${hltvError}`);
+    }
 
-    if (!process.argv.includes("--no-demos")) {
+    if (hltvError) {
+      console.log("2/5 Demos — hoppas över, HLTV-steget misslyckades");
+    } else if (!process.argv.includes("--no-demos")) {
       console.log("2/5 Demos för lag med kommande matcher");
       const api = await loadDemoparser().catch((e) => {
         console.log(`   hoppar över demos: ${e instanceof Error ? e.message : e}`);
@@ -96,6 +108,13 @@ async function main() {
     console.log(`   ${await settleProjections(prisma)} linjer avgjorda`);
     console.log("5/5 Roller");
     console.log(`   ${await updateDerivedRoles(prisma)} spelare`);
+    // Sista raden blir sammanfattningen i SyncLog och notisen.
+    if (hltvError) {
+      console.log(`HLTV-steget misslyckades: ${hltvError}`);
+      process.exitCode = 1;
+    } else if (s && s.errors.length > 0) {
+      console.log(`klart · ${s.errors.length} HLTV-sidor hoppades över`);
+    }
   } finally {
     await session.close();
   }
