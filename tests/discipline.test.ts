@@ -38,7 +38,7 @@ describe("deriveDisciplineRules", () => {
       // and trips the share cap.
       ...series(300, 120, { odds: 2.5, selection: "Arsenal vinner", market: "h2h" }),
     ];
-    const { rules, windowLabel } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    const { rules, windowLabel } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40, leaks: true });
 
     expect(windowLabel).toBe("senaste året");
     const oddsLeak = rules.find((r) => r.dim === "Odds" && r.key.startsWith("Odds 5"));
@@ -51,7 +51,7 @@ describe("deriveDisciplineRules", () => {
 
   it("stays silent on segments below the sample floor", () => {
     const bets = series(10, 0, { odds: 5.5, selection: "Arsenal vinner" });
-    expect(deriveDisciplineRules(bets, { now: NOW, minSettled: 40 }).rules).toHaveLength(0);
+    expect(deriveDisciplineRules(bets, { now: NOW, minSettled: 40, leaks: true }).rules).toHaveLength(0);
   });
 
   it("stays silent on segments that sit inside the no-edge spread", () => {
@@ -71,7 +71,7 @@ describe("deriveDisciplineRules", () => {
       // …but everything else returns +10 %.
       ...series(1800, 990, { odds: 2.0, selection: "Arsenal vinner", market: "h2h" }),
     ];
-    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40, leaks: true });
     const leak = rules.find((r) => r.dim === "Odds" && r.key.startsWith("Odds 5"));
     expect(leak?.basis).toBe("rest");
     expect(leak?.tone).toBe("neg");
@@ -85,7 +85,7 @@ describe("deriveDisciplineRules", () => {
       ...series(900, 160, { odds: 6.0, selection: "Arsenal vinner", market: "h2h" }), // +6,7 %
       ...series(1800, 990, { odds: 2.0, selection: "Arsenal vinner", market: "h2h" }), // +10 %
     ];
-    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40, leaks: true });
     expect(rules.find((r) => r.basis === "rest")).toBeUndefined();
   });
 
@@ -97,11 +97,73 @@ describe("deriveDisciplineRules", () => {
     // maxShare lifted: this fixture is one uniform segment, which the share cap
     // would otherwise drop for reasons unrelated to the window.
     expect(
-      deriveDisciplineRules(old, { now: NOW, sinceDays: 365, minSettled: 40, maxShare: 1 }).rules
+      deriveDisciplineRules(old, { now: NOW, sinceDays: 365, minSettled: 40, maxShare: 1, leaks: true }).rules
     ).toHaveLength(0);
     expect(
-      deriveDisciplineRules(old, { now: NOW, sinceDays: null, minSettled: 40, maxShare: 1 }).rules.length
+      deriveDisciplineRules(old, { now: NOW, sinceDays: null, minSettled: 40, maxShare: 1, leaks: true }).rules.length
     ).toBeGreaterThan(0);
+  });
+});
+
+// Leaks did not hold on later bets (scripts/disciplineHoldout.ts, 2026-11-21):
+// the bets they would have warned about did as well as the rest. The guard must
+// not quote them, whichever path asks for the rules.
+describe("leaks are off by default", () => {
+  /** One journal with all three kinds of rule: an absolute leak (cards, −50 %),
+   *  a relative leak (long odds at −6,7 % — inside the no-edge spread, but well
+   *  below the rest) and an edge (shots, +67 %). */
+  function journal(): EdgeBetInput[] {
+    return [
+      ...series(900, 140, { odds: 6.0, selection: "Arsenal vinner", market: "h2h" }),
+      ...series(1800, 990, { odds: 2.0, selection: "Arsenal vinner", market: "h2h" }),
+      ...series(120, 30, { odds: 2.0, selection: "Över 4.5 kort", marketCategory: "Kort & fouls" }),
+      ...series(120, 100, { odds: 2.0, selection: "Över 24.5 skott", marketCategory: "Skott" }),
+    ];
+  }
+
+  it("derives no negative rule, absolute or relative, without leaks: true", () => {
+    const bets = journal();
+    const withLeaks = deriveDisciplineRules(bets, { now: NOW, minSettled: 40, leaks: true }).rules;
+    // The fixture really does contain both kinds of leak…
+    expect(withLeaks.find((r) => r.key === "Kort & fouls")).toMatchObject({ tone: "neg" });
+    expect(withLeaks.find((r) => r.dim === "Odds" && r.key.startsWith("Odds 5"))).toMatchObject({
+      tone: "neg",
+      basis: "rest",
+    });
+
+    // …and the default derivation — the one /api/metrics uses — says none of them.
+    const { rules } = deriveDisciplineRules(bets, { now: NOW, minSettled: 40 });
+    expect(rules.filter((r) => r.tone === "neg")).toEqual([]);
+    expect(rules.some((r) => r.dim === "Marknad" && r.key === "Skott" && r.tone === "pos")).toBe(true);
+  });
+
+  it("stays off at a stricter z threshold too", () => {
+    const { rules } = deriveDisciplineRules(journal(), { now: NOW, minSettled: 40, minAbsZ: 2 });
+    expect(rules.some((r) => r.tone === "neg")).toBe(false);
+  });
+
+  it("leaves the add-bet guard silent on a former leak segment", () => {
+    const input = { odds: 6.0, stakeUnits: 1, selection: "Över 4.5 kort", marketCategory: "Kort & fouls" };
+    // With the old derivation this bet hits both leaks…
+    const old = evaluateBet(input, deriveDisciplineRules(journal(), { now: NOW, minSettled: 40, leaks: true }));
+    expect(old.notes.filter((n) => n.tone === "neg")).toHaveLength(2);
+    // …the guard now says nothing about it.
+    const v = evaluateBet(input, deriveDisciplineRules(journal(), { now: NOW, minSettled: 40 }));
+    expect(v.notes).toEqual([]);
+    expect(v.level).toBe("none");
+  });
+
+  it("still warns about piling onto one match — exposure, not a segment's ROI", () => {
+    const ruleSet = deriveDisciplineRules(journal(), { now: NOW, minSettled: 40 });
+    const open = openEventCounts([
+      { event: "Arsenal vs Chelsea", stakeUnits: 1, outcome: "pending" },
+      { event: "Arsenal vs Chelsea", stakeUnits: 1, outcome: "pending" },
+      { event: "Arsenal vs Chelsea", stakeUnits: 1, outcome: "pending" },
+    ]);
+    const v = evaluateBet({ event: "Arsenal vs Chelsea", odds: 6.0, stakeUnits: 1 }, ruleSet, open);
+    expect(v.level).toBe("warn");
+    expect(v.notes.filter((n) => n.tone === "neg")).toHaveLength(1);
+    expect(v.notes[0].text).toContain("redan 3 öppna spel");
   });
 });
 

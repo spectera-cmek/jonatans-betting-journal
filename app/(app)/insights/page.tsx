@@ -80,7 +80,7 @@ export default function InsightsPage() {
             label="Avsnitt"
             items={[
               { id: "rapporter", label: "Rapporter" },
-              { id: "lackor", label: "Läckor & edge" },
+              { id: "lackor", label: "Segment" },
               { id: "form", label: "Form" },
               { id: "verktyg", label: "Verktyg" },
             ]}
@@ -121,7 +121,7 @@ export default function InsightsPage() {
             </div>
           )}
 
-          <SectionHead id="lackor" title="Läckor & edge" sub="var du tappar och var du tjänar" />
+          <SectionHead id="lackor" title="Segment" sub="vad som har kostat och gett · historik, inte prognos" />
 
           {!betsLoading && bets.length > 0 && (
             <>
@@ -139,7 +139,7 @@ export default function InsightsPage() {
                   ))}
                 </div>
                 <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>
-                  {windowBets.length.toLocaleString("sv-SE")} spel · styr läckor, tur-index och simulatorn
+                  {windowBets.length.toLocaleString("sv-SE")} spel · styr segmenten, tur-index och simulatorn
                 </span>
               </div>
               <EdgePanel bets={bets} unit={unit} days={period.days} periodLabel={period.label} />

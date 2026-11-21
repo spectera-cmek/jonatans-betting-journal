@@ -4,7 +4,7 @@
 // analysis run: by the time the same history had grown by another season,
 // several of those verdicts had reversed and the modal was warning about the
 // wrong things. These rules are derived instead — same four dimensions the
-// "Läckor & Edge" panel slices along (lib/edge), over a trailing window, and
+// "Segment" panel (formerly "Läckor & Edge") slices along (lib/edge), over a trailing window, and
 // only for segments that are both big enough and far enough from the no-edge
 // baseline to be worth saying out loud.
 //
@@ -14,6 +14,18 @@
 // leaks only *relative to the rest of the journal*, so a second test compares a
 // segment with everything else in its dimension and warns when it is clearly
 // worse (`basis: "rest"`).
+//
+// Leaks are OFF by default (`leaks: false`). A holdout measurement on
+// 2026-11-21 (scripts/disciplineHoldout.ts, `npm run discipline:holdout`)
+// derived the rules at four cut-offs from bets before each one and scored them
+// on the bets after: the bets the guard would have warned about did as well as
+// or better than the rest (+3, +9, +17 and −5 pp ROI), the leak signs held no
+// more often than chance, and neither minAbsZ 2 nor confirming each leak on the
+// newest part of the window (4 splits/thresholds) changed that — "Kort &
+// fouls" was flagged at −27 % and went +60 % right after. A warning that does
+// not predict anything only teaches the bettor to ignore the guard, so the
+// guard no longer says it. The derivation stays behind `leaks: true` so the
+// holdout script can keep checking whether leaks start to hold.
 //
 // Pure & dependency-free so it is trivially unit-testable and can run either on
 // the server (in /api/metrics) or in a script.
@@ -63,10 +75,22 @@ export interface DeriveOptions {
   /** Share cap for relative leaks. Looser than `maxShare`: a default stake on
    *  40 % of the journal that trails the rest is exactly the leak to name. */
   maxRelShare?: number;
+  /** Derive negative rules (absolute and relative leaks) too. Off by default:
+   *  they did not hold out of sample (see the header). Only measurement code
+   *  should turn this on. */
+  leaks?: boolean;
   now?: number;
 }
 
-const DEFAULTS = { sinceDays: 365, minSettled: 40, minAbsZ: 1, maxShare: 0.35, minRelZ: 2, maxRelShare: 0.5 };
+const DEFAULTS = {
+  sinceDays: 365,
+  minSettled: 40,
+  minAbsZ: 1,
+  maxShare: 0.35,
+  minRelZ: 2,
+  maxRelShare: 0.5,
+  leaks: false,
+};
 
 export function windowLabelFor(sinceDays: number | null): string {
   if (!sinceDays) return "hela historiken";
@@ -86,6 +110,7 @@ export function deriveDisciplineRules(
   const minSettled = options.minSettled ?? DEFAULTS.minSettled;
   const minAbsZ = options.minAbsZ ?? DEFAULTS.minAbsZ;
   const maxShare = options.maxShare ?? DEFAULTS.maxShare;
+  const leaks = options.leaks ?? DEFAULTS.leaks;
   const windowBets = filterByPeriod(bets, sinceDays, options.now ?? Date.now());
 
   // z per (dimension, key), grouped exactly as the segments are.
@@ -101,7 +126,7 @@ export function deriveDisciplineRules(
   }
 
   // "Övrigt" / "Okänd sport" are where everything unclassified lands. They are
-  // real segments and the Läckor & Edge panel is right to show them, but as a
+  // real segments and the Segment panel is right to show them, but as a
   // warning while typing ("Övrigt: +18 % ROI") they say nothing actionable.
   const catchAll = new Set(EDGE_DIMENSIONS.map((d) => `${d.dim}:${d.fallback}`));
 
@@ -117,6 +142,7 @@ export function deriveDisciplineRules(
     if (seg.settled > shareCap) continue;
     const z = zByDim.get(seg.dim)?.get(seg.key) ?? null;
     if (z == null || Math.abs(z) < minAbsZ) continue;
+    if (seg.profitUnits < 0 && !leaks) continue;
     rules.push({
       dim: seg.dim,
       key: seg.key,
@@ -127,11 +153,12 @@ export function deriveDisciplineRules(
       tone: seg.profitUnits >= 0 ? "pos" : "neg",
     });
   }
-  // Relative leaks: clearly worse than the rest of the same dimension.
+  // Relative leaks: clearly worse than the rest of the same dimension. Every
+  // one of them is negative, so with leaks off none is derived at all.
   const minRelZ = options.minRelZ ?? DEFAULTS.minRelZ;
   const relShareCap = Math.max(minSettled, settledInWindow * (options.maxRelShare ?? DEFAULTS.maxRelShare));
   const taken = new Set(rules.map((r) => `${r.dim}:${r.key}`));
-  for (const d of EDGE_DIMENSIONS) {
+  for (const d of leaks ? EDGE_DIMENSIONS : []) {
     const source = (d.include ? windowBets.filter((b) => d.include!(b)) : windowBets).filter(
       (b) => b.outcome !== "pending"
     );

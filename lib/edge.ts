@@ -1,4 +1,4 @@
-// Läckor & Edge: live-computed money leaks vs edges over the full history.
+// Segment (formerly "Läckor & Edge"): live-computed money leaks vs edges over the full history.
 // Groups the settled history along four dimensions (market category, odds band,
 // singles/accumulators, stake size) and surfaces the segments that have cost or
 // made the most. Nothing is hardcoded — the panel always reflects current data.

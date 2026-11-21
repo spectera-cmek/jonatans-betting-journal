@@ -1,6 +1,7 @@
 "use client";
 
-// Generic period report card (current vs previous period + discipline grade).
+// Generic period report card (current vs previous period + discipline grade,
+// when the period is scored at all — see lib/weekly).
 // The weekly and monthly reports on Insikter are both instances of this.
 
 import { Card } from "./ui";
@@ -91,15 +92,17 @@ export function ReportCard({
         <span className={"ap-pill " + (delta >= 0 ? "pos" : "neg")}>
           {delta >= 0 ? "▲" : "▼"} {krFmt(Math.abs(delta) * unit)} {compareLabel}
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <span className={"ap-num ap-grade " + grade.tone}>{grade.text}</span>
-          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim)", lineHeight: 1.4 }}>
-            Disciplin<br />
-            {current.disciplinePct != null
-              ? `${Math.round(current.disciplinePct)} % av insatserna utan kända läckor`
-              : "ingen data ännu"}
-          </span>
-        </div>
+        {/* Unscored whenever the guard has no leak rules — which is always since
+            they were switched off (lib/disciplineRules) — so there is no grade to show. */}
+        {current.disciplinePct != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <span className={"ap-num ap-grade " + grade.tone}>{grade.text}</span>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim)", lineHeight: 1.4 }}>
+              Disciplin<br />
+              {`${Math.round(current.disciplinePct)} % av insatserna utan kända läckor`}
+            </span>
+          </div>
+        )}
       </div>
       {(current.best || current.worst) && (
         <div style={{ padding: "0 var(--pad-x) 12px", display: "flex", flexDirection: "column", gap: 0 }}>

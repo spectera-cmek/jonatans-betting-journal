@@ -89,6 +89,23 @@ describe("weeklyReport", () => {
     expect(weeklyReport(bets, NOW).current.disciplinePct).toBeNull();
   });
 
+  it("leaves discipline unscored when the rule set has no leaks", () => {
+    // The guard derives no leak rules any more (lib/disciplineRules), so every
+    // bet would count as clean: the same flattering 100 % as having no rules.
+    const bets = [
+      bet("2026-06-09", { selection: "Över 4.5 skott", odds: 1.8, stakeUnits: 3 }),
+      bet("2026-06-10", { betType: "accumulator", odds: 8, stakeUnits: 1 }),
+    ];
+    const rules: DisciplineRuleSet = {
+      windowLabel: "senaste året",
+      settled: 400,
+      minSettled: 40,
+      rules: [{ dim: "Marknad", key: "Skott", settled: 300, profitUnits: 40, roiPct: 6.2, z: 2.1, tone: "pos" }],
+    };
+    expect(weeklyReport(bets, NOW, rules).current.disciplinePct).toBeNull();
+    expect(monthlyReport(bets, NOW, rules).current.disciplinePct).toBeNull();
+  });
+
   it("handles an empty week", () => {
     const r = weeklyReport([], NOW);
     expect(r.current.bets).toBe(0);

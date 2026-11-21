@@ -1,7 +1,13 @@
 "use client";
 
-// "Läckor & Edge": where money leaks and where the edge is, computed live from
-// the bet history via lib/edge (never hardcoded).
+// "Segment": which segments have cost and made the most, computed live from the
+// bet history via lib/edge (never hardcoded).
+//
+// It used to be "Läckor & Edge". A holdout measurement (2026-11-21,
+// scripts/disciplineHoldout.ts) found that a segment that had lost over a year
+// did no worse than the rest on the bets that came after, so calling it a leak
+// claims a prediction the data does not support. The rows are history, and the
+// panel says so; the add-bet guard no longer warns about them (lib/disciplineRules).
 //
 // The history spans more than one era. Read over all of it, a segment that has
 // been printing money for the last six months still shows as a leak because of
@@ -120,7 +126,7 @@ export function EdgePanel({
     return (
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-          <span className="ap-label">Läckor &amp; Edge</span>
+          <span className="ap-label">Segment</span>
           <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>{periodLabel.toLowerCase()}</span>
         </div>
         <p style={{ fontSize: "var(--fs-md)", color: "var(--dim2)", marginTop: 14, marginBottom: 0, lineHeight: 1.55 }}>
@@ -135,7 +141,7 @@ export function EdgePanel({
   return (
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-        <span className="ap-label">Läckor &amp; Edge</span>
+        <span className="ap-label">Segment</span>
         <span style={{ color: "var(--dim2)", fontSize: "var(--fs-sm)" }}>
           {days ? `beräknat live · ${periodLabel.toLowerCase()}` : "beräknat live ur hela historiken"}
         </span>
@@ -144,7 +150,7 @@ export function EdgePanel({
       <div className="ap-split" style={{ marginTop: 12 }}>
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-            <span className="neg" style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>Läckor</span>
+            <span className="neg" style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>Sämst</span>
             <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
               har kostat <b className="ap-num neg">{krFmt(Math.abs(seg.leakUnits) * unit)}</b>
             </span>
@@ -153,7 +159,7 @@ export function EdgePanel({
         </div>
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-            <span className="pos" style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>Edges</span>
+            <span className="pos" style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>Bäst</span>
             <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
               har gett <b className="ap-num pos">{krFmt(seg.edgeUnits * unit, true)}</b>
             </span>
@@ -165,7 +171,8 @@ export function EdgePanel({
       <p style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)", lineHeight: 1.55, marginTop: 16, marginBottom: 0 }}>
         Segment över marknad, oddsspann, singel/ack och insatsstorlek med minst {seg.minSettled} avgjorda spel
         {days ? ` inom ${periodLabel.toLowerCase()}` : ""}. Odds-platshållare (1.01) är exkluderade ur oddsspannen.
-        Testa reglerna i simulatorn längre ner.
+        Historik, inte prognos: segment som gått sämst har inte fortsatt gå sämre på senare spel, så
+        disciplinvakten varnar inte för dem. Testa reglerna i simulatorn längre ner.
       </p>
     </Card>
   );

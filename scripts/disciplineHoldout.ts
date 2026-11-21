@@ -11,8 +11,10 @@
  *
  * För varje brytpunkt T tas en regeluppsättning fram per variant, bara ur spel
  * före T och med `deriveDisciplineRules` och dess standardvärden (365 d,
- * minSettled 40, maxShare 0,35, minRelZ 2) där inget annat sägs:
- *   P1  produktionen: minAbsZ 1, `now = T`.
+ * minSettled 40, maxShare 0,35, minRelZ 2) där inget annat sägs. Alla varianter
+ * slår på `leaks: true`: sedan 2026-11-21 tar vakten inte fram minusregler alls
+ * (den här mätningen är skälet), men skriptet ska kunna se om de börjar hålla.
+ *   P1  vakten fram till 2026-11-21: minAbsZ 1, `now = T`.
  *   P2  som P1 men minAbsZ 2.
  *   V1  P1:s regler, men bara de som pekar åt samma håll i BÅDA halvåren av
  *       fönstret var för sig (minst 20 avgjorda i varje halvår).
@@ -20,6 +22,9 @@
  *       halvåret (T − 365 d till T − 182 d, `sinceDays` 183) och behålls bara om
  *       det nyare halvåret (T − 182 d till T) bekräftar dem med z ≥ 1 åt regelns
  *       håll (minst 20 avgjorda).
+ *   V2S som V2, men det räcker att det nyare halvåret går åt rätt håll (z > 0).
+ *   V3  som V2, men de äldre 2/3 väljer och de senaste 122 dagarna bekräftar.
+ *   V3S som V3 med z > 0.
  * "Åt samma håll" mäts som vakten mäter regeln: abs-regler med no-edge-z
  * (lib/variance) och vinstens tecken, relativa läckor mot resten av dimensionen.
  *
@@ -73,12 +78,27 @@ const MODES = ["N0", "N1"] as const;
 type NullMode = (typeof MODES)[number];
 
 const VARIANTS = {
-  P1: "produktion, minAbsZ 1",
+  P1: "vakten t.o.m. 2026-11-21, minAbsZ 1",
   P2: "minAbsZ 2",
   V1: "P1 + samma håll i båda halvåren",
   V2: "äldre halvår väljer, nyare bekräftar",
+  V2S: "äldre halvår väljer, nyare går åt samma håll (z > 0)",
+  V3: "äldre 2/3 väljer, senaste 1/3 bekräftar",
+  V3S: "äldre 2/3 väljer, senaste 1/3 går åt samma håll (z > 0)",
 } as const;
 type VariantId = keyof typeof VARIANTS;
+
+/**
+ * Bekräftelsevarianterna: reglerna tas fram på den äldre delen av fönstret och
+ * behålls om de senaste `newerDays` dagarna visar z ≥ `minZ` åt regelns håll
+ * (minZ 0 = bara åt rätt håll, z > 0).
+ */
+const CONFIRM: Partial<Record<VariantId, { newerDays: number; minZ: number }>> = {
+  V2: { newerDays: NEWER_HALF_DAYS, minZ: CONFIRM_Z },
+  V2S: { newerDays: NEWER_HALF_DAYS, minZ: 0 },
+  V3: { newerDays: 122, minZ: CONFIRM_Z },
+  V3S: { newerDays: 122, minZ: 0 },
+};
 
 /* ------------------------------ argument ---------------------------------- */
 
@@ -436,11 +456,11 @@ function buildRuleSets(all: Bet[], cutoff: number): Record<VariantId, Discipline
   const older = train.filter((b) => b.t >= windowFrom && b.t < mid);
   const newer = train.filter((b) => b.t >= mid);
 
-  const p1 = deriveDisciplineRules(train, { now: cutoff, minAbsZ: 1 }).rules;
+  const p1 = deriveDisciplineRules(train, { now: cutoff, minAbsZ: 1, leaks: true }).rules;
   const want = new Set(VARIANT_IDS);
   const sets = { P1: p1 } as Record<VariantId, DisciplineRule[]>;
 
-  if (want.has("P2")) sets.P2 = deriveDisciplineRules(train, { now: cutoff, minAbsZ: 2 }).rules;
+  if (want.has("P2")) sets.P2 = deriveDisciplineRules(train, { now: cutoff, minAbsZ: 2, leaks: true }).rules;
 
   if (want.has("V1")) {
     const inOlder = evaluate(p1, older).rules;
@@ -449,15 +469,21 @@ function buildRuleSets(all: Bet[], cutoff: number): Record<VariantId, Discipline
     sets.V1 = p1.filter((_, i) => ok(inOlder[i]) && ok(inNewer[i]));
   }
 
-  if (want.has("V2")) {
+  for (const [id, c] of Object.entries(CONFIRM) as [VariantId, { newerDays: number; minZ: number }][]) {
+    if (!want.has(id)) continue;
+    const split = cutoff - c.newerDays * DAY_MS;
     const picked = deriveDisciplineRules(
-      train.filter((b) => b.t < mid),
-      { now: mid, sinceDays: WINDOW_DAYS - NEWER_HALF_DAYS, minAbsZ: 1 }
+      train.filter((b) => b.t < split),
+      { now: split, sinceDays: WINDOW_DAYS - c.newerDays, minAbsZ: 1, leaks: true }
     ).rules;
-    const check = evaluate(picked, newer).rules;
-    sets.V2 = picked.filter(
-      (_, i) => check[i].test.settled >= MIN_HALF_SETTLED && (check[i].signedZ ?? -Infinity) >= CONFIRM_Z
-    );
+    const check = evaluate(
+      picked,
+      train.filter((b) => b.t >= split)
+    ).rules;
+    sets[id] = picked.filter((_, i) => {
+      const z = check[i].signedZ;
+      return check[i].test.settled >= MIN_HALF_SETTLED && z != null && z > 0 && z >= c.minZ;
+    });
   }
   return sets;
 }

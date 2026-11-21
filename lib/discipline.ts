@@ -6,6 +6,11 @@
 // the guard was confidently warning about the wrong markets. Nothing is
 // hardcoded now — if the data stops supporting a rule, the rule disappears.
 //
+// Since 2026-11-21 the derived rule set carries no leaks (lib/disciplineRules:
+// they did not hold on later bets), so the only warning left is exposure — the
+// open-bets-on-this-match count, which is about this bet and not a segment's ROI.
+// evaluateBet itself still quotes whatever rules it is given.
+//
 // Pure & dependency-free (besides the market normalizer and formatting) so it is
 // trivially unit-testable and reusable from both the add-bet modal and scripts.
 
