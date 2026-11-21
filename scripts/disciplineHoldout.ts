@@ -1,37 +1,49 @@
 /**
  * Håller disciplinvaktens regler på spel som kom EFTER att de togs fram?
- * Läser bara — skriver ingenting till databasen.
+ * Läser bara — skriver ingenting till databasen, och ändrar inte vakten.
  *
  *   npm run discipline:holdout
  *   npm run discipline:holdout -- --cutoffs 2026-03-21,2026-05-21 --iter 400 --seed 7
+ *   npm run discipline:holdout -- --variants P1,V2   # bara vissa regelvarianter
  *   npm run discipline:holdout -- --detail            # varje regel, före och efter
  *   npm run discipline:holdout -- --json out.json     # allt som JSON
  *   npm run discipline:holdout -- --keep-placeholders # behåll odds 1,01 som produktionen
  *
- * För varje brytpunkt T:
- *   1. Reglerna tas fram med `deriveDisciplineRules` och dess standardvärden
- *      (365 d, minSettled 40, maxShare 0,35, minRelZ 2), med `now = T` och bara
- *      på spel före T. Det görs två gånger: minAbsZ 1 (produktionen) och 2.
- *   2. Samma segment mäts på spel från T till idag: antal avgjorda, ROI och z
- *      med samma kod (`edgeSegmentCandidates`, `varianceByKey`). Relativa läckor
- *      (`basis: "rest"`) mäts som i vakten: segmentets ROI mot resten av samma
- *      dimension, z för skillnaden.
- *   3. Två sätt att säga att en regel "höll":
- *        tecknet     pos-segmentet gick plus / neg-segmentet gick minus efteråt
- *                    (relativa läckor: gick sämre än resten). Det uppgiften frågar.
- *        mot resten  segmentet gick bättre (pos) / sämre (neg) än resten av sin
- *                    dimension efteråt. Oberoende av om journalen totalt går plus:
- *                    går allt +8 % håller abs-pos-regler "gratis" på tecknet och
- *                    abs-neg-regler faller, utan att segmentet säger något.
- *   4. Samma sak i påhittade världar där segmenten inte betyder något, så att
- *      siffrorna kan jämföras med vad slumpen ger. Varje avgjort spel (riktiga
- *      odds) dras om som vinst med p = (1+m)/odds, vilket ger spelet förväntad
- *      ROI m men behåller dess egen varians:
- *        N0  m = hela poolens ROI — inget segment är bättre än något annat.
- *        N1  m = oddsbandets ROI — oddsbanden är verkliga och stabila, inget
- *            annat är det. "Slumpa om utfallen inom oddsband", fast utan att ett
- *            spel på odds 5 får träffprocenten från ett på odds 50 (5.00+ är brett).
- *      Poolen är spelen från T − 365 d till idag, alltså båda sidor av T.
+ * För varje brytpunkt T tas en regeluppsättning fram per variant, bara ur spel
+ * före T och med `deriveDisciplineRules` och dess standardvärden (365 d,
+ * minSettled 40, maxShare 0,35, minRelZ 2) där inget annat sägs:
+ *   P1  produktionen: minAbsZ 1, `now = T`.
+ *   P2  som P1 men minAbsZ 2.
+ *   V1  P1:s regler, men bara de som pekar åt samma håll i BÅDA halvåren av
+ *       fönstret var för sig (minst 20 avgjorda i varje halvår).
+ *   V2  kontroll på data regeln inte valdes ur: reglerna tas fram på det äldre
+ *       halvåret (T − 365 d till T − 182 d, `sinceDays` 183) och behålls bara om
+ *       det nyare halvåret (T − 182 d till T) bekräftar dem med z ≥ 1 åt regelns
+ *       håll (minst 20 avgjorda).
+ * "Åt samma håll" mäts som vakten mäter regeln: abs-regler med no-edge-z
+ * (lib/variance) och vinstens tecken, relativa läckor mot resten av dimensionen.
+ *
+ * Sedan mäts samma segment på spel från T till idag: antal avgjorda, ROI och z
+ * med samma kod (`edgeSegmentCandidates`, `varianceByKey`). En regel "höll":
+ *   tecknet     pos-segmentet gick plus / neg-segmentet gick minus efteråt
+ *               (relativa läckor: gick sämre än resten).
+ *   mot resten  segmentet gick bättre (pos) / sämre (neg) än resten av sin
+ *               dimension efteråt. Oberoende av om journalen totalt går plus:
+ *               går allt +8 % håller abs-pos-regler "gratis" på tecknet och
+ *               abs-neg-regler faller, utan att segmentet säger något.
+ * och vaktens nytta mäts som ROI efteråt på spel som minst en neg-regel hade
+ * varnat för, mot alla andra spel.
+ *
+ * Allt mäts också i påhittade världar där segmenten inte betyder något, så att
+ * siffrorna kan jämföras med vad slumpen ger. Varje avgjort spel (riktiga odds)
+ * dras om som vinst med p = (1+m)/odds, vilket ger spelet förväntad ROI m men
+ * behåller dess egen varians:
+ *   N0  m = hela poolens ROI — inget segment är bättre än något annat.
+ *   N1  m = oddsbandets ROI — oddsbanden är verkliga och stabila, inget annat
+ *       är det. "Slumpa om utfallen inom oddsband", fast utan att ett spel på
+ *       odds 5 får träffprocenten från ett på odds 50 (5.00+ är brett).
+ * Poolen är spelen från T − 365 d till idag, alltså båda sidor av T. Varje
+ * påhittad värld mäts med alla varianter.
  *
  * Klockan är vaktens egen (eventAt ?? placedAt ?? createdAt), inte placedAt:
  * ett spel som lades före T på en match efter T hade inget utfall vid T.
@@ -50,9 +62,23 @@ import { countsForWinRate, hasRealOdds, settledProfit, type Outcome } from "../l
 const DAY_MS = 864e5;
 const FICTIVE_TAG = "FIKTIV 2026-06-11";
 const PLACEHOLDER_ODDS = 1.01;
-const Z_LEVELS = [1, 2] as const;
+const WINDOW_DAYS = 365;
+/** Det nyare halvåret i V1/V2; det äldre är resten av fönstret. */
+const NEWER_HALF_DAYS = 182;
+/** Avgjorda spel ett halvår måste ha för att kunna bekräfta en regel. */
+const MIN_HALF_SETTLED = 20;
+/** z åt regelns håll som det nyare halvåret måste visa i V2. */
+const CONFIRM_Z = 1;
 const MODES = ["N0", "N1"] as const;
 type NullMode = (typeof MODES)[number];
+
+const VARIANTS = {
+  P1: "produktion, minAbsZ 1",
+  P2: "minAbsZ 2",
+  V1: "P1 + samma håll i båda halvåren",
+  V2: "äldre halvår väljer, nyare bekräftar",
+} as const;
+type VariantId = keyof typeof VARIANTS;
 
 /* ------------------------------ argument ---------------------------------- */
 
@@ -66,6 +92,11 @@ const CUTOFFS = (argValue("--cutoffs") ?? "2026-03-21,2026-05-21,2026-07-21,2026
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+const VARIANT_IDS = (argValue("--variants") ?? Object.keys(VARIANTS).join(","))
+  .split(",")
+  .map((s) => s.trim().toUpperCase())
+  .filter(Boolean) as VariantId[];
+for (const v of VARIANT_IDS) if (!(v in VARIANTS)) throw new Error(`Okänd variant: ${v}`);
 const ITER = Number(argValue("--iter") ?? 300);
 const SEED = Number(argValue("--seed") ?? 20261121);
 const USERNAME = argValue("--user") ?? "jonatan";
@@ -122,6 +153,8 @@ interface WorldStats {
   meanSignedRestZ: number | null;
   warned: Split; // efteråt: spel som minst en neg-regel hade varnat för
   unwarned: Split; // efteråt: alla andra avgjorda spel
+  /** Andel av de avgjorda spelen efteråt som fick en varning. */
+  warnedShare: number | null;
   diffPp: number | null; // warned.roi − unwarned.roi, procentenheter
   diffZ: number | null;
   edgeTagged: Split; // efteråt: spel som minst en pos-regel pekade ut
@@ -295,6 +328,7 @@ const mean = (xs: (number | null)[]) => {
   return e.length ? e.reduce((s, x) => s + x, 0) / e.length : null;
 };
 
+/** Hur reglernas segment gick på `test`. Ordningen i `rules` följer `rules`. */
 function evaluate(rules: DisciplineRule[], test: Bet[]): WorldStats {
   const settled = test.filter((b) => b.outcome !== "pending");
 
@@ -385,6 +419,7 @@ function evaluate(rules: DisciplineRule[], test: Bet[]): WorldStats {
     meanSignedRestZ: mean(evals.filter((e) => e.heldRest != null).map((e) => e.signedRestZ)),
     warned: split(warned),
     unwarned: split(unwarned),
+    warnedShare: settled.length ? warned.length / settled.length : null,
     diffPp: wd.diff == null ? null : wd.diff * 100,
     diffZ: wd.z,
     edgeTagged: split(edgeTagged),
@@ -393,11 +428,46 @@ function evaluate(rules: DisciplineRule[], test: Bet[]): WorldStats {
   };
 }
 
-function measure(all: Bet[], cutoff: number, now: number, minAbsZ: number): WorldStats {
+/** Varje variants regeluppsättning vid brytpunkten, bara ur spel före den. */
+function buildRuleSets(all: Bet[], cutoff: number): Record<VariantId, DisciplineRule[]> {
   const train = all.filter((b) => b.t < cutoff);
+  const mid = cutoff - NEWER_HALF_DAYS * DAY_MS;
+  const windowFrom = cutoff - WINDOW_DAYS * DAY_MS;
+  const older = train.filter((b) => b.t >= windowFrom && b.t < mid);
+  const newer = train.filter((b) => b.t >= mid);
+
+  const p1 = deriveDisciplineRules(train, { now: cutoff, minAbsZ: 1 }).rules;
+  const want = new Set(VARIANT_IDS);
+  const sets = { P1: p1 } as Record<VariantId, DisciplineRule[]>;
+
+  if (want.has("P2")) sets.P2 = deriveDisciplineRules(train, { now: cutoff, minAbsZ: 2 }).rules;
+
+  if (want.has("V1")) {
+    const inOlder = evaluate(p1, older).rules;
+    const inNewer = evaluate(p1, newer).rules;
+    const ok = (e: RuleEval) => e.test.settled >= MIN_HALF_SETTLED && e.held === true;
+    sets.V1 = p1.filter((_, i) => ok(inOlder[i]) && ok(inNewer[i]));
+  }
+
+  if (want.has("V2")) {
+    const picked = deriveDisciplineRules(
+      train.filter((b) => b.t < mid),
+      { now: mid, sinceDays: WINDOW_DAYS - NEWER_HALF_DAYS, minAbsZ: 1 }
+    ).rules;
+    const check = evaluate(picked, newer).rules;
+    sets.V2 = picked.filter(
+      (_, i) => check[i].test.settled >= MIN_HALF_SETTLED && (check[i].signedZ ?? -Infinity) >= CONFIRM_Z
+    );
+  }
+  return sets;
+}
+
+function measureAll(all: Bet[], cutoff: number, now: number): Record<VariantId, WorldStats> {
+  const sets = buildRuleSets(all, cutoff);
   const test = all.filter((b) => b.t >= cutoff && b.t <= now);
-  const { rules } = deriveDisciplineRules(train, { now: cutoff, minAbsZ });
-  return evaluate(rules, test);
+  const out = {} as Record<VariantId, WorldStats>;
+  for (const v of VARIANT_IDS) out[v] = evaluate(sets[v], test);
+  return out;
 }
 
 /* --------------------------- påhittade världar ---------------------------- */
@@ -441,6 +511,10 @@ const pad = (s: string, n: number) => (s.length >= n ? s : s + " ".repeat(n - s.
 const lpad = (s: string, n: number) => (s.length >= n ? s : " ".repeat(n - s.length) + s);
 
 function printDetail(s: WorldStats) {
+  if (!s.rules.length) {
+    console.log("    (inga regler)");
+    return;
+  }
   console.log(
     "    " +
       [
@@ -495,6 +569,7 @@ async function main() {
       `${KEEP_PLACEHOLDERS ? " (behållna, --keep-placeholders)" : ""}.`
   );
   console.log(`Påhittade världar: ${ITER} per brytpunkt och nollmodell, seed ${SEED}.`);
+  console.log(`Varianter: ${VARIANT_IDS.map((v) => `${v} = ${VARIANTS[v]}`).join("; ")}.`);
 
   const out: Record<string, unknown>[] = [];
   const tableA: string[] = [];
@@ -503,7 +578,7 @@ async function main() {
   for (const c of CUTOFFS) {
     const cutoff = Date.parse(`${c}T00:00:00Z`);
     if (!Number.isFinite(cutoff)) throw new Error(`Ogiltig brytpunkt: ${c}`);
-    const poolFrom = cutoff - 365 * DAY_MS;
+    const poolFrom = cutoff - WINDOW_DAYS * DAY_MS;
     const trainN = bets.filter((b) => b.t >= poolFrom && b.t < cutoff && b.outcome !== "pending").length;
     const testN = bets.filter((b) => b.t >= cutoff && b.t <= now && b.outcome !== "pending").length;
     const crossings = bets.filter((b) => b.placedAt && (+new Date(b.placedAt) < cutoff) !== (b.t < cutoff)).length;
@@ -512,28 +587,27 @@ async function main() {
         ` (${crossings} spel byter sida om placedAt används i stället) ===`
     );
 
-    const real = new Map<number, WorldStats>();
-    for (const z of Z_LEVELS) real.set(z, measure(bets, cutoff, now, z));
+    const real = measureAll(bets, cutoff, now);
 
-    // Samma påhittade värld mäts på båda z-nivåerna.
+    // Samma påhittade värld mäts med alla varianter.
     const nulls = new Map<string, WorldStats[]>();
     for (const mode of MODES) {
       const rng = mulberry32((SEED ^ Math.round(cutoff / DAY_MS) ^ (mode === "N1" ? 0x5bd1e995 : 0)) >>> 0);
       for (let i = 0; i < ITER; i++) {
         const world = makeWorld(bets, poolFrom, now, mode, rng);
-        for (const z of Z_LEVELS) {
-          const s = measure(world, cutoff, now, z);
-          s.rules = [];
-          const k = `${mode}:${z}`;
+        const res = measureAll(world, cutoff, now);
+        for (const v of VARIANT_IDS) {
+          res[v].rules = [];
+          const k = `${mode}:${v}`;
           if (!nulls.has(k)) nulls.set(k, []);
-          nulls.get(k)!.push(s);
+          nulls.get(k)!.push(res[v]);
         }
       }
     }
 
-    for (const z of Z_LEVELS) {
-      const r = real.get(z)!;
-      const N = (mode: NullMode) => nulls.get(`${mode}:${z}`)!;
+    for (const v of VARIANT_IDS) {
+      const r = real[v];
+      const N = (mode: NullMode) => nulls.get(`${mode}:${v}`)!;
       const D = (mode: NullMode, pick: (s: WorldStats) => number | null) => dist(N(mode).map(pick));
       const T = (mode: NullMode, pick: (s: WorldStats) => number | null, x: number | null, dir: "ge" | "le") =>
         tail(N(mode).map(pick), x, dir);
@@ -546,29 +620,28 @@ async function main() {
       const heldRest = (s: WorldStats) => s.heldRestShare;
       const msz = (s: WorldStats) => s.meanSignedRestZ;
       const diff = (s: WorldStats) => s.diffPp;
+      const wsh = (s: WorldStats) => s.warnedShare;
       const p1 = (x: number) => f1(x);
       const pp = (x: number) => f1(x, true);
       const zz = (x: number) => f2(x, true);
 
-      console.log(`\n-- minAbsZ ${z} --`);
+      console.log(`\n-- ${v}: ${VARIANTS[v]} --`);
       console.log(
         `  Regler: ${r.nRules} (abs pos ${r.nAbsPos}, abs neg ${r.nAbsNeg}, rel neg ${r.nRel}),` +
-          ` ${r.evaluable} med avgjorda spel efteråt.  Slump: N0 ${band(D("N0", nr), p1)}, N1 ${band(D("N1", nr), p1)}`
+          ` ${r.evaluable} med avgjorda spel efteråt.  Slump: N0 ${band(D("N0", nr), p1)}, N1 ${band(D("N1", nr), p1)};` +
+          ` ≥ verkligt i N0 ${pct(T("N0", nr, r.nRules, "ge"))} av världarna`
       );
       console.log(
         `  Höll tecknet: ${pct(r.heldShare)} — abs pos ${pct(r.heldByType.absPos)}, abs neg ${pct(r.heldByType.absNeg)},` +
           ` rel ${pct(r.heldByType.rel)}.`
       );
-      console.log(
-        `    Slump N0: ${band(D("N0", held), pct)} — abs pos ${pct(D("N0", heldPos).mean)}, abs neg ${pct(
-          D("N0", heldNeg).mean
-        )}, rel ${pct(D("N0", heldRel).mean)};  ≥ verkligt i ${pct(T("N0", held, r.heldShare, "ge"))} av världarna`
-      );
-      console.log(
-        `    Slump N1: ${band(D("N1", held), pct)} — abs pos ${pct(D("N1", heldPos).mean)}, abs neg ${pct(
-          D("N1", heldNeg).mean
-        )}, rel ${pct(D("N1", heldRel).mean)};  ≥ verkligt i ${pct(T("N1", held, r.heldShare, "ge"))} av världarna`
-      );
+      for (const mode of MODES) {
+        console.log(
+          `    Slump ${mode}: ${band(D(mode, held), pct)} — abs pos ${pct(D(mode, heldPos).mean)}, abs neg ${pct(
+            D(mode, heldNeg).mean
+          )}, rel ${pct(D(mode, heldRel).mean)};  ≥ verkligt i ${pct(T(mode, held, r.heldShare, "ge"))} av världarna`
+        );
+      }
       console.log(
         `  Höll mot resten: ${pct(r.heldRestShare)}, medel-z mot resten i regelns riktning ${f2(r.meanSignedRestZ, true)}.` +
           `  Slump: N0 ${band(D("N0", heldRest), pct)} / z ${band(D("N0", msz), zz)},` +
@@ -576,13 +649,15 @@ async function main() {
       );
       const warnedStakePct = (r.warned.stake / Math.max(1e-9, r.warned.stake + r.unwarned.stake)) * 100;
       console.log(
-        `  ROI efteråt: varnade ${f1(r.warned.roiPct, true)} % (${r.warned.settled} spel, ${f1(warnedStakePct)} % av insatsen)` +
-          ` mot övriga ${f1(r.unwarned.roiPct, true)} % (${r.unwarned.settled}) → ${f1(r.diffPp, true)} pe, z ${f2(r.diffZ, true)}.`
+        `  ROI efteråt: varnade ${f1(r.warned.roiPct, true)} % (${r.warned.settled} spel = ${pct(r.warnedShare)},` +
+          ` ${f1(warnedStakePct)} % av insatsen) mot övriga ${f1(r.unwarned.roiPct, true)} % (${r.unwarned.settled})` +
+          ` → ${f1(r.diffPp, true)} pe, z ${f2(r.diffZ, true)}.`
       );
       console.log(
         `    Slump, skillnad i pe: N0 ${band(D("N0", diff), pp)}, N1 ${band(D("N1", diff), pp)};` +
           ` ≤ verkligt i N0 ${pct(T("N0", diff, r.diffPp, "le"))}, N1 ${pct(T("N1", diff, r.diffPp, "le"))} av världarna` +
-          ` (världar utan varningar: N0 ${ITER - D("N0", diff).n}, N1 ${ITER - D("N1", diff).n})`
+          ` (världar utan varningar: N0 ${ITER - D("N0", diff).n}, N1 ${ITER - D("N1", diff).n});` +
+          ` varnad andel i slump N0 ${pct(D("N0", wsh).mean)}`
       );
       console.log(
         `  ROI efteråt, pos-utpekade: ${f1(r.edgeTagged.roiPct, true)} % (${r.edgeTagged.settled})` +
@@ -591,18 +666,20 @@ async function main() {
       if (DETAIL) printDetail(r);
 
       tableA.push(
-        `| ${c} | ${z} | ${r.nRules} (${r.nAbsPos}/${r.nAbsNeg}/${r.nRel}) | ${f1(D("N0", nr).mean)} | ` +
+        `| ${c} | ${v} | ${r.nRules} (${r.nAbsPos}/${r.nAbsNeg}/${r.nRel}) | ${f1(D("N0", nr).mean)} / ${f1(D("N1", nr).mean)} | ` +
           `${pct(r.heldShare)} | ${pct(D("N0", held).mean)} / ${pct(D("N1", held).mean)} | ` +
           `${pct(r.heldRestShare)} | ${pct(D("N0", heldRest).mean)} / ${pct(D("N1", heldRest).mean)} |`
       );
       tableB.push(
-        `| ${c} | ${z} | ${f1(r.warned.roiPct, true)} % (${r.warned.settled}) | ${f1(r.unwarned.roiPct, true)} % (${r.unwarned.settled}) | ` +
+        `| ${c} | ${v} | ${pct(r.warnedShare)} | ${f1(r.warned.roiPct, true)} % (${r.warned.settled}) | ` +
+          `${f1(r.unwarned.roiPct, true)} % (${r.unwarned.settled}) | ` +
           `${f1(r.diffPp, true)} (z ${f2(r.diffZ, true)}) | ${band(D("N0", diff), pp)} | ${band(D("N1", diff), pp)} |`
       );
 
       out.push({
         cutoff: c,
-        minAbsZ: z,
+        variant: v,
+        variantLabel: VARIANTS[v],
         trainSettled: trainN,
         testSettled: testN,
         real: r,
@@ -617,7 +694,9 @@ async function main() {
               heldRel: D(mode, heldRel),
               heldRestShare: D(mode, heldRest),
               meanSignedRestZ: D(mode, msz),
+              warnedShare: D(mode, wsh),
               diffPp: D(mode, diff),
+              pRulesGE: T(mode, nr, r.nRules, "ge"),
               pHeldGE: T(mode, held, r.heldShare, "ge"),
               pHeldRestGE: T(mode, heldRest, r.heldRestShare, "ge"),
               pDiffLE: T(mode, diff, r.diffPp, "le"),
@@ -630,20 +709,24 @@ async function main() {
 
   console.log("\n=== Sammanfattning: höll reglerna? (slump = medel över påhittade världar) ===");
   console.log(
-    "| brytpunkt | minAbsZ | regler (pos/neg/rel) | slump N0: regler | höll tecknet | slump N0 / N1 | höll mot resten | slump N0 / N1 |"
+    "| brytpunkt | variant | regler (pos/neg/rel) | slump N0 / N1: regler | höll tecknet | slump N0 / N1 | höll mot resten | slump N0 / N1 |"
   );
   console.log("|---|---|---|---|---|---|---|---|");
   for (const line of tableA) console.log(line);
   console.log("\n=== Sammanfattning: ROI efteråt, spel vakten hade varnat för mot övriga ===");
-  console.log("| brytpunkt | minAbsZ | varnade | övriga | skillnad pe | slump N0 [5–95] | slump N1 [5–95] |");
-  console.log("|---|---|---|---|---|---|---|");
+  console.log("| brytpunkt | variant | varnad andel | varnade | övriga | skillnad pe | slump N0 [5–95] | slump N1 [5–95] |");
+  console.log("|---|---|---|---|---|---|---|---|");
   for (const line of tableB) console.log(line);
 
   if (JSON_OUT) {
     const fs = await import("node:fs");
     fs.writeFileSync(
       JSON_OUT,
-      JSON.stringify({ generatedAt: new Date(now).toISOString(), iter: ITER, seed: SEED, excluded, results: out }, null, 2)
+      JSON.stringify(
+        { generatedAt: new Date(now).toISOString(), iter: ITER, seed: SEED, variants: VARIANTS, excluded, results: out },
+        null,
+        2
+      )
     );
     console.log(`\nJSON: ${JSON_OUT}`);
   }
