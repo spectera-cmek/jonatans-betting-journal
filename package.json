@@ -96,6 +96,7 @@
     "shots:ingest": "tsx scripts/shots/ingestSofascore.ts",
     "shots:backtest": "tsx scripts/shots/backtest.ts",
     "shots:tune": "tsx scripts/shots/tune.ts",
+    "shots:gamestate": "tsx scripts/shots/measureGameState.ts",
     "user:reset-link": "tsx scripts/resetLink.ts"
   },
   "prisma": {
