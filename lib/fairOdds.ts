@@ -11,6 +11,30 @@ export const RHO_MIN = -0.2;
 export const RHO_MAX = 0.6;
 export const MAX_LEGS = 6;
 
+export interface RhoPreset {
+  id: string;
+  label: string;
+  /** Värdet reglaget sätts till — uppmätt φ avrundat till reglagets steg (0,05), mot noll vid lika avstånd. */
+  rho: number;
+  /** Vad mätningen faktiskt gav, för visning. */
+  measured: string;
+}
+
+/**
+ * Uppmätt korrelation (φ, samma storhet som `rho` i jointProb) mellan ben i
+ * samma fotbollsmatch. Källa: `npm run shots:gamestate` 2026-11-21, 792
+ * ligamatcher ur Sofascore-cachen (Allsvenskan 464, Premier League 184,
+ * Europa League 144), φ inom styrkeskikt vid linjer nära 50 %. Gäller
+ * fulltidsmarknader; kort = gula + röda. Ändra här om mätningen körs om på
+ * större underlag.
+ */
+export const MEASURED_RHO_PRESETS: readonly RhoPreset[] = [
+  { id: "same-team-volume", label: "Samma lags skott + hörnor", rho: 0.3, measured: "+0,30 till +0,35" },
+  { id: "over25-shots", label: "Över 2,5 mål + skott totalt", rho: 0.1, measured: "+0,09" },
+  { id: "result-stats", label: "Resultat/mål + hörnor eller kort", rho: 0, measured: "−0,04 till +0,05" },
+  { id: "fav-win-fav-corners", label: "Favoriten vinner + favoritens hörnor", rho: -0.1, measured: "−0,10" },
+];
+
 const P_EPS = 1e-9;
 const clampProb = (p: number) => Math.min(1 - P_EPS, Math.max(P_EPS, p));
 
