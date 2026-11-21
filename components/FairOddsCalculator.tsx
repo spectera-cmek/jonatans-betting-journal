@@ -7,6 +7,7 @@ import { kellyAdvice } from "@/lib/staking";
 import {
   DEFAULT_ONE_SIDED_MARGIN_PCT,
   MAX_LEGS,
+  MEASURED_RHO_PRESETS,
   RHO_MAX,
   RHO_MIN,
   combineLegs,
@@ -151,6 +152,12 @@ function legResult(l: LegState): DevigResult | null {
   return devigProportional(num(l.odds), third == null ? [opp] : [opp, third]);
 }
 
+// "+0,30", "0,00", "−0,10" — tecknet syns så att negativ korrelation inte läses som positiv.
+function fmtRho(r: number): string {
+  const abs = Math.abs(r).toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return r > 0 ? `+${abs}` : r < 0 ? `−${abs}` : abs;
+}
+
 // Multi-leg fair-odds calculator for specials/bet builders: de-vig each leg,
 // multiply (with optional same-match correlation), compare vs offered price.
 export function FairOddsCalculator({
@@ -164,6 +171,8 @@ export function FairOddsCalculator({
   const [legs, setLegs] = useState<LegState[]>([emptyLeg(0)]);
   const [comboMode, setComboMode] = useState<ComboMode>("all");
   const [rho, setRho] = useState(0);
+  // Vilken uppmätt knapp som satte ρ; nollställs när reglaget dras för hand.
+  const [rhoPreset, setRhoPreset] = useState<string | null>(null);
   const [offered, setOffered] = useState("");
   const [stake, setStake] = useState("1");
   const [bankroll, setBankroll] = useState(String(Math.max(1, Math.round(defaultBankrollUnits))));
@@ -517,15 +526,42 @@ export function FairOddsCalculator({
               max={RHO_MAX}
               step={0.05}
               value={rho}
-              onChange={(e) => setRho(parseFloat(e.target.value))}
+              onChange={(e) => {
+                setRho(parseFloat(e.target.value));
+                setRhoPreset(null);
+              }}
               aria-label="Korrelation mellan ben i samma match"
               style={{ accentColor: "var(--acc)", flex: "1 1 180px", maxWidth: 320 }}
             />
             <span className="ap-num" style={{ fontWeight: 600 }}>
-              ρ = {rho.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ρ = {fmtRho(rho)}
             </span>
-            <span style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)" }}>0 oberoende · 0,3 måttlig · 0,5 stark</span>
           </div>
+          <div style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)", marginTop: 10, marginBottom: 6 }}>
+            Uppmätt i 792 ligamatcher — välj det som liknar dina ben:
+          </div>
+          {/* Två och två: fyra i bredd kapar "Resultat/mål" på mobil. */}
+          <div className="ap-seg2" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+            {MEASURED_RHO_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                className={rhoPreset === p.id ? "is-active" : ""}
+                aria-pressed={rhoPreset === p.id}
+                onClick={() => {
+                  setRho(p.rho);
+                  setRhoPreset(p.id);
+                }}
+                style={{ fontSize: "var(--fs-sm)" }}
+              >
+                {p.label} <span className="ap-num">{fmtRho(p.rho)}</span>
+              </button>
+            ))}
+          </div>
+          {rhoPreset != null && (
+            <div style={{ fontSize: "var(--fs-xs)", color: "var(--dim2)", marginTop: 6 }}>
+              Uppmätt φ {MEASURED_RHO_PRESETS.find((p) => p.id === rhoPreset)?.measured} · fulltid, linjer nära 50 %
+            </div>
+          )}
         </div>
       )}
       </Card>
@@ -623,7 +659,10 @@ export function FairOddsCalculator({
           väntade mål (λ) per match ur dess Ö/U-marknad, antar oberoende mellan matcherna och räknar totalen som
           Poisson-summan mot totallinjen — med bara en rad ifylld fungerar den som linjeflytt (t.ex. fair Ö2,5 ur
           Ö1,5-priset). Korrelationsjusteringen mellan ben är en tumregel — ben i samma match kan samvariera mer
-          eller mindre än så.
+          eller mindre än så. Knapparna vid ρ-reglaget är uppmätta på 792 ligamatcher (Allsvenskan, Premier League,
+          Europa League): samma lags skott och hörnor samvarierar starkt, resultat och mål mot hörnor eller kort
+          nästan inte alls, och favoritseger + favoritens hörnor negativt — ett lag som leder backar hem och tar
+          färre hörnor.
         </details>
       </Card>
     </div>
