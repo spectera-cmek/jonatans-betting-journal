@@ -483,6 +483,35 @@ export function fairOdds(p: number): number {
   return 1 / clampProb(p);
 }
 
+export interface ModelFairLine {
+  /** Alltid en halvlinje (9.5), så ingen push. */
+  line: number;
+  pOver: number;
+  fairOver: number;
+  fairUnder: number;
+}
+
+/**
+ * Modellens egen linje: halvlinjen där P(över) ligger närmast 50 %, med fair
+ * odds åt båda håll. Det är den siffra man jämför mot bokens linje när inga
+ * priser finns lagrade — ligger boken en hel enhet fel är det synligt direkt.
+ * Väljer och prissätter på den kalibrerade sannolikheten, samma som
+ * kalkylatorn.
+ */
+export function modelFairLine(pmf: number[], cal?: Calibration | null): ModelFairLine {
+  let best: { line: number; p: number } | null = null;
+  let tail = 1 - (pmf[0] ?? 0); // P(X ≥ 1) = Ö0,5
+  for (let k = 0; k < pmf.length - 1; k++) {
+    const p = applyCalibration(tail, cal);
+    if (!best || Math.abs(p - 0.5) < Math.abs(best.p - 0.5)) best = { line: k + 0.5, p };
+    // Svansen är avtagande: när den passerat 50 % och avståndet växer igen är vi klara.
+    else if (p < 0.5) break;
+    tail -= pmf[k + 1] ?? 0;
+  }
+  const p = best?.p ?? 0.5;
+  return { line: best?.line ?? 0.5, pOver: p, fairOver: fairOdds(p), fairUnder: fairOdds(1 - p) };
+}
+
 // ---------------------------------------------------------------------------
 // Marknad och blend
 // ---------------------------------------------------------------------------

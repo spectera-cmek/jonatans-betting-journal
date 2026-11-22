@@ -14,8 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui";
-import { InlineStat, MiniStat } from "@/components/stats";
-import { api } from "@/lib/fetcher";
+import { InlineStat } from "@/components/stats";
 import { kellyAdvice } from "@/lib/staking";
 import {
   correlatedTotalPmf,
@@ -30,8 +29,9 @@ import {
   type MatchSide,
 } from "@/lib/shotModel";
 import type { FixtureProjection } from "@/lib/shotScreen";
+import type { ShotOddsPreset } from "@/components/ShotProjections";
 
-interface FixturesResponse {
+export interface FixturesResponse {
   fixtures: FixtureProjection[];
   leagues: Array<{ key: string; label: string }>;
   dbConfigured: boolean;
@@ -53,14 +53,19 @@ function kickoffLabel(iso: string) {
 export function ManualShotOdds({
   bankrollUnits,
   blendW = DEFAULT_BLEND_W,
+  data,
+  loading,
+  preset,
 }: {
   bankrollUnits: number;
   /** Samma vikt som screenens reglage — annars visar sidan två olika tal. */
   blendW?: number;
+  /** Hämtas av sidan, som delar dem med projektionstabellen. */
+  data: FixturesResponse | null;
+  loading: boolean;
+  /** En linje vald i projektionstabellen — fylls i när nonce ändras. */
+  preset?: ShotOddsPreset | null;
 }) {
-  const [data, setData] = useState<FixturesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-
   const [matchId, setMatchId] = useState("");
   const [metric, setMetric] = useState("corners");
   const [side, setSide] = useState<MatchSide>("match");
@@ -70,20 +75,19 @@ export function ManualShotOdds({
   const [book, setBook] = useState("Betsson");
 
   useEffect(() => {
-    let cancelled = false;
-    api
-      .get<FixturesResponse>("/api/shots/fixtures?days=14")
-      .then((r) => {
-        if (cancelled) return;
-        setData(r);
-        if (r.fixtures.length > 0) setMatchId((cur) => cur || r.fixtures[0].matchId);
-      })
-      .catch(() => undefined)
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (data && data.fixtures.length > 0) setMatchId((cur) => cur || data.fixtures[0].matchId);
+  }, [data]);
+
+  useEffect(() => {
+    if (!preset) return;
+    setMatchId(preset.matchId);
+    setMetric(preset.metric);
+    setSide(preset.side);
+    setLine(String(preset.line));
+    // Priserna hörde till den förra linjen.
+    setOverOdds("");
+    setUnderOdds("");
+  }, [preset]);
 
   const fixture = data?.fixtures.find((f) => f.matchId === matchId) ?? null;
   const projection = fixture?.metrics.find((m) => m.metric === metric) ?? null;
@@ -176,7 +180,7 @@ export function ManualShotOdds({
       <div className="ap-card-head">
         <span role="heading" aria-level={2} className="ap-card-title">Räkna på egna odds</span>
         <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
-          För böcker API:et inte täcker — Betsson, Bethard, NordicBet
+          Skriv in bokens pris — eller klicka en linje i projektionerna
         </span>
       </div>
 

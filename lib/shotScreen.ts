@@ -13,8 +13,10 @@ import {
   correlatedTotalPmf,
   negBinPmfVector,
   priceLine,
+  modelFairLine,
   negBinFamily,
   correlatedTotalFamily,
+  type ModelFairLine,
   type BookPrice,
   type MarketQuote,
   type MatchSide,
@@ -150,6 +152,12 @@ export interface FixtureProjection {
   kickoffAt: string;
   homeTeam: string;
   awayTeam: string;
+  /**
+   * Matcher bakom lagens ratings. 0 = laget saknas i historiken (nykomling,
+   * motstånd från en annan liga) och projiceras som ett snittlag.
+   */
+  homeMatches: number;
+  awayMatches: number;
   /** Per mätetal: λ för hemmalag, bortalag och matchtotal, plus dispersion. */
   metrics: Array<{
     metric: ShotMetric;
@@ -164,6 +172,8 @@ export interface FixtureProjection {
     calA: number;
     calB: number;
     calN: number;
+    /** Modellens egen linje (närmast 50/50) per sida, ren modell utan marknad. */
+    fairLines: Record<MatchSide, ModelFairLine>;
   }>;
 }
 
@@ -213,10 +223,14 @@ export async function buildFixtureProjections(
       },
     });
 
+    // Alla mätetal tränas på samma matcher — ett räcker för att räkna underlaget.
+    const anyModel = models.get("shots") ?? [...models.values()][0];
+
     for (const f of fixtures) {
       const metrics: FixtureProjection["metrics"] = [];
       for (const [metric, model] of models) {
         const l = projectFixture(model, f.homeTeamId, f.awayTeamId);
+        const sidePmf = (side: MatchSide) => pmfForSide(l, model.dispersion, side, model.appliedRho);
         metrics.push({
           metric,
           metricLabel: METRIC_LABEL[metric],
@@ -229,6 +243,11 @@ export async function buildFixtureProjections(
           calA: model.calibration.a,
           calB: model.calibration.b,
           calN: model.calibration.n,
+          fairLines: {
+            home: modelFairLine(sidePmf("home"), model.calibration),
+            away: modelFairLine(sidePmf("away"), model.calibration),
+            match: modelFairLine(sidePmf("match"), model.calibration),
+          },
         });
       }
       out.push({
@@ -238,6 +257,8 @@ export async function buildFixtureProjections(
         kickoffAt: f.kickoffAt.toISOString(),
         homeTeam: f.homeTeamName,
         awayTeam: f.awayTeamName,
+        homeMatches: anyModel.ratings.get(f.homeTeamId)?.matches ?? 0,
+        awayMatches: anyModel.ratings.get(f.awayTeamId)?.matches ?? 0,
         metrics,
       });
     }
