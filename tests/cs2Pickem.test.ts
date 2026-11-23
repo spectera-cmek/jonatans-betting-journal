@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { buchholz, isBo3, pairGroup, simulateSwiss, type SwissTeam } from "../lib/cs2/pickem";
+import {
+  buchholz,
+  isBo3,
+  pairGroup,
+  expectedHits,
+  greedyPicks,
+  optimizePicks,
+  pHitAtLeast,
+  scorePicks,
+  simulateSwiss,
+  tally,
+  type Outcome,
+  type SwissTeam,
+} from "../lib/cs2/pickem";
 
 describe("isBo3", () => {
   it("är bo3 när avancering eller elimination står på spel", () => {
@@ -155,5 +168,113 @@ describe("simulateSwiss", () => {
     );
     expect(formats.slice(0, 8).every((f) => f === "bo1")).toBe(true);
     expect(formats.some((f) => f === "bo3")).toBe(true);
+  });
+});
+
+describe("scorePicks", () => {
+  const out = new Map<number, Outcome>([
+    [1, "3-0"],
+    [2, "adv"],
+    [3, "0-3"],
+    [4, "out"],
+    [5, "adv"],
+  ]);
+
+  it("räknar rätt val i varje slot", () => {
+    expect(scorePicks({ threeZero: [1], advance: [2, 5], zeroThree: [3] }, out)).toBe(4);
+  });
+
+  it("räknar ett 3-0-val som fel när laget går 3-1", () => {
+    expect(scorePicks({ threeZero: [2], advance: [], zeroThree: [] }, out)).toBe(0);
+  });
+
+  it("räknar inte ett 3-0-lag som ett avancerings-val", () => {
+    expect(scorePicks({ threeZero: [], advance: [1], zeroThree: [] }, out)).toBe(0);
+  });
+
+  it("räknar inte ett lag utslaget på 2-3 som 0-3", () => {
+    expect(scorePicks({ threeZero: [], advance: [], zeroThree: [4] }, out)).toBe(0);
+  });
+});
+
+const TEAM_IDS = Array.from({ length: 16 }, (_, i) => i + 1);
+
+/** Ett facit byggt ur en rangordning: 2 på 3-0, 6 på adv, 2 på 0-3, 6 out. */
+function outcomesFromOrder(order: number[]): Map<number, Outcome> {
+  const m = new Map<number, Outcome>();
+  order.forEach((id, i) => {
+    m.set(id, i < 2 ? "3-0" : i < 8 ? "adv" : i < 14 ? "out" : "0-3");
+  });
+  return m;
+}
+
+/** Favoriterna håller varje gång: lag 1–2 går 3-0, 3–8 avancerar, 15–16 går 0-3. */
+function favouriteSims(): Array<Map<number, Outcome>> {
+  return Array.from({ length: 200 }, () => outcomesFromOrder(TEAM_IDS));
+}
+
+/** Favoriterna håller i 70 % av fallen, annars slumpas rangordningen. */
+function mixedSims(): Array<Map<number, Outcome>> {
+  const rng = mulberry32(99);
+  return Array.from({ length: 2000 }, () => {
+    if (rng() < 0.7) return outcomesFromOrder(TEAM_IDS);
+    const order = [...TEAM_IDS];
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    return outcomesFromOrder(order);
+  });
+}
+
+describe("tally och pHitAtLeast", () => {
+  const sims = [
+    new Map<number, Outcome>([
+      [1, "3-0"],
+      [2, "adv"],
+      [3, "0-3"],
+    ]),
+    new Map<number, Outcome>([
+      [1, "adv"],
+      [2, "3-0"],
+      [3, "0-3"],
+    ]),
+  ];
+
+  it("ger marginalsannolikheter per lag", () => {
+    const t = tally(sims, [1, 2, 3]);
+    expect(t.p30.get(1)).toBeCloseTo(0.5);
+    expect(t.pAdv.get(1)).toBeCloseTo(0.5);
+    expect(t.p03.get(3)).toBeCloseTo(1);
+  });
+
+  it("räknar P(minst n rätt) över simuleringarna", () => {
+    const t = tally(sims, [1, 2, 3]);
+    expect(pHitAtLeast(t, { threeZero: [1], advance: [], zeroThree: [3] }, 2)).toBeCloseTo(0.5);
+    expect(pHitAtLeast(t, { threeZero: [1], advance: [], zeroThree: [3] }, 1)).toBeCloseTo(1);
+  });
+
+  it("ger förväntat antal rätt som summan av marginalerna", () => {
+    const t = tally(sims, [1, 2, 3]);
+    expect(expectedHits(t, { threeZero: [1], advance: [], zeroThree: [3] })).toBeCloseTo(1.5);
+  });
+});
+
+describe("optimizePicks", () => {
+  it("ger tio olika lag i rätt antal per slot", () => {
+    const table = tally(favouriteSims(), TEAM_IDS);
+    const best = optimizePicks(table, 5, mulberry32(1));
+    const all = [...best.picks.threeZero, ...best.picks.advance, ...best.picks.zeroThree];
+    expect(new Set(all).size).toBe(10);
+    expect(best.picks.threeZero).toHaveLength(2);
+    expect(best.picks.advance).toHaveLength(6);
+    expect(best.picks.zeroThree).toHaveLength(2);
+    expect(best.pHit).toBeGreaterThan(0.9);
+  });
+
+  it("slår det giriga EV-valet eller tangerar det", () => {
+    const table = tally(mixedSims(), TEAM_IDS);
+    const best = optimizePicks(table, 5, mulberry32(2));
+    expect(best.pHit).toBeGreaterThanOrEqual(pHitAtLeast(table, greedyPicks(table), 5) - 1e-9);
   });
 });

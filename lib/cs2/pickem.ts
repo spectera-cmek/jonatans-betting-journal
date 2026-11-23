@@ -158,3 +158,227 @@ export function simulateSwiss(
   }
   return out;
 }
+
+/**
+ * De tio valen i en Swiss-etapp: 2 lag på 3-0, 6 lag som avancerar på 3-1
+ * eller 3-2, och 2 lag på 0-3.
+ */
+export interface PickSet {
+  threeZero: number[];
+  advance: number[];
+  zeroThree: number[];
+}
+
+/**
+ * Antal rätt i en uppsättning val mot ett facit.
+ *
+ * Slotten är strikta: ett lag lagt på 3-0 som går 3-1 är fel, och ett 3-0-lag
+ * räknas aldrig som ett avancerings-val. Valve säger inte uttryckligen vad som
+ * gäller för det senare; det här är den strikta tolkningen.
+ */
+export function scorePicks(picks: PickSet, outcomes: Map<number, Outcome>): number {
+  let hits = 0;
+  for (const id of picks.threeZero) if (outcomes.get(id) === "3-0") hits++;
+  for (const id of picks.advance) if (outcomes.get(id) === "adv") hits++;
+  for (const id of picks.zeroThree) if (outcomes.get(id) === "0-3") hits++;
+  return hits;
+}
+
+/** Utfallskod i `OutcomeTable.codes`. */
+const CODE: Record<Outcome, number> = { "3-0": 0, adv: 1, "0-3": 2, out: 3 };
+
+/** Vilken kod varje slot vill se. */
+const SLOT_CODE = { threeZero: 0, advance: 1, zeroThree: 2 } as const;
+
+const SLOTS = ["threeZero", "advance", "zeroThree"] as const;
+
+/**
+ * Alla simuleringars utfall, både som marginaler per lag och som rå matris.
+ *
+ * `codes[sim * teams.length + i]` är lag `teams[i]`:s utfall i den
+ * simuleringen. Matrisen behövs för att P(≥5 rätt) måste räknas över
+ * simuleringarna — marginalerna kan inte svara på det, eftersom valen slår in
+ * tillsammans.
+ */
+export interface OutcomeTable {
+  teams: number[];
+  p30: Map<number, number>;
+  pAdv: Map<number, number>;
+  p03: Map<number, number>;
+  codes: Uint8Array;
+  sims: number;
+}
+
+export function tally(sims: Array<Map<number, Outcome>>, teams: number[]): OutcomeTable {
+  const n = sims.length;
+  const t = teams.length;
+  const codes = new Uint8Array(n * t);
+  const c30 = new Array<number>(t).fill(0);
+  const cAdv = new Array<number>(t).fill(0);
+  const c03 = new Array<number>(t).fill(0);
+
+  for (let s = 0; s < n; s++) {
+    const sim = sims[s];
+    for (let i = 0; i < t; i++) {
+      const o = sim.get(teams[i]) ?? "out";
+      const code = CODE[o];
+      codes[s * t + i] = code;
+      if (code === 0) c30[i]++;
+      else if (code === 1) cAdv[i]++;
+      else if (code === 2) c03[i]++;
+    }
+  }
+
+  const p30 = new Map<number, number>();
+  const pAdv = new Map<number, number>();
+  const p03 = new Map<number, number>();
+  for (let i = 0; i < t; i++) {
+    p30.set(teams[i], n ? c30[i] / n : 0);
+    pAdv.set(teams[i], n ? cAdv[i] / n : 0);
+    p03.set(teams[i], n ? c03[i] / n : 0);
+  }
+  return { teams, p30, pAdv, p03, codes, sims: n };
+}
+
+/** Kolumnindex och önskad kod för varje val, platt och i typade vektorer. */
+function flatten(table: OutcomeTable, picks: PickSet): { col: Int32Array; want: Uint8Array } {
+  const index = new Map(table.teams.map((id, i) => [id, i]));
+  const col: number[] = [];
+  const want: number[] = [];
+  for (const slot of SLOTS) {
+    for (const id of picks[slot]) {
+      const i = index.get(id);
+      if (i == null) continue;
+      col.push(i);
+      want.push(SLOT_CODE[slot]);
+    }
+  }
+  return { col: Int32Array.from(col), want: Uint8Array.from(want) };
+}
+
+/** P(minst `atLeast` av valen rätt), räknad över simuleringarna. */
+export function pHitAtLeast(table: OutcomeTable, picks: PickSet, atLeast: number): number {
+  const { col, want } = flatten(table, picks);
+  const t = table.teams.length;
+  const n = table.sims;
+  if (!n) return 0;
+  let hits = 0;
+  for (let s = 0; s < n; s++) {
+    const off = s * t;
+    let right = 0;
+    for (let k = 0; k < col.length; k++) if (table.codes[off + col[k]] === want[k]) right++;
+    if (right >= atLeast) hits++;
+  }
+  return hits / n;
+}
+
+/** Förväntat antal rätt — summan av valens marginalsannolikheter. */
+export function expectedHits(table: OutcomeTable, picks: PickSet): number {
+  let sum = 0;
+  for (const id of picks.threeZero) sum += table.p30.get(id) ?? 0;
+  for (const id of picks.advance) sum += table.pAdv.get(id) ?? 0;
+  for (const id of picks.zeroThree) sum += table.p03.get(id) ?? 0;
+  return sum;
+}
+
+/** Topp 2 på P(3-0), topp 2 på P(0-3) bland återstående, topp 6 på P(3-1/3-2). */
+export function greedyPicks(table: OutcomeTable): PickSet {
+  const taken = new Set<number>();
+  const pick = (n: number, p: Map<number, number>): number[] => {
+    const out = table.teams
+      .filter((id) => !taken.has(id))
+      .sort((a, b) => (p.get(b) ?? 0) - (p.get(a) ?? 0))
+      .slice(0, n);
+    for (const id of out) taken.add(id);
+    return out;
+  };
+  const threeZero = pick(2, table.p30);
+  const zeroThree = pick(2, table.p03);
+  const advance = pick(6, table.pAdv);
+  return { threeZero, advance, zeroThree };
+}
+
+const clonePicks = (p: PickSet): PickSet => ({
+  threeZero: [...p.threeZero],
+  advance: [...p.advance],
+  zeroThree: [...p.zeroThree],
+});
+
+/**
+ * Valen som maximerar P(minst `atLeast` rätt).
+ *
+ * Tröskeln är poängen: Diamond-utmaningen kräver 5 av 10, och mot en tröskel
+ * vill man ha val som slår in tillsammans — inte de tio var för sig bästa.
+ * Därför optimeras P(≥n) och inte förväntat antal rätt.
+ *
+ * Brantaste klättring över två sorters drag: byt ett valt lag mot ett ovalt i
+ * samma slot, eller byt plats på två valda lag i olika slots. Startar från det
+ * giriga EV-valet plus tre slumpstarter.
+ */
+export function optimizePicks(
+  table: OutcomeTable,
+  atLeast: number,
+  rng: () => number
+): { picks: PickSet; pHit: number; expected: number } {
+  const climb = (start: PickSet): { picks: PickSet; pHit: number } => {
+    let cur = clonePicks(start);
+    let curP = pHitAtLeast(table, cur, atLeast);
+    for (;;) {
+      let bestP = curP;
+      let best: PickSet | null = null;
+      const inUse = new Set([...cur.threeZero, ...cur.advance, ...cur.zeroThree]);
+      const free = table.teams.filter((id) => !inUse.has(id));
+
+      for (const slot of SLOTS) {
+        for (let i = 0; i < cur[slot].length; i++) {
+          for (const id of free) {
+            const cand = clonePicks(cur);
+            cand[slot][i] = id;
+            const p = pHitAtLeast(table, cand, atLeast);
+            if (p > bestP + 1e-12) {
+              bestP = p;
+              best = cand;
+            }
+          }
+        }
+      }
+
+      for (let a = 0; a < SLOTS.length; a++) {
+        for (let b = a + 1; b < SLOTS.length; b++) {
+          for (let i = 0; i < cur[SLOTS[a]].length; i++) {
+            for (let j = 0; j < cur[SLOTS[b]].length; j++) {
+              const cand = clonePicks(cur);
+              cand[SLOTS[a]][i] = cur[SLOTS[b]][j];
+              cand[SLOTS[b]][j] = cur[SLOTS[a]][i];
+              const p = pHitAtLeast(table, cand, atLeast);
+              if (p > bestP + 1e-12) {
+                bestP = p;
+                best = cand;
+              }
+            }
+          }
+        }
+      }
+
+      if (!best) return { picks: cur, pHit: curP };
+      cur = best;
+      curP = bestP;
+    }
+  };
+
+  let best = climb(greedyPicks(table));
+  for (let restart = 0; restart < 3; restart++) {
+    const shuffled = [...table.teams];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const got = climb({
+      threeZero: shuffled.slice(0, 2),
+      advance: shuffled.slice(2, 8),
+      zeroThree: shuffled.slice(8, 10),
+    });
+    if (got.pHit > best.pHit) best = got;
+  }
+  return { picks: best.picks, pHit: best.pHit, expected: expectedHits(table, best.picks) };
+}
