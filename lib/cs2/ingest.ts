@@ -93,6 +93,25 @@ export function sideRoundsFromHalves(
   return { team1Ct, team1T, team2Ct, team2T, team1StartSide: halves[0].team1Side };
 }
 
+/** Sidans veto som databasrader, med lagen kopplade på namn. */
+export function vetoRows(matchId: number, page: Pick<HltvMatchPage, "team1" | "team2" | "vetoes">) {
+  const { team1: t1, team2: t2 } = page;
+  const teamIdFor = (name: string | null) => {
+    if (!name) return null;
+    if (t1 && norm(name) === norm(t1.name)) return t1.id;
+    if (t2 && norm(name) === norm(t2.name)) return t2.id;
+    return null;
+  };
+  return page.vetoes.map((v) => ({
+    matchId,
+    step: v.step,
+    teamId: teamIdFor(v.teamName),
+    teamName: v.teamName,
+    action: v.action,
+    mapName: v.mapName,
+  }));
+}
+
 /**
  * Matchsidan: serien, vetot och de spelade kartorna. Kartraderna skapas här
  * med resultat och halvlekar; mapstats-sidan fyller sedan på rundhistorik och
@@ -151,23 +170,7 @@ export async function applyMatchPage(
   // Vetot ersätts helt — det är en ögonblicksbild av sidan.
   if (page.vetoes.length > 0) {
     await db.cs2Veto.deleteMany({ where: { matchId } });
-    const teamIdFor = (name: string | null) => {
-      if (!name) return null;
-      if (t1 && norm(name) === norm(t1.name)) return t1.id;
-      if (t2 && norm(name) === norm(t2.name)) return t2.id;
-      return null;
-    };
-    await db.cs2Veto.createMany({
-      data: page.vetoes.map((v) => ({
-        matchId,
-        step: v.step,
-        teamId: teamIdFor(v.teamName),
-        teamName: v.teamName,
-        action: v.action,
-        mapName: v.mapName,
-      })),
-      skipDuplicates: true,
-    });
+    await db.cs2Veto.createMany({ data: vetoRows(matchId, page), skipDuplicates: true });
   }
 
   const mapStatsIds: number[] = [];

@@ -196,6 +196,41 @@ describe("parseMatchPage", () => {
       [16693, "flameZ"],
     ]);
   });
+  // HLTV bytte layout kring 19 oktober 2026: vetot ligger först och
+  // formatrutan ("Best of 1 (LAN) * Swiss round 3") sist, och kommande matcher
+  // har en simulerad veto med egna kartrader. Parsern läste format ur första
+  // rutan och veto ur sista — formatet blev bo3 och vetot tomt i fem veckor.
+  it("ny layout, spelad match: format, LAN/online och veto ur rätt ruta", () => {
+    const m = parseMatchPage(read("match-2026-finished.html"));
+    expect(m.id).toBe(2400372);
+    expect(m.format).toBe("bo3");
+    expect(m.lan).toBe(false);
+    expect(m.status).toBe("finished");
+    expect(m.vetoes).toHaveLength(7);
+    expect(m.vetoes.filter((v) => v.action === "pick").map((v) => [v.teamName, v.mapName])).toEqual([
+      ["Phantom", "ancient"],
+      ["Betclic", "nuke"],
+    ]);
+    expect(m.vetoes[6]).toMatchObject({ action: "decider", mapName: "anubis", teamName: null });
+    expect(m.maps.map((x) => [x.mapNumber, x.mapName])).toEqual([
+      [1, "ancient"],
+      [2, "nuke"],
+      [3, "anubis"],
+    ]);
+  });
+  it("ny layout, kommande bo1: formatet läses och den simulerade vetot ignoreras", () => {
+    const m = parseMatchPage(read("match-2026-simulated.html"));
+    expect(m.id).toBe(2400565);
+    expect(m.format).toBe("bo1");
+    expect(m.lan).toBe(true);
+    expect(m.status).toBe("scheduled");
+    // Simuleringen ("1. HEROIC removes Anubis 93%") är inget veto.
+    expect(m.vetoes).toEqual([]);
+    expect(m.vetoLines).toEqual([]);
+    // Simuleringens kartrader ("Inferno - 48%") är inga kartor.
+    expect(m.maps.every((x) => !/%/.test(x.mapName))).toBe(true);
+    expect(m.maps.map((x) => x.mapName)).toEqual([]);
+  });
   it("kommande match är scheduled", () => {
     const html = read("match.html")
       .replace("Match over", "1d : 03h : 12m")
