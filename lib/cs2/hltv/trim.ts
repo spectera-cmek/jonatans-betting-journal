@@ -10,7 +10,10 @@ const KEEP: Record<HltvPageKind, string[]> = {
   ranking: [".ranked-team"],
   team: [".profile-team-container", ".profile-team-name", ".team-country", ".players-table", ".bodyshot-team", "#matchesBox"],
   results: [".result-con", ".pagination-component"],
-  match: [".team1-gradient", ".team2-gradient", ".timeAndEvent", ".countdown", ".veto-box", ".mapholder", ".lineups", "[data-demo-link]"],
+  // .simulated-veto-only före .veto-box/.mapholder: HLTV:s simulerade veto
+  // (sedan oktober 2026) har egna kartrader, och parsern känner igen dem på
+  // behållaren — utan den i fixturen går det inte att testa.
+  match: [".team1-gradient", ".team2-gradient", ".timeAndEvent", ".countdown", ".simulated-veto-only", ".veto-box", ".mapholder", ".lineups", "[data-demo-link]"],
   mapstats: [".match-info-box-con", ".match-info-box", ".team-left", ".team-right", ".match-info-row", ".round-history-con", "table.stats-table"],
 };
 

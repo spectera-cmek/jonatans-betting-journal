@@ -349,53 +349,58 @@ export function parseMatchPage(html: string): HltvMatchPage {
   const event: HltvRef | null =
     eventId != null ? { id: eventId, name: clean(eventA.text()) || clean(eventA.attr("title")), slug: slugFromHref(eventA.attr("href"), "events") } : null;
 
-  // Formatet står i första veto-boxen: "Best of 3 (LAN)".
-  const formatText = clean($(".veto-box").first().text() || $(".preformatted-text").first().text());
+  // Två veto-boxar: formatrutan ("Best of 3 (LAN) * Semi-final") och vetot.
+  // Ordningen har bytts (sedan oktober 2026 ligger vetot först), så rutorna
+  // känns igen på innehåll, inte plats. Kommande matcher har dessutom HLTV:s
+  // simulerade veto ("1. X removes Anubis 93%") — det är ingen data.
+  const boxes = $(".veto-box").not(".simulated-veto, .simulated-veto-only");
+  const formatBox = boxes.filter((_, el) => /best of\s*\d/i.test($(el).text())).first();
+  const formatText = clean(formatBox.text() || $(".preformatted-text").first().text());
   const bo = formatText.match(/best of\s*(\d)/i);
   const format: SeriesFormat | null = bo ? (`bo${bo[1]}` as SeriesFormat) : null;
   const lan = /\(lan\)/i.test(formatText) ? true : /\(online\)/i.test(formatText) ? false : null;
 
-  // Vetot ligger i den sista veto-boxen, en rad per div.
+  // Vetot: den andra rutan, en rad per div.
   const vetoLines: string[] = [];
-  const vetoBoxes = $(".veto-box");
-  if (vetoBoxes.length > 1) {
-    vetoBoxes
-      .last()
-      .find("div")
-      .each((_, d) => {
-        const node = $(d);
-        if (node.children("div").length > 0) return;
-        const t = clean(node.text());
-        if (/^\d+\.\s/.test(t)) vetoLines.push(t);
-      });
-  }
+  boxes
+    .filter((_, el) => el !== formatBox.get(0))
+    .first()
+    .find("div")
+    .each((_, d) => {
+      const node = $(d);
+      if (node.children("div").length > 0) return;
+      const t = clean(node.text());
+      if (/^\d+\.\s/.test(t)) vetoLines.push(t);
+    });
   const vetoes = vetoLines.map(parseVetoLine).filter((v): v is ParsedVeto => v !== null);
 
   const maps: HltvMatchMap[] = [];
-  $(".mapholder").each((i, el) => {
-    const holder = $(el);
-    const mapName = canonicalMap(holder.find(".mapname").first().text());
-    if (!mapName) return;
-    const left = holder.find(".results-left").first();
-    const right = holder.find(".results-right").first();
-    const s1 = int(left.find(".results-team-score").first().text());
-    const s2 = int(right.find(".results-team-score").first().text());
-    const statsHref = holder.find('a[href*="/mapstatsid/"]').first().attr("href");
-    const pickedBy = left.hasClass("pick") ? "team1" : right.hasClass("pick") ? "team2" : null;
-    const half = holder.find(".results-center-half-score").first();
-    const { halves, otRounds } = half.length ? parseHalfScores($, half) : { halves: [], otRounds: 0 };
-    maps.push({
-      mapNumber: i + 1,
-      mapName,
-      mapStatsId: idFromHref(statsHref, "mapstatsid"),
-      team1Score: s1,
-      team2Score: s2,
-      pickedBy,
-      halves,
-      otRounds,
-      played: s1 != null && s2 != null && s1 + s2 > 0,
+  $(".mapholder")
+    .filter((_, el) => $(el).closest(".simulated-veto-only").length === 0)
+    .each((i, el) => {
+      const holder = $(el);
+      const mapName = canonicalMap(holder.find(".mapname").first().text());
+      if (!mapName) return;
+      const left = holder.find(".results-left").first();
+      const right = holder.find(".results-right").first();
+      const s1 = int(left.find(".results-team-score").first().text());
+      const s2 = int(right.find(".results-team-score").first().text());
+      const statsHref = holder.find('a[href*="/mapstatsid/"]').first().attr("href");
+      const pickedBy = left.hasClass("pick") ? "team1" : right.hasClass("pick") ? "team2" : null;
+      const half = holder.find(".results-center-half-score").first();
+      const { halves, otRounds } = half.length ? parseHalfScores($, half) : { halves: [], otRounds: 0 };
+      maps.push({
+        mapNumber: i + 1,
+        mapName,
+        mapStatsId: idFromHref(statsHref, "mapstatsid"),
+        team1Score: s1,
+        team2Score: s2,
+        pickedBy,
+        halves,
+        otRounds,
+        played: s1 != null && s2 != null && s1 + s2 > 0,
+      });
     });
-  });
 
   const countdown = clean($(".countdown").first().text()).toLowerCase();
   const stillCounting = /\d+\s*[dhms]\b/.test(countdown);
