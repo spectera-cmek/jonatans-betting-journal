@@ -89,7 +89,9 @@ export function FacitPanel() {
       <Card>
         <div className="ap-card-head is-bleed">
           <span role="heading" aria-level={2} className="ap-card-title">Prissatta linjer · utfall</span>
-          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>{l ? `${l.settled} avgjorda · ${l.open} öppna` : ""}</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>
+            {l ? `${l.settled} avgjorda · ${l.open} öppna${l.discarded > 0 ? ` · ${l.discarded} feltolkade räknas inte` : ""}` : ""}
+          </span>
         </div>
         {(!l || l.settled === 0) && (
           <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>

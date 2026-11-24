@@ -10,6 +10,7 @@ import type { RoundFact } from "./demo/types";
 import type { RoundOutcome } from "./types";
 import { TOTAL_MARKETS, type Cs2Market } from "./types";
 import { lineKey, type LineIdentity } from "./lineInput";
+import { isImplausible } from "./pricing";
 
 const SCOPE_MAPS: Record<string, number[] | null> = { map1: [1], map2: [2], map3: [3], maps12: [1, 2], match: null };
 
@@ -119,6 +120,8 @@ export interface FacitRow {
 
 export interface FacitSummary {
   settled: number;
+  /** Rader som räknats bort som feltolkade, se PLAUSIBLE_GAP. */
+  discarded: number;
   /** Log-loss på linjer där båda finns: modellen, boken och blandningen. */
   vsMarket: { n: number; model: number; market: number; blend: number } | null;
   /** Plattspel 1 u på varje linje modellen gav positiv edge. */
@@ -147,7 +150,13 @@ export function latestPerLine<T extends LineIdentity & { id: number; matchId: nu
   return [...best.values()];
 }
 
-export function summarizeFacit(rows: FacitRow[]): FacitSummary {
+export function summarizeFacit(all: FacitRow[]): FacitSummary {
+  // Feltolkade rader får inte räknas som facit. En kartlinje som lästs som
+  // hela matchens gick över varje gång, och modellen "träffade" den varje gång:
+  // 53 sådana rader lyfte modellens log-loss från 0,630 till 0,618 och
+  // kills-marknadens plattspel från −11 u till +40 u.
+  const rows = all.filter((r) => !isImplausible(r.pModel, r.pMarket));
+  const discarded = all.length - rows.length;
   const both = rows.filter((r) => r.pMarket != null);
   const yOf = (r: FacitRow) => overResult(r.market, r.line, r.actual);
   const decided = (r: FacitRow) => yOf(r) !== 0.5;
@@ -173,6 +182,7 @@ export function summarizeFacit(rows: FacitRow[]): FacitSummary {
   }
   return {
     settled: rows.length,
+    discarded,
     vsMarket: vs.length
       ? {
           n: vs.length,

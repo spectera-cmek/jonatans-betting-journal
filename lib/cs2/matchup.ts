@@ -873,6 +873,18 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
     .sort((a, b) => a.side - b.side || (b.kills12?.mean ?? b.killsMap1?.mean ?? 0) - (a.kills12?.mean ?? a.killsMap1?.mean ?? 0));
 
   const priced = lines.map((l) => priceLine(ctx, l, blendW));
+  // En linje som modellen och boken är fundamentalt oense om är nästan alltid
+  // en marknad vi läst fel, inte en edge. Den prissätts inte — säg det i stället
+  // för att visa en tom rad.
+  const implausible = priced.filter((l) => l.price?.implausible);
+  const warnings = [...ctx.warnings];
+  if (implausible.length > 0)
+    warnings.push(
+      `${implausible.length} ${implausible.length === 1 ? "linje" : "linjer"} prissätts inte: modellen och boken skiljer sig så mycket att marknaden troligen är feltolkad (oftast en kartlinje läst som hela matchen). ${implausible
+        .slice(0, 3)
+        .map((l) => l.label)
+        .join("; ")}${implausible.length > 3 ? " …" : ""}`
+    );
   const pIn12 = (map: string) => (ctx.veto.marginal[map]?.p1 ?? 0) + (ctx.veto.marginal[map]?.p2 ?? 0);
   const angles = buildAngles({
     players: ctx.players.map((p) => ({
@@ -917,7 +929,7 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
     players,
     lines: priced,
     angles,
-    warnings: ctx.warnings,
+    warnings,
     lineupChanges: ctx.lineupChanges.map((c) => ({ ...c, teamName: c.teamId === ctx.team1.id ? ctx.team1.name : ctx.team2.name })),
     lineupKnown: ctx.lineupKnown,
     model: {

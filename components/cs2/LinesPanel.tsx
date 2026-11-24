@@ -473,6 +473,15 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
                     {l.bookmaker && <span className="ap-tag" style={{ marginLeft: 6 }}>{l.bookmaker}</span>}
                     {!l.includesOt && <span className="ap-tag" style={{ marginLeft: 4 }}>ej OT</span>}
                     {l.pPlayed < 0.999 && <span className="ap-tag" style={{ marginLeft: 4 }}>spelas {pct(l.pPlayed)}</span>}
+                    {pr?.implausible && (
+                      <span
+                        className="ap-tag"
+                        style={{ marginLeft: 4, color: "var(--red)", borderColor: "var(--red)" }}
+                        title="Modellen och boken skiljer sig för mycket för att det kan vara en edge — troligen fel karta eller fel marknad på linjen."
+                      >
+                        feltolkad
+                      </span>
+                    )}
                   </span>
                   <span className="ap-r ap-num" style={{ color: "var(--dim)" }}>{l.mean != null ? dec(l.mean, 1) : "—"}</span>
                   <span className="ap-r ap-num">
@@ -481,7 +490,11 @@ export function LinesPanel({ view, onChanged }: { view: MatchupView; onChanged: 
                   <span className="ap-r ap-num">{p != null ? pct(p) : "—"}</span>
                   <span className="ap-r ap-num">{fair != null ? fair.toFixed(2) : "—"}</span>
                   <span className={`ap-r ap-num ${pr?.edge != null ? (pr.edge > 0 ? "pos" : "neg") : ""}`}>
-                    {pr?.edge != null ? `${side ? sideLabel(l, side, view) : ""} ${pr.edge >= 0 ? "+" : ""}${(pr.edge * 100).toFixed(1)} %` : "—"}
+                    {pr?.edge != null
+                      ? `${side ? sideLabel(l, side, view) : ""} ${pr.edge >= 0 ? "+" : ""}${(pr.edge * 100).toFixed(1)} %`
+                      : pr?.implausible
+                        ? "ingen"
+                        : "—"}
                   </span>
                   <span className="ap-r ap-num">{k && k.hasEdge ? `${k.halfUnits.toFixed(2)} u` : "—"}</span>
                   <span className="ap-r" style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
