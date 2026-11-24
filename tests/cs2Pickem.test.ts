@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buchholz,
+  calibrate,
+  devigLogit,
+  fitCalibration,
   isBo3,
   pairGroup,
   expectedHits,
@@ -276,5 +279,53 @@ describe("optimizePicks", () => {
     const table = tally(mixedSims(), TEAM_IDS);
     const best = optimizePicks(table, 5, mulberry32(2));
     expect(best.pHit).toBeGreaterThanOrEqual(pHitAtLeast(table, greedyPicks(table), 5) - 1e-9);
+  });
+});
+
+describe("devigLogit", () => {
+  it("ger sannolikheter som summerar till ett", () => {
+    const d = devigLogit(1.47, 2.6)!;
+    expect(d.pA + d.pB).toBeCloseTo(1, 10);
+    expect(d.pA).toBeGreaterThan(1 / 1.47 - 0.05);
+    expect(d.pA).toBeLessThan(1 / 1.47 + 0.05);
+  });
+
+  it("lämnar ett rättvist par orört", () => {
+    expect(devigLogit(2, 2)!.pA).toBeCloseTo(0.5, 10);
+  });
+
+  it("ger favoriten mer än multiplikativ de-vig, som smickrar höga odds", () => {
+    const d = devigLogit(1.1, 9)!;
+    const mult = 1 / 1.1 / (1 / 1.1 + 1 / 9);
+    // Multiplikativ de-vig drar av marginalen proportionellt och lämnar
+    // därmed för mycket hos skrällen: 0,109 mot additivas 0,101.
+    expect(d.pA).toBeGreaterThan(mult);
+    expect(d.pB).toBeLessThan(1 - mult);
+  });
+
+  it("ger null när ett odds saknas eller är orimligt", () => {
+    expect(devigLogit(NaN, 2)).toBeNull();
+    expect(devigLogit(1, 2)).toBeNull();
+  });
+});
+
+describe("fitCalibration", () => {
+  it("ger k=1 när modellen redan möter marknaden", () => {
+    const pts = [0.3, 0.45, 0.6, 0.75].map((p) => ({ pModel: p, pMarket: p }));
+    expect(fitCalibration(pts).k).toBeCloseTo(1, 2);
+  });
+
+  it("ger k under 1 när modellen är för tvärsäker", () => {
+    const pts = [0.1, 0.2, 0.8, 0.9].map((p) => ({ pModel: p, pMarket: calibrate(p, 0.6) }));
+    const f = fitCalibration(pts);
+    expect(f.k).toBeCloseTo(0.6, 1);
+    expect(f.warning).toBeNull();
+  });
+
+  it("faller tillbaka på k=1 med varning vid för få punkter", () => {
+    const f = fitCalibration([{ pModel: 0.6, pMarket: 0.5 }]);
+    expect(f.k).toBe(1);
+    expect(f.n).toBe(1);
+    expect(f.warning).not.toBeNull();
   });
 });

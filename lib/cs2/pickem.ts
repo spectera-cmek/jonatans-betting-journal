@@ -382,3 +382,80 @@ export function optimizePicks(
   }
   return { picks: best.picks, pHit: best.pHit, expected: expectedHits(table, best.picks) };
 }
+
+// --- Marknadskalibrering ---------------------------------------------------
+
+const clampP = (p: number) => Math.min(1 - 1e-9, Math.max(1e-9, p));
+const logit = (p: number) => Math.log(clampP(p) / (1 - clampP(p)));
+const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
+
+/**
+ * Avviggar ett tvåvägspris additivt på log-odds: hitta det `c` som gör att
+ * σ(logit(1/oddsA) + c) + σ(logit(1/oddsB) + c) = 1.
+ *
+ * Additivt, inte multiplikativt. Multiplikativ de-vig fördelar marginalen
+ * proportionellt och smickrar därmed höga odds — dokumenterat i den här
+ * kodbasen för fair odds-verktyget.
+ */
+export function devigLogit(oddsA: number, oddsB: number): { pA: number; pB: number } | null {
+  if (!Number.isFinite(oddsA) || !Number.isFinite(oddsB) || oddsA <= 1 || oddsB <= 1) return null;
+  const la = logit(1 / oddsA);
+  const lb = logit(1 / oddsB);
+  let lo = -1;
+  let hi = 1;
+  const f = (c: number) => sigmoid(la + c) + sigmoid(lb + c) - 1;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (f(mid) > 0) hi = mid;
+    else lo = mid;
+  }
+  const c = (lo + hi) / 2;
+  const pA = sigmoid(la + c);
+  return { pA, pB: 1 - pA };
+}
+
+/** Drar modellens sannolikhet mot eller från 0,5 med faktorn k på log-odds. */
+export function calibrate(pModel: number, k: number): number {
+  return sigmoid(k * logit(pModel));
+}
+
+/**
+ * Fittar en global skalfaktor k så modellen möter marknaden på log-odds.
+ *
+ * k under 1 betyder att modellen är för tvärsäker — den drar favoriterna
+ * längre från 0,5 än marknaden gör. Måttet är kvadratsumman mot de avviggade
+ * priserna. En enda k för alla lag: åtta matcher räcker inte till mer.
+ */
+export function fitCalibration(points: Array<{ pModel: number; pMarket: number }>): {
+  k: number;
+  n: number;
+  warning: string | null;
+} {
+  if (points.length < 4) {
+    return {
+      k: 1,
+      n: points.length,
+      warning: "För få marknadspriser för kalibrering — kör okalibrerat.",
+    };
+  }
+  const sse = (k: number) =>
+    points.reduce((sum, p) => sum + (calibrate(p.pModel, k) - p.pMarket) ** 2, 0);
+
+  let bestK = 1;
+  let bestErr = Infinity;
+  for (let k = 0.2; k <= 2.0001; k += 0.01) {
+    const e = sse(k);
+    if (e < bestErr) {
+      bestErr = e;
+      bestK = k;
+    }
+  }
+  for (let k = Math.max(0.2, bestK - 0.01); k <= Math.min(2, bestK + 0.01) + 1e-9; k += 0.001) {
+    const e = sse(k);
+    if (e < bestErr) {
+      bestErr = e;
+      bestK = k;
+    }
+  }
+  return { k: Math.round(bestK * 1000) / 1000, n: points.length, warning: null };
+}
