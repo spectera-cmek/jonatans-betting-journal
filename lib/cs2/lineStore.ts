@@ -48,41 +48,57 @@ export async function kambiRowsForMatch(
 /** Det saveLines skriver till: klienten eller en transaktion. */
 export type Cs2Writer = Pick<PrismaClient, "cs2Line" | "cs2Projection">;
 
-/** Sparar linjerna och modellens pris på var och en (Cs2Projection). Alla ska gälla ctx:s match. */
+/**
+ * Sparar linjerna och modellens pris på var och en (Cs2Projection). Alla ska gälla ctx:s match.
+ *
+ * Två anrop oavsett antal linjer: alla linjer, sedan alla priser. Ett anrop
+ * mot Neon tar ~100 ms från datorn, och Unibet har 200+ linjer för en Bo3
+ * med kartmarknader. Med två anrop per linje hann sparandet inte klart inom
+ * transaktionens 30 s (writeChangedLines), och hela matchen rullades tillbaka
+ * — Imperial–FlyQuest och 9z–DENDELE fick 0 linjer 2026-11-24.
+ */
 export async function saveLines(db: Cs2Writer, ctx: MatchupContext, lines: ValidLine[], createdBy: string | null): Promise<PricedLine[]> {
-  const out: PricedLine[] = [];
-  for (const v of lines) {
-    const { matchId, ...rest } = v;
-    const line = await db.cs2Line.create({ data: { ...v, createdBy } });
-    const priced = priceLine(ctx, { ...rest, id: line.id }, DEFAULT_CS2_BLEND_W);
-    if (priced.price) {
-      await db.cs2Projection.create({
-        data: {
-          matchId,
-          lineId: line.id,
-          market: v.market,
-          scope: v.scope,
-          playerId: v.playerId,
-          player2Id: v.player2Id,
-          teamId: v.teamId,
-          line: v.line,
-          includesOt: v.includesOt,
-          mean: priced.mean,
-          pModel: priced.price.pModel,
-          pMarket: priced.price.pMarket,
-          pFinal: priced.price.pFinal,
-          fairOver: priced.price.fairOver,
-          fairUnder: priced.price.fairUnder,
-          bestSide: priced.price.bestSide,
-          bestOdds: priced.price.bestOdds,
-          edgePct: priced.price.edge != null ? priced.price.edge * 100 : null,
-          modelVersion: CS2_MODEL_VERSION,
-        },
-      });
+  if (lines.length === 0) return [];
+  const created = await db.cs2Line.createManyAndReturn({ data: lines.map((v) => ({ ...v, createdBy })) });
+  // Postgres lämnar tillbaka raderna i den ordning de skickades. Ett pris på
+  // fel linje vore ett tyst fel i facit, så det kontrolleras ändå.
+  const priced = lines.map((v, i) => {
+    const row = created[i];
+    if (!row || lineKey(row) !== lineKey(v) || row.overOdds !== v.overOdds || row.underOdds !== v.underOdds) {
+      throw new Error(`Sparade linjer kom tillbaka i annan ordning (rad ${i}) — modellpriserna sparas inte`);
     }
-    out.push(priced);
-  }
-  return out;
+    const { matchId, ...rest } = v;
+    return priceLine(ctx, { ...rest, id: row.id }, DEFAULT_CS2_BLEND_W);
+  });
+  const projections = priced.flatMap((p, i) => {
+    const v = lines[i];
+    if (!p.price) return [];
+    return [
+      {
+        matchId: v.matchId,
+        lineId: p.id,
+        market: v.market,
+        scope: v.scope,
+        playerId: v.playerId,
+        player2Id: v.player2Id,
+        teamId: v.teamId,
+        line: v.line,
+        includesOt: v.includesOt,
+        mean: p.mean,
+        pModel: p.price.pModel,
+        pMarket: p.price.pMarket,
+        pFinal: p.price.pFinal,
+        fairOver: p.price.fairOver,
+        fairUnder: p.price.fairUnder,
+        bestSide: p.price.bestSide,
+        bestOdds: p.price.bestOdds,
+        edgePct: p.price.edge != null ? p.price.edge * 100 : null,
+        modelVersion: CS2_MODEL_VERSION,
+      },
+    ];
+  });
+  if (projections.length > 0) await db.cs2Projection.createMany({ data: projections });
+  return priced;
 }
 
 /**
