@@ -160,6 +160,23 @@ describe("summarizeFacit", () => {
     const s = summarizeFacit([]);
     expect(s.vsMarket).toBeNull();
     expect(s.flat.roi).toBeNull();
+    expect(s.discarded).toBe(0);
+  });
+
+  it("feltolkade linjer räknas inte som facit", () => {
+    // En kartlinje som lästs som hela matchens: modellen är nästan säker på
+    // över, boken sitter nära 50/50, och utfallet går över varje gång. Sådana
+    // rader gav modellen ett facit den inte förtjänade.
+    const s = summarizeFacit([
+      row({}),
+      row({ pModel: 0.999, pMarket: 0.45, actual: 60, bestOdds: 2.6, edgePct: 130 }),
+      row({ pModel: 0.998, pMarket: 0.4, actual: 55, bestOdds: 2.8, edgePct: 150 }),
+    ]);
+    expect(s.discarded).toBe(2);
+    expect(s.settled).toBe(1);
+    expect(s.flat.bets).toBe(1);
+    expect(s.flat.units).toBeCloseTo(1, 10);
+    expect(s.vsMarket!.n).toBe(1);
   });
 });
 

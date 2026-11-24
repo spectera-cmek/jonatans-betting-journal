@@ -24,9 +24,35 @@ export interface Price {
   bestOdds: number | null;
   /** Bästa sidans EV per satsad enhet. 0.05 = +5 %. */
   edge: number | null;
+  /**
+   * true när modellen och boken är så oense att marknaden troligen är
+   * feltolkad. Då sätts edge, bestSide och bestOdds till null: raden visas,
+   * men den är inget spel. Se PLAUSIBLE_GAP.
+   */
+  implausible: boolean;
 }
 
 const clamp = (p: number) => Math.min(1 - 1e-6, Math.max(1e-6, p));
+const logit = (p: number) => Math.log(clamp(p) / (1 - clamp(p)));
+
+/**
+ * Hur långt ifrån bokens pris modellen får ligga, i log-odds, innan raden
+ * räknas som feltolkad i stället för som en edge.
+ *
+ * Boken har hela marknaden bakom sig. Ligger modellen tolv gånger ifrån den i
+ * odds är det nästan alltid vi som läst marknaden fel — fel karta, fel
+ * marknad, fel spelare — inte boken som missat. Mätt på databasens 4 979
+ * sparade prissättningar: de 3 785 rader där marknaden lästs rätt ligger alla
+ * under 1,8 (99,9-percentilen 1,4), medan alla 1 194 rader från den
+ * feltolkade kartlinjen ligger över 3,5 i median 4,5. 2,5 skiljer dem åt utan
+ * att röra en enda rimlig rad.
+ */
+export const PLAUSIBLE_GAP = 2.5;
+
+/** Är modellen och boken så oense att marknaden troligen är feltolkad? */
+export function isImplausible(pModel: number, pMarket: number | null | undefined): boolean {
+  return pMarket != null && Math.abs(logit(pModel) - logit(pMarket)) > PLAUSIBLE_GAP;
+}
 
 export function priceTwoWay(
   pModelNoPush: number,
@@ -47,6 +73,8 @@ export function priceTwoWay(
   const edgeUnder = hasUnder ? underOdds! * (1 - pFinal) * live + pPush - 1 : null;
   let bestSide: Price["bestSide"] = null;
   if (edgeOver != null || edgeUnder != null) bestSide = (edgeOver ?? -Infinity) >= (edgeUnder ?? -Infinity) ? "over" : "under";
+  const implausible = isImplausible(pModelNoPush, pMarket);
+  const odds = bestSide === "over" ? overOdds ?? null : bestSide === "under" ? underOdds ?? null : null;
   return {
     pModel: clamp(pModelNoPush),
     pMarket,
@@ -56,8 +84,9 @@ export function priceTwoWay(
     fairUnder: 1 / (1 - pFinal),
     edgeOver,
     edgeUnder,
-    bestSide,
-    bestOdds: bestSide === "over" ? overOdds ?? null : bestSide === "under" ? underOdds ?? null : null,
-    edge: bestSide === "over" ? edgeOver : bestSide === "under" ? edgeUnder : null,
+    bestSide: implausible ? null : bestSide,
+    bestOdds: implausible ? null : odds,
+    edge: implausible ? null : bestSide === "over" ? edgeOver : bestSide === "under" ? edgeUnder : null,
+    implausible,
   };
 }

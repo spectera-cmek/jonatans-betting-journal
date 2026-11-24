@@ -348,6 +348,34 @@ describe("öppningar och prissättning", () => {
     const push = priceTwoWay(0.5, 0.2, 2.0, 2.0, 1);
     expect(push.edgeOver).toBeCloseTo(2 * 0.5 * 0.8 + 0.2 - 1);
   });
+
+  it("en linje modellen och boken är fundamentalt oense om prissätts inte", () => {
+    // Fallet som gav påhittade edgar på +50 till +150 %: bokens kartlinje
+    // jämfördes med modellens summa över hela serien, så modellen var nästan
+    // säker på över medan boken satt nära 50/50.
+    const bad = priceTwoWay(0.995, 0, 2.6, 1.45, 0.5);
+    expect(bad.implausible).toBe(true);
+    expect(bad.edge).toBeNull();
+    expect(bad.bestSide).toBeNull();
+    expect(bad.bestOdds).toBeNull();
+    // Sannolikheterna finns kvar: raden ska gå att inspektera, inte spelas.
+    expect(bad.pModel).toBeCloseTo(0.995);
+    expect(bad.pMarket).toBeGreaterThan(0.3);
+
+    // En stor men rimlig avvikelse är fortfarande en edge. 2,5 i log-odds
+    // motsvarar ungefär tolv gånger i odds; databasens rimliga rader låg alla
+    // under 1,8.
+    const good = priceTwoWay(0.62, 0, 1.95, 1.85, 0.5);
+    expect(good.implausible).toBe(false);
+    expect(good.edge).not.toBeNull();
+    expect(priceTwoWay(0.9, 0, 2.0, 2.0, 0.5).implausible).toBe(false);
+
+    // Ett ensidigt pris räcker som jämförelse: att boken håller 2,00 på något
+    // modellen kallar nästan säkert är lika misstänkt.
+    expect(priceTwoWay(0.999, 0, 2.0, null, 1).implausible).toBe(true);
+    // Finns inget bokpris alls finns inget att jämföra med.
+    expect(priceTwoWay(0.999, 0, null, null, 1).implausible).toBe(false);
+  });
 });
 
 describe("angles", () => {

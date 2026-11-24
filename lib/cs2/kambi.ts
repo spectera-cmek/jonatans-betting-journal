@@ -113,13 +113,34 @@ const odds = (v: number | undefined): number | null => {
   return o != null && o > 1 ? Math.round(o * 1000) / 1000 : null;
 };
 
-/** "Map 1", "1st map", "Maps 1-2" → scope. Inget kartnummer → hela matchen. */
-export function scopeOf(label: string): ParsedPropRow["scope"] {
+/** "Map 1", "1st map", "Maps 1-2" → scope. Inget kartnummer i etiketten → null. */
+export function scopeOf(label: string): ParsedPropRow["scope"] | null {
   const l = label.toLowerCase();
   if (/maps?\s*1\s*(?:-|–|&|and|\+|och)\s*2|kart(?:a|or)\s*1\s*(?:-|–|&|och|\+)\s*2/.test(l)) return "maps12";
   const m = l.match(/(?:map|karta)\s*([123])\b|\b([123])(?:st|nd|rd|:a|:e)?\s*(?:map|karta)\b/);
   const n = m?.[1] ?? m?.[2];
-  return n === "1" ? "map1" : n === "2" ? "map2" : n === "3" ? "map3" : "match";
+  return n === "1" ? "map1" : n === "2" ? "map2" : n === "3" ? "map3" : null;
+}
+
+/** Marknader som gäller hela serien även utan kartnummer i etiketten. */
+const SERIES_LEVEL =
+  /match odds|matchodds|moneyline|map handicap|karthandikapp|total maps|antal kartor|correct map score|korrekt kartresultat/i;
+
+/**
+ * Scope för en Kambi-etikett, inklusive vad en omärkt marknad betyder hos Kambi.
+ *
+ * Kambi sätter inget kartnummer på marknaderna för kartan som spelas härnäst.
+ * I utbudet för en Bo3 ligger "Total Rounds" på 14,5–23,5 och "Total Kills by
+ * the Player" på 8,5–17,5, och "Round 13", "First to 12 Rounds" och "1st Half
+ * Round Handicap" finns bara inom en MR12-karta. Bara serienivåns marknader —
+ * matchodds, karthandikapp, antal kartor — gäller hela matchen.
+ *
+ * Utan den här regeln lästes varje omärkt spelarprop som en serietotal:
+ * modellen jämförde sin summa över alla kartor (~45 kills) med bokens
+ * kartlinje (~15) och rapporterade edge på nästan varje linje.
+ */
+export function kambiScope(label: string): ParsedPropRow["scope"] {
+  return scopeOf(label) ?? (SERIES_LEVEL.test(label) ? "match" : "map1");
 }
 
 /** Spelarmarknad? Kambi sätter `participant` även på lagens utfall, så det avgör inte. */
@@ -130,30 +151,38 @@ export function isPlayerOffer(bo: KambiBetOffer): boolean {
 
 /**
  * Vilken av modellens marknader en criterion-etikett avser. Kambis etiketter
- * för CS2: "Map 1 - Total Kills by the Player", "Map 1 - Total Headshots by
- * the Player", "Map 1 - Round Handicap", "Map 1 - Total Rounds", "Map 1 -
- * Round 1" (pistolrundan), "Map 1" (kartvinnare), "Match Odds", "Map
- * Handicap", "Total Maps".
+ * för CS2, med eller utan kartnummer: "Total Kills by the Player", "Total
+ * Headshots by the Player", "Round Handicap", "Total Rounds", "Round 1"
+ * (pistolrundan), "Map 1" (kartvinnare), "Match Odds", "Map Handicap",
+ * "Total Maps".
  */
 export function marketOf(label: string, isPlayer: boolean): ParsedPropRow["market"] {
   const l = label.toLowerCase().replace(/\s+/g, " ").trim();
   const rest = l.replace(/^(?:map|karta) [123](?: ?[-–] ?)?/, "").trim();
-  const onMap = scopeOf(label) !== "match";
+  const onMap = kambiScope(label) !== "match";
+  // Utanför modellen oavsett nivå: udda/jämnt, exakt resultat, övertid och
+  // "först till N rundor" — och halvlekar, eftersom modellen räknar hela kartor.
+  if (/odd\/even|udda|correct|korrekt|overtime|förlängning|first to \d|först till/.test(l)) return "other";
+  if (/\b1st half\b|\bfirst half\b|halvlek/.test(l)) return "other";
   if (isPlayer) {
+    // AWP-kills är en delmängd av spelarens kills, inte kills-marknaden: de
+    // ligger kring 4,5–6,5 där kills-linjen ligger kring 15.
+    if (/\bawp\b/.test(l)) return "other";
     if (/headshot|huvudskott/.test(l)) return "headshots";
     if (/first (?:kill|blood)|första kill/.test(l)) return "player_first_kill";
     if (/\bkills?\b/.test(l)) return "kills";
     return "other";
   }
-  // Udda/jämnt, exakt resultat, övertid och "först till N rundor" finns inte i modellen.
-  if (/odd\/even|udda|correct|korrekt|overtime|förlängning|first to \d|först till/.test(l)) return "other";
   if (/first (?:kill|blood)|första kill/.test(l)) return onMap ? "first_kill" : "other";
+  // Lagets och de kombinerade kills-marknaderna prissätter modellen inte.
   if (/\bkills?\b|headshot/.test(l)) return "other";
   if (/pistol/.test(l) || /^(?:round|runda) 1$/.test(rest)) return onMap ? "pistol" : "other";
-  // "Round Handicap" utan kartnummer gäller rundorna över hela matchen — det
-  // prissätter modellen inte (se mapBetOffers för Bo1, där det är kartans).
-  if (/handicap|handikapp/.test(l)) return onMap ? "map_handicap" : isRoundHandicap(l) ? "other" : "match_handicap";
-  if (/total rounds|antal rundor/.test(l)) return onMap ? "rounds" : "other";
+  // Rundhandikappet hör till kartan. Ett karthandikapp ("Map Handicap") är
+  // något annat och gäller serien.
+  if (/handicap|handikapp/.test(l)) return isRoundHandicap(l) ? (onMap ? "map_handicap" : "other") : "match_handicap";
+  // Bara den rena rundtotalen: "Total Rounds Won by Bomb Explosion" och dess
+  // syskonmarknader räknar något annat än kartans rundor.
+  if (/^(?:total rounds|antal rundor)$/.test(rest)) return onMap ? "rounds" : "other";
   if (/total maps|antal kartor/.test(l)) return "total_maps";
   if (rest === "" || /match odds|matchodds|winner|vinnare|moneyline/.test(l)) return onMap ? "map_winner" : "match_winner";
   return "other";
@@ -171,20 +200,16 @@ const UNDER = new Set(["OT_UNDER", "OT_NO"]);
  * Kambis marknader → rader i samma form som skärmdumpstolkningen. Lagmarknader
  * anges från lag 1:s sida (OT_ONE: team, line och overOdds; OT_TWO: underOdds).
  * Stängda utfall hoppas över; okända marknader blir "other" så att de syns men
- * inte sparas. `format` (bo1/bo3/bo5): i en Bo1 är matchens rundhandikapp
- * kartans, så den blir karta 1:s rundhandikapp. Utan format gäller Bo3.
+ * inte sparas. Omärkta marknader hör till kartan som spelas härnäst, se
+ * `kambiScope` — det gäller lika i en Bo1 och en Bo3.
  */
-export function mapBetOffers(offers: KambiBetOffer[], event: Pick<KambiEvent, "homeName" | "awayName">, format?: string): ParsedPropRow[] {
+export function mapBetOffers(offers: KambiBetOffer[], event: Pick<KambiEvent, "homeName" | "awayName">): ParsedPropRow[] {
   const rows: ParsedPropRow[] = [];
   for (const bo of offers) {
     const label = bo.criterion?.englishLabel ?? bo.criterion?.label ?? "";
-    let scope = scopeOf(label);
+    const scope = kambiScope(label);
     const isPlayer = isPlayerOffer(bo);
-    let market = marketOf(label, isPlayer);
-    if (format === "bo1" && !isPlayer && scope === "match" && isRoundHandicap(label)) {
-      market = "map_handicap";
-      scope = "map1";
-    }
+    const market = marketOf(label, isPlayer);
     const handicap = market === "map_handicap" || market === "match_handicap";
     const outs = (bo.outcomes ?? []).filter((o) => !o.status || o.status === "OPEN");
     // En betoffer kan innehålla flera spelare och flera linjer — gruppera.

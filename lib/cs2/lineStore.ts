@@ -35,7 +35,7 @@ export async function kambiRowsForMatch(
   if (!event) return null;
   const players = await db.cs2Player.findMany({ where: { teamId: { in: teams.map((t) => t.id) } }, select: { id: true, nickname: true, teamId: true } });
   // Marknader utanför modellen (udda/jämnt, övertid, exakt resultat …) är bara brus här.
-  const parsed = mapBetOffers(await fetchBetOffers(event.id), event, match.format).filter((r) => r.market !== "other");
+  const parsed = mapBetOffers(await fetchBetOffers(event.id), event).filter((r) => r.market !== "other");
   const teamOf = matchTeams(parsed.map((r) => r.team), teams);
   return parsed.map((r) => {
     const playerId = matchPlayer(r.player, players);
