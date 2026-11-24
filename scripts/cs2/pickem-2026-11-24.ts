@@ -19,12 +19,15 @@ import { mapDistribution, DEFAULT_SIGMA } from "../../lib/cs2/mapModel";
 import { matchSpread, pistolWinProb, roundWinProb } from "../../lib/cs2/ratings";
 import { activeMapPool } from "../../lib/cs2/maps";
 import { fetchBetOffers, fetchCs2Events, findKambiEvent } from "../../lib/cs2/kambi";
+import { matchTeam } from "../../lib/cs2/propsMatch";
 import {
+  assertAdvanceSum,
   calibrate,
   devigLogit,
   expectedHits,
   fitCalibration,
   greedyPicks,
+  matchOddsSides,
   optimizePicks,
   pHitAtLeast,
   simulateSwiss,
@@ -241,16 +244,17 @@ async function main() {
       continue;
     }
     const offer = offers.find((o) => (o.criterion?.englishLabel ?? o.criterion?.label) === "Match Odds");
-    const outs = offer?.outcomes ?? [];
-    const hit = (teamName: string) =>
-      outs.find((o) => {
-        const label = `${o.participant ?? ""} ${o.englishLabel ?? o.label ?? ""}`.toLowerCase();
-        const needle = teamName.toLowerCase().split(/\s+/)[0];
-        return label.includes(needle);
-      });
-    const oa = hit(name(a))?.odds;
-    const ob = hit(name(b))?.odds;
-    const dv = oa != null && ob != null ? devigLogit(oa / 1000, ob / 1000) : null;
+    // Lagnamnen matchas med repots egen matchTeam — samma funktion
+    // findKambiEvent använder. Den strippar Team/Esports/Gaming och kan
+    // alias (NAVI → Natus Vincere). En förstaordsmatchning skulle para
+    // "Team Spirit" och "Team Falcons" till samma utfall.
+    const sides = matchOddsSides(
+      offer?.outcomes ?? [],
+      (label) => matchTeam(label, [{ id: a, name: name(a) }, { id: b, name: name(b) }]),
+      a,
+      b
+    );
+    const dv = sides ? devigLogit(sides.oddsA / 1000, sides.oddsB / 1000) : null;
     if (!dv) {
       console.log(`  ${name(a).padEnd(20)} modell ${pct(pModel)}  marknad      —  (inget Match Odds-pris)`);
       continue;
@@ -301,6 +305,7 @@ async function main() {
   }
   const advSum = ids.reduce((s, id) => s + table.p30.get(id)! + table.pAdv.get(id)!, 0);
   console.log(`  Summa P(vidare) = ${advSum.toFixed(3)} (ska vara 8,000)`);
+  assertAdvanceSum(table);
 
   const best = optimizePicks(table, AT_LEAST, mulberry32(SEED + 1));
   const greedy = greedyPicks(table);

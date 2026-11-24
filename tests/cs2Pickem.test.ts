@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
+  assertAdvanceSum,
   buchholz,
   calibrate,
   devigLogit,
   fitCalibration,
   isBo3,
+  matchOddsSides,
   pairGroup,
   expectedHits,
   greedyPicks,
@@ -327,5 +329,144 @@ describe("fitCalibration", () => {
     expect(f.k).toBe(1);
     expect(f.n).toBe(1);
     expect(f.warning).not.toBeNull();
+  });
+});
+
+describe("pairGroup — rond 5:s 2-2-grupp", () => {
+  // Fallet granskningen hittade: i 2-2-gruppen i rond 5 kan ett lag ha mött
+  // två av gruppens andra lag. Då räcker inte ett enkelt byte i underhalvan —
+  // den omatchfria parningen kräver att två lag ur överhalvan möts.
+  const group = [
+    { id: 2, buchholz: 5, seed: 2 },
+    { id: 6, buchholz: 2, seed: 6 },
+    { id: 7, buchholz: 2, seed: 7 },
+    { id: 10, buchholz: -2, seed: 10 },
+    { id: 11, buchholz: -2, seed: 11 },
+    { id: 15, buchholz: -5, seed: 15 },
+  ];
+  const played = new Set(["2|10", "7|15", "2|7", "10|15", "6|11", "7|10"]);
+
+  it("hittar den omatchfria parningen även när den kräver två ur överhalvan", () => {
+    const pairs = pairGroup(group, played);
+    expect(pairs).toHaveLength(3);
+    for (const [a, b] of pairs) {
+      expect(played.has(a < b ? `${a}|${b}` : `${b}|${a}`)).toBe(false);
+    }
+  });
+
+  it("parar varje lag exakt en gång", () => {
+    const pairs = pairGroup(group, played);
+    expect(new Set(pairs.flat()).size).toBe(6);
+  });
+
+  it("är deterministisk", () => {
+    expect(pairGroup(group, played)).toEqual(pairGroup(group, played));
+  });
+});
+
+describe("matchOddsSides", () => {
+  const resolve = (label: string) => {
+    const l = label.toLowerCase();
+    if (l.includes("spirit")) return 1;
+    if (l.includes("falcons")) return 2;
+    return null;
+  };
+
+  it("parar utfallen mot rätt lag oavsett ordning", () => {
+    const outs = [
+      { participant: "Team Falcons", odds: 2100 },
+      { participant: "Team Spirit", odds: 1750 },
+    ];
+    expect(matchOddsSides(outs, resolve, 1, 2)).toEqual({ oddsA: 1750, oddsB: 2100 });
+  });
+
+  it("vägrar när båda sidor pekar på samma lag", () => {
+    const outs = [
+      { participant: "Team Spirit", odds: 2900 },
+      { participant: "Team Spirit", odds: 2900 },
+    ];
+    expect(matchOddsSides(outs, resolve, 1, 2)).toBeNull();
+  });
+
+  it("vägrar när ett lag inte går att känna igen", () => {
+    const outs = [
+      { participant: "Team Spirit", odds: 1750 },
+      { participant: "NAVI", odds: 2100 },
+    ];
+    expect(matchOddsSides(outs, resolve, 1, 2)).toBeNull();
+  });
+
+  it("vägrar när ett odds saknas", () => {
+    const outs = [{ participant: "Team Spirit", odds: 1750 }, { participant: "Team Falcons" }];
+    expect(matchOddsSides(outs, resolve, 1, 2)).toBeNull();
+  });
+});
+
+describe("devigLogit — ytterligheter", () => {
+  it("ger 0,5 på ett symmetriskt par även vid extrem marginal", () => {
+    expect(devigLogit(1.01, 1.01)!.pA).toBeCloseTo(0.5, 6);
+  });
+
+  it("vägrar ett par som inte är en tvåvägsmarknad", () => {
+    // 1/2,9 + 1/2,9 = 0,69: underrunda, alltså inte två sidor av samma marknad.
+    expect(devigLogit(2.9, 2.9)).toBeNull();
+  });
+});
+
+describe("fitCalibration — gränser", () => {
+  it("varnar när k fastnar mot rutnätets kant", () => {
+    const pts = [0.1, 0.25, 0.75, 0.9].map((p) => ({ pModel: p, pMarket: calibrate(p, 3.5) }));
+    const f = fitCalibration(pts);
+    expect(f.k).toBe(2);
+    expect(f.warning).not.toBeNull();
+  });
+
+  it("varnar när en punkt inte är ett tal", () => {
+    const pts = [
+      { pModel: NaN, pMarket: 0.5 },
+      { pModel: 0.4, pMarket: 0.45 },
+      { pModel: 0.6, pMarket: 0.55 },
+      { pModel: 0.7, pMarket: 0.66 },
+    ];
+    expect(fitCalibration(pts).warning).not.toBeNull();
+  });
+});
+
+describe("assertAdvanceSum", () => {
+  it("släpper igenom en tabell där åtta lag går vidare", () => {
+    const table = tally(favouriteSims(), TEAM_IDS);
+    expect(() => assertAdvanceSum(table)).not.toThrow();
+  });
+
+  it("kastar när summan inte är åtta", () => {
+    const broken = tally(favouriteSims(), TEAM_IDS.slice(0, 6));
+    expect(() => assertAdvanceSum(broken)).toThrow(/vidare/i);
+  });
+});
+
+describe("matchOddsSides — Kambis riktiga form", () => {
+  // Kambi skickar samma namn i både participant och englishLabel. Slås de
+  // ihop blir etiketten "9z Team 9z Team", som ingen namnmatchning känner igen.
+  const resolve = (label: string) => {
+    const l = label.toLowerCase().replace(/\s+(team|gaming|esports)\b/g, "").trim();
+    if (l === "9z") return 1;
+    if (l === "lynn vision") return 2;
+    return null;
+  };
+
+  it("dubblerar inte lagnamnet när participant och englishLabel är lika", () => {
+    const outs = [
+      { participant: "9z Team", englishLabel: "9z Team", label: "9z Team", odds: 1520 },
+      { participant: "Lynn Vision Gaming", englishLabel: "Lynn Vision Gaming", label: "Lynn Vision Gaming", odds: 2480 },
+    ];
+    expect(matchOddsSides(outs, resolve, 1, 2)).toEqual({ oddsA: 1520, oddsB: 2480 });
+  });
+
+  it("faller tillbaka på englishLabel när participant saknas", () => {
+    const outs = [
+      { englishLabel: "9z Team", odds: 1520 },
+      { englishLabel: "Lynn Vision Gaming", odds: 2480 },
+    ];
+    expect(matchOddsSides(outs, resolve, 1, 2)).toEqual({ oddsA: 1520, oddsB: 2480 });
   });
 });

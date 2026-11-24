@@ -54,13 +54,28 @@ export function buchholz(record: Map<number, { w: number; l: number }>, opponent
   return sum;
 }
 
+/** Alla perfekta parningar av en jämn mängd lag. 6 lag ger 15, 8 ger 105. */
+function perfectMatchings(ids: number[]): Array<Array<[number, number]>> {
+  if (ids.length === 0) return [[]];
+  const [first, ...rest] = ids;
+  const out: Array<Array<[number, number]>> = [];
+  for (let i = 0; i < rest.length; i++) {
+    const remaining = rest.filter((_, j) => j !== i);
+    for (const m of perfectMatchings(remaining)) out.push([[first, rest[i]], ...m]);
+  }
+  return out;
+}
+
 /**
  * Parar en facitgrupp: sortera på buchholz fallande, därefter seed stigande,
  * och ställ högsta mot lägsta (1 mot n, 2 mot n−1, …).
  *
- * Vid omatch byts motståndaren mot ett annat pars motståndare. Går ingen
- * bytessekvens hem behålls den ursprungliga parningen — en omatch är bättre än
- * ett undantag mitt i 200 000 simuleringar.
+ * Vid omatch byts motståndaren mot ett annat pars motståndare. Räcker inte det
+ * söks alla perfekta parningar igenom efter en omatchfri — nödvändigt i rond
+ * 5:s 2-2-grupp, där ett lag kan ha mött två av gruppens andra lag och den
+ * omatchfria parningen kräver att två lag ur överhalvan möts. Finns ingen
+ * omatchfri parning behålls grundparningen; en omatch är bättre än ett
+ * undantag mitt i 200 000 simuleringar.
  */
 export function pairGroup(
   group: Array<{ id: number; buchholz: number; seed: number }>,
@@ -84,7 +99,31 @@ export function pairGroup(
     }
   }
 
-  return top.map((id, i) => [id, bottom[i]] as [number, number]);
+  let pairs = top.map((id, i) => [id, bottom[i]] as [number, number]);
+  const hasRematch = (ps: Array<[number, number]>) => ps.some(([a, b]) => played.has(pairKey(a, b)));
+  if (!hasRematch(pairs)) return pairs;
+
+  // Grundparningen går inte hem. Leta i stället igenom alla perfekta parningar
+  // och ta den omatchfria som behåller mest av grundparningen.
+  const order = sorted.map((t) => t.id);
+  const rank = new Map(order.map((id, i) => [id, i]));
+  const base = new Set(pairs.map(([a, b]) => pairKey(a, b)));
+  let best: Array<[number, number]> | null = null;
+  let bestKept = -1;
+  for (const m of perfectMatchings(order)) {
+    if (hasRematch(m)) continue;
+    const kept = m.filter(([a, b]) => base.has(pairKey(a, b))).length;
+    if (kept > bestKept) {
+      bestKept = kept;
+      best = m;
+    }
+  }
+  if (best) {
+    pairs = best.map(([a, b]) =>
+      (rank.get(a) ?? 0) <= (rank.get(b) ?? 0) ? ([a, b] as [number, number]) : ([b, a] as [number, number])
+    );
+  }
+  return pairs;
 }
 
 /**
@@ -399,10 +438,14 @@ const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
  */
 export function devigLogit(oddsA: number, oddsB: number): { pA: number; pB: number } | null {
   if (!Number.isFinite(oddsA) || !Number.isFinite(oddsB) || oddsA <= 1 || oddsB <= 1) return null;
+  // Två sidor av samma marknad summerar till minst 1 i råa sannolikheter —
+  // marginalen. Ligger summan under 1 är det ingen marknad man kan vinna på
+  // båda sidor av, utan två priser som parats fel.
+  if (1 / oddsA + 1 / oddsB < 1 - 1e-12) return null;
   const la = logit(1 / oddsA);
   const lb = logit(1 / oddsB);
-  let lo = -1;
-  let hi = 1;
+  let lo = -8;
+  let hi = 8;
   const f = (c: number) => sigmoid(la + c) + sigmoid(lb + c) - 1;
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2;
@@ -410,6 +453,7 @@ export function devigLogit(oddsA: number, oddsB: number): { pA: number; pB: numb
     else lo = mid;
   }
   const c = (lo + hi) / 2;
+  if (Math.abs(f(c)) > 1e-9) return null;
   const pA = sigmoid(la + c);
   return { pA, pB: 1 - pA };
 }
@@ -438,24 +482,105 @@ export function fitCalibration(points: Array<{ pModel: number; pMarket: number }
       warning: "För få marknadspriser för kalibrering — kör okalibrerat.",
     };
   }
+  if (points.some((p) => !Number.isFinite(p.pModel) || !Number.isFinite(p.pMarket))) {
+    return { k: 1, n: points.length, warning: "Någon kalibreringspunkt är inte ett tal — kör okalibrerat." };
+  }
   const sse = (k: number) =>
     points.reduce((sum, p) => sum + (calibrate(p.pModel, k) - p.pMarket) ** 2, 0);
 
+  const K_LO = 0.2;
+  const K_HI = 2.0;
   let bestK = 1;
   let bestErr = Infinity;
-  for (let k = 0.2; k <= 2.0001; k += 0.01) {
+  for (let k = K_LO; k <= K_HI + 1e-4; k += 0.01) {
     const e = sse(k);
     if (e < bestErr) {
       bestErr = e;
       bestK = k;
     }
   }
-  for (let k = Math.max(0.2, bestK - 0.01); k <= Math.min(2, bestK + 0.01) + 1e-9; k += 0.001) {
+  for (let k = Math.max(K_LO, bestK - 0.01); k <= Math.min(K_HI, bestK + 0.01) + 1e-9; k += 0.001) {
     const e = sse(k);
     if (e < bestErr) {
       bestErr = e;
       bestK = k;
     }
   }
-  return { k: Math.round(bestK * 1000) / 1000, n: points.length, warning: null };
+  const k = Math.round(bestK * 1000) / 1000;
+  // Fastnar optimum mot rutnätets kant är det inget fit — modellen ligger
+  // utanför vad en enda skalfaktor kan överbrygga, och k ska inte redovisas
+  // som om den mött marknaden.
+  const clipped = k <= K_LO + 0.011 || k >= K_HI - 0.011;
+  return {
+    k,
+    n: points.length,
+    warning: clipped
+      ? `k fastnade mot sökintervallets kant (${K_LO}–${K_HI}) — modellen och marknaden är för långt ifrån varandra för en enda skalfaktor.`
+      : null,
+  };
+}
+
+/**
+ * Parar ihop ett tvåvägspris utfall-för-utfall mot två lag.
+ *
+ * Bokens utfall kommer inte i vår ordning, och lagnamnen skiljer sig
+ * (`Natus Vincere` mot `NAVI`). `resolve` ska översätta en utfallsetikett till
+ * ett lag-id. Kravet är strikt: exakt ett utfall per lag, två skilda utfall,
+ * båda med odds. Allt annat ger null — ett fabricerat pris förgiftar
+ * kalibreringen och därmed varje simulering.
+ */
+export function matchOddsSides<T extends { participant?: string; englishLabel?: string; label?: string; odds?: number }>(
+  outcomes: T[],
+  resolve: (label: string) => number | null,
+  a: number,
+  b: number
+): { oddsA: number; oddsB: number } | null {
+  let iA = -1;
+  let iB = -1;
+  for (let i = 0; i < outcomes.length; i++) {
+    const o = outcomes[i];
+    // Kambi skickar samma namn i både participant och englishLabel. Slås de
+    // ihop blir etiketten "9z Team 9z Team" och ingen namnmatchning hittar
+    // laget — varje kandidat prövas därför för sig.
+    const candidates = [o.participant, o.englishLabel, o.label].filter(
+      (c): c is string => typeof c === "string" && c.trim() !== ""
+    );
+    let id: number | null = null;
+    for (const c of candidates) {
+      id = resolve(c.trim());
+      if (id != null) break;
+    }
+    if (id === a) {
+      if (iA >= 0) return null;
+      iA = i;
+    } else if (id === b) {
+      if (iB >= 0) return null;
+      iB = i;
+    }
+  }
+  if (iA < 0 || iB < 0 || iA === iB) return null;
+  const oddsA = outcomes[iA].odds;
+  const oddsB = outcomes[iB].odds;
+  if (oddsA == null || oddsB == null) return null;
+  return { oddsA, oddsB };
+}
+
+/**
+ * Kontrollerar att exakt åtta lag går vidare i utfallstabellen.
+ *
+ * Summan av P(vidare) över alla lag måste bli 8,000 — varje simulering skickar
+ * åtta vidare. Blir den något annat är parningen eller formatreglerna trasiga
+ * och hela tabellen oanvändbar, så det ska fälla körningen och inte skrivas ut
+ * som en rad man kan missa.
+ */
+export function assertAdvanceSum(table: OutcomeTable, expected = 8, tolerance = 0.05): void {
+  const sum = table.teams.reduce(
+    (s, id) => s + (table.p30.get(id) ?? 0) + (table.pAdv.get(id) ?? 0),
+    0
+  );
+  if (Math.abs(sum - expected) > tolerance) {
+    throw new Error(
+      `Summan av P(vidare) är ${sum.toFixed(3)}, väntade ${expected.toFixed(3)} — parningen eller formatreglerna är trasiga.`
+    );
+  }
 }
