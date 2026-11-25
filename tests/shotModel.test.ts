@@ -18,6 +18,7 @@ import {
   projectMatch,
   lineProbs,
   fairOdds,
+  modelFairLine,
   marketProbOver,
   marketConsensus,
   lambdaFromLineProb,
@@ -472,6 +473,36 @@ describe("fairOdds", () => {
   it("inverts the probability", () => {
     expect(fairOdds(0.5)).toBeCloseTo(2, 12);
     expect(fairOdds(0.25)).toBeCloseTo(4, 12);
+  });
+});
+
+describe("modelFairLine", () => {
+  it("picks the half line whose over probability is closest to 50 %", () => {
+    // Svansar: Ö0,5 = 0,9 · Ö1,5 = 0,7 · Ö2,5 = 0,4 → 2,5 ligger närmast.
+    const r = modelFairLine([0.1, 0.2, 0.3, 0.4]);
+    expect(r.line).toBe(2.5);
+    expect(r.pOver).toBeCloseTo(0.4, 12);
+    expect(r.fairOver).toBeCloseTo(2.5, 12);
+    expect(r.fairUnder).toBeCloseTo(1 / 0.6, 12);
+  });
+
+  it("lands next to the mean on a realistic count distribution", () => {
+    const pmf = negBinPmfVector(10, 1e6); // i praktiken Poisson(10)
+    const r = modelFairLine(pmf);
+    // P(X ≥ 10) ≈ 0,542 och P(X ≥ 11) ≈ 0,417 — 9,5 vinner.
+    expect(r.line).toBe(9.5);
+    expect(r.pOver).toBeCloseTo(negBinAtLeast(10, 10, 1e6), 9);
+  });
+
+  it("chooses and prices on the calibrated probability", () => {
+    const pmf = [0.1, 0.2, 0.3, 0.4];
+    const cal = { a: 0.4, b: 1, n: 500 };
+    const r = modelFairLine(pmf, cal);
+    const calibrated = [0.9, 0.7, 0.4].map((p) => applyCalibration(p, cal));
+    const best = calibrated.reduce((bi, p, i) => (Math.abs(p - 0.5) < Math.abs(calibrated[bi] - 0.5) ? i : bi), 0);
+    expect(r.line).toBe(best + 0.5);
+    expect(r.pOver).toBeCloseTo(calibrated[best], 12);
+    expect(r.fairOver * r.pOver).toBeCloseTo(1, 12);
   });
 });
 

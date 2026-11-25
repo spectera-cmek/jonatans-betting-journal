@@ -9,8 +9,12 @@ import { I, IC } from "@/components/icons";
 import { api } from "@/lib/fetcher";
 import type { ShotScreenRow, ShotScreenMeta } from "@/lib/shotScreen";
 import { DEFAULT_BLEND_W } from "@/lib/shotModel";
-import { ManualShotOdds } from "@/components/ManualShotOdds";
+import { ManualShotOdds, type FixturesResponse } from "@/components/ManualShotOdds";
+import { ShotProjections, type ShotOddsPreset } from "@/components/ShotProjections";
 import { useMetrics } from "@/lib/useData";
+
+/** Projektionerna hämtas en gång för längsta horisonten och filtreras här. */
+const PROJECTION_DAYS = 14;
 
 const GRID = "78px 1.6fr 1fr 66px 62px 74px 74px 92px 84px";
 
@@ -161,12 +165,49 @@ export default function ShotsPage() {
     };
   }, [league, metric, minEdge, days, blendW]);
 
+  // Modellens λ för kommande matcher — kräver inga odds. Delas av
+  // projektionstabellen och kalkylatorn så att de visar samma siffror.
+  const [proj, setProj] = useState<FixturesResponse | null>(null);
+  const [projLoading, setProjLoading] = useState(true);
+  const [preset, setPreset] = useState<ShotOddsPreset | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<FixturesResponse>(`/api/shots/fixtures?days=${PROJECTION_DAYS}`)
+      .then((r) => {
+        if (!cancelled) setProj(r);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setProjLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const shownFixtures = useMemo(() => {
+    const until = Date.now() + days * 86_400_000;
+    return (proj?.fixtures ?? []).filter(
+      (f) => (!league || f.leagueKey === league) && new Date(f.kickoffAt).getTime() <= until
+    );
+  }, [proj, league, days]);
+
+  const pickLine = (p: Omit<ShotOddsPreset, "nonce">) => {
+    setPreset({ ...p, nonce: Date.now() });
+    document.getElementById("shot-calc")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const { data: metricsData } = useMetrics();
   const bankrollUnits =
     (metricsData?.settings.startingBankrollUnits ?? 100) + (metricsData?.metrics?.profitUnits ?? 0);
 
   const rows = data?.rows ?? [];
   const meta = data?.meta;
+  // Utan lagrade bolagspriser kan screenen aldrig visa en edge — då är
+  // edge-filtret och edge-siffrorna bara brus.
+  const noOdds = !!meta?.missingOdds;
 
   const headline = useMemo(() => {
     if (rows.length === 0) return null;
@@ -177,8 +218,11 @@ export default function ShotsPage() {
 
   const trainedMatches = meta?.leagues.reduce((s, l) => s + l.matches, 0) ?? 0;
   // Tabellhuvudet utan tabell är bara brus — visa det först när det finns en
-  // modell bakom. Undantaget är laddning, där skelettraden hör hemma.
-  const showTable = loading || (!error && !!meta?.dbConfigured && trainedMatches > 0);
+  // modell och priser bakom. Vid omladdning ligger förra svarets meta kvar.
+  const showTable = !error && !!meta?.dbConfigured && trainedMatches > 0 && !noOdds;
+  // Projektionerna har eget anrop och klarar sig utan screenens svar; bara en
+  // tom databas (som har egna kort nedan) döljer dem.
+  const showProjections = (projLoading || !!proj?.dbConfigured) && (!meta || trainedMatches > 0);
 
   return (
     <div>
@@ -214,18 +258,20 @@ export default function ShotsPage() {
             </div>
           </div>
 
-          <div className="ap-field">
-            <label htmlFor="shot-edge">Lägsta edge</label>
-            <div className="ap-select">
-              <select id="shot-edge" value={minEdge} onChange={(e) => setMinEdge(Number(e.target.value))}>
-                <option value={-100}>Visa allt</option>
-                <option value={0}>0 %</option>
-                <option value={2}>2 %</option>
-                <option value={5}>5 %</option>
-                <option value={8}>8 %</option>
-              </select>
+          {!noOdds && (
+            <div className="ap-field">
+              <label htmlFor="shot-edge">Lägsta edge</label>
+              <div className="ap-select">
+                <select id="shot-edge" value={minEdge} onChange={(e) => setMinEdge(Number(e.target.value))}>
+                  <option value={-100}>Visa allt</option>
+                  <option value={0}>0 %</option>
+                  <option value={2}>2 %</option>
+                  <option value={5}>5 %</option>
+                  <option value={8}>8 %</option>
+                </select>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="ap-field">
             <label htmlFor="shot-days">Horisont</label>
@@ -259,14 +305,36 @@ export default function ShotsPage() {
         </div>
 
         <div className="ap-shot-summary">
-          <InlineStat label="Linjer med edge" value={String(rows.length)} />
-          <InlineStat label="Bästa edge" value={headline ? signedPct(headline.best.edge) : "—"} tone={headline && headline.best.edge > 0 ? "pos" : undefined} />
+          {!noOdds && (
+            <>
+              <InlineStat label="Linjer med edge" value={String(rows.length)} />
+              <InlineStat label="Bästa edge" value={headline ? signedPct(headline.best.edge) : "—"} tone={headline && headline.best.edge > 0 ? "pos" : undefined} />
+            </>
+          )}
           <InlineStat label="Kommande matcher" value={String(meta?.fixtures ?? 0)} />
           <InlineStat label="Matcher i modellen" value={String(trainedMatches)} />
+          {noOdds && <InlineStat label="Lagrade bolagspriser" value="0" />}
         </div>
       </Card>
 
-      <ManualShotOdds bankrollUnits={bankrollUnits} blendW={blendW / 100} />
+      {showProjections && (
+        <ShotProjections
+          fixtures={shownFixtures}
+          loading={projLoading}
+          metricFilter={metric}
+          onPick={pickLine}
+        />
+      )}
+
+      <div id="shot-calc">
+        <ManualShotOdds
+          bankrollUnits={bankrollUnits}
+          blendW={blendW / 100}
+          data={proj}
+          loading={projLoading}
+          preset={preset}
+        />
+      </div>
 
       {error && (
         <Card>
@@ -290,16 +358,6 @@ export default function ShotsPage() {
             icon={IC.bars}
             title="Ingen matchdata inläst än"
             hint="Kör npm run shots:ingest -- --league allsvenskan --confirm för att fylla på historiken modellen tränar på."
-          />
-        </Card>
-      )}
-
-      {!error && !loading && trainedMatches > 0 && meta?.missingOdds && (
-        <Card>
-          <Empty
-            icon={IC.percent}
-            title="Inga odds lagrade för kommande matcher"
-            hint="Kör npm run shots:odds -- --upcoming --confirm. Modellen kan bara visa edge på linjer som böckerna faktiskt prissatt."
           />
         </Card>
       )}
@@ -378,7 +436,7 @@ export default function ShotsPage() {
       </div>
 
       {/* kort (mobil) */}
-      <div className="ap-betcards">
+      <div className="ap-betcards" style={{ display: showTable ? undefined : "none" }}>
         {loading && <div className="ap-betcard-empty">Laddar…</div>}
         {!loading &&
           rows.map((r) => {

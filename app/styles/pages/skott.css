@@ -104,6 +104,114 @@
 .ap-betcard .ap-shot-books {
   max-width: none;
 }
+/* ---- Matchprojektioner: modellens siffror utan odds ---- */
+.ap-shot-proj-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+.ap-shot-proj-cell b {
+  font-weight: 600;
+}
+.ap-shot-proj-cell span,
+.ap-shot-proj-split {
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+  font-style: normal;
+}
+.ap-shot-proj-fine {
+  margin: 0;
+  padding: 8px var(--pad-x);
+  border-top: 1px solid var(--line2);
+}
+/* Line matrix: metric down the side, home / away / match across. */
+.ap-shot-lines {
+  display: grid;
+  grid-template-columns: minmax(84px, auto) repeat(3, minmax(0, 1fr));
+  gap: 6px 8px;
+  max-width: 720px;
+}
+.ap-shot-lines-head,
+.ap-shot-lines-row {
+  display: contents;
+}
+.ap-shot-lines-head > span {
+  color: var(--dim2);
+  font-family: var(--disp);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ap-shot-lines-metric {
+  align-self: center;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.ap-shot-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+  color: var(--txt);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ap-shot-line:hover {
+  border-color: var(--acc-line);
+  background: var(--hover);
+}
+.ap-shot-line:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+.ap-shot-line-top {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.ap-shot-line-top b {
+  color: var(--txt);
+  font-weight: 600;
+}
+.ap-shot-line-lambda {
+  margin-left: auto;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+.ap-shot-line-odds {
+  font-size: var(--fs-xs);
+  color: var(--dim2);
+}
+@media (max-width: 520px) {
+  .ap-shot-lines {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  /* On a phone the metric name gets its own row above its three lines. */
+  .ap-shot-lines-head > span:first-child {
+    display: none;
+  }
+  .ap-shot-lines-metric {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+  }
+  .ap-shot-line-lambda {
+    display: none;
+  }
+}
+/* The calculator is scrolled to from a picked line; keep it clear of the top nav. */
+#shot-calc {
+  scroll-margin-top: 72px;
+}
+
 /* Opening a panel on its own, the summary needs no rule above it. */
 .ap-shot-summary:first-child {
   margin-top: 0;
