@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_ONE_SIDED_MARGIN_PCT,
+  MEASURED_RHO_PRESETS,
+  RHO_MAX,
+  RHO_MIN,
   combineLegs,
   devigCombinedOver,
   devigOneSided,
@@ -153,6 +156,31 @@ describe("jointProb", () => {
   it("clamps to the Fréchet upper bound", () => {
     // raw 0.18 + 0.9·√0.0504 ≈ 0.382 > min(0.3, 0.6) → 0.3
     expect(jointProb(0.3, 0.6, 0.9)).toBeCloseTo(0.3, 10);
+  });
+});
+
+describe("MEASURED_RHO_PRESETS (npm run shots:gamestate)", () => {
+  it("ligger inom reglagets gränser och på dess steg om 0,05", () => {
+    expect(MEASURED_RHO_PRESETS.length).toBeGreaterThan(0);
+    for (const p of MEASURED_RHO_PRESETS) {
+      expect(p.rho).toBeGreaterThanOrEqual(RHO_MIN);
+      expect(p.rho).toBeLessThanOrEqual(RHO_MAX);
+      expect(Math.abs(p.rho * 20 - Math.round(p.rho * 20))).toBeLessThan(1e-9);
+    }
+    expect(new Set(MEASURED_RHO_PRESETS.map((p) => p.id)).size).toBe(MEASURED_RHO_PRESETS.length);
+  });
+
+  it("favoritseger + favoritens hörnor blir längre än oberoende (facit 3,93 → 4,36)", () => {
+    const p = MEASURED_RHO_PRESETS.find((x) => x.id === "fav-win-fav-corners")!;
+    expect(p.rho).toBeLessThan(0);
+    expect(1 / jointProb(0.53, 0.48, 0)).toBeCloseTo(3.93, 2);
+    expect(1 / jointProb(0.53, 0.48, p.rho)).toBeCloseTo(4.36, 2);
+  });
+
+  it("samma lags skott + hörnor blir kortare än oberoende", () => {
+    const p = MEASURED_RHO_PRESETS.find((x) => x.id === "same-team-volume")!;
+    expect(p.rho).toBeGreaterThan(0);
+    expect(1 / jointProb(0.46, 0.48, p.rho)).toBeLessThan(1 / jointProb(0.46, 0.48, 0));
   });
 });
 
