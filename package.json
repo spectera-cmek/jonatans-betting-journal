@@ -55,6 +55,7 @@
     "install:tasks": "powershell -ExecutionPolicy Bypass -File scripts/install-tasks.ps1",
     "clv:coverage": "tsx scripts/clvCoverage.ts",
     "clv:suspicious": "tsx scripts/clvSuspicious.ts",
+    "discipline:holdout": "tsx scripts/disciplineHoldout.ts",
     "import:bet365": "tsx scripts/importBet365.ts",
     "import:unibet": "tsx scripts/importUnibet.ts",
     "import:bethero": "tsx scripts/importBetheroClv.ts",

@@ -1,6 +1,8 @@
 // Weekly & monthly reports: this period vs the previous one (Swedish calendar)
 // with a discipline grade — the stake-weighted share of the period's bets that
-// avoided the known leak patterns from lib/discipline.
+// avoided the known leak patterns from lib/discipline. The guard derives no
+// leak rules any more (lib/disciplineRules, holdout 2026-11-21), so the grade is
+// unscored unless a rule set with leaks is passed in.
 //
 // Pure & dependency-free (besides betting/discipline/time helpers) so it is
 // trivially unit-testable.
@@ -73,10 +75,12 @@ function betTime(b: BetLike): number {
 /**
  * Aggregate one arbitrary {start,end} window — the week/month reports both wrap
  * this. `rules` is the journal's derived leak/edge set (lib/disciplineRules);
- * without it there is nothing to call a leak, so disciplinePct stays null rather
- * than reporting a flattering 100 %.
+ * without a leak in it there is nothing to call a leak, so disciplinePct stays
+ * null rather than reporting a flattering 100 %. That covers a set with only
+ * positive rules too — the default since leaks were switched off.
  */
 export function aggPeriod(bets: WeeklyBetInput[], win: WeekWindow, rules?: DisciplineRuleSet | null): PeriodAgg {
+  const scoresDiscipline = !!rules?.rules.some((r) => r.tone === "neg");
   let settled = 0;
   let pending = 0;
   let staked = 0;
@@ -103,7 +107,7 @@ export function aggPeriod(bets: WeeklyBetInput[], win: WeekWindow, rules?: Disci
     const day = dayIso(t);
     if (day < win.start || day > win.end) continue;
 
-    if (b.stakeUnits > 0 && rules) {
+    if (b.stakeUnits > 0 && scoresDiscipline && rules) {
       allStake += b.stakeUnits;
       const verdict = evaluateBet(
         {
