@@ -448,6 +448,7 @@ describe("matchup utan databas", () => {
         awpEarlyKills: 0,
         openingShare: null,
         openingRounds: 0,
+        boardMaps: [],
       }))
     ),
     spread: 0.8,
@@ -464,6 +465,7 @@ describe("matchup utan databas", () => {
       at: 0,
     },
     teamAngles: [],
+    oppTeams: {},
     warnings: [],
   };
 

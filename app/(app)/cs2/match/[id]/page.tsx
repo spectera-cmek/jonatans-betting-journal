@@ -14,10 +14,13 @@ import { LinesPanel } from "@/components/cs2/LinesPanel";
 import { ManualVeto } from "@/components/cs2/ManualVeto";
 import { QuickProps } from "@/components/cs2/QuickProps";
 import { LineupChanges } from "@/components/cs2/LineupChanges";
+import { PlayerBoard } from "@/components/cs2/PlayerBoard";
+import { HeadToHead } from "@/components/cs2/HeadToHead";
+import type { HeadToHeadView } from "@/lib/cs2/h2h";
 import { Cs2Empty, Cs2NoDb, TeamLink, dateLabel, dec, pct } from "@/components/cs2/common";
 
 type Resp =
-  | ({ dbConfigured: true; pending?: undefined } & MatchupView)
+  | ({ dbConfigured: true; pending?: undefined; h2h?: HeadToHeadView } & MatchupView)
   | { dbConfigured: true; pending: true; team1Name: string; team2Name: string }
   | { dbConfigured: false };
 
@@ -53,7 +56,7 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
         hint="Lagen är inte klara på HLTV än (TBD). Modellen räknar när båda lagen är kända och inlästa."
       />
     );
-  const v = data as MatchupView;
+  const v = data as MatchupView & { h2h?: HeadToHeadView };
   const s = v.series;
   const scores = Object.entries(s.scores).sort((a, b) => b[1] - a[1]);
 
@@ -108,6 +111,9 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
         </details>
       </Card>
 
+      <PlayerBoard data={v.board} initialScope={v.suggestedScope} />
+      {v.h2h && <HeadToHead h2h={v.h2h} team1={v.team1.name} team2={v.team2.name} />}
+
       <ManualVeto key={`${v.vetoManual}-${v.vetoMaps.join(",")}`} v={v} onSaved={load} />
 
       <Card style={{ padding: 0, marginBottom: 16 }}>
@@ -147,6 +153,28 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
             ))}
           </div>
         </div>
+      </Card>
+
+      <QuickProps view={v} onChanged={load} />
+      <LinesPanel view={v} onChanged={load} />
+
+      <Card style={{ marginBottom: 16 }}>
+        <div className="ap-card-head is-bleed">
+          <span role="heading" aria-level={2} className="ap-card-title">Angles</span>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Datadrivna skäl att avvika från linjen — med urvalet bakom</span>
+        </div>
+        {v.angles.length === 0 && <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>Inga angles över trösklarna för den här matchen.</div>}
+        <ul className="ap-cs2-items">
+          {v.angles.map((a, i) => (
+            <li key={i} className={`ap-cs2-item ${a.strength === 0 ? "warn" : a.kind === "edge" ? "pos" : ""}`}>
+              <b>
+                {a.strength > 0 ? "●".repeat(a.strength) + " " : "⚠ "}
+                {a.title}
+              </b>
+              <div style={{ color: "var(--dim)", fontSize: "var(--fs-md)" }}>{a.detail}</div>
+            </li>
+          ))}
+        </ul>
       </Card>
 
       <Card style={{ padding: 0, marginBottom: 16 }}>
@@ -207,28 +235,6 @@ export default function Cs2MatchPage({ params }: { params: { id: string } }) {
             ))}
           </div>
         </div>
-      </Card>
-
-      <QuickProps view={v} onChanged={load} />
-      <LinesPanel view={v} onChanged={load} />
-
-      <Card style={{ marginBottom: 16 }}>
-        <div className="ap-card-head is-bleed">
-          <span role="heading" aria-level={2} className="ap-card-title">Angles</span>
-          <span style={{ fontSize: "var(--fs-sm)", color: "var(--dim2)" }}>Datadrivna skäl att avvika från linjen — med urvalet bakom</span>
-        </div>
-        {v.angles.length === 0 && <div style={{ color: "var(--dim2)", fontSize: "var(--fs-md)" }}>Inga angles över trösklarna för den här matchen.</div>}
-        <ul className="ap-cs2-items">
-          {v.angles.map((a, i) => (
-            <li key={i} className={`ap-cs2-item ${a.strength === 0 ? "warn" : a.kind === "edge" ? "pos" : ""}`}>
-              <b>
-                {a.strength > 0 ? "●".repeat(a.strength) + " " : "⚠ "}
-                {a.title}
-              </b>
-              <div style={{ color: "var(--dim)", fontSize: "var(--fs-md)" }}>{a.detail}</div>
-            </li>
-          ))}
-        </ul>
       </Card>
 
       <div className="ap-seg" style={{ marginBottom: 12 }}>

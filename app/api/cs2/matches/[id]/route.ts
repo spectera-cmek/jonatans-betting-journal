@@ -5,6 +5,7 @@ import { buildMatchupView, loadMatchupContext, type LineInput } from "@/lib/cs2/
 import { DEFAULT_CS2_BLEND_W } from "@/lib/cs2/pricing";
 import { idParam, noCs2Db } from "@/lib/cs2/api";
 import { latestLineVersions } from "@/lib/cs2/lineInput";
+import { loadHeadToHead } from "@/lib/cs2/h2h";
 import type { Cs2Market, Cs2Scope } from "@/lib/cs2/types";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,11 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ dbConfigured: true, pending: true, team1Name: m.team1Name, team2Name: m.team2Name });
   }
   // Bara den senaste versionen per linje och bok — äldre versioner är historik.
-  const rows = latestLineVersions(await cs2Prisma.cs2Line.findMany({ where: { matchId: id } }));
+  const [lineRows, h2h] = await Promise.all([
+    cs2Prisma.cs2Line.findMany({ where: { matchId: id } }),
+    loadHeadToHead(cs2Prisma, ctx.team1.id, ctx.team2.id, ctx.match.startAt),
+  ]);
+  const rows = latestLineVersions(lineRows);
   const lines: LineInput[] = rows.map((r) => ({
     id: r.id,
     market: r.market as Cs2Market,
@@ -42,5 +47,5 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     source: r.source,
     createdAt: r.createdAt.toISOString(),
   }));
-  return NextResponse.json({ dbConfigured: true, ...buildMatchupView(ctx, lines, blendW) });
+  return NextResponse.json({ dbConfigured: true, ...buildMatchupView(ctx, lines, blendW), h2h });
 }

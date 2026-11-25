@@ -46,6 +46,7 @@ function testCtx(): MatchupContext {
         awpEarlyKills: 0,
         openingShare: null,
         openingRounds: 0,
+        boardMaps: [],
       }))
     ),
     spread: 0.8,
@@ -62,6 +63,7 @@ function testCtx(): MatchupContext {
       at: 0,
     },
     teamAngles: [],
+    oppTeams: {},
     warnings: [],
   };
 }
