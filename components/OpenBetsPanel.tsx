@@ -51,6 +51,8 @@ export function OpenBetsPanel({
 }) {
   const [rows, setRows] = useState(open);
   const [settling, setSettling] = useState<OpenBetRow | null>(null);
+  // Rows on their way out after a settle: they slide away, then drop.
+  const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     setRows(open);
   }, [open]);
@@ -106,7 +108,10 @@ export function OpenBetsPanel({
                 const chip = timeChip(b.eventAt);
                 const ready = !!b.eventAt && dayIso(b.eventAt) <= today;
                 return (
-                  <li key={b.id} className={"ap-openbet" + (ready ? " is-ready" : "")}>
+                  <li
+                    key={b.id}
+                    className={"ap-openbet" + (ready ? " is-ready" : "") + (leaving.has(b.id) ? " is-leaving" : "")}
+                  >
                     <div className="ap-openbet-main">
                       <div className="ap-openbet-sel" title={b.selection || undefined}>
                         {b.selection || "—"}
@@ -169,10 +174,20 @@ export function OpenBetsPanel({
         bet={settling ? { id: settling.id, event: settling.event, selection: settling.selection, outcome: "pending" } : null}
         onClose={() => setSettling(null)}
         onChanged={() => {
-          // Drop the row optimistically so the ticker reflects the settle at once.
-          setRows((list) => list.filter((b) => b.id !== settling?.id));
+          // Slide the row out at once, then drop it and refresh the metrics.
+          const id = settling?.id;
           setSettling(null);
-          onSettled?.();
+          if (!id) return;
+          setLeaving((s) => new Set(s).add(id));
+          setTimeout(() => {
+            setRows((list) => list.filter((b) => b.id !== id));
+            setLeaving((s) => {
+              const next = new Set(s);
+              next.delete(id);
+              return next;
+            });
+            onSettled?.();
+          }, 260);
         }}
       />
     </>
