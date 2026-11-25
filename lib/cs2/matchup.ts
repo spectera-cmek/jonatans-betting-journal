@@ -46,6 +46,7 @@ import {
 import { firstKillProb, firstPistolProb, openingRates, playerFirstKillProb, type OpeningRates } from "./openingModel";
 import { CS2_MODEL_VERSION, DEFAULT_CS2_BLEND_W, priceTwoWay, type Price } from "./pricing";
 import { buildAngles, type Angle } from "./angles";
+import { boardKey, type BoardLine, type BoardMap, type BoardModel, type BoardScope, type BoardTeamRef, type PlayerBoardData } from "./playerBoard";
 import { lineProbs } from "../shotModel";
 import { sumFacts } from "./profiles";
 import { lineupChange, LINEUP_RECENT_MAPS, type LineupChange } from "./lineup";
@@ -150,6 +151,8 @@ interface PlayerCtx {
   awpEarlyKills: number;
   openingShare: number | null;
   openingRounds: number;
+  /** Spelarens kartor i perioden (HLTV, hela kartan) — spelartavlans underlag. */
+  boardMaps: BoardMap[];
 }
 
 export interface MatchupContext {
@@ -178,6 +181,8 @@ export interface MatchupContext {
   /** Femmorna i prissättningen (tom = lagens senaste). */
   fives: Record<number, number[]>;
   teamAngles: Array<{ teamId: number; name: string; pistolWinRate: number | null; pistolN: number; antiEcoLossRate: number | null; antiEcoN: number; mapsInWindow: number }>;
+  /** Motståndarna i spelarnas historik, med nuvarande rank. */
+  oppTeams: Record<number, BoardTeamRef>;
   warnings: string[];
 }
 
@@ -295,7 +300,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
       teamId: true,
       kills: true,
       headshots: true,
-      map: { select: { mapName: true, playedAt: true, team1Id: true, team2Id: true, team1Rounds: true, team2Rounds: true } },
+      map: { select: { id: true, matchId: true, mapNumber: true, mapName: true, playedAt: true, team1Id: true, team2Id: true, team1Rounds: true, team2Rounds: true } },
     },
   });
   const demoRows = await db.cs2DemoPlayerMap.findMany({
@@ -365,8 +370,23 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
       awpEarlyKills: all?.awpEarlyKills ?? 0,
       openingShare: null,
       openingRounds: all?.rounds ?? 0,
+      boardMaps: hl.map((h) => ({
+        mapId: h.map.id,
+        matchId: h.map.matchId,
+        mapNumber: h.map.mapNumber,
+        mapName: h.map.mapName,
+        playedAt: h.map.playedAt.toISOString(),
+        oppId: oppOf(h.map, h.teamId),
+        kills: h.kills,
+        won: h.map.team1Id === h.teamId ? h.map.team1Rounds : h.map.team2Rounds,
+        lost: h.map.team1Id === h.teamId ? h.map.team2Rounds : h.map.team1Rounds,
+      })),
     };
   });
+  // Motståndarna i historiken: namn och rank till spelartavlans motståndsnivå.
+  const oppIds = [...new Set([team1.id, team2.id, ...players.flatMap((p) => p.boardMaps.map((b) => b.oppId))])];
+  const oppRows = await db.cs2Team.findMany({ where: { id: { in: oppIds } }, select: { id: true, name: true, rank: true } });
+  const oppTeams: Record<number, BoardTeamRef> = Object.fromEntries(oppRows.map((t) => [t.id, { id: t.id, name: t.name, rank: t.rank }]));
   for (const t of [team1, team2]) {
     const n = players.filter((p) => p.teamId === t.id).length;
     if (n < 5) warnings.push(`${t.name}: ${n} spelare i truppen i databasen — kör cs2:ingest så att truppen läses in.`);
@@ -463,6 +483,7 @@ export async function loadMatchupContext(db: PrismaClient, matchId: number): Pro
     lineupKnown: known != null,
     fives,
     teamAngles,
+    oppTeams,
     warnings,
   };
 }
@@ -710,6 +731,8 @@ export interface MatchupView {
   duels: DuelLadder;
   /** Förvald karta i snabbläget (gissad ur tiden sedan start). */
   suggestedScope: LadderScope;
+  /** Spelartavlan: form, karta och motstånd mot linjen. */
+  board: PlayerBoardData;
 }
 
 function summarize(pmf: number[]) {
@@ -730,6 +753,8 @@ export const LADDER_SPAN = 3;
 
 export interface LadderRow {
   playerId: number;
+  /** Modellens förväntade antal. */
+  mean: number;
   /** Modellens linje (P(över) närmast 50 %). */
   median: number;
   /** P(över) per halvlinje, median − LADDER_SPAN … median + LADDER_SPAN. Övertid räknas. */
@@ -759,7 +784,7 @@ export function propLadder(ctx: MatchupContext): PropLadder {
           if (line < 0.5) continue;
           lines.push({ line, pOver: lineProbs(s.pmf, line).pOverNoPush });
         }
-        rows.push({ playerId: p.playerId, median, lines });
+        rows.push({ playerId: p.playerId, mean: pmfMean(s.pmf), median, lines });
       }
       byMarket[market] = rows;
     }
@@ -873,6 +898,7 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
     .sort((a, b) => a.side - b.side || (b.kills12?.mean ?? b.killsMap1?.mean ?? 0) - (a.kills12?.mean ?? a.killsMap1?.mean ?? 0));
 
   const priced = lines.map((l) => priceLine(ctx, l, blendW));
+  const ladder = propLadder(ctx);
   // En linje som modellen och boken är fundamentalt oense om är nästan alltid
   // en marknad vi läst fel, inte en edge. Den prissätts inte — säg det i stället
   // för att visa en tom rad.
@@ -940,9 +966,60 @@ export function buildMatchupView(ctx: MatchupContext, lines: LineInput[], blendW
       trainedMaps: ctx.global.trainedMaps,
       leagueRounds: ctx.global.leagueRounds,
     },
-    ladder: propLadder(ctx),
+    ladder,
     duels: duelLadder(ctx),
     suggestedScope: suggestedScope(ctx.format, ctx.match.startAt),
+    board: buildBoardData(ctx, lines, ladder),
+  };
+}
+
+/**
+ * Kills-linjen per spelare och karta som tavlan jämför mot. Jonatans egna
+ * inmatade linjer (från hans böcker) går före Unibets — den senaste vinner.
+ * Unibet erbjuder en hel stege per spelare (8,5–17,5); av den används
+ * huvudlinjen, den där över och under ligger närmast jämnt odds.
+ */
+export function boardLines(lines: LineInput[]): Record<string, BoardLine> {
+  const best = new Map<string, { own: boolean; score: number; line: BoardLine }>();
+  for (const l of lines) {
+    if (l.market !== "kills" || l.playerId == null || l.line == null) continue;
+    if (!(LADDER_SCOPES as string[]).includes(l.scope)) continue;
+    const key = boardKey(l.playerId, l.scope as BoardScope);
+    const own = l.source !== "kambi";
+    const at = l.createdAt ? Date.parse(l.createdAt) : 0;
+    // Egen: nyast först. Unibet: jämnast odds först (lägre = bättre), nyast vid lika.
+    const balance = l.overOdds && l.underOdds ? Math.abs(Math.log(l.overOdds / l.underOdds)) : 9;
+    const score = own ? at : -balance * 1e13 + at / 1e3;
+    const cur = best.get(key);
+    if (cur && (cur.own && !own)) continue;
+    if (cur && cur.own === own && cur.score >= score) continue;
+    best.set(key, {
+      own,
+      score,
+      line: { line: l.line, overOdds: l.overOdds ?? null, underOdds: l.underOdds ?? null, bookmaker: l.bookmaker ?? null, source: l.source ?? null, createdAt: l.createdAt ?? null },
+    });
+  }
+  return Object.fromEntries([...best].map(([k, v]) => [k, v.line]));
+}
+
+/** Spelartavlans underlag: spelarnas kartor, vetots kartvikter, linjerna och modellen. */
+export function buildBoardData(ctx: MatchupContext, lines: LineInput[], ladder: PropLadder = propLadder(ctx)): PlayerBoardData {
+  const scopes = ladderScopes(ctx.format) as BoardScope[];
+  const weights: PlayerBoardData["mapWeights"] = {};
+  // Karta 1–2 behöver positionerna 1 och 2 även när de inte visas var för sig.
+  for (const s of ["map1", "map2", "map3"] as const) if (s === "map1" || scopes.includes(s)) weights[s] = mapWeights(ctx, s).filter((x) => x.w > 0);
+  const model: Record<string, BoardModel> = {};
+  for (const s of scopes) for (const r of ladder[s]?.kills ?? []) model[boardKey(r.playerId, s)] = { mean: r.mean, median: r.median, lines: r.lines };
+  const ref = (t: TeamInfo): BoardTeamRef => ({ id: t.id, name: t.name, rank: t.rank });
+  return {
+    scopes,
+    team1: ref(ctx.team1),
+    team2: ref(ctx.team2),
+    teams: { ...ctx.oppTeams, [ctx.team1.id]: ref(ctx.team1), [ctx.team2.id]: ref(ctx.team2) },
+    mapWeights: weights,
+    players: ctx.players.map((p) => ({ playerId: p.playerId, nickname: p.nickname, teamId: p.teamId, side: p.side, role: p.role, maps: p.boardMaps })),
+    lines: boardLines(lines),
+    model,
   };
 }
 

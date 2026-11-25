@@ -243,3 +243,415 @@
     grid-template-columns: 1fr;
   }
 }
+
+.ap-cs2-listtools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: 12px;
+}
+
+/* ---- Spelartavlan: kills mot linjen ----
+   Över = fylld amber, under = ihålig grå kontur. Formen (fylld/ihålig) bär
+   skillnaden även utan färg; i ljust läge räcker inte färgerna ensamma
+   (validerat: amber/grå under 15 ΔE vid 3:1-kontrast). */
+.ap-cs2 {
+  --cs2-over: #ffb000;
+  --cs2-under: #74716a;
+}
+:root[data-mode="light"] .ap-cs2 {
+  --cs2-over: #b97900;
+  --cs2-under: #8a877d;
+}
+.ap-pb-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--pad-x) var(--pad-y);
+}
+.ap-pb-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+.ap-pb-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.ap-pb-legend .sw-over {
+  background: var(--cs2-over);
+}
+.ap-pb-legend .sw-under {
+  box-shadow: inset 0 0 0 1px var(--cs2-under);
+}
+.ap-pb-legend .sw-line {
+  width: 14px;
+  height: 0;
+  vertical-align: 3px;
+  border-top: 1px solid var(--txt);
+}
+.ap-pb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr));
+  gap: var(--gap);
+  padding: 0 var(--pad-x) var(--pad-x);
+}
+.ap-pb-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+  padding: 0 var(--pad-x) var(--pad-x);
+}
+.ap-pb-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+.ap-pb-colhead {
+  margin: 0;
+  font-family: var(--disp);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--dim);
+}
+@media (max-width: 860px) {
+  .ap-pb-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ap-pb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px 9px;
+  background: var(--card2);
+  border-radius: var(--r-card);
+  /* Kanten säger åt vilket håll underlagen pekar — tom när de spretar. */
+  border-left: 2px solid transparent;
+}
+.ap-pb-card.lean-over {
+  border-left-color: var(--cs2-over);
+}
+.ap-pb-card.lean-under {
+  border-left-color: var(--cs2-under);
+}
+.ap-pb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+.ap-pb-who {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+.ap-pb-name {
+  font-family: var(--disp);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--txt);
+  text-decoration: none;
+}
+.ap-pb-name:hover {
+  color: var(--acc-ink);
+}
+.ap-pb-team {
+  color: var(--dim2);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.ap-pb-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.ap-pb-line .ap-input {
+  width: 58px;
+  height: 26px;
+  padding: 0 6px;
+  text-align: right;
+}
+.ap-pb-from {
+  color: var(--dim2);
+  white-space: nowrap;
+}
+
+.ap-pb-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px;
+  align-items: end;
+  gap: 12px;
+}
+.ap-kbars {
+  position: relative;
+  min-width: 0;
+}
+.ap-kbars-plot {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  align-items: end;
+  /* 2px av kortet mellan staplarna, så att grannar aldrig flyter ihop. */
+  gap: 2px;
+  height: 60px;
+  border-bottom: 1px solid var(--line);
+}
+.ap-kbar {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+}
+.ap-kbar i {
+  display: block;
+  width: 70%;
+  border-radius: 2px 2px 0 0;
+}
+.ap-kbar.is-over i {
+  background: var(--cs2-over);
+}
+.ap-kbar.is-under i {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--cs2-under);
+}
+.ap-kbar.is-push i {
+  background: var(--cs2-under);
+}
+.ap-kbar:not(.is-empty):hover {
+  background: var(--hover);
+}
+.ap-kbars-line {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  height: 0;
+  border-top: 1px solid var(--txt);
+  pointer-events: none;
+}
+.ap-kbars-tip {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+}
+.ap-pb-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+.ap-pb-big {
+  font-size: var(--fs-2xl);
+  line-height: 1;
+  color: var(--txt);
+}
+.ap-pb-avg {
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.ap-pb-axes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+}
+@media (max-width: 520px) {
+  .ap-pb-axes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.ap-pb-axis {
+  min-width: 0;
+  padding: 6px 8px 7px;
+  background: var(--card);
+  border-top: 2px solid transparent;
+}
+.ap-pb-axis.lean-over {
+  border-top-color: var(--cs2-over);
+}
+.ap-pb-axis.lean-under {
+  border-top-color: var(--cs2-under);
+}
+.ap-pb-axis .v {
+  margin-top: 2px;
+  font-size: var(--fs-lg);
+  color: var(--txt);
+}
+.ap-pb-axis .s {
+  overflow: hidden;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Modellen är en referens, inte ett av underlagen — den räknas inte i signalen. */
+.ap-pb-axis.is-ref {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line2);
+}
+.ap-pb-axis.is-ref .v {
+  color: var(--dim);
+}
+
+.ap-pb-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.ap-pb-pips {
+  display: inline-flex;
+  gap: 3px;
+}
+.ap-pb-pips i {
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+  background: var(--card3);
+}
+.ap-pb-pips i.over {
+  background: var(--cs2-over);
+}
+.ap-pb-pips i.under {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--cs2-under);
+}
+.ap-pb-pips i.even {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.ap-pb-note {
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+
+/* ---- Möten och form ---- */
+.ap-h2h {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: var(--sp-5);
+  padding: 0 var(--pad-x) var(--pad-x);
+}
+@media (max-width: 860px) {
+  .ap-h2h {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.ap-h2h-sub {
+  margin: 0 0 6px;
+}
+.ap-h2h-empty,
+.ap-h2h-legend {
+  color: var(--dim2);
+  font-size: var(--fs-sm);
+}
+.ap-h2h-legend {
+  margin-top: 8px;
+  font-size: var(--fs-xs);
+}
+.ap-h2h-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 40px;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line2);
+  color: inherit;
+  text-decoration: none;
+}
+.ap-h2h-row:hover {
+  background: var(--hover);
+}
+.ap-h2h-date {
+  color: var(--dim2);
+  font-size: var(--fs-sm);
+}
+.ap-h2h-fmt {
+  margin-left: 4px;
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+.ap-h2h-score {
+  text-align: right;
+  color: var(--dim);
+}
+.ap-h2h .is-win {
+  color: var(--txt);
+  font-weight: 600;
+}
+.ap-h2h-maps {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2 / -1;
+  gap: 4px;
+}
+.ap-h2h-map {
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--card2);
+  color: var(--dim);
+  font-size: var(--fs-xs);
+}
+.ap-h2h-record {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line2);
+}
+.ap-h2h-team {
+  margin-bottom: 10px;
+}
+.ap-h2h-teamhead {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: var(--fs-md);
+}
+.ap-form-strip {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 2px;
+}
+.ap-form-strip a {
+  display: grid;
+  place-items: center;
+  height: 24px;
+  font-family: var(--disp);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-decoration: none;
+}
+.ap-form-strip .win {
+  background: var(--pos-soft);
+  color: var(--pos);
+}
+.ap-form-strip .loss {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.ap-form-strip .draw {
+  background: var(--card2);
+  color: var(--dim);
+}

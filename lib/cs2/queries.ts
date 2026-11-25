@@ -514,6 +514,10 @@ export interface UpcomingMatch {
   /** Kartor med HLTV-data / tolkad demo per lag inom 6 månader. */
   coverage: { team1Maps: number; team2Maps: number; team1Demo: number; team2Demo: number };
   lines: number;
+  /** Kills-linjer (senaste versionen), det Jonatan mest spelar. */
+  killLines: number;
+  /** HLTV visar redan vetot. */
+  vetoKnown: boolean;
 }
 
 export async function listUpcoming(db: PrismaClient, days: number): Promise<UpcomingMatch[]> {
@@ -541,7 +545,10 @@ export async function listUpcoming(db: PrismaClient, days: number): Promise<Upco
   });
   const linesByMatch = new Map<number, typeof lineRows>();
   for (const l of lineRows) linesByMatch.set(l.matchId, [...(linesByMatch.get(l.matchId) ?? []), l]);
-  const lineCount = new Map([...linesByMatch].map(([id, ls]) => [id, latestLineVersions(ls).length]));
+  const latest = new Map([...linesByMatch].map(([id, ls]) => [id, latestLineVersions(ls)]));
+  const vetoDone = new Set(
+    (await db.cs2Veto.findMany({ where: { matchId: { in: rows.map((r) => r.id) }, action: "decider" }, select: { matchId: true } })).map((v) => v.matchId)
+  );
   const teamIds = [...new Set(rows.flatMap((r) => [r.team1Id, r.team2Id]).filter((x): x is number => x != null))];
   const teams = await db.cs2Team.findMany({ where: { id: { in: teamIds } }, select: { id: true, rank: true, tracked: true } });
   const tInfo = new Map(teams.map((t) => [t.id, t]));
@@ -579,6 +586,8 @@ export async function listUpcoming(db: PrismaClient, days: number): Promise<Upco
       team1Demo: r.team1Id != null ? cov.get(r.team1Id)?.demo ?? 0 : 0,
       team2Demo: r.team2Id != null ? cov.get(r.team2Id)?.demo ?? 0 : 0,
     },
-    lines: lineCount.get(r.id) ?? 0,
+    lines: latest.get(r.id)?.length ?? 0,
+    killLines: latest.get(r.id)?.filter((l) => l.market === "kills").length ?? 0,
+    vetoKnown: vetoDone.has(r.id),
   }));
 }
